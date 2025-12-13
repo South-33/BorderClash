@@ -1224,41 +1224,58 @@ ${internationalPropaganda || "(no articles)"}
 ${breakingNewsList || "(no articles)"}
 ═══════════════════════════════════════════════════════════════
 
-🎖️ MILITARY POSTURE & INTENSITY GAUGE - SCORING GUIDE:
-This is NOT just "how aggressive is the military." It evaluates the NATURE and LOCATION of military actions.
+🎖️ MILITARY POSTURE - SCORING GUIDE:
+This gauge measures whether a country is DEFENDING ITSELF or INVADING OTHERS.
+The bar position MUST match the posture category.
 
-⚔️ POSTURE (nature of the military stance):
-- PEACEFUL (0-30): No significant military presence, normal operations, diplomatic channels open
-- DEFENSIVE (31-65): Reinforcing own borders, moving troops to defensive positions, reacting to threats
-- AGGRESSIVE (66-100): Actively incurring, initiating fire, advancing into disputed/foreign territory
+⚔️ POSTURE & INTENSITY (these MUST match!):
+🟢 PEACEFUL (intensity: 0-30): No military threat, normal operations, diplomacy active
+   - 0-10: Complete peace, minimal border presence
+   - 11-20: Normal patrols, routine operations
+   - 21-30: Heightened awareness, but no military action
 
-📊 INTENSITY (0-100) EXAMPLES:
-0-15: Peacetime (normal border patrols, routine operations)
-16-30: Heightened Alert (troops moved to border, but no confrontation)
-31-45: Active Defense (responding to incursions, fortifying positions)
-46-60: Tense Standoff (troops facing each other, small skirmishes)
-61-75: Active Clashes (confirmed firefights, casualties)
-76-90: Major Offensive (coordinated attacks, territory seized)
-91-100: Full-scale War
+🟡 DEFENSIVE (intensity: 31-65): Protecting own territory, responding to threats
+   - 31-40: Reinforcing borders, moving to defensive positions
+   - 41-50: Active defense, fortifying against incursion
+   - 51-65: Heavy defensive action (returning fire, repelling attack) BUT staying in own territory
+
+🔴 AGGRESSIVE (intensity: 66-100): Attacking, invading, or initiating conflict
+   - 66-75: Cross-border strikes, entering disputed territory
+   - 76-85: Active invasion, seizing territory
+   - 86-100: Full-scale offensive war
+
+⚠️ CRITICAL RULE: militaryIntensity MUST be within the posture range!
+   - If posture is PEACEFUL → intensity must be 0-30
+   - If posture is DEFENSIVE → intensity must be 31-65
+   - If posture is AGGRESSIVE → intensity must be 66-100
 
 🏷️ POSTURE LABEL - MUST BE SHORT (MAX 4 WORDS):
-- Combined action + location (e.g., "Airstrikes in Border Zone")
-- MUST be under 30 characters if possible to fit in UI badge.
-Examples:
-  - "Routine Border Patrol"
-  - "Defensive Reinforcement"
-  - "Artillery Response"
-  - "Airstrikes into Cambodia"
-  - "Incursion into Disputed Zone"
-  - "Troops on Foreign Soil"
+Examples by posture:
+  PEACEFUL: "Routine Patrols", "Normal Operations", "Diplomatic Talks"
+  DEFENSIVE: "Border Reinforcement", "Defensive Positions", "Repelling Attack"
+  AGGRESSIVE: "Cross-Border Strike", "Territory Seizure", "Invasion Underway"
 
-💡 KEY QUESTIONS TO DETERMINE POSTURE:
-1. WHO moved first? (Initiator vs Responder)
-2. WHERE is the action? (Their territory, disputed zone, or our territory?)
-3. WHAT is the goal? (Defend, Deter, or Expand?)
+💡 KEY QUESTION: Is the country INSIDE its own borders or OUTSIDE?
+- Troops in OWN territory (even with heavy weapons) → DEFENSIVE
+- Troops in ENEMY territory (even "defensively") → AGGRESSIVE
+- Firing AT troops entering YOUR territory → DEFENSIVE
 
-If Country A's troops are in Country B's territory → A is likely AGGRESSIVE
-If Country A is responding to intrusion in their own land → A is likely DEFENSIVE
+🛡️ VERIFICATION & ACCURACY RULES:
+1. NO SPECIFICITY WITHOUT SOURCE: Do NOT invent specific names (e.g., specific hill numbers, bridge names, or unit IDs) unless EXPLICITLY present in the source text. Use general terms like "high ground" or "infrastructure" if unsure.
+2. PRECISE LANGUAGE: Distinguish between "rejecting a PROPOSAL" vs "rejecting a CLAIM". If a source says "We deny X happened", report it as a DENIAL, not a refusal of peace.
+3. PLATFORM VERIFICATION: Do not specify weapon platforms (e.g., "Naval shelling", "F-16s") unless high-credibility sources confirm them. Use "airstrikes" or "shelling" if the specific platform is unconfirmed.
+4. POLICY VS REALITY: Distinguish between official policy (e.g., "border closed by decree") and tactical reality (e.g., "crossing impassable due to fighting").
+
+📰 KEY EVENTS STYLE GUIDE (3-5 events MAX, KEEP EACH SHORT!):
+Write KEY EVENTS as SHORT headline-style bullets. MAX 20 WORDS each!
+❌ TOO LONG: "Trump announces 'Ceasefire', but fighting intensifies hours later as Thailand rejects the truce and continues offensive"
+❌ TOO LONG: "Humanitarian Crisis: 330,000+ civilians displaced as Cambodia officially closes all border crossings"
+✅ GOOD: "Ceasefire collapses hours after announcement"
+✅ GOOD: "F-16s destroy Victory Bridge; Cambodia responds with rockets"
+✅ GOOD: "330,000+ civilians displaced; all borders closed"
+✅ GOOD: "Thailand invokes UN Article 51; Cambodia demands intervention"
+
+Be CONCISE. Each event = 1 short line. No multi-clause sentences.
 
 ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
 <json>
@@ -1305,10 +1322,15 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "generalSummaryTh": "Thai translation",
     "generalSummaryKh": "Khmer translation",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
-    "keyEvents": ["Event 1", "Event 2"],
-    "keyEventsEn": ["Event 1 EN"],
-    "keyEventsTh": ["เหตุการณ์ 1"],
-    "keyEventsKh": ["ព្រឹត្តិការណ៍ 1"],
+    "keyEvents": [
+      "3-5 SHORT headlines, MAX 15 words each!",
+      "Ceasefire collapses hours after announcement",
+      "F-16s destroy Victory Bridge; rockets hit Thai territory",
+      "330,000+ displaced; borders closed"
+    ],
+    "keyEventsEn": ["Short headlines in English - max 15 words each"],
+    "keyEventsTh": ["หัวข้อสั้นๆ ไม่เกิน 15 คำ"],
+    "keyEventsKh": ["ចំណងជើងខ្លី មិនលើស 15 ពាក្យ"],
     "discrepancies": "Where do different reports differ? Note disputed claims.",
     "confidence": 75,
     "confidenceRationale": "How sure are we? What's uncertain?"
@@ -1352,7 +1374,12 @@ RULES:
                     officialNarrativeTh: result.cambodia.officialNarrativeTh,
                     officialNarrativeKh: result.cambodia.officialNarrativeKh,
                     narrativeSource: result.cambodia.narrativeSource || "Unknown",
-                    militaryIntensity: Math.max(0, Math.min(100, result.cambodia.militaryIntensity || 50)),
+                    // Enforce intensity matches posture range
+                    militaryIntensity: posture === "PEACEFUL"
+                        ? Math.max(0, Math.min(30, result.cambodia.militaryIntensity || 15))
+                        : posture === "DEFENSIVE"
+                            ? Math.max(31, Math.min(65, result.cambodia.militaryIntensity || 48))
+                            : Math.max(66, Math.min(100, result.cambodia.militaryIntensity || 80)),
                     militaryPosture: posture,
                     postureLabel: result.cambodia.postureLabel || result.cambodia.postureLabelEn,
                     postureLabelEn: result.cambodia.postureLabelEn || result.cambodia.postureLabel,
@@ -1384,7 +1411,12 @@ RULES:
                     officialNarrativeTh: result.thailand.officialNarrativeTh,
                     officialNarrativeKh: result.thailand.officialNarrativeKh,
                     narrativeSource: result.thailand.narrativeSource || "Unknown",
-                    militaryIntensity: Math.max(0, Math.min(100, result.thailand.militaryIntensity || 50)),
+                    // Enforce intensity matches posture range
+                    militaryIntensity: posture === "PEACEFUL"
+                        ? Math.max(0, Math.min(30, result.thailand.militaryIntensity || 15))
+                        : posture === "DEFENSIVE"
+                            ? Math.max(31, Math.min(65, result.thailand.militaryIntensity || 48))
+                            : Math.max(66, Math.min(100, result.thailand.militaryIntensity || 80)),
                     militaryPosture: posture,
                     postureLabel: result.thailand.postureLabel || result.thailand.postureLabelEn,
                     postureLabelEn: result.thailand.postureLabelEn || result.thailand.postureLabel,

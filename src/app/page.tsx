@@ -105,7 +105,7 @@ const TRANSLATIONS = {
     monitoring: "MONITORING",
     active: "ACTIVE",
     situationReport: "SITUATION REPORT",
-    autoUpdating: "Auto-updating every 15 minutes",
+    autoUpdating: "Auto-updating every 60 minutes",
     keyDevelopments: "Key Developments",
     sourcesTracked: "SOURCES TRACKED",
     viewMode: "VIEW MODE",
@@ -135,7 +135,7 @@ const TRANSLATIONS = {
     thailand: "Thailand",
     cambodia: "Cambodia",
     neutralAI: "Neutral AI",
-    intl: "Intl",
+    intl: "International",
     credibility: "Credibility",
     subTitle: "Real-time monitoring of border tensions through multi-perspective analysis and AI-verified intelligence.",
     fatalities: "Confirmed Fatalities",
@@ -238,7 +238,7 @@ const TRANSLATIONS = {
     monitoring: "กำลังจับตา",
     active: "ใช้งานอยู่",
     situationReport: "รายงานสถานการณ์สด",
-    autoUpdating: "อัปเดตเองทุก 15 นาที",
+    autoUpdating: "อัปเดตเองทุก 60 นาที",
     keyDevelopments: "เหตุการณ์สำคัญ",
     sourcesTracked: "แหล่งข่าวที่ติดตาม",
     viewMode: "โหมดดูข้อมูล",
@@ -371,7 +371,7 @@ const TRANSLATIONS = {
     monitoring: "កំពុងមើល",
     active: "សកម្ម",
     situationReport: "របាយការណ៍សង្ខេប",
-    autoUpdating: "អាប់ដេតរៀងរាល់ 15 នាទី",
+    autoUpdating: "អាប់ដេតរៀងរាល់ 60 នាទី",
     keyDevelopments: "ព្រឹត្តិការណ៍សំខាន់ៗ",
     sourcesTracked: "ប្រភពព័ត៌មាន",
     viewMode: "មើលជា",
@@ -608,7 +608,15 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
 
   const t = TRANSLATIONS[lang as Lang] || TRANSLATIONS.en;
 
-  const formatRelativeTime = (timestamp: number) => {
+  // Format relative time with fallback: if publishedAt is in the future or very recent, use fetchedAt
+  const formatRelativeTime = (publishedAt: number | undefined, fetchedAt: number) => {
+    // Check if publishedAt would result in "Just now" (future date or < 1 min ago)
+    const publishedDiff = publishedAt ? Date.now() - publishedAt : -1;
+    const publishedMinutes = Math.floor(publishedDiff / 60000);
+
+    // If publishedAt is missing, in the future, or would show "Just now", use fetchedAt instead
+    const timestamp = (!publishedAt || publishedMinutes < 1) ? fetchedAt : publishedAt;
+
     const diff = Date.now() - timestamp;
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
@@ -635,7 +643,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
           {article.isVerified && <CheckCircle className="w-3 h-3 text-green-600" />}
           <span className="text-[10px] font-mono opacity-60">{article.source}</span>
         </div>
-        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap">{formatRelativeTime(article.publishedAt || article.fetchedAt)}</span>
+        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap">{formatRelativeTime(article.publishedAt, article.fetchedAt)}</span>
       </div>
 
       {/* Title - use language-specific title if available */}
@@ -795,8 +803,8 @@ const IntelligenceLog = ({
         lang={lang}
       />
 
-      {/* Scrollable Container - flex-1 fills remaining space */}
-      <div className="flex-1 min-h-[150px] overflow-y-auto border border-riso-ink/10 rounded bg-white/50 scrollbar-thin">
+      {/* Scrollable Container - flex-1 fills remaining space, max-h on mobile */}
+      <div className="flex-1 min-h-[150px] max-h-[350px] md:max-h-none overflow-y-auto border border-riso-ink/10 rounded bg-white/50 scrollbar-thin">
         {isLoading ? (
           <div className="h-full flex items-center justify-center">
             <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
@@ -1058,7 +1066,7 @@ export default function Home() {
   const [lang, setLang] = useState<'en' | 'th' | 'kh'>('en');
   const t = TRANSLATIONS[lang as Lang];
 
-  const [timelineColumns, setTimelineColumns] = useState(5);
+
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [showAllSources, setShowAllSources] = useState(false);
   const [isModalClosing, setIsModalClosing] = useState(false);
@@ -1107,14 +1115,7 @@ export default function Home() {
     };
   }, [selectedEvent]);
 
-  useEffect(() => {
-    const handleResize = () => {
-      setTimelineColumns(window.innerWidth < 768 ? 2 : 5);
-    };
-    handleResize(); // Init
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+
 
   // Logic for height synchronization
   const neutralRef = useRef<HTMLDivElement>(null);
@@ -1177,6 +1178,8 @@ export default function Home() {
     isLoading: timelineLoading,
     isRefreshing: timelineRefreshing
   } = usePersistentQuery(api.api.getTimeline, { limit: 50 }, "borderclash_timeline") as any;
+
+
 
   // --- Modal Navigation & Touch State ---
 
@@ -1480,12 +1483,12 @@ export default function Home() {
     if (!systemStats?.lastResearchAt) return;
 
     const updateCountdown = () => {
-      // 15 minutes in milliseconds
-      const fifteenMinutes = 15 * 60 * 1000;
+      // 60 minutes in milliseconds (matches cron schedule)
+      const sixtyMinutes = 60 * 60 * 1000;
       // Calculate time since the last research finished
       const timeSinceLastUpdate = Date.now() - systemStats.lastResearchAt;
       // Calculate remaining time until next check
-      const remaining = Math.max(0, fifteenMinutes - timeSinceLastUpdate);
+      const remaining = Math.max(0, sixtyMinutes - timeSinceLastUpdate);
       setNextUpdateIn(Math.floor(remaining / 1000));
     };
 
@@ -1565,7 +1568,7 @@ export default function Home() {
 
           {/* Control Panel */}
           <div className="bg-riso-ink text-riso-paper p-4 rough-border-sm">
-            <div className="flex justify-between items-end mb-4">
+            <div className="flex justify-between items-start mb-3">
               <div>
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.nextAutoScan}</p>
                 <p className="font-mono text-3xl font-bold">
@@ -1581,22 +1584,63 @@ export default function Home() {
                 </p>
               </div>
               <div className="text-right">
-                <p className="font-mono text-[10px] opacity-70 mb-1">{t.articlesRead}</p>
+                <p className="font-mono text-[10px] opacity-70 mb-1">{t.sourcesTracked}</p>
                 <p className="font-mono text-xl font-bold">
-                  {sysStatsLoading ? <HackerScramble /> : systemStats?.totalArticlesFetched || 0}
+                  {sysStatsLoading || countsLoading ? (
+                    <HackerScramble />
+                  ) : (
+                    (articleCounts?.cambodia || 0) + (articleCounts?.international || 0) + (articleCounts?.thailand || 0)
+                  )}
                 </p>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between text-[10px] font-mono uppercase">
-                <span>{t.articlesFetched}</span>
-                <span>{countsLoading ? <HackerScramble /> : `${articleCounts?.total || 0} ${t.total}`}</span>
+            {/* Sources Tracked - Visual Bar */}
+            <div className="bg-riso-paper text-riso-ink p-2 rounded rough-border-sm">
+
+              {/* Proportional Bar */}
+              <div className="flex h-3 rounded-sm overflow-hidden bg-black/5 border border-black/10">
+                {(() => {
+                  const kh = articleCounts?.cambodia || 0;
+                  const intl = articleCounts?.international || 0;
+                  const th = articleCounts?.thailand || 0;
+                  const total = (kh + intl + th) || 1;
+                  return (
+                    <>
+                      <div
+                        className="bg-[#032EA1] transition-all duration-500"
+                        style={{ width: `${(kh / total) * 100}%` }}
+                        title={`Cambodia: ${kh}`}
+                      />
+                      <div
+                        className="bg-gray-400 transition-all duration-500"
+                        style={{ width: `${(intl / total) * 100}%` }}
+                        title={`International: ${intl}`}
+                      />
+                      <div
+                        className="bg-[#241D4F] transition-all duration-500"
+                        style={{ width: `${(th / total) * 100}%` }}
+                        title={`Thailand: ${th}`}
+                      />
+                    </>
+                  );
+                })()}
               </div>
-              <div className="flex gap-1 h-1">
-                {[...Array(10)].map((_, i) => (
-                  <div key={i} className={`flex-1 ${i < 8 ? 'bg-riso-paper' : 'bg-riso-paper/30'}`}></div>
-                ))}
+
+              {/* Legend with counts & labels */}
+              <div className="flex justify-between text-[10px] font-mono font-bold pt-1.5">
+                <span className="flex items-center gap-1.5 text-[#032EA1]">
+                  <span className="w-2 h-2 bg-[#032EA1] rounded-full"></span>
+                  KH {articleCounts?.cambodia || 0}
+                </span>
+                <span className="flex items-center gap-1.5 text-gray-600">
+                  <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                  INTL {articleCounts?.international || 0}
+                </span>
+                <span className="flex items-center gap-1.5 text-[#241D4F]">
+                  <span className="w-2 h-2 bg-[#241D4F] rounded-full"></span>
+                  TH {articleCounts?.thailand || 0}
+                </span>
               </div>
             </div>
           </div>
@@ -1740,7 +1784,7 @@ export default function Home() {
             </div>
 
             {/* Minimized System Log */}
-            <div className="mt-2 border-t border-dashed border-riso-ink/30 pt-2">
+            <div className="mt-2 border-t border-dashed border-riso-ink/30 pt-3">
             </div>
           </div>
         </aside>
@@ -1784,22 +1828,23 @@ export default function Home() {
 
                     {/* Injuries - Split into Civilian / Military */}
                     <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between h-32">
+                      {/* Top: Title + Numbers */}
                       <div>
                         <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.injured}</h4>
                         <div className="flex items-center gap-4">
                           {/* Civilian */}
-                          <div className="flex-1">
-                            <span className="font-display text-4xl md:text-6xl text-riso-ink leading-none">{dashboardStats?.civilianInjuredCount || 0}</span>
-                            <p className={`font-mono opacity-50 mt-1 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[9px]'}`}>{t.civilian}</p>
-                          </div>
-                          {/* Divider - fixed height, centered */}
-                          <div className="w-px h-14 bg-riso-ink/20"></div>
+                          <span className="font-display text-4xl md:text-6xl text-riso-ink leading-none">{dashboardStats?.civilianInjuredCount || 0}</span>
+                          {/* Divider */}
+                          <div className="w-px h-10 bg-riso-ink/20"></div>
                           {/* Military */}
-                          <div className="flex-1">
-                            <span className="font-display text-4xl md:text-6xl text-riso-ink leading-none">{dashboardStats?.militaryInjuredCount || 0}</span>
-                            <p className={`font-mono opacity-50 mt-1 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[9px]'}`}>{t.military}</p>
-                          </div>
+                          <span className="font-display text-4xl md:text-6xl text-riso-ink leading-none">{dashboardStats?.militaryInjuredCount || 0}</span>
                         </div>
+                      </div>
+                      {/* Bottom: Labels */}
+                      <div className="flex items-center gap-4">
+                        <span className={`font-mono opacity-50 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[9px]'}`}>{t.civilian}</span>
+                        <div className="w-px h-3 bg-transparent"></div>
+                        <span className={`font-mono opacity-50 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[9px]'}`}>{t.military}</span>
                       </div>
                     </div>
 
@@ -1872,7 +1917,7 @@ export default function Home() {
                 </div>
 
                 {/* Section 3: Neutral Analysis (Center) - MASTER height */}
-                <div className="flex flex-col gap-4 self-start" id="neutral-master" ref={neutralRef}>
+                <div className="flex flex-col gap-4 self-start min-h-[600px]" id="neutral-master" ref={neutralRef}>
                   <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
                     <Scale size={18} /> {t.neutralAI}
                   </div>
@@ -1908,24 +1953,8 @@ export default function Home() {
                         </div>
                       )}
 
-                      {/* Source Stats */}
-                      <div className={`bg-riso-ink/5 p-3 rounded font-mono ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                        <p className="font-bold mb-2">{t.sourcesTracked}:</p>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div>
-                            <span className="block text-lg font-bold">{articleCounts?.cambodia || 0}</span>
-                            <span className="opacity-60">{t.cambodia}</span>
-                          </div>
-                          <div>
-                            <span className="block text-lg font-bold">{articleCounts?.international || 0}</span>
-                            <span className="opacity-60">{t.intl}</span>
-                          </div>
-                          <div>
-                            <span className="block text-lg font-bold">{articleCounts?.thailand || 0}</span>
-                            <span className="opacity-60">{t.thailand}</span>
-                          </div>
-                        </div>
-                      </div>
+                      {/* Source Stats - Compact */}
+
                     </div>
                   </Card>
                 </div>
@@ -2013,20 +2042,45 @@ export default function Home() {
                             };
 
                             // Layout Configuration
-                            const eventsPerRow = timelineColumns;
-                            const sortedEvents = [...timelineEvents].sort((a: any, b: any) =>
-                              new Date(a.date).getTime() - new Date(b.date).getTime()
-                            );
+                            // Mobile: 2 items per row (left/right), unlimited rows (user scrolls)
+                            // Desktop: 5 fixed rows, items distributed evenly
+                            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
-                            // Chunking with Padding for Alignment
+                            // Sort by date first, then by timeOfDay for same-day events
+                            const sortedEvents = [...timelineEvents].sort((a: any, b: any) => {
+                              // First compare by date string (YYYY-MM-DD format)
+                              const dateCompare = (a.date || '').localeCompare(b.date || '');
+                              if (dateCompare !== 0) return dateCompare;
+
+                              // Same date: compare by timeOfDay (HH:MM format)
+                              // Events without timeOfDay sort to end of their day
+                              const timeA = a.timeOfDay || '99:99';
+                              const timeB = b.timeOfDay || '99:99';
+                              return timeA.localeCompare(timeB);
+                            });
+
+                            const totalEvents = sortedEvents.length;
                             const rows: any[][] = [];
-                            for (let i = 0; i < sortedEvents.length; i += eventsPerRow) {
-                              const chunk = sortedEvents.slice(i, i + eventsPerRow);
-                              // Pad the last row with nulls to maintain grid alignment (prevent justify-between spreading too wide)
-                              while (chunk.length < eventsPerRow) {
-                                chunk.push(null);
+
+                            if (isMobile) {
+                              // Mobile: Fixed 2 items per row
+                              const itemsPerRow = 2;
+                              for (let i = 0; i < totalEvents; i += itemsPerRow) {
+                                rows.push(sortedEvents.slice(i, i + itemsPerRow));
                               }
-                              rows.push(chunk);
+                            } else {
+                              // Desktop: Fixed 5 rows, distribute evenly
+                              const targetRows = 5;
+                              const baseEventsPerRow = Math.floor(totalEvents / targetRows);
+                              const extraEvents = totalEvents % targetRows;
+                              let eventIndex = 0;
+                              for (let rowIdx = 0; rowIdx < targetRows && eventIndex < totalEvents; rowIdx++) {
+                                const itemsThisRow = rowIdx < extraEvents ? baseEventsPerRow + 1 : baseEventsPerRow;
+                                if (itemsThisRow > 0) {
+                                  rows.push(sortedEvents.slice(eventIndex, eventIndex + itemsThisRow));
+                                  eventIndex += itemsThisRow;
+                                }
+                              }
                             }
 
                             const categoryColors: Record<string, string> = {
@@ -2036,75 +2090,81 @@ export default function Home() {
                               political: 'bg-purple-500',
                             };
 
-                            // Bigger Dots
+                            // Dot size based on importance (0-100)
                             const getDotSize = (importance: number) => {
-                              const minSize = 24; // Much bigger base
-                              const maxSize = 56; // Huge max
-                              const size = minSize + ((importance / 100) * (maxSize - minSize));
+                              const minSize = 20;  // Small dots for low impact (0)
+                              const maxSize = 56;  // Large dots for high impact (100)
+                              const clampedImportance = Math.max(0, Math.min(100, importance || 50));
+                              const size = minSize + ((clampedImportance / 100) * (maxSize - minSize));
                               return Math.round(size);
                             };
 
+                            // Lane configuration - taller on mobile to give labels space
+                            const LANE_HEIGHT = isMobile ? 60 : 80;
+                            const LINE_OFFSET = isMobile ? 30 : 40;
+                            const ROW_MIN_HEIGHT = isMobile ? 160 : undefined; // Extra height for mobile labels
+
                             return (
-                              <div className="flex-1 flex flex-col justify-between">
+                              <div className={`flex-1 flex flex-col ${isMobile ? '' : 'justify-between'}`}>
                                 {rows.map((row, rowIndex) => {
                                   const isReversed = rowIndex % 2 === 1;
                                   const isLastRow = rowIndex === rows.length - 1;
+                                  const itemCount = row.length;
 
-                                  // Lane configuration
-                                  const LANE_HEIGHT = 80; // Heights for the dot container area
-                                  const LINE_OFFSET = 40; // Center of the lane (where the line runs)
+                                  // Pre-calculate all dot sizes for this row
+                                  const dotSizes = row.map((event: any) => getDotSize(event.importance || 50));
 
-                                  // Dynamic Offset Calculation based on column count/padding
-                                  // Mobile: px-2 (0.5rem) + Half w-24 (3rem) = 3.5rem
-                                  // Desktop: px-8 (2rem) + Half w-32 (4rem) = 6rem
-                                  const lineOffsetRem = timelineColumns === 2 ? '3.5rem' : '6rem';
+                                  // Line spans from first dot center to last dot center
+                                  const firstDotHalfWidth = dotSizes[0] / 2;
+                                  const lastDotHalfWidth = dotSizes[dotSizes.length - 1] / 2;
 
                                   return (
-                                    <div key={rowIndex} className="flex-1 relative flex flex-col justify-start group/row">
-                                      {/* 1. The Horizontal Road Line - Direct Center-to-Center */}
+                                    <div
+                                      key={rowIndex}
+                                      className="relative flex flex-col justify-start group/row"
+                                      style={{ minHeight: ROW_MIN_HEIGHT }}
+                                    >
+                                      {/* 1. The Horizontal Road Line - from first dot center to last dot center */}
                                       <div
                                         className="absolute h-0 border-t-2 border-dashed border-stone-400 z-0"
                                         style={{
                                           top: `${LINE_OFFSET}px`,
-                                          left: lineOffsetRem,
-                                          right: lineOffsetRem,
+                                          left: `${firstDotHalfWidth}px`,
+                                          right: `${lastDotHalfWidth}px`,
                                         }}
                                       />
 
-                                      {/* 2. The Vertical Connector to Next Row (Straight Drop) */}
-                                      {/* Connects the end of this row to the start of the next row vertically */}
+                                      {/* 2. The Vertical Connector to Next Row */}
                                       {!isLastRow && (
                                         <div
-                                          className={`absolute border-l-2 border-dashed border-stone-400 z-0`}
+                                          className="absolute border-l-2 border-dashed border-stone-400 z-0"
                                           style={{
                                             top: `${LINE_OFFSET}px`,
-                                            height: '100%', // Spans to the start of the next row's dot (offset matched)
-                                            // Scale ensures it hits the corresponding dot on the next row
-                                            [isReversed ? 'left' : 'right']: lineOffsetRem,
+                                            height: '100%',
+                                            [isReversed ? 'left' : 'right']: `${isReversed ? firstDotHalfWidth : lastDotHalfWidth}px`,
                                             width: '0px',
                                           }}
                                         />
                                       )}
 
-                                      {/* 3. The Content Container */}
-                                      <div className={`w-full flex justify-between items-start px-2 md:px-8 z-10 ${isReversed ? 'flex-row-reverse' : ''}`}>
-                                        {row.map((event: any, i: number) => {
-                                          if (!event) {
-                                            // Spacer matches the structure
-                                            return <div key={`spacer-${i}`} className="w-24 md:w-32 flex flex-col items-center opacity-0">
-                                              <div style={{ height: LANE_HEIGHT }} />
-                                            </div>;
-                                          }
-
+                                      {/* 3. The Content Container - dots at exact edges */}
+                                      <div
+                                        className={`w-full flex items-start z-10 ${itemCount === 1 ? 'justify-center' : 'justify-between'} ${isReversed ? 'flex-row-reverse' : ''}`}
+                                      >
+                                        {row.map((event: any, idx: number) => {
                                           const dotColor = categoryColors[event.category] || 'bg-gray-500';
-                                          const dotSize = getDotSize(event.importance || 50);
+                                          const dotSize = dotSizes[idx];
 
                                           return (
-                                            <div key={event._id} className="relative flex flex-col items-center w-24 md:w-32">
-                                              {/* 1. Dot Wrapper - Clickable */}
+                                            <div
+                                              key={event._id}
+                                              className="relative flex flex-col items-center"
+                                              style={{ width: `${dotSize}px` }} // Container width = dot width, so center aligns with edge
+                                            >
+                                              {/* Dot - centered in container (which IS edge-aligned) */}
                                               <div
-                                                className="flex items-center justify-center flex-shrink-0 relative z-20 cursor-pointer"
-                                                style={{ height: `${LANE_HEIGHT}px`, width: `${LANE_HEIGHT}px` }}
+                                                className="flex items-center justify-center relative z-20 cursor-pointer"
+                                                style={{ height: `${LANE_HEIGHT}px`, width: `${dotSize}px` }}
                                                 onClick={() => { setSelectedEvent(event); setShowAllSources(false); }}
                                               >
                                                 <div
@@ -2114,11 +2174,32 @@ export default function Home() {
                                                 />
                                               </div>
 
-                                              {/* 2. Text Label */}
-                                              <div className="text-center w-full z-30 -mt-2 cursor-pointer" onClick={() => { setSelectedEvent(event); setShowAllSources(false); }}>
-                                                <div className="inline-block bg-[#F2F2E9] bg-opacity-95 px-2 py-1 rounded-md shadow-sm border border-white/20 backdrop-blur-sm">
+                                              {/* Text Label - overflows to center on dot, max 3 lines */}
+                                              <div
+                                                className="absolute z-30 cursor-pointer text-center"
+                                                style={{
+                                                  top: `${LANE_HEIGHT - 8}px`,
+                                                  left: '50%',
+                                                  transform: 'translateX(-50%)',
+                                                  minWidth: isMobile ? '160px' : '130px',
+                                                  maxWidth: isMobile ? '160px' : '180px',
+                                                }}
+                                                onClick={() => { setSelectedEvent(event); setShowAllSources(false); }}
+                                              >
+                                                <div className="inline-block bg-[#F2F2E9] bg-opacity-95 px-2 py-1 pb-2 rounded-md shadow-sm border border-white/20 backdrop-blur-sm">
                                                   <p className="font-mono text-[10px] font-bold opacity-50 mb-0.5">{event.date}</p>
-                                                  <p className={`font-display text-xs md:text-sm leading-tight text-riso-ink ${lang === 'th' ? 'font-bold' : ''}`}>
+                                                  <p
+                                                    className="font-display text-[12px] md:text-sm text-riso-ink"
+                                                    style={{
+                                                      display: '-webkit-box',
+                                                      WebkitLineClamp: 3,
+                                                      WebkitBoxOrient: 'vertical',
+                                                      overflow: 'hidden',
+                                                      textOverflow: 'ellipsis',
+                                                      lineHeight: '1.4',
+                                                      paddingBottom: '2px', // Space for descenders
+                                                    }}
+                                                  >
                                                     {getEventTitle(event)}
                                                   </p>
                                                 </div>

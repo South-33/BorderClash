@@ -17,7 +17,7 @@ Real-time intelligence dashboard tracking the Thailand-Cambodia border situation
 
 ```mermaid
 graph TB
-    subgraph "RESEARCH CYCLE (every 15 min)"
+    subgraph "RESEARCH CYCLE (every 60 min)"
         ORCH[Orchestrator]
         ORCH -->|step 1| S[SCOUTS (Parallel Workers)]
         ORCH -->|step 2| H[HISTORIAN LOOP]
@@ -138,6 +138,7 @@ Timeline events are automatically sorted by `date` + `timeOfDay` (oldest first) 
 `systemStats`
 - Tracks `systemStatus` ('online', 'syncing', 'error').
 - Controls the `isPaused` state for administrative override.
+- `skipNextCycle` flag for one-time cycle skip (auto-resets).
 
 ### Validation State
 `validationState`
@@ -190,6 +191,9 @@ npx convex run api:pauseTimer
 
 # Resume the automation
 npx convex run api:resumeTimer
+
+# Skip ONLY the next cycle (auto-resets after skip)
+npx convex run api:skipNextCycle
 ```
 
 **Manual Triggers:**
@@ -238,9 +242,16 @@ src/app/
 
 ## UI Behavior
 
-- **Timer**: Displays a 15-minute countdown between cycles.
+- **Timer**: Displays a 60-minute countdown between cycles.
 - **Status**:
   - `RUNNING...` (Pulsing): Research cycle is active.
   - `PAUSED` (Yellow): Administratively paused.
   - `ONLINE`: Idle, waiting for next cycle.
 - **Non-blocking Updates**: Cards refresh quietly in background. The Neutral AI card does not block content during updates.
+
+## Low-Credibility / Propaganda Handling
+
+- **Curators** find ALL news citizens would see (not just credible), including government propaganda
+- **Historian** archives (not discards) low-credibility articles for analysis
+- **Synthesizer** receives 15 lowest-credibility articles per country to understand propaganda narratives
+- Low credibility score ≠ delete; only broken/spam articles are discarded
