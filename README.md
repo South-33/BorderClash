@@ -20,30 +20,27 @@ graph TB
     subgraph "RESEARCH CYCLE (every 15 min)"
         ORCH[Orchestrator]
         ORCH -->|step 1| S[SCOUTS (Parallel Workers)]
-        ORCH -->|step 2| V[VALIDATION LOOP]
-        ORCH -->|step 3| D[DASHBOARD UPDATER]
-        ORCH -->|step 4| SY[SYNTHESIS]
+        ORCH -->|step 2| H[HISTORIAN LOOP]
+        ORCH -->|step 3| SY[SYNTHESIS]
     end
     
-    subgraph "VALIDATION LOOP (3-Step Orchestrator)"
-        MP[1. MANAGER PLANNING] -->|assigns task| A[2. ANALYST EXECUTING]
-        A -->|returns findings| MF[3. MANAGER FINALIZING]
-        MF -->|nextTask| MP
-        MF -->|final decisions| DB2[(Database)]
+    subgraph "HISTORIAN LOOP (until done)"
+        PL[PLANNER] -->|picks 10-15 articles| HI[HISTORIAN]
+        HI -->|creates/merges events| TL[(Timeline)]
+        HI -->|more articles?| PL
     end
     
     subgraph "GHOST API (Custom)"
         W1[Worker 1 - fast]
         W2[Worker 2 - thinking]
         S -.-> W1
-        A -.-> W1
-        MP -.-> W2
-        MF -.-> W2
+        PL -.-> W1
+        HI -.-> W2
+        SY -.-> W2
     end
     
     S --> DB[(Convex DB)]
-    V --> DB
-    D --> DB
+    H --> DB
     SY --> DB
     DB --> FE[Frontend]
 ```
@@ -53,48 +50,56 @@ graph TB
 | Component | Model | Role |
 |-----------|-------|------|
 | **SCOUT** | Ghost fast | Find new articles (isolated per country) |
-| **MANAGER (Planning)** | Ghost thinking | Decide what task to assign to Analyst |
-| **ANALYST** | Ghost fast | Execute assigned task, report findings (natural language) |
-| **MANAGER (Finalizing)** | Ghost thinking | Review findings, make final decisions, plan next task |
+| **PLANNER** | Ghost fast | Select 10-15 most important articles from unprocessed pool |
+| **HISTORIAN** | Ghost thinking | Process articles → create/merge timeline events, verify with source URLs |
 | **DASHBOARD** | Ghost thinking | Update stats (casualties, displaced) with web verification |
 | **SYNTHESIS** | Ghost thinking | Generate multilingual narratives for frontend |
 
-### Validation Loop Architecture (3-Step Orchestrator)
+### Timeline Historian Architecture (Two-Phase)
 
-The validation loop uses a **Manager-orchestrated** pattern where the thinking model controls what the fast model does:
+The **Timeline Historian** solves context window overflow by building a structured timeline of key events instead of re-processing all articles:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  STEP 1: MANAGER PLANNING (thinking model)                           │
-│  • Looks at DB stats (unverified count, conflicts, etc.)             │
-│  • Decides what the Analyst should focus on                          │
-│  • Outputs: taskType, taskDescription, focusAreas, articlesToCheck   │
-└───────────────────────────────┬──────────────────────────────────────┘
-                                │
-                                ▼ "Check these articles for propaganda..."
+│  PHASE 1: PLANNER (fast model)                                       │
+│  • Sees ALL unprocessed articles (up to 200)                         │
+│  • Sees timeline context (100 recent events)                         │
+│  • Picks 10-15 most important articles to process                    │
+│  • Groups related articles for cross-validation                      │
+└───────────────────────────────────┬──────────────────────────────────┘
+                                    │
+                                    ▼ "These 12 articles about the border clash..."
 ┌──────────────────────────────────────────────────────────────────────┐
-│  STEP 2: ANALYST EXECUTING (fast model)                              │
-│  • Receives the specific task from Manager                           │
-│  • Analyzes articles according to instructions                       │
-│  • Uses WEB SEARCH to verify claims before accepting                 │
-│  • Returns findings (free-form text, not decisions)                  │
-└───────────────────────────────┬──────────────────────────────────────┘
-                                │
-                                ▼ "Article X has red flags, Y looks okay..."
-┌──────────────────────────────────────────────────────────────────────┐
-│  STEP 3: MANAGER FINALIZING (thinking model)                         │
-│  • Reviews Analyst's findings                                        │
-│  • Makes FINAL decisions (agree/modify/override Analyst)             │
-│  • Outputs: finalActions (DB changes) + nextTask (for next loop)     │
-│  └→ nextTask becomes the task for STEP 1 in next iteration          │
+│  PHASE 2: HISTORIAN (thinking model)                                 │
+│  • Processes only the selected articles                              │
+│  • VISITS source URLs to verify dates and details                    │
+│  • Creates timeline events OR merges sources OR archives             │
+│  • Marks all processed articles as `processedToTimeline: true`       │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key Benefits:**
-- Manager **controls** what the Analyst works on (true delegation)
-- Analyst is a "worker bee" that executes specific tasks
-- Manager sees Analyst's reasoning before making final calls
-- Continuous loop: nextTask feeds back into next iteration
+**Historian Actions:**
+| Action | Description |
+|--------|-------------|
+| `create_event` | Add new event to timeline (importance 0-100) with Thai/Khmer translations |
+| `merge_source` | Add article as source to existing event |
+| `update_event` | Modify existing event (title, description, date, importance, status) |
+| `delete_event` | Remove completely fabricated events (use rarely!) |
+| `archive` | Mark as processed but not timeline-worthy |
+| `discard` | Mark as false/bad data |
+| `flag_conflict` | Mark article as conflicting with timeline |
+
+**Timeline Events Schema:**
+- `date`, `timeOfDay` (estimated time like "08:00", "14:30" for chronological ordering)
+- `title`, `titleTh`, `titleKh` (Thai/Khmer translations)
+- `description`, `descriptionTh`, `descriptionKh`
+- `category` (military/diplomatic/humanitarian/political)
+- `importance` (0-100 - controls dot size on frontend: 6px-40px)
+- `status` (confirmed/disputed/debunked)
+- `sources[]` - Array of contributing articles with credibility
+
+**Chronological Ordering:**
+Timeline events are automatically sorted by `date` + `timeOfDay` (oldest first) when passed to AI prompts. This ensures the AI receives events in proper historical order. Events without a `timeOfDay` are sorted to the end of their respective day.
 
 ### Robustness & Concurrency
 - **Ghost API Workers**: Uses a custom `WorkerPool` where each worker has a unique browser profile to prevent lock conflicts.
@@ -111,9 +116,18 @@ The validation loop uses a **Manager-orchestrated** pattern where the thinking m
 
 ### News Tables
 `thailandNews`, `cambodiaNews`, `internationalNews`
-- Stores articles with `active`, `outdated`, `unverified`, or `false` status.
+- Stores articles with `active`, `outdated`, `unverified`, `false`, or `archived` status.
 - Includes multilingual titles and summaries.
 - Validation fields: `lastReviewedAt`, `hasConflict`, `nextReviewAt`.
+- Timeline field: `processedToTimeline` (boolean) - tracks if Historian has processed this article.
+
+### Timeline Events
+`timelineEvents`
+- Structured historical record of key conflict events.
+- Fields: `date`, `timeOfDay`, `title`, `description`, `category`, `importance` (0-100), `status`.
+- `timeOfDay` is an estimated time string ("08:00", "14:30", "22:00") for ordering same-day events.
+- `sources[]` array tracks which articles contributed to this event.
+- Status: `confirmed` | `disputed` | `debunked`.
 
 ### Dashboard Stats
 `dashboardStats`
@@ -183,6 +197,9 @@ npx convex run api:resumeTimer
 # Run one full research cycle immediately
 npx convex run api:runFullCycle
 
+# Run the Historian (builds timeline from unprocessed articles)
+npx convex run api:runHistorian
+
 # Run ONLY the validation loop (Analyst → Manager)
 npx convex run validation:runValidationLoop
 
@@ -193,15 +210,25 @@ npx convex run api:resetAllValidation
 npx convex run api:clearAllData
 ```
 
+**Timeline Utilities:**
+```bash
+# Export all timeline events (for manual review)
+npx convex run api:exportTimelineEvents
+
+# Clear all timeOfDay values (reset for manual re-entry)
+npx convex run api:clearTimeOfDay
+```
+
 ---
 
 ## File Structure
 
 ```
 convex/
-├── schema.ts       # Database schema (multilingual fields)
+├── schema.ts       # Database schema (multilingual fields, timeline)
 ├── api.ts          # Queries & mutations (public + admin)
 ├── research.ts     # Core logic: Scouts, Synthesizer, Dashboard
+├── historian.ts    # Timeline Historian (Planner + Historian AI)
 ├── validation.ts   # Validation loop logic
 └── crons.ts        # Scheduled jobs (Research Cycle)
 

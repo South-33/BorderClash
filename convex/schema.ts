@@ -32,6 +32,8 @@ export default defineSchema({
         hasConflict: v.optional(v.boolean()),
         conflictsWith: v.optional(v.string()),
         nextReviewAt: v.optional(v.number()), // AI-determined re-check time
+        // Timeline processing
+        processedToTimeline: v.optional(v.boolean()), // True = Historian has processed this
     })
         .index("by_status", ["status"])
         .index("by_title", ["title"])
@@ -64,6 +66,8 @@ export default defineSchema({
         hasConflict: v.optional(v.boolean()),
         conflictsWith: v.optional(v.string()),
         nextReviewAt: v.optional(v.number()),
+        // Timeline processing
+        processedToTimeline: v.optional(v.boolean()),
     })
         .index("by_status", ["status"])
         .index("by_title", ["title"])
@@ -97,6 +101,8 @@ export default defineSchema({
         hasConflict: v.optional(v.boolean()),
         conflictsWith: v.optional(v.string()),
         nextReviewAt: v.optional(v.number()),
+        // Timeline processing
+        processedToTimeline: v.optional(v.boolean()),
     })
         .index("by_status", ["status"])
         .index("by_title", ["title"])
@@ -218,6 +224,7 @@ export default defineSchema({
         systemStatus: v.union(v.literal("online"), v.literal("syncing"), v.literal("error"), v.literal("stopped")),
         errorLog: v.optional(v.string()),
         isPaused: v.optional(v.boolean()),
+        skipNextCycle: v.optional(v.boolean()), // Skip only the next cycle (auto-resets after skip)
     })
         .index("by_key", ["key"]),
 
@@ -233,4 +240,59 @@ export default defineSchema({
         lastUpdatedAt: v.number(),
     })
         .index("by_key", ["key"]),
+
+    // ==================== TIMELINE EVENTS ====================
+    // The "memory" of the system - key historical events extracted from news
+    // This is what the AI synthesizes from, NOT raw articles
+    // Designed for future frontend: timeline page with hoverable dots
+
+    timelineEvents: defineTable({
+        // Core Event Data
+        date: v.string(),           // ISO date "2024-12-12" (for display/grouping)
+        timeOfDay: v.optional(v.string()),  // Estimated time "08:00", "14:30", "22:00" (for ordering same-day events)
+        title: v.string(),          // "Ceasefire Violated at Preah Vihear" (English)
+        titleTh: v.optional(v.string()),  // Thai translation
+        titleKh: v.optional(v.string()),  // Khmer translation
+        description: v.string(),    // Detailed paragraph of the event (English)
+        descriptionTh: v.optional(v.string()),  // Thai translation
+        descriptionKh: v.optional(v.string()),  // Khmer translation
+        category: v.union(
+            v.literal("military"),
+            v.literal("diplomatic"),
+            v.literal("humanitarian"),
+            v.literal("political")
+        ),
+
+        // AI-Determined Importance (0-100)
+        // Higher = more significant event, more likely to appear in synthesis
+        // AI decides this based on: geopolitical impact, casualty count, novelty
+        importance: v.number(),
+
+        // Verification Status
+        status: v.union(
+            v.literal("confirmed"),    // Verified by multiple sources
+            v.literal("disputed"),     // Sources disagree
+            v.literal("debunked")      // Proven false (kept for record)
+        ),
+
+        // Source Links - For verification and future deep-checks
+        // Each source is a news article that contributed to this event
+        sources: v.array(v.object({
+            url: v.string(),           // "https://bangkokpost.com/article/123"
+            name: v.string(),          // "Bangkok Post"
+            country: v.string(),       // "thailand" | "cambodia" | "international"
+            credibility: v.number(),   // Credibility at time of capture
+            snippet: v.optional(v.string()),  // Key quote from the article
+            addedAt: v.number(),       // Timestamp when this source was linked
+        })),
+
+        // Metadata
+        createdAt: v.number(),
+        lastUpdatedAt: v.number(),
+    })
+        .index("by_date", ["date"])
+        .index("by_importance", ["importance"])
+        .index("by_status", ["status"])
+        .index("by_createdAt", ["createdAt"])
+        .index("by_category", ["category"]),
 });

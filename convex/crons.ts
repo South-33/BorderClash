@@ -4,10 +4,10 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 // =============================================================================
-// AUTOMATION - Full Research Cycle (DISABLED - run manually with npx convex run research:runResearchCycle)
+// AUTOMATION - Full Research Cycle (runs every hour)
 // Runs: Curation -> Validation -> Dashboard -> Synthesis
 // =============================================================================
-// crons.interval("research-cycle", { minutes: 20 }, internal.research.runResearchCycle);
+crons.interval("research-cycle", { minutes: 60 }, internal.research.runResearchCycle);
 
 // =============================================================================
 // GHOST API KEEPALIVE - Ping Koyeb to prevent instance sleep (every 10 minutes)

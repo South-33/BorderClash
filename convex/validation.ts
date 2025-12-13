@@ -72,6 +72,60 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
     throw new Error("Ghost API failed after max retries");
 }
 
+async function repairJson(malformed: string, contextPrompt: string): Promise<any | null> {
+    console.log("🔧 [REPAIR] Attempting to fix malformed JSON...");
+    const repairPrompt = `SYSTEM: You are a JSON REPAIR AGENT.
+Your GOAL: Fix the syntax of the provided text to ensure it is VALID JSON.
+
+CONTEXT (The JSON must match this schema/logic):
+${contextPrompt}
+
+MALFORMED OUTPUT:
+${malformed}
+
+INSTRUCTIONS:
+1. Output ONLY the valid JSON object.
+2. Do not explain.
+3. Fix comma errors, unescaped quotes, or missing brackets.
+4. If multiple JSON blocks exist, merge or pick the most complete one.`;
+
+    // Helper to clean and parse
+    const cleanAndParse = (input: string) => {
+        const clean = input
+            .replace(/```json\s*/g, "").replace(/```\s*/g, "")
+            .replace(/,\s*([\]\}])/g, '$1')
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+            .trim();
+
+        let jsonStr = clean;
+        const tagMatch = clean.match(/<json>([\s\S]*?)<\/json>/i);
+        if (tagMatch) {
+            jsonStr = tagMatch[1];
+        } else {
+            const jsonMatch = clean.match(/\{[\s\S]*\}/);
+            if (jsonMatch) jsonStr = jsonMatch[0];
+        }
+        return JSON.parse(jsonStr);
+    };
+
+    try {
+        // Attempt 1: FAST model
+        console.log("   🔧 Using FAST model for repair...");
+        const fastResponse = await callGhostAPI(repairPrompt, "fast", 1);
+        return cleanAndParse(fastResponse);
+    } catch (e) {
+        console.warn("   ⚠️ FAST repair failed, trying THINKING model...", e);
+        try {
+            // Attempt 2: THINKING model
+            const thinkingResponse = await callGhostAPI(repairPrompt, "thinking", 1);
+            return cleanAndParse(thinkingResponse);
+        } catch (e2) {
+            console.warn("   ❌ [REPAIR] Both models failed to repair JSON:", e2);
+            return null;
+        }
+    }
+}
+
 
 // =============================================================================
 // MANAGER PLANNING (thinking model) - Decides what task to give the Analyst
@@ -205,13 +259,23 @@ ${prompt}`;
 
         try {
             const parsed = JSON.parse(jsonString);
-            // Ensure focusAreas is always an array
             if (!Array.isArray(parsed.focusAreas)) {
                 parsed.focusAreas = [parsed.focusAreas || "credibility"].filter(Boolean);
             }
             return parsed;
         } catch (e: any) {
             console.log(`⚠️ [MANAGER-PLAN] JSON Parse error on attempt ${attempt}: ${e.message}`);
+
+            // ATTEMPT REPAIR
+            const repaired = await repairJson(jsonString || response, currentPrompt);
+            if (repaired) {
+                console.log("✅ [MANAGER-PLAN] JSON Repaired successfully!");
+                if (!Array.isArray(repaired.focusAreas)) {
+                    repaired.focusAreas = [repaired.focusAreas || "credibility"].filter(Boolean);
+                }
+                return repaired;
+            }
+
             if (attempt < MAX_RETRIES) {
                 continue; // Will use the error-prefixed prompt on next attempt
             }
@@ -284,6 +348,8 @@ FOR EACH ARTICLE, PROVIDE:
 1. Your suggested credibility score (0-100)
 2. Why (mention if you verified via web search)
 3. Suggested status: active, outdated, unverified, false, archived, DUPLICATE (mark for deletion), or MISSING (suggest insertion)
+   ⚠️ LOW CREDIBILITY ≠ DELETE! Low-cred propaganda is valuable for understanding what citizens see.
+   Only suggest deletion for: broken URLs, actual spam, duplicates.
 4. Priority: URGENT/HIGH/NORMAL/LOW
 5. Any translation fixes needed (Thai/Khmer)
 6. Confidence level: How sure are you about this assessment?
@@ -489,6 +555,7 @@ ${prompt}`;
             const cleanResponse = response
                 .replace(/```json\s*/g, "").replace(/```\s*/g, "")
                 .replace(/,\s*([\]\}])/g, '$1')
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
                 .trim();
             const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
@@ -511,13 +578,8 @@ ${prompt}`;
                 completionPercent: 0,
                 status: "CONTINUE",
                 finalActions: [],
-                nextTask: {
-                    taskType: "verify",
-                    taskDescription: "Review all unverified articles",
-                    focusAreas: ["credibility"],
-                    articlesToCheck: "unverified",
-                },
-                reasoning: "JSON parsing failed - using default",
+                nextTask: null, // Force re-planning on error
+                reasoning: "JSON parsing failed - detailed actions lost",
             };
         }
 
@@ -534,6 +596,21 @@ ${prompt}`;
             return parsed;
         } catch (e: any) {
             console.log(`⚠️ [MANAGER-FINAL] JSON Parse error on attempt ${attempt}: ${e.message}`);
+
+            // ATTEMPT REPAIR
+            const repaired = await repairJson(jsonString || response, currentPrompt);
+            if (repaired) {
+                console.log("✅ [MANAGER-FINAL] JSON Repaired successfully!");
+                // Ensure array types for repaired data
+                if (repaired.nextTask && !Array.isArray(repaired.nextTask.focusAreas)) {
+                    repaired.nextTask.focusAreas = [repaired.nextTask.focusAreas || "credibility"].filter(Boolean);
+                }
+                if (!Array.isArray(repaired.finalActions)) {
+                    repaired.finalActions = [];
+                }
+                return repaired;
+            }
+
             if (attempt < MAX_RETRIES) {
                 continue; // Will use the error-prefixed prompt on next attempt
             }
@@ -541,13 +618,8 @@ ${prompt}`;
                 completionPercent: 0,
                 status: "CONTINUE",
                 finalActions: [],
-                nextTask: {
-                    taskType: "verify",
-                    taskDescription: "Review all unverified articles",
-                    focusAreas: ["credibility"],
-                    articlesToCheck: "unverified",
-                },
-                reasoning: "JSON parsing failed - using default",
+                nextTask: null, // Force re-planning on error
+                reasoning: "JSON parsing failed - detailed actions lost",
             };
         }
     }
@@ -556,13 +628,8 @@ ${prompt}`;
         completionPercent: 0,
         status: "CONTINUE",
         finalActions: [],
-        nextTask: {
-            taskType: "verify",
-            taskDescription: "Review all unverified articles",
-            focusAreas: ["credibility"],
-            articlesToCheck: "unverified",
-        },
-        reasoning: "Max retries exceeded - using default",
+        nextTask: null, // Force re-planning on error
+        reasoning: "Max retries exceeded - detailed actions lost",
     };
 }
 
@@ -571,7 +638,7 @@ ${prompt}`;
 // =============================================================================
 
 const MAX_ITERATIONS = 50;
-const BATCH_SIZE = 10;  // Increased to 10 for better efficiency (Analyst can handle it)
+const BATCH_SIZE = 10;  // Restored to 10 (User requested higher limit instead of small batch)
 const STALL_THRESHOLD = 4; // Stop if completion % unchanged for this many loops
 const TIME_LIMIT = 60 * 60 * 1000; // 60 minutes (effectively disabled limit)
 
@@ -585,6 +652,24 @@ export const runValidationLoop = internalAction({
         const START_TIME = Date.now();
         const RUN_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
         console.log(`🔒 Starting Validation Run: ${RUN_ID}`);
+
+        // ============================================
+        // STALE STATE CLEANUP - Reset crashed runs
+        // If a previous run crashed and left isRunning=true, detect and reset it
+        // ============================================
+        const STALE_THRESHOLD = 10 * 60 * 1000; // 10 minutes
+        const existingState = await ctx.runQuery(internal.api.getValidationState, {});
+        if (existingState?.isRunning && existingState.lastUpdatedAt) {
+            const staleTime = Date.now() - existingState.lastUpdatedAt;
+            if (staleTime > STALE_THRESHOLD) {
+                console.log(`⚠️ Found stale run (${Math.round(staleTime / 60000)}min old). Previous run likely crashed. Resetting...`);
+                await ctx.runMutation(internal.api.updateValidationState, {
+                    isRunning: false,
+                    activeRunId: undefined,
+                    currentInstruction: "Previous run crashed - reset by stale detection",
+                });
+            }
+        }
 
         // Initialize state & Claim Lock
         await ctx.runMutation(internal.api.updateValidationState, {
@@ -697,9 +782,11 @@ export const runValidationLoop = internalAction({
                     console.warn("   ⚠️ Analyst returned very short/empty findings, proceeding with caution...");
                 }
 
-                // Build article context for Manager's final review
+                // Build article context for Manager's final review (include URL and credibility for verification)
                 const articleContext = batch.map((a: any) =>
-                    `- [${a.country.toUpperCase()}] "${a.title}" | Source: ${a.source} | Summary: ${a.summary || a.summaryEn || "(none)"}`
+                    `- [${a.country.toUpperCase()}] "${a.title}"
+   Source: ${a.source} (cred:${a.credibility || 50}) | URL: ${a.sourceUrl}
+   Summary: ${a.summary || a.summaryEn || "(none)"}`
                 ).join("\n");
 
                 // ============================================

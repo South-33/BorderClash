@@ -447,6 +447,12 @@ FOCUS:
 - How Cambodian news frames the conflict
 - Local Cambodian perspectives and concerns
 
+📌 INCLUDE ALL NEWS - NOT JUST CREDIBLE:
+- Find EVERYTHING a Cambodian citizen would see - propaganda, government press releases, viral stories, AND credible journalism
+- 🏢 GOVERNMENT SOURCES ARE IMPORTANT: Official ministry statements, AKP, etc. = pure propaganda. INCLUDE them with low credibility scores!
+- We score credibility separately - your job is to FIND news, not filter it
+- Recent/breaking news is highest priority, regardless of credibility
+
 CREDIBILITY SCORING - THINK CRITICALLY:
 Don't just score based on source name. Analyze the CONTENT:
 🔴 LOWER SCORE IF: Emotional language, no evidence cited, one-sided, exaggerated claims, "sources say" without naming who
@@ -460,10 +466,12 @@ SCORING GUIDE:
 • Below 25: Obvious misinformation or fabrication
 
 TRANSLATION REQUIREMENTS:
-- Provide NATURAL translations (not machine-translated)
-- Thai: ภาษาราชการ (formal Thai)
-- Khmer: ភាសាផ្លូវការ (formal Khmer)
-- If unsure, leave translation field empty
+- Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
+- Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
+- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language like how a Cambodian would explain to family
+- NOT formal/government language - use words regular people actually use
+- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
+- If unsure about translation quality, leave field empty
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
@@ -494,9 +502,17 @@ RULES:
 - Inside the tags, output valid JSON only
 - You can search/think before the tags
 - Use English numerals (0-9) only
-- Extract EXACT publication date/time from the article page
 
-If no credible news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
+📅 DATE HANDLING - BE STRICT, DON'T GUESS:
+- ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
+- If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
+- DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
+- DO NOT use today's date unless the article explicitly says \"Published today\" with a date
+- Common bad dates to REJECT: dates in the far future, dates from years ago for current news
+- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
+- WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
+
+If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
 
         return await processNewsResponse(ctx, prompt, "cambodia");
     },
@@ -573,6 +589,12 @@ FOCUS:
 - How Thai news frames the conflict
 - Local Thai perspectives and concerns
 
+📌 INCLUDE ALL NEWS - NOT JUST CREDIBLE:
+- Find EVERYTHING a Thai citizen would see - propaganda, government press releases, viral stories, AND credible journalism
+- 🏢 GOVERNMENT SOURCES ARE IMPORTANT: Official military statements, ministry announcements = pure propaganda. INCLUDE them with low credibility scores!
+- We score credibility separately - your job is to FIND news, not filter it
+- Recent/breaking news is highest priority, regardless of credibility
+
 CREDIBILITY SCORING - THINK CRITICALLY:
 Don't just score based on source name. Analyze the CONTENT:
 🔴 LOWER SCORE IF: Emotional language, no evidence cited, one-sided, exaggerated claims, "sources say" without naming who
@@ -586,10 +608,12 @@ SCORING GUIDE:
 • Below 25: Obvious misinformation or fabrication
 
 TRANSLATION REQUIREMENTS:
-- Provide NATURAL translations (not machine-translated)
-- Thai: ภาษาราชการ (formal Thai)
-- Khmer: ភាសាផ្លូវការ (formal Khmer)
-- If unsure, leave translation field empty
+- Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
+- Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
+- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language like how a Cambodian would explain to family
+- NOT formal/government language - use words regular people actually use
+- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
+- If unsure about translation quality, leave field empty
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
@@ -620,9 +644,17 @@ RULES:
 - Inside the tags, output valid JSON only
 - You can search/think before the tags
 - Use English numerals (0-9) only
-- Extract EXACT publication date/time from the article page
 
-If no credible news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
+📅 DATE HANDLING - BE STRICT, DON'T GUESS:
+- ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
+- If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
+- DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
+- DO NOT use today's date unless the article explicitly says \"Published today\" with a date
+- Common bad dates to REJECT: dates in the far future, dates from years ago for current news
+- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
+- WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
+
+If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
 
         return await processNewsResponse(ctx, prompt, "thailand");
     },
@@ -704,6 +736,11 @@ FOCUS:
 - Diplomatic efforts and negotiations
 - What the OUTSIDE WORLD is being told about this conflict
 
+📌 INCLUDE ALL NEWS - EVEN BIASED INTERNATIONAL COVERAGE:
+- Find EVERYTHING international outlets are reporting - including sensationalized or biased coverage
+- We score credibility separately - your job is to FIND news, not filter it
+- Recent/breaking news is highest priority, regardless of credibility
+
 CREDIBILITY SCORING - THINK CRITICALLY:
 Don't just score based on source name. Analyze the CONTENT:
 🔴 LOWER SCORE IF: Emotional language, unverified claims, sensational headlines, "sources say" without naming who
@@ -717,10 +754,12 @@ SCORING GUIDE:
 • Below 40: Unreliable, missing URL, contradicted by other sources
 
 TRANSLATION REQUIREMENTS:
-- Provide NATURAL translations (not machine-translated)
-- Thai: ภาษาราชการ (formal Thai)
-- Khmer: ភាសាផ្លូវការ (formal Khmer)
-- If unsure, leave translation field empty
+- Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
+- Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
+- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language like how a Cambodian would explain to family
+- NOT formal/government language - use words regular people actually use
+- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
+- If unsure about translation quality, leave field empty
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
@@ -751,9 +790,17 @@ RULES:
 - Inside the tags, output valid JSON only
 - You can search/think before the tags
 - Use English numerals (0-9) only
-- Extract EXACT publication date/time from the article page
 
-If no credible news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
+📅 DATE HANDLING - BE STRICT, DON'T GUESS:
+- ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
+- If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
+- DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
+- DO NOT use today's date unless the article explicitly says \"Published today\" with a date
+- Common bad dates to REJECT: dates in the far future, dates from years ago for current news
+- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
+- WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
+
+If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
 
         return await processNewsResponse(ctx, prompt, "international");
     },
@@ -865,7 +912,25 @@ Please output the FIXED JSON wrapped in <json> tags:
 
             // Insert new articles
             for (const article of articles) {
-                const publishedAt = new Date(article.publishedAt).getTime() || Date.now();
+                // VALIDATE and PARSE publishedAt - fall back to fetch time if invalid/missing
+                let publishedAt = Date.now(); // Default to fetch time
+                if (article.publishedAt && article.publishedAt !== null) {
+                    const parsed = new Date(article.publishedAt).getTime();
+                    if (!isNaN(parsed)) {
+                        // Validate: not in the future, not more than 30 days old
+                        const now = Date.now();
+                        const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+                        const oneDayInFuture = now + (24 * 60 * 60 * 1000);
+
+                        if (parsed > oneDayInFuture) {
+                            console.log(`   ⚠️ Rejecting future date for "${article.title?.substring(0, 30)}..." - using fetch time`);
+                        } else if (parsed < thirtyDaysAgo) {
+                            console.log(`   ⚠️ Rejecting old date (>30 days) for "${article.title?.substring(0, 30)}..." - using fetch time`);
+                        } else {
+                            publishedAt = parsed; // Valid date, use it
+                        }
+                    }
+                }
 
                 // ====== URL VALIDATION ======
                 const url = article.sourceUrl || "";
@@ -923,7 +988,8 @@ Please output the FIXED JSON wrapped in <json> tags:
                 // Apply credibility penalty
                 const finalCredibility = Math.max(10, Math.min(100, (article.credibility || 50) - credibilityPenalty));
 
-                await ctx.runMutation(internal.api.insertArticle, {
+                // Check if insert was successful (returns null if duplicate)
+                const insertResult = await ctx.runMutation(internal.api.insertArticle, {
                     perspective: country,
                     title: article.title,
                     titleEn: article.titleEn,
@@ -939,13 +1005,20 @@ Please output the FIXED JSON wrapped in <json> tags:
                     summaryTh: article.summaryTh,
                     summaryKh: article.summaryKh,
                 });
-                addedCount++;
-                const credNote = credibilityPenalty > 0 ? ` (adjusted from ${article.credibility || 50})` : "";
-                console.log(`   ✅ Added: "${(article.titleEn || article.title || "").substring(0, 50)}..." [${finalCredibility}${credNote}]`);
+
+                if (insertResult !== null) {
+                    // Actually inserted
+                    addedCount++;
+                    const credNote = credibilityPenalty > 0 ? ` (adjusted from ${article.credibility || 50})` : "";
+                    console.log(`   ✅ Added: "${(article.titleEn || article.title || "").substring(0, 50)}..." [${finalCredibility}${credNote}]`);
+                } else {
+                    // Skipped as duplicate
+                    skippedCount++;
+                }
             }
 
             if (skippedCount > 0) {
-                console.log(`   ⚠️ Skipped ${skippedCount} articles with invalid/missing URLs`);
+                console.log(`   ⚠️ Skipped ${skippedCount} duplicates/invalid URLs`);
             }
 
             // Flag outdated articles
@@ -957,7 +1030,7 @@ Please output the FIXED JSON wrapped in <json> tags:
                 });
             }
 
-            console.log(`✅ [${country.toUpperCase()}] Added ${addedCount}, flagged ${(result.flaggedTitles || []).length}`);
+            console.log(`✅ [${country.toUpperCase()}] Added ${addedCount}, skipped ${skippedCount}, flagged ${(result.flaggedTitles || []).length}`);
             return { newArticles: addedCount, flagged: (result.flaggedTitles || []).length };
 
         } catch (err: any) {
@@ -981,27 +1054,89 @@ export const synthesizeAll = internalAction({
     handler: async (ctx): Promise<any> => {
         console.log("🧠 [SYNTHESIS] Running combined analysis via Ghost API...");
 
-        // Get articles from ALL THREE perspectives
-        const cambodiaArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "cambodia", limit: 50 });
-        const thailandArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "thailand", limit: 50 });
-        const internationalArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "international", limit: 50 });
+        // ==================== TIMELINE CONTEXT (PRIMARY SOURCE) ====================
+        // Timeline events are the verified, structured "memory" of the conflict
+        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 50 });
+        const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
 
-        if (cambodiaArticles.length === 0 && thailandArticles.length === 0 && internationalArticles.length === 0) {
-            console.log("⚠️ [SYNTHESIS] No articles to synthesize");
+        console.log(`📜 Timeline: ${timeline.length} events (avg importance: ${timelineStats.avgImportance})`);
+
+        const timelineContext = timeline.length > 0
+            ? timeline.map((e: any) => {
+                const timeDisplay = e.timeOfDay ? `, ${e.timeOfDay}` : "";
+                // Get top 3 most credible sources with URLs for verification (matching historian.ts)
+                const topSources = [...e.sources]
+                    .sort((a: any, b: any) => (b.credibility || 50) - (a.credibility || 50))
+                    .slice(0, 3);
+                const sourceDetails = topSources
+                    .map((s: any) => `${s.name} (cred:${s.credibility || 50}): ${s.url}`)
+                    .join("\n     ");
+                return `[${e.date}${timeDisplay}] ${e.title} (${e.category}, ${e.status}, importance:${e.importance})
+   ${e.description}
+   Sources (${e.sources.length} total, top 3):
+     ${sourceDetails || "(none)"}`;
+            }).join("\n\n")
+            : "(No timeline events yet - first run)";
+
+        // ==================== STRATIFIED ARTICLE SAMPLING ====================
+        // Timeline has verified/credible sources, so we DON'T need high-cred articles again.
+        // Instead we focus on:
+        // 1. LOW CREDIBILITY (propaganda) - to analyze what each side is lying about
+        // 2. BREAKING NEWS (most recent) - to catch current developments
+        // This keeps context bounded even as DB grows to 1000s of articles.
+
+        // Fetch more articles than we need, then filter
+        const cambodiaAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "cambodia", limit: 100 });
+        const thailandAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "thailand", limit: 100 });
+        const internationalAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "international", limit: 100 });
+
+        if (cambodiaAll.length === 0 && thailandAll.length === 0 && internationalAll.length === 0 && timeline.length === 0) {
+            console.log("⚠️ [SYNTHESIS] No articles or timeline events to synthesize");
             return null;
         }
 
-        const cambodiaList: string = cambodiaArticles.map((a: any) =>
-            `- [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50}) - ${a.summary || "No summary"}`
+        // Helper to format article for prompt
+        const formatArticle = (a: any) =>
+            `- [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
+   URL: ${a.sourceUrl || "(none)"}
+   Summary: ${a.summary || "No summary"}`;
+
+        // ==================== LOW CREDIBILITY / PROPAGANDA (15 per country) ====================
+        // Sort by credibility ASC (lowest first) and take 15
+        const cambodiaLowCred = [...cambodiaAll]
+            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
+            .slice(0, 15);
+        const thailandLowCred = [...thailandAll]
+            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
+            .slice(0, 15);
+        const internationalLowCred = [...internationalAll]
+            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
+            .slice(0, 15);
+
+        const cambodiaPropaganda = cambodiaLowCred.map(formatArticle).join("\n");
+        const thailandPropaganda = thailandLowCred.map(formatArticle).join("\n");
+        const internationalPropaganda = internationalLowCred.map(formatArticle).join("\n");
+
+        console.log(`📰 [SYNTHESIS] Low-cred articles: Cambodia=${cambodiaLowCred.length}, Thailand=${thailandLowCred.length}, Intl=${internationalLowCred.length}`);
+
+        // ==================== BREAKING NEWS (30 most recent across all) ====================
+        // Combine all, sort by publishedAt DESC (newest first), take 30
+        const allArticles = [
+            ...cambodiaAll.map(a => ({ ...a, country: "cambodia" })),
+            ...thailandAll.map(a => ({ ...a, country: "thailand" })),
+            ...internationalAll.map(a => ({ ...a, country: "international" })),
+        ];
+        const breakingNews = [...allArticles]
+            .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+            .slice(0, 30);
+
+        const breakingNewsList = breakingNews.map((a: any) =>
+            `- [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
+   URL: ${a.sourceUrl || "(none)"}
+   Summary: ${a.summary || "No summary"}`
         ).join("\n");
 
-        const thailandList: string = thailandArticles.map((a: any) =>
-            `- [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50}) - ${a.summary || "No summary"}`
-        ).join("\n");
-
-        const internationalList: string = internationalArticles.map((a: any) =>
-            `- [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50}) - ${a.summary || "No summary"}`
-        ).join("\n");
+        console.log(`⚡ [SYNTHESIS] Breaking news: ${breakingNews.length} articles`);
 
         // Get previous analysis for context (MEMORY)
         const prevCambodia = await ctx.runQuery(api.api.getAnalysis, { target: "cambodia" }) as any;
@@ -1009,6 +1144,10 @@ export const synthesizeAll = internalAction({
         const prevNeutral = await ctx.runQuery(api.api.getAnalysis, { target: "neutral" }) as any;
 
         const memoryContext = `
+📜 TIMELINE (VERIFIED HISTORICAL RECORD - ${timeline.length} events):
+This is the structured memory of key conflict events. Use this as your PRIMARY source of truth.
+${timelineContext}
+
 📜 PREVIOUS ANALYSIS (CONTINUITY CONTEXT):
 The following was the previous analysis. You should UPDATE this based on new information, but maintain continuity.
 If nothing changed, you can keep similar themes. If the situation escalated, update accordingly.
@@ -1062,19 +1201,27 @@ Each article has a credibility score. Weight your analysis accordingly:
 If high-cred and low-cred articles conflict, TRUST THE HIGH-CRED SOURCE.
 
 🌐 TRANSLATION QUALITY:
-- Thai translations: formal (ภาษาราชการ), grammatically correct
-- Khmer translations: formal (ភាសាផ្លូវការ), grammatically correct
+- Thai translations: ภาษาพูด (spoken Thai) - natural, conversational, like how a regular Thai person would explain to a friend. NOT formal news anchor language.
+- Khmer translations: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - natural, conversational, like how a Cambodian would explain to family. NOT formal government language.
+- ALWAYS use English numerals (0-9) in translations - NEVER Thai ๑๒๓ or Khmer ១២៣
+- Prioritize being understood by average citizens over being technically "correct"
 - If unsure, leave blank rather than guess wrong
 
 ═══════════════════════════════════════════════════════════════
-🇰🇭 CAMBODIAN DOMESTIC NEWS (what Cambodians are reading - ${cambodiaArticles.length} articles):
-${cambodiaList || "(no articles)"}
+🔴 PROPAGANDA / LOW-CREDIBILITY ARTICLES (analyze for bias & lies):
+These are the LEAST credible articles from each side. Use these to understand what spin/propaganda each country is pushing.
 
-🇹🇭 THAI DOMESTIC NEWS (what Thais are reading - ${thailandArticles.length} articles):
-${thailandList || "(no articles)"}
+🇰🇭 CAMBODIAN LOW-CRED (${cambodiaLowCred.length} articles - analyze for Cambodian propaganda):
+${cambodiaPropaganda || "(no articles)"}
 
-🌍 INTERNATIONAL NEWS (outside perspective - ${internationalArticles.length} articles):
-${internationalList || "(no articles)"}
+🇹🇭 THAI LOW-CRED (${thailandLowCred.length} articles - analyze for Thai propaganda):
+${thailandPropaganda || "(no articles)"}
+
+🌍 INTERNATIONAL LOW-CRED (${internationalLowCred.length} articles - analyze for international bias):
+${internationalPropaganda || "(no articles)"}
+
+⚡ BREAKING NEWS (${breakingNews.length} most recent articles across all sources):
+${breakingNewsList || "(no articles)"}
 ═══════════════════════════════════════════════════════════════
 
 🎖️ MILITARY POSTURE & INTENSITY GAUGE - SCORING GUIDE:
@@ -1490,6 +1637,16 @@ RULES:
 export const runResearchCycle = internalAction({
     args: {},
     handler: async (ctx) => {
+        // Check if we should skip this cycle (one-time skip, auto-resets)
+        const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+        if (stats?.skipNextCycle) {
+            console.log("⏭️ SKIPPING THIS CYCLE (skipNextCycle was set)");
+            // Reset the flag so next cycle runs normally
+            await ctx.runMutation(internal.api.setStatus, { status: "online" });
+            await ctx.runMutation(internal.api.clearSkipNextCycle, {});
+            return;
+        }
+
         // Note: isPaused check removed - pause only affects automatic cron (which is disabled)
         // Manual runs via npx convex run always execute
 
@@ -1531,32 +1688,53 @@ export const runResearchCycle = internalAction({
             errors.push(`International: ${String(e)}`);
         }
 
-        // Step 2: Validation Loop
-        console.log("\n── STEP 2: VALIDATION LOOP ──");
-        try {
-            await ctx.runAction(internal.validation.runValidationLoop, {});
-            await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
-        } catch (e) {
-            console.error("❌ [STEP 2] Validation Failed:", e);
-            errors.push(`Validation: ${String(e)}`);
+        // ABSOLUTE STOP CHECK: If curation failed completely, there's no point continuing
+        if (errors.length >= 3) {
+            console.error("🛑 ALL CURATION STEPS FAILED. Aborting cycle.");
+            await ctx.runMutation(internal.api.setStatus, { status: "error", errorLog: "Curation failed completely" });
+            return;
         }
 
-        // Step 3: Dashboard Update (SKIPPED - User runs manually)
-        // console.log("\n── STEP 3: DASHBOARD UPDATE ──");
-        // try {
-        //     await ctx.runAction(internal.research.updateDashboard, {});
-        //     await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
-        // } catch (e) {
-        //     console.error("❌ [STEP 3] Dashboard Update Failed:", e);
-        //     errors.push(`Dashboard: ${String(e)}`);
-        // }
+        // Step 2: Historian Loop - Process ALL unprocessed articles
+        console.log("\n── STEP 2: HISTORIAN LOOP ──");
+        let historianLoops = 0;
+        const MAX_HISTORIAN_LOOPS = 20;  // Safety cap to prevent infinite loops
 
-        // Step 4: Combined Synthesis (Uses "Memory" of previous state)
-        console.log("\n── STEP 4: SYNTHESIS ──");
+        try {
+            while (historianLoops < MAX_HISTORIAN_LOOPS) {
+                historianLoops++;
+                console.log(`\n   📜 Historian iteration ${historianLoops}...`);
+
+                const result = await ctx.runAction(internal.historian.runHistorianCycle, {});
+
+                // Check if historian found any articles to process
+                if (!result || result.processed === 0) {
+                    console.log("   ✅ Historian complete - no more articles to process");
+                    break;
+                }
+
+                console.log(`   Processed ${result.processed} articles, created ${result.eventsCreated} events`);
+
+                // Brief cooldown between iterations
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            if (historianLoops >= MAX_HISTORIAN_LOOPS) {
+                console.warn(`   ⚠️ Historian reached max iterations (${MAX_HISTORIAN_LOOPS})`);
+            }
+
+            console.log(`   📊 Historian completed after ${historianLoops} iterations`);
+        } catch (e) {
+            console.error("❌ [STEP 2] Historian Failed:", e);
+            errors.push(`Historian: ${String(e)}`);
+        }
+
+        // Step 3: Combined Synthesis
+        console.log("\n── STEP 3: SYNTHESIS ──");
         try {
             await ctx.runAction(internal.research.synthesizeAll, {});
         } catch (e) {
-            console.error("❌ [STEP 4] Synthesis Failed:", e);
+            console.error("❌ [STEP 3] Synthesis Failed:", e);
             errors.push(`Synthesis: ${String(e)}`);
         }
 
@@ -1571,9 +1749,6 @@ export const runResearchCycle = internalAction({
             console.log("⚠️ RESEARCH CYCLE COMPLETE (WITH ERRORS)");
             console.log("Errors encountered:", errors);
             console.log("═══════════════════════════════════════════════════════════════");
-            // If at least one thing succeeded, we stay online but maybe log the error elsewhere?
-            // For now, let's just go back to online so the next cycle can try again.
-            // Only set error status if it was catastrophic (e.g. all failed), but for now 'online' to keep the heartbeat.
             await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: errors.join(" | ") });
         }
     },
@@ -1588,102 +1763,175 @@ export const updateDashboard = internalAction({
     handler: async (ctx) => {
         console.log("📊 [DASHBOARD] Starting live stats update...");
 
+        // Get previous stats
         const prevStats = await ctx.runQuery(api.api.getDashboardStats, {}) as any;
 
-        const memoryContext = `
-📊 CURRENT DASHBOARD STATS (from previous update):
-Conflict Level: ${prevStats?.conflictLevel || "UNKNOWN"}
-Casualties: ${prevStats?.casualtyCount || 0}
-Displaced: ${prevStats?.displacedCount || 0} (Trend: ${prevStats?.displacedTrend || 0}%)
-Civilian Injured: ${prevStats?.civilianInjuredCount || 0}
-Military Injured: ${prevStats?.militaryInjuredCount || 0}
+        // ==================== TIMELINE CONTEXT (same as synthesizeAll) ====================
+        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 30 });
+        const timelineContext = timeline.length > 0
+            ? timeline.map((e: any) => {
+                const timeDisplay = e.timeOfDay ? `, ${e.timeOfDay}` : "";
+                const topSources = [...e.sources]
+                    .sort((a: any, b: any) => (b.credibility || 50) - (a.credibility || 50))
+                    .slice(0, 3);
+                const sourceDetails = topSources
+                    .map((s: any) => `${s.name} (cred:${s.credibility || 50}): ${s.url}`)
+                    .join("\n     ");
+                return `[${e.date}${timeDisplay}] ${e.title} (${e.category}, importance:${e.importance})
+   ${e.description}
+   Sources: ${sourceDetails || "(none)"}`;
+            }).join("\n\n")
+            : "(No timeline events)";
 
-⚠️ IMPORTANT - REGARDING UPDATES:
-- These numbers may ALREADY be accurate and up-to-date
-- You are NOT required to change numbers on every update
-- If your research shows the situation hasn't changed, RETURN THE SAME NUMBERS
-- Only update if you find NEW, VERIFIED information that differs from current stats
-- It's better to keep stable numbers than to make random changes without evidence
-- DO NOT invent changes just to show activity - accuracy matters more than updates
-`;
+        // ==================== ARTICLE CONTEXT (same as synthesizeAll) ====================
+        const cambodiaAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "cambodia", limit: 50 });
+        const thailandAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "thailand", limit: 50 });
+        const internationalAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "international", limit: 50 });
 
+        // Helper to format article
+        const formatArticle = (a: any) =>
+            `- [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
+   URL: ${a.sourceUrl || "(none)"}
+   Summary: ${a.summary || "No summary"}`;
+
+        // Low credibility articles (10 per country for dashboard - smaller than synthesis)
+        const cambodiaLowCred = [...cambodiaAll]
+            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
+            .slice(0, 10);
+        const thailandLowCred = [...thailandAll]
+            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
+            .slice(0, 10);
+        const internationalLowCred = [...internationalAll]
+            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
+            .slice(0, 10);
+
+        const cambodiaPropaganda = cambodiaLowCred.map(formatArticle).join("\n");
+        const thailandPropaganda = thailandLowCred.map(formatArticle).join("\n");
+        const internationalPropaganda = internationalLowCred.map(formatArticle).join("\n");
+
+        // Breaking news (20 most recent)
+        const allArticles = [
+            ...cambodiaAll.map(a => ({ ...a, country: "cambodia" })),
+            ...thailandAll.map(a => ({ ...a, country: "thailand" })),
+            ...internationalAll.map(a => ({ ...a, country: "international" })),
+        ];
+        const breakingNews = [...allArticles]
+            .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+            .slice(0, 20);
+
+        const breakingNewsList = breakingNews.map((a: any) =>
+            `- [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
+   Summary: ${a.summary || "No summary"}`
+        ).join("\n");
+
+        console.log(`📊 [DASHBOARD] Context: ${timeline.length} timeline events, ${breakingNews.length} breaking news`);
 
         const prompt = `You are the DASHBOARD CONTROLLER for the BorderClash monitor.
-Your job is to SEARCH THE WEB in MULTIPLE LANGUAGES and cross-reference sources to establish accurate metrics.
+Your job is to maintain ACCURATE, STABLE statistics - NOT to invent changes.
 
-${memoryContext}
+⚠️ CRITICAL RULE - STABILITY OVER ACTIVITY:
+- Numbers should ONLY change when there is NEW, VERIFIED evidence
+- If nothing has changed, RETURN THE SAME NUMBERS
+- It is 100% acceptable to return identical values to previous update
+- DO NOT make small random adjustments just to show "activity"
+- Accuracy and stability matter MORE than frequent updates
 
-🌐 MULTI-LANGUAGE RESEARCH (SEARCH IN ALL THREE):
-1. ENGLISH: "Thailand Cambodia border clash casualties", "Preah Vihear conflict displaced", "border shelling deaths"
-2. THAI: "ไทย กัมพูชา ปะทะ ชายแดน ผู้บาดเจ็บ", "อพยพ พระวิหาร", "ทหารไทย เสียชีวิต"
-3. KHMER: "ការប៉ះទង្គិច ព្រំដែន ប្រទេសថៃ កម្ពុជា", "ប្រជាជនភៀសខ្លួន", "ស្លាប់ របួស"
+📊 CURRENT DASHBOARD STATS (from previous update):
+┌─────────────────────────────────────────────┐
+│ Conflict Level: ${prevStats?.conflictLevel || "UNKNOWN"}
+│ Casualties: ${prevStats?.casualtyCount || 0}
+│ Displaced: ${prevStats?.displacedCount || 0} (Trend: ${prevStats?.displacedTrend || 0}%)
+│ Civilian Injured: ${prevStats?.civilianInjuredCount || 0}
+│ Military Injured: ${prevStats?.militaryInjuredCount || 0}
+└─────────────────────────────────────────────┘
 
-**SEARCH BROADLY - use ANY credible sources you find, not just these examples.**
-** You are NOT limited to these sources - use your judgment to find the most reliable information:**
-**Prioritize international wire services (Reuters, AP, AFP) as baseline, but verify with local sources too.**
+═══════════════════════════════════════════════════════════════
+📜 TIMELINE (VERIFIED EVENTS - PRIMARY SOURCE):
+These are confirmed, verified events with sources. Base your assessment primarily on these:
 
-📰 EXAMPLE SOURCES (prioritize these, but search broadly):
-INTERNATIONAL (baseline - most neutral):
-- Wire services: Reuters, AP, AFP
-- Global news: BBC, Al Jazeera, CNN, Guardian
+${timelineContext}
+═══════════════════════════════════════════════════════════════
 
-THAI SOURCES (for Thai perspective):
-- Bangkok Post, Thai PBS, Matichon, ThaiRath, Khaosod
+🔴 LOW-CREDIBILITY / PROPAGANDA ARTICLES (for context - be skeptical):
 
-CAMBODIAN SOURCES (for Cambodian perspective):
-- Phnom Penh Post, Fresh News, Khmer Times, VOD, RFA Khmer
+🇰🇭 CAMBODIAN LOW-CRED (${cambodiaLowCred.length} articles):
+${cambodiaPropaganda || "(none)"}
 
-OFFICIAL (use with skepticism - governments have agendas):
-- Royal Thai Army (RTA), Thai Ministry of Defense
-- Royal Cambodian Armed Forces (RCAF), Cambodian Ministry of National Defense
-- UN/ASEAN statements
+🇹🇭 THAI LOW-CRED (${thailandLowCred.length} articles):
+${thailandPropaganda || "(none)"}
 
-📊 REQUIRED METRICS - TRIANGULATE FROM MULTIPLE SOURCES:
-1. CONFLICT LEVEL (use UPPERCASE):
-   - "LOW": No kinetic action, only diplomatic words
-   - "ELEVATED": Troop movements, drills, minor skirmishes, evacuations
-   - "CRITICAL": Sustained shelling, confirmed fatalities, major offensive
-   - "UNCERTAIN": Conflicting reports, cannot determine with confidence
+🌍 INTERNATIONAL LOW-CRED (${internationalLowCred.length} articles):
+${internationalPropaganda || "(none)"}
 
-2. STATS - CROSS-CHECK AND MAKE BEST ESTIMATE:
-   - displaced: Cross-check Thai + Cambodian + International numbers, make your BEST ESTIMATE
-   - displacedTrend: PERCENTAGE CHANGE from 1 week ago (e.g., +300 means 300% increase, -50 means 50% decrease)
-   - fatalities: Make your BEST ESTIMATE based on all available sources
-   - civilianInjured: Separate civilian injuries
-   - militaryInjured: Separate military injuries
+⚡ BREAKING NEWS (${breakingNews.length} most recent):
+${breakingNewsList || "(none)"}
+═══════════════════════════════════════════════════════════════
 
-⚠️ SYMMETRIC ACCURACY RULES:
-- ALL sources (Thai, Cambodian, International) may have biases - treat them equally
-- If sources give DIFFERENT numbers, make your BEST EDUCATED ESTIMATE (not just the lowest)
-- Weight sources by how many independent reports corroborate a claim
-- Single-source claims should be noted with lower confidence
-- DO NOT HALLUCINATE - if you cannot verify, return 0 with low confidence
-- If uncertain, set confidence LOW and explain in confidenceRationale
+🔍 YOUR TASK:
+1. Review the timeline events above for any NEW information about casualties/displaced
+2. Cross-reference with breaking news - does it confirm or contradict?
+3. Be SKEPTICAL of low-cred sources - they often exaggerate numbers
+4. ONLY if there is clear, verified evidence of change, update the numbers
+5. If nothing significant has changed, KEEP CURRENT NUMBERS
+
+📊 WHEN TO CHANGE NUMBERS:
+✅ CHANGE IF: Timeline shows new confirmed casualties (check sources!)
+✅ CHANGE IF: Multiple HIGH-credibility sources confirm different numbers
+❌ DON'T CHANGE IF: Only low-cred sources report new numbers
+❌ DON'T CHANGE IF: Numbers are "estimates" or "unconfirmed"
+❌ DON'T CHANGE IF: Breaking news just repeats old events
+
+🌐 WEB SEARCH - USE IT TO VERIFY:
+You have access to web search. Use it to:
+- Verify casualty numbers from international wire services (Reuters, AP, AFP)
+- Check for official government announcements
+- Cross-reference claims from the timeline/articles above
+- Search in English, Thai (ไทย กัมพูชา ปะทะ), and Khmer (ការប៉ះទង្គិច ព្រំដែន)
+If your search confirms the current numbers are still accurate, KEEP THEM.
+
+ CONFLICT LEVEL (use UPPERCASE):
+- "LOW": No kinetic action, only diplomatic words
+- "ELEVATED": Troop movements, drills, minor skirmishes, small-scale evacuations
+- "CRITICAL": Sustained shelling, confirmed fatalities, major offensive
+- "UNCERTAIN": Conflicting reports, cannot determine with confidence
+
+🔢 STATS RULES:
+- displaced: Only change if NEW displacement events in timeline
+- displacedTrend: PERCENTAGE CHANGE from 1 week ago (keep at 0 if stable)
+- fatalities: CUMULATIVE total - can only increase, never decrease
+- civilianInjured: Separate civilian injuries
+- militaryInjured: Separate military injuries
 
 Wrap your response in <json> tags:
 <json>
 {
-  "conflictLevel": "LOW",
-  "confidence": 75,
-  "confidenceRationale": "Based on X sources agreeing, Y sources disagree on...",
+  "conflictLevel": "${prevStats?.conflictLevel || "LOW"}",
+  "unchanged": true,
+  "changeReason": "No new verified information - keeping stable values",
   "stats": {
-    "displaced": 0,
-    "displacedTrend": 0,
-    "fatalities": 0,
-    "civilianInjured": 0,
-    "militaryInjured": 0
+    "displaced": ${prevStats?.displacedCount || 0},
+    "displacedTrend": ${prevStats?.displacedTrend || 0},
+    "fatalities": ${prevStats?.casualtyCount || 0},
+    "civilianInjured": ${prevStats?.civilianInjuredCount || 0},
+    "militaryInjured": ${prevStats?.militaryInjuredCount || 0}
   }
 }
 </json>
 
+NOTE: The above JSON shows the CURRENT values. If nothing has changed, you can return this EXACTLY.
+Only modify values if you have found new verified evidence.
+
 RULES:
 - You MUST include <json> and </json> tags
 - Inside the tags, output valid JSON only
-- You can analyze before the tags
+- "unchanged": true means you're returning same values (this is GOOD if nothing changed)
+- "unchanged": false means you found new evidence and are updating
 - Use English numerals (0-9) only`;
 
         interface DashboardData {
             conflictLevel?: string;
+            unchanged?: boolean;  // true = keeping same values (this is good!)
+            changeReason?: string;  // Explanation of why changed or kept same
             stats?: {
                 displaced?: number;
                 displacedTrend?: number;  // % change from 1 week ago
@@ -1706,16 +1954,23 @@ RULES:
             if (!data) {
                 return;
             }
-            console.log("✅ [DASHBOARD] Parsed data:", data);
 
-            // 3. Update Database (NEW: dashboardStats table, NOT neutralAnalysis)
+            // Log whether values changed or stayed the same
+            if (data.unchanged) {
+                console.log(`✅ [DASHBOARD] No changes needed: ${data.changeReason || "values stable"}`);
+            } else {
+                console.log(`📊 [DASHBOARD] Updating values: ${data.changeReason || "new evidence found"}`);
+            }
+            console.log("📊 [DASHBOARD] Parsed data:", data);
+
+            // Update Database (even if unchanged - this updates lastUpdatedAt)
             await ctx.runMutation(internal.api.upsertDashboardStats, {
-                conflictLevel: data.conflictLevel || "LOW",
-                displacedCount: data.stats?.displaced || 0,
-                displacedTrend: data.stats?.displacedTrend || 0,
-                casualtyCount: data.stats?.fatalities || 0,
-                civilianInjuredCount: data.stats?.civilianInjured || 0,
-                militaryInjuredCount: data.stats?.militaryInjured || 0,
+                conflictLevel: data.conflictLevel || prevStats?.conflictLevel || "LOW",
+                displacedCount: data.stats?.displaced ?? prevStats?.displacedCount ?? 0,
+                displacedTrend: data.stats?.displacedTrend ?? prevStats?.displacedTrend ?? 0,
+                casualtyCount: data.stats?.fatalities ?? prevStats?.casualtyCount ?? 0,
+                civilianInjuredCount: data.stats?.civilianInjured ?? prevStats?.civilianInjuredCount ?? 0,
+                militaryInjuredCount: data.stats?.militaryInjured ?? prevStats?.militaryInjuredCount ?? 0,
             });
 
             console.log("💾 [DASHBOARD] Database updated successfully.");

@@ -87,6 +87,21 @@ export const getArticleCounts = query({
     },
 });
 
+// Timeline events for frontend display
+export const getTimeline = query({
+    args: {
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const events = await ctx.db
+            .query("timelineEvents")
+            .withIndex("by_date")
+            .order("desc")
+            .take(args.limit ?? 50);
+        return events;
+    },
+});
+
 // =============================================================================
 // INTERNAL QUERIES (Research Agent)
 // =============================================================================
@@ -476,6 +491,19 @@ export const setStatus = internalMutation({
     },
 });
 
+// Internal mutation to clear skipNextCycle flag (called automatically after skip)
+export const clearSkipNextCycle = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const existing = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+        if (existing) {
+            await ctx.db.patch(existing._id, { skipNextCycle: false });
+        }
+    },
+});
+
 export const pauseTimer = mutation({
     args: {},
     handler: async (ctx) => {
@@ -516,6 +544,22 @@ export const stopResearchCycle = mutation({
                 systemStatus: "stopped",
                 errorLog: "Cycle manually stopped by user."
             });
+        }
+    },
+});
+
+// Skip ONLY the next research cycle (auto-resets after skip)
+export const skipNextCycle = mutation({
+    args: {},
+    handler: async (ctx) => {
+        console.log("⏭️ SKIP NEXT: Will skip the next research cycle only");
+        const existing = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, { skipNextCycle: true });
+            console.log("✅ Next research cycle will be skipped");
         }
     },
 });
@@ -690,6 +734,66 @@ export const curateInternationalNews = action({
         }
     },
 });
+
+// Run Historian cycle - processes unverified articles into timeline events
+export const runHistorian = action({
+    args: {},
+    handler: async (ctx): Promise<{ success: boolean; result?: any; error?: string }> => {
+        console.log("📜 Running Historian cycle...");
+        try {
+            const result = await ctx.runAction(internal.historian.runHistorianCycle, {});
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Reset processedToTimeline flag on all articles so Historian can reprocess them
+export const resetHistorianFlags = action({
+    args: {},
+    handler: async (ctx): Promise<{ success: boolean; resetCount: number }> => {
+        console.log("🔄 Resetting Historian flags on all articles...");
+        const result = await ctx.runMutation(internal.api.clearProcessedToTimeline, {});
+        return { success: true, resetCount: result };
+    },
+});
+
+// Clear all timeOfDay values (reset to undefined)
+export const clearTimeOfDay = action({
+    args: {},
+    handler: async (ctx): Promise<{ success: boolean; cleared: number }> => {
+        console.log("🗑️ Clearing all timeOfDay values...");
+        const result = await ctx.runMutation(internal.api.resetTimeOfDayForEvents, {});
+        return { success: true, cleared: result };
+    },
+});
+
+// Export all timeline events for manual review
+export const exportTimelineEvents = action({
+    args: {},
+    handler: async (ctx): Promise<string> => {
+        const events = await ctx.runQuery(internal.api.getAllTimelineEvents, {});
+        // Format for easy pasting into ChatGPT
+        let output = `TIMELINE EVENTS (${events.length} total)\n`;
+        output += `Please estimate a time of day (HH:MM format, like "08:00", "14:30", "22:00") for each event based on when it most likely happened.\n\n`;
+
+        for (const e of events) {
+            output += `---\n`;
+            output += `ID: ${e._id}\n`;
+            output += `Date: ${e.date}\n`;
+            output += `Title: ${e.title}\n`;
+            output += `Description: ${e.description}\n`;
+            output += `Category: ${e.category}\n`;
+            output += `Current timeOfDay: ${e.timeOfDay || "(none)"}\n`;
+            output += `\n`;
+        }
+
+        console.log(output);
+        return output;
+    },
+});
+
 
 // =============================================================================
 // VALIDATION QUERIES & MUTATIONS (used by validation.ts action)
@@ -882,6 +986,106 @@ export const getCrossRefArticles = internalQuery({
     },
 });
 
+/**
+ * Get articles that haven't been processed by the Historian yet
+ * This returns articles regardless of validation status (active, unverified, etc.)
+ * Only excludes: archived, false, and already processed articles
+ */
+export const getUnprocessedForTimeline = internalQuery({
+    args: {
+        batchSize: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const thai = await ctx.db.query("thailandNews").collect();
+        const cambo = await ctx.db.query("cambodiaNews").collect();
+        const intl = await ctx.db.query("internationalNews").collect();
+
+        let all = [
+            ...thai.map(a => ({ ...a, country: "thailand" as const })),
+            ...cambo.map(a => ({ ...a, country: "cambodia" as const })),
+            ...intl.map(a => ({ ...a, country: "international" as const })),
+        ];
+
+        // Filter: NOT processed to timeline AND NOT archived/false
+        all = all.filter(a =>
+            !a.processedToTimeline &&
+            a.status !== "archived" &&
+            a.status !== "false"
+        );
+
+        // Sort by credibility (higher first) to process best sources first
+        all.sort((a, b) => (b.credibility || 50) - (a.credibility || 50));
+
+        return all.slice(0, args.batchSize);
+    },
+});
+
+/**
+ * Mark an article as processed by the Historian
+ * Called after Historian makes a decision about the article
+ */
+export const markAsProcessedToTimeline = internalMutation({
+    args: {
+        country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")),
+        title: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const table = args.country === "thailand" ? "thailandNews"
+            : args.country === "cambodia" ? "cambodiaNews"
+                : "internationalNews";
+
+        const article = await ctx.db
+            .query(table)
+            .withIndex("by_title", (q) => q.eq("title", args.title))
+            .first();
+
+        if (article) {
+            await ctx.db.patch(article._id, { processedToTimeline: true });
+        }
+    },
+});
+
+/**
+ * Clear processedToTimeline flag on ALL articles
+ * Used when you want to re-run Historian on existing articles
+ */
+export const clearProcessedToTimeline = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        let resetCount = 0;
+
+        // Reset Thailand articles
+        const thai = await ctx.db.query("thailandNews").collect();
+        for (const a of thai) {
+            if (a.processedToTimeline) {
+                await ctx.db.patch(a._id, { processedToTimeline: false });
+                resetCount++;
+            }
+        }
+
+        // Reset Cambodia articles
+        const cambo = await ctx.db.query("cambodiaNews").collect();
+        for (const a of cambo) {
+            if (a.processedToTimeline) {
+                await ctx.db.patch(a._id, { processedToTimeline: false });
+                resetCount++;
+            }
+        }
+
+        // Reset International articles
+        const intl = await ctx.db.query("internationalNews").collect();
+        for (const a of intl) {
+            if (a.processedToTimeline) {
+                await ctx.db.patch(a._id, { processedToTimeline: false });
+                resetCount++;
+            }
+        }
+
+        console.log(`🔄 Reset processedToTimeline on ${resetCount} articles`);
+        return resetCount;
+    },
+});
+
 export const updateArticleValidation = internalMutation({
     args: {
         country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")),
@@ -926,3 +1130,398 @@ export const updateArticleValidation = internalMutation({
         }
     },
 });
+
+// =============================================================================
+// TIMELINE EVENT MUTATIONS & QUERIES
+// The "memory" layer - stores key historical events for AI synthesis
+// =============================================================================
+
+/**
+ * Create a new timeline event
+ * Checks for duplicates by date + title similarity
+ */
+export const createTimelineEvent = internalMutation({
+    args: {
+        date: v.string(),           // ISO date "2024-12-12"
+        timeOfDay: v.optional(v.string()),  // Estimated time "08:00", "14:30", "22:00"
+        title: v.string(),          // English title
+        titleTh: v.optional(v.string()),  // Thai translation
+        titleKh: v.optional(v.string()),  // Khmer translation
+        description: v.string(),    // English description
+        descriptionTh: v.optional(v.string()),  // Thai translation
+        descriptionKh: v.optional(v.string()),  // Khmer translation
+        category: v.union(
+            v.literal("military"),
+            v.literal("diplomatic"),
+            v.literal("humanitarian"),
+            v.literal("political")
+        ),
+        importance: v.number(),     // 0-100, AI-determined
+        sources: v.array(v.object({
+            url: v.string(),
+            name: v.string(),
+            country: v.string(),
+            credibility: v.number(),
+            snippet: v.optional(v.string()),
+        })),
+    },
+    handler: async (ctx, args) => {
+        // Check for duplicate by date + exact title
+        const existing = await ctx.db
+            .query("timelineEvents")
+            .withIndex("by_date", q => q.eq("date", args.date))
+            .filter(q => q.eq(q.field("title"), args.title))
+            .first();
+
+        if (existing) {
+            console.log(`⚠️ Timeline event already exists: "${args.title}" on ${args.date}`);
+            return null;
+        }
+
+        const now = Date.now();
+        const eventId = await ctx.db.insert("timelineEvents", {
+            date: args.date,
+            timeOfDay: args.timeOfDay,  // Estimated time for chronological ordering
+            title: args.title,
+            titleTh: args.titleTh,
+            titleKh: args.titleKh,
+            description: args.description,
+            descriptionTh: args.descriptionTh,
+            descriptionKh: args.descriptionKh,
+            category: args.category,
+            importance: Math.max(0, Math.min(100, args.importance)),
+            status: "confirmed",
+            sources: args.sources.map(s => ({ ...s, addedAt: now })),
+            createdAt: now,
+            lastUpdatedAt: now,
+        });
+
+        console.log(`📌 Created timeline event: "${args.title}" (importance: ${args.importance})`);
+        return eventId;
+    },
+});
+
+/**
+ * Add a new source to an existing timeline event
+ * Used when multiple articles report the same event
+ */
+export const addSourceToEvent = internalMutation({
+    args: {
+        eventId: v.id("timelineEvents"),
+        source: v.object({
+            url: v.string(),
+            name: v.string(),
+            country: v.string(),
+            credibility: v.number(),
+            snippet: v.optional(v.string()),
+        }),
+    },
+    handler: async (ctx, args) => {
+        const event = await ctx.db.get(args.eventId);
+        if (!event) {
+            console.log(`⚠️ Timeline event not found: ${args.eventId}`);
+            return null;
+        }
+
+        // Avoid duplicate URLs
+        if (event.sources.some(s => s.url === args.source.url)) {
+            console.log(`⚠️ Source already linked: ${args.source.url}`);
+            return null;
+        }
+
+        await ctx.db.patch(args.eventId, {
+            sources: [...event.sources, { ...args.source, addedAt: Date.now() }],
+            lastUpdatedAt: Date.now(),
+        });
+
+        console.log(`➕ Added source "${args.source.name}" to event: "${event.title}"`);
+        return args.eventId;
+    },
+});
+
+/**
+ * Update event verification status
+ * Used when conflicting information is found
+ */
+export const updateEventStatus = internalMutation({
+    args: {
+        eventId: v.id("timelineEvents"),
+        status: v.union(
+            v.literal("confirmed"),
+            v.literal("disputed"),
+            v.literal("debunked")
+        ),
+        reason: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const event = await ctx.db.get(args.eventId);
+        if (!event) return null;
+
+        await ctx.db.patch(args.eventId, {
+            status: args.status,
+            lastUpdatedAt: Date.now(),
+        });
+
+        console.log(`🏷️ Updated event status: "${event.title}" → ${args.status}${args.reason ? ` (${args.reason})` : ""}`);
+        return args.eventId;
+    },
+});
+
+/**
+ * Update timeline event content
+ * Used by Historian to edit existing events when new info is found
+ */
+export const updateTimelineEvent = internalMutation({
+    args: {
+        eventTitle: v.string(), // Find by title (Historian references events by title)
+        updates: v.object({
+            title: v.optional(v.string()),
+            titleTh: v.optional(v.string()),
+            titleKh: v.optional(v.string()),
+            description: v.optional(v.string()),
+            descriptionTh: v.optional(v.string()),
+            descriptionKh: v.optional(v.string()),
+            date: v.optional(v.string()),
+            timeOfDay: v.optional(v.string()),  // Estimated time "08:00", "14:30"
+            category: v.optional(v.union(
+                v.literal("military"),
+                v.literal("diplomatic"),
+                v.literal("humanitarian"),
+                v.literal("political")
+            )),
+            importance: v.optional(v.number()),
+            status: v.optional(v.union(
+                v.literal("confirmed"),
+                v.literal("disputed"),
+                v.literal("debunked")
+            )),
+        }),
+        reason: v.string(), // Required - audit trail
+    },
+    handler: async (ctx, args) => {
+        // Find event by title
+        const event = await ctx.db
+            .query("timelineEvents")
+            .filter(q => q.eq(q.field("title"), args.eventTitle))
+            .first();
+
+        if (!event) {
+            console.log(`⚠️ Event not found for update: "${args.eventTitle}"`);
+            return null;
+        }
+
+        // Build patch object with only provided fields
+        const patch: any = { lastUpdatedAt: Date.now() };
+        if (args.updates.title !== undefined) patch.title = args.updates.title;
+        if (args.updates.titleTh !== undefined) patch.titleTh = args.updates.titleTh;
+        if (args.updates.titleKh !== undefined) patch.titleKh = args.updates.titleKh;
+        if (args.updates.description !== undefined) patch.description = args.updates.description;
+        if (args.updates.descriptionTh !== undefined) patch.descriptionTh = args.updates.descriptionTh;
+        if (args.updates.descriptionKh !== undefined) patch.descriptionKh = args.updates.descriptionKh;
+        if (args.updates.date !== undefined) patch.date = args.updates.date;
+        if (args.updates.timeOfDay !== undefined) patch.timeOfDay = args.updates.timeOfDay;
+        if (args.updates.category !== undefined) patch.category = args.updates.category;
+        if (args.updates.importance !== undefined) patch.importance = Math.max(0, Math.min(100, args.updates.importance));
+        if (args.updates.status !== undefined) patch.status = args.updates.status;
+
+        await ctx.db.patch(event._id, patch);
+
+        const changedFields = Object.keys(args.updates).filter(k => (args.updates as any)[k] !== undefined);
+        console.log(`✏️ Updated event "${args.eventTitle}": [${changedFields.join(", ")}] - ${args.reason}`);
+        return event._id;
+    },
+});
+
+/**
+ * Delete a timeline event - USE WITH EXTREME CAUTION
+ * Only for completely fabricated/fake events that should never have existed
+ * For debunked events, prefer setting status to "debunked" instead
+ */
+export const deleteTimelineEvent = internalMutation({
+    args: {
+        eventTitle: v.string(),
+        reason: v.string(), // Required - must justify deletion
+    },
+    handler: async (ctx, args) => {
+        const event = await ctx.db
+            .query("timelineEvents")
+            .filter(q => q.eq(q.field("title"), args.eventTitle))
+            .first();
+
+        if (!event) {
+            console.log(`⚠️ Event not found for deletion: "${args.eventTitle}"`);
+            return null;
+        }
+
+        await ctx.db.delete(event._id);
+        console.log(`🗑️ DELETED timeline event: "${args.eventTitle}" - Reason: ${args.reason}`);
+        return event._id;
+    },
+});
+
+/**
+ * Reset timeOfDay for all events (clear the bad values)
+ */
+export const resetTimeOfDayForEvents = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const events = await ctx.db.query("timelineEvents").collect();
+        let cleared = 0;
+
+        for (const event of events) {
+            if (event.timeOfDay) {
+                await ctx.db.patch(event._id, {
+                    timeOfDay: undefined,
+                    lastUpdatedAt: Date.now()
+                });
+                console.log(`🗑️ Cleared timeOfDay for "${event.title}"`);
+                cleared++;
+            }
+        }
+
+        console.log(`✅ Cleared timeOfDay from ${cleared} events`);
+        return cleared;
+    },
+});
+
+/**
+ * Get all timeline events for export
+ */
+export const getAllTimelineEvents = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        const events = await ctx.db.query("timelineEvents").collect();
+        // Sort by date for easy reading
+        events.sort((a, b) => a.date.localeCompare(b.date));
+        return events;
+    },
+});
+
+/**
+ * Get recent timeline events for synthesis context
+ * Returns events sorted CHRONOLOGICALLY by date + timeOfDay (oldest first)
+ * This ensures AI receives events in proper historical order
+ */
+export const getRecentTimeline = internalQuery({
+    args: {
+        limit: v.number(),
+        minImportance: v.optional(v.number()),  // Filter by minimum importance
+        category: v.optional(v.string()),       // Filter by category
+    },
+    handler: async (ctx, args) => {
+        // Get all events
+        const events = await ctx.db.query("timelineEvents").collect();
+
+        // Apply filters
+        let filtered = events.filter(e => e.status !== "debunked"); // Exclude debunked
+
+        if (args.minImportance !== undefined) {
+            filtered = filtered.filter(e => e.importance >= args.minImportance!);
+        }
+
+        if (args.category) {
+            filtered = filtered.filter(e => e.category === args.category);
+        }
+
+        // Sort CHRONOLOGICALLY: oldest first, by date + timeOfDay
+        // This gives AI proper historical context (events in order they happened)
+        filtered.sort((a, b) => {
+            // First compare by date
+            const dateCompare = a.date.localeCompare(b.date);
+            if (dateCompare !== 0) return dateCompare;
+
+            // Same date: compare by timeOfDay (events without time sort to end of day)
+            const timeA = a.timeOfDay || "99:99";  // Unknown times go last within day
+            const timeB = b.timeOfDay || "99:99";
+            return timeA.localeCompare(timeB);
+        });
+
+        return filtered.slice(0, args.limit);
+    },
+});
+
+/**
+ * Find an event by approximate title match and date range
+ * Used for merging sources into existing events
+ */
+export const findEventByTitleAndDate = internalQuery({
+    args: {
+        title: v.string(),          // Title to search for
+        dateRange: v.optional(v.object({
+            start: v.string(),      // ISO date "2024-12-01"
+            end: v.string(),        // ISO date "2024-12-15"
+        })),
+    },
+    handler: async (ctx, args) => {
+        const events = await ctx.db
+            .query("timelineEvents")
+            .withIndex("by_createdAt")
+            .order("desc")
+            .take(100);  // Search recent events
+
+        // Simple case-insensitive title search
+        const searchLower = args.title.toLowerCase();
+        const matches = events.filter(e => {
+            const titleMatch = e.title.toLowerCase().includes(searchLower) ||
+                searchLower.includes(e.title.toLowerCase());
+
+            // Optional date range filter
+            if (args.dateRange) {
+                const eventDate = e.date;
+                if (eventDate < args.dateRange.start || eventDate > args.dateRange.end) {
+                    return false;
+                }
+            }
+
+            return titleMatch;
+        });
+
+        return matches;
+    },
+});
+
+/**
+ * Get timeline events that may need conflict checking
+ * (disputed status or recently updated)
+ */
+export const getEventsForConflictCheck = internalQuery({
+    args: {
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        // Get disputed events
+        const disputed = await ctx.db
+            .query("timelineEvents")
+            .withIndex("by_status", q => q.eq("status", "disputed"))
+            .take(args.limit);
+
+        return disputed;
+    },
+});
+
+/**
+ * Get timeline statistics for the Manager to make decisions
+ */
+export const getTimelineStats = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        const all = await ctx.db.query("timelineEvents").collect();
+
+        return {
+            totalEvents: all.length,
+            confirmedCount: all.filter(e => e.status === "confirmed").length,
+            disputedCount: all.filter(e => e.status === "disputed").length,
+            debunkedCount: all.filter(e => e.status === "debunked").length,
+            avgImportance: all.length > 0
+                ? Math.round(all.reduce((sum, e) => sum + e.importance, 0) / all.length)
+                : 0,
+            byCategory: {
+                military: all.filter(e => e.category === "military").length,
+                diplomatic: all.filter(e => e.category === "diplomatic").length,
+                humanitarian: all.filter(e => e.category === "humanitarian").length,
+                political: all.filter(e => e.category === "political").length,
+            },
+        };
+    },
+});
+

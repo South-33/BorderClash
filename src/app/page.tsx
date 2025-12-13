@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
@@ -27,11 +27,20 @@ const Crosshair = (props: any) => (
   <IconBase {...props}>
     <circle cx="12" cy="12" r="10" />
     <line x1="22" y1="12" x2="18" y2="12" />
+    <line x1="22" y1="12" x2="18" y2="12" />
     <line x1="6" y1="12" x2="2" y2="12" />
     <line x1="12" y1="6" x2="12" y2="2" />
     <line x1="12" y1="22" x2="12" y2="18" />
   </IconBase>
 );
+
+const XIcon = (props: any) => (
+  <IconBase {...props}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </IconBase>
+);
+
 
 const RefreshCw = (props: any) => (
   <IconBase {...props}>
@@ -85,6 +94,7 @@ const TRANSLATIONS = {
     intelligenceLog: "Intelligence Log",
     items: "items",
     noArticles: "No articles yet",
+    noArticlesFiltered: "No articles in this category",
     damageAssessment: "DAMAGE ASSESSMENT",
     displacedCivilians: "Displaced Civilians",
     civilianInjuries: "Civilian Injuries",
@@ -100,6 +110,7 @@ const TRANSLATIONS = {
     sourcesTracked: "SOURCES TRACKED",
     viewMode: "VIEW MODE",
     analysis: "ANALYSIS",
+    timeline: "TIMELINE",
     losses: "LOSSES",
     guide: "GUIDE",
     language: "LANGUAGE",
@@ -180,6 +191,19 @@ const TRANSLATIONS = {
     territoryDisputed: "Disputed Area",
     territoryForeign: "Foreign Territory",
     postureRationale: "Analysis",
+    // Timeline & Map
+    historicalTimeline: "OPERATIONAL TIMELINE",
+    noTimelineEvents: "NO INTEL LOGGED",
+    runHistorian: "Run the Historian to build the timeline from news articles.",
+    impact: "Impact",
+    sourcesLower: "sources",
+    peaceWar: "PEACE / WAR",
+    thBase: "TH-BASE",
+    khOutpost: "KH-OUTPOST",
+    thBaseFull: "Thai Base",
+    khOutpostFull: "Cambodian Outpost",
+    lat: "LAT",
+    lon: "LON",
 
     // Guide Section
     howItWorks: "HOW IT WORKS",
@@ -195,57 +219,59 @@ const TRANSLATIONS = {
     statelessDesc: "We do not believe in 'National Truth'. Truth is often found in the silence between two shouting governments.",
   },
   th: {
-    officialNarrative: "ท่าทีอย่างเป็นทางการ",
-    militaryIntensity: "ระดับความตึงเครียดทางทหาร",
-    peaceful: "สงบ",
-    defensive: "ตั้งรับ",
-    aggressive: "เชิงรุก",
-    intelligenceLog: "บันทึกข่าวกรอง",
+    officialNarrative: "มุมมองจากทางการ",
+    militaryIntensity: "สถานการณ์ความตึงเครียด",
+    peaceful: "เหตุการณ์ปกติ",
+    defensive: "เตรียมพร้อม/ตั้งรับ",
+    aggressive: "ปะทะ/ตึงเครียด",
+    intelligenceLog: "ข่าวกรองล่าสุด",
     items: "รายการ",
-    noArticles: "ยังไม่มีบทความ",
-    damageAssessment: "การประเมินความเสียหาย",
-    displacedCivilians: "พลเรือนพลัดถิ่น",
-    civilianInjuries: "ผู้ได้รับบาดเจ็บพลเรือน",
+    noArticles: "ยังไม่มีข้อมูล",
+    noArticlesFiltered: "ไม่พบบทความในหมวดนี้",
+    damageAssessment: "ประเมินความเสียหาย",
+    displacedCivilians: "ชาวบ้านที่ต้องอพยพ",
+    civilianInjuries: "ชาวบ้านบาดเจ็บ",
     propertyDamaged: "ทรัพย์สินเสียหาย",
     status: "สถานะ",
-    confirmedOnly: "ยืนยันแล้วเท่านั้น",
-    structures: "อาคารสิ่งปลูกสร้าง",
-    monitoring: "กำลังเฝ้าระวัง",
+    confirmedOnly: "ยืนยันแล้ว",
+    structures: "สิ่งปลูกสร้าง",
+    monitoring: "กำลังจับตา",
     active: "ใช้งานอยู่",
-    situationReport: "รายงานสถานการณ์",
-    autoUpdating: "อัปเดตอัตโนมัติทุก 15 นาที",
+    situationReport: "รายงานสถานการณ์สด",
+    autoUpdating: "อัปเดตเองทุก 15 นาที",
     keyDevelopments: "เหตุการณ์สำคัญ",
-    sourcesTracked: "แหล่งข้อมูลที่ติดตาม",
-    viewMode: "โหมดการดู",
+    sourcesTracked: "แหล่งข่าวที่ติดตาม",
+    viewMode: "โหมดดูข้อมูล",
     analysis: "วิเคราะห์",
+    timeline: "ไทม์ไลน์",
     losses: "ความสูญเสีย",
     guide: "คู่มือ",
     language: "ภาษา",
-    nextAutoScan: "การสแกนอัตโนมัติ",
+    nextAutoScan: "สแกนรอบถัดไป",
     articles: "บทความ",
-    articlesRead: "บทความที่อ่านแล้ว",
-    articlesFetched: "บทความที่ดึงมา",
+    articlesRead: "อ่านแล้ว",
+    articlesFetched: "ดึงข้อมูลแล้ว",
     total: "ทั้งหมด",
     sectorMap: "แผนที่เขต 4",
-    clashDetected: "ตรวจพบการปะทะ",
+    clashDetected: "พบการปะทะ",
     live: "สด",
-    syncing: "กำลังอัปเดต...",
+    syncing: "กำลังซิงค์...",
     running: "กำลังทำงาน...",
-    systemOnline: "ระบบออนไลน์",
-    error: "ข้อผิดพลาด",
-    awaitingAnalysis: "รอการวิเคราะห์...",
-    keyPoints: "ประเด็นสำคัญ",
-    positive: "เชิงบวก",
-    negative: "เชิงลบ",
+    systemOnline: "ระบบพร้อมใช้งาน",
+    error: "ขัดข้อง",
+    awaitingAnalysis: "รอผลวิเคราะห์...",
+    keyPoints: "ประเด็นที่น่าสนใจ",
+    positive: "ทางบวก",
+    negative: "ทางลบ",
     neutral: "เป็นกลาง",
-    justNow: "เมื่อสักครู่",
-    thailand: "ประเทศไทย",
+    justNow: "เมื่อกี้",
+    thailand: "ไทย",
     cambodia: "กัมพูชา",
-    neutralAI: "AI เป็นกลาง",
+    neutralAI: "AI ตัวกลาง",
     intl: "ตปท.",
     credibility: "ความน่าเชื่อถือ",
-    subTitle: "การติดตามสถานการณ์ความตึงเครียดบริเวณชายแดนแบบเรียลไทม์ ผ่านการวิเคราะห์หลายมุมมองและข่าวกรองที่ตรวจสอบโดย AI",
-    fatalities: "ผู้เสียชีวิตที่ยืนยันแล้ว",
+    subTitle: "เกาะติดชายแดนแบบเรียลไทม์ วิเคราะห์รอบด้านด้วย AI เพื่อข้อเท็จจริง ไม่ใช่อารมณ์",
+    fatalities: "ผู้เสียชีวิต (ยืนยันแล้ว)",
     threatLevel: "ระดับภัยคุกคาม",
     low: "ต่ำ",
     elevated: "สูง",
@@ -254,181 +280,209 @@ const TRANSLATIONS = {
     civilian: "พลเรือน",
     military: "ทหาร",
     fromLastWeek: "จากสัปดาห์ก่อน",
-    noChange: "ไม่เปลี่ยนแปลง",
-    visualDamageAssessment: "การประเมินความเสียหายเชิงประจักษ์",
-    infrastructureDamage: "ความเสียหายต่อโครงสร้างพื้นฐาน",
-    buildingsDestroyed: "อาคารที่ถูกทำลาย",
-    displacedPersons: "ผู้พลัดถิ่น",
-    lossImagesPlaceholder: "[รูปภาพและวิดีโอจะแสดงที่นี่พร้อมแหล่งที่มาที่ได้รับการตรวจสอบแล้ว]",
-    criticalThinkingGuide: "คู่มือการคิดเชิงวิพากษ์",
-    dontTrustBlindly: "อย่าเชื่อโดยปราศจากการไตร่ตรอง",
-    dontTrustBlindlyDesc: "จงตั้งคำถามกับทุกสิ่ง รัฐบาลมีวาระซ่อนเร้น สื่อมีอคติ ตรวจสอบข้อกล่าวหาด้วยตนเอง และตรวจสอบเทียบเคียงจากหลายแหล่งข้อมูล",
-    verificationChecklist: "รายการตรวจสอบข้อเท็จจริง",
-    checkSources: "ตรวจสอบจากแหล่งข้อมูลอิสระหลายแห่ง",
-    lookForEvidence: "มองหาหลักฐานชั้นต้น (ภาพถ่าย วิดีโอ เอกสาร)",
-    considerBias: "พิจารณาอคติที่อาจมีของแหล่งข้อมูล",
-    checkDates: "ตรวจสอบวันที่เผยแพร่และบริบท",
-    emotionalManipulation: "ระวังการชักจูงด้วยอารมณ์",
-    propagandaWarning: "สัญญาณเตือนการโฆษณาชวนเชื่อ",
-    propagandaWarningDesc: "ระวัง: ภาษาที่ใช้อารมณ์เกินจริง การสร้างภาพปิศาจให้ \"อีกฝ่าย\" การขาดหลักฐานที่เป็นรูปธรรม การทำซ้ำโดยไม่มีเนื้อหาสาระ การกระตุ้นความกลัวหรือความรักชาติเหนือข้อเท็จจริง",
-    systemDisclaimer: "ระบบนี้พยายามวิเคราะห์อย่างเป็นกลาง แต่โปรดใช้วิจารณญาณและตรวจสอบข้อมูลด้วยตัวคุณเองเสมอ",
+    noChange: "เท่าเดิม",
+    visualDamageAssessment: "ภาพความเสียหาย",
+    infrastructureDamage: "ความเสียหายโครงสร้างพื้นฐาน",
+    buildingsDestroyed: "อาคารที่เสียหาย",
+    displacedPersons: "ผู้อพยพ",
+    lossImagesPlaceholder: "[พื้นที่แสดงภาพและคลิปที่ผ่านการตรวจสอบแล้ว]",
+    criticalThinkingGuide: "คู่มือรู้ทันสื่อ",
+    dontTrustBlindly: "อย่าเพิ่งเชื่อถ้าไม่ได้เช็ค",
+    dontTrustBlindlyDesc: "ตั้งคำถามไว้ก่อนเสมอ รัฐบาลก็มีเกมการเมือง สื่อก็เลือกข้างได้ เช็คหลายๆ แหล่งก่อนเชื่อ",
+    verificationChecklist: "เช็คลิสต์ก่อนแชร์",
+    checkSources: "เช็คจากหลายสื่อที่ไม่เกี่ยวข้องกัน",
+    lookForEvidence: "หาหลักฐานยืนยัน (รูป, คลิป, เอกสาร)",
+    considerBias: "ดูว่าค่ายนี้เชียร์ใครเป็นพิเศษไหม",
+    checkDates: "ดูวันที่ดีๆ ข่าวเก่าเล่าใหม่หรือเปล่า",
+    emotionalManipulation: "ระวังข่าวที่เขียนปลุกอารมณ์โกรธ/เกลียด",
+    propagandaWarning: "สัญญาณจับผิดโฆษณาชวนเชื่อ",
+    propagandaWarningDesc: "ระวัง: ใช้คำดราม่าล้นๆ, ป้ายสีอีกฝั่งเป็นตัวร้าย, ไม่มีหลักฐานชัดเจน, พูดซ้ำๆ แต่ไม่มีเนื้อหา, ปลุกระดมให้รักชาติ/เกลียดชังแทนที่จะพูดด้วยเหตุผล",
+    systemDisclaimer: "ระบบนี้พยายามเป็นกลางที่สุด แต่คุณต้องใช้วิจารณญาณตัวเองด้วย",
     incident: "เหตุการณ์",
     image: "รูปภาพ",
     sector: "เขต",
     all: "ทั้งหมด",
     government: "รัฐบาล",
     media: "สื่อ",
-    agency: "หน่วยงาน",
+    agency: "สำนักข่าว",
     other: "อื่นๆ",
-    guideTitle: "คู่มือผู้ใช้และการรู้เท่าทันสื่อ",
-    dashboardGuide: "การใช้งานแดชบอร์ด",
-    dashboardGuideDesc: "เครื่องมือนี้รวบรวมข้อมูลความขัดแย้งจากแหล่งข่าวไทย กัมพูชา และต่างประเทศ โดยมี 'AI เป็นกลาง' ทำหน้าที่สังเคราะห์ประเด็นเพื่อหาจุดร่วม",
-    aiWarning: "คำเตือน: AI และ Deepfakes",
-    aiWarningDesc: "AI สามารถสร้างภาพและวิดีโอปลอม (Deepfakes) ได้เหมือนจริง อย่าเชื่อสื่อเพียงแค่ตาเห็น",
-    deepfakeTips: "การสังเกตสื่อปลอม",
-    dfTip1: "จุดสังเกตความผิดปกติ (มือ, ดวงตา, ตัวอักษร)",
-    dfTip2: "ตรวจสอบว่ามีการรายงานจากสำนักข่าวที่น่าเชื่อถือหรือไม่",
-    dfTip3: "ค้นหาต้นฉบับรูปภาพ (Reverse Image Search) เพื่อดูบริบทที่แท้จริง",
-    credibilityScore: "ความเข้าใจเรื่องความน่าเชื่อถือ",
-    credibilityDesc: "คะแนน (0-100%) สะท้อนความน่าเชื่อถือของแหล่งข่าวและการตรวจสอบไขว้ คะแนนต่ำกว่า 50% อาจเป็นโฆษณาชวนเชื่อหรือข่าวลือ",
+    guideTitle: "คู่มือใช้งาน & รู้ทันสื่อ",
+    dashboardGuide: "วิธีใช้แดชบอร์ดนี้",
+    dashboardGuideDesc: "เรารวมข่าวจากทั้งฝั่งไทย เขมร และสื่อโลก แล้วให้ AI ตัวกลางช่วยสรุปให้เห็นภาพรวมที่ไม่อิงฝ่ายใดฝ่ายหนึ่ง",
+    aiWarning: "เตือนภัย: ระวัง AI และ Deepfakes",
+    aiWarningDesc: "เดี๋ยวนี้ AI สร้างรูป/คลิปปลอม (Deepfakes) ได้เนียนมาก อย่าเชื่อสิ่งทีเห็นในเน็ตง่ายๆ",
+    deepfakeTips: "วิธีจับผิดภาพปลอม",
+    dfTip1: "สังเกตจุดแปลกๆ (นิ้วมือ, แววตา, ตัวหนังสือเบี้ยว)",
+    dfTip2: "เช็คว่ามีสำนักข่าวหลักรายงานเรื่องนี้ไหม",
+    dfTip3: "ลองเอารูปไปค้นหาต้นฉบับ (Reverse Image Search)",
+    credibilityScore: "คะแนนความน่าเชื่อถือดูยังไง?",
+    credibilityDesc: "คะแนน (0-100%) คือความชัวร์ของข่าว ถ้าต่ำกว่า 50% คือเสี่ยงเป็นข่าวโคมลอย หรือข่าวปั่น",
     // Military Posture Context
-    postureGaugeTitle: "ท่าทีทางทหาร",
-    territoryOwn: "ดินแดนตนเอง",
-    territoryBorder: "แนวชายแดน",
-    territoryDisputed: "พื้นที่พิพาท",
-    territoryForeign: "ดินแดนต่างประเทศ",
-    postureRationale: "การวิเคราะห์",
+    postureGaugeTitle: "ท่าทีของกองทัพ",
+    territoryOwn: "ในเขตแดนตนเอง",
+    territoryBorder: "พื้นที่ชายแดน",
+    territoryDisputed: "พื้นที่ทับซ้อน",
+    territoryForeign: "ในเขตเพื่อนบ้าน",
+    postureRationale: "บทวิเคราะห์",
+    // Timeline & Map
+    historicalTimeline: "ลำดับเหตุการณ์ยุทธการ", // Operational Timeline
+    noTimelineEvents: "ยังไม่มีรายงานข่าวกรอง",
+    runHistorian: "ระบบกำลังรวบรวมข้อมูลเหตุการณ์...",
+    impact: "ผลกระทบ",
+    sourcesLower: "แหล่งข่าว",
+    peaceWar: "สันติภาพ / สงคราม",
+    thBase: "ฐานไทย",
+    khOutpost: "ฐานกัมพูชา",
+    thBaseFull: "ฐานทัพไทย",
+    khOutpostFull: "ฐานทัพกัมพูชา",
+    lat: "พิกัด",
+    lon: "ลองจิจูด",
 
     // Guide Section
-    howItWorks: "การทำงานของระบบ",
-    scoutRole: "หน่วยลาดตระเวน (เก็บข้อมูล)",
-    scoutDesc: "ทีม AI ค้นหาสื่อไทย กัมพูชา และต่างประเทศตลอด 24 ชม. เพื่อรวบรวมบทความดิบจากทุกแหล่งโดยไม่ปรุงแต่ง",
-    analystRole: "นักวิเคราะห์ (ตรวจสอบ)",
-    analystDesc: "AI ชั้นที่สองอ่านทุกบทความเพื่อหาอคติ ตรวจสอบข้อกล่าวหากับสำนักข่าวระดับโลก (Reuters, AP) และแจ้งเตือนเนื้อหาที่ใช้อารมณ์หรือยังไม่ได้รับการยืนยัน",
-    managerRole: "ผู้จัดการ (สังเคราะห์)",
-    managerDesc: "AI ที่เป็นกลางจะทบทวนรายงานที่ขัดแย้งกันโดยไม่เลือกข้าง หากไทยบอก X และกัมพูชาบอก Y ระบบจะรายงานความขัดแย้งนั้นและคำนวณคะแนนความน่าเชื่อถือ",
-    trustWarning: "อย่าไว้ใจใครอย่างมืดบอด",
-    trustWarningDesc: "ทุกรัฐบาลมีแรงจูงใจที่จะบิดเบือนข้อมูลในยามขัดแย้ง ทุกสำนักข่าวมีฐานเสียงที่ต้องเอาใจ แดชบอร์ดนี้เป็นเครื่องมือเทียบเคียงข้อมูล ไม่ใช่เครื่องผลิตความจริง จงใช้มันเพื่อเปรียบเทียบคำกล่าวอ้าง ไม่ใช่เพื่อยืนยันอคติของคุณ",
-    statelessApproach: "แนวทางไร้รัฐ",
-    statelessDesc: "เราไม่เชื่อใน 'ความจริงของชาติ' หรือความจริงฝ่ายเดียว ความจริงมักซ่อนอยู่ในความเงียบและช่องว่างระหว่างรัฐบาลสองฝ่ายที่กำลังตะโกนใส่กัน"
+    howItWorks: "ระบบทำงานยังไง?",
+    scoutRole: "หน่วยสอดแนม (หาข่าว)",
+    scoutDesc: "AI ทีมแรกจะวิ่งหาข่าวจากสื่อไทย เขมร และตปท. ตลอด 24 ชม. กวาดมาหมดทุกข่าวไม่เลือกข้าง",
+    analystRole: "นักวิเคราะห์ (กรองข่าว)",
+    analystDesc: "AI ทีมสองจะอ่านทุกข่าวเพื่อจับผิดอคติ เทียบกับสำนักข่าวกลาง (Reuters, AP) อันไหนเขียนเว่อร์หรือมั่วจะถูกติดธงเตือน",
+    managerRole: "ผู้จัดการ (สรุปผล)",
+    managerDesc: "AI ตัวกลางจะอ่านข้อมูลที่ขัดแย้งกัน (เช่น ไทยบอกอย่าง เขมรบอกอย่าง) แล้วสรุปให้ฟังว่าตรงไหนไม่ตรงกัน พร้อมให้คะแนนความน่าเชื่อถือ",
+    trustWarning: "อย่าเชื่อใจใครง่ายๆ",
+    trustWarningDesc: "เวลารบกัน รัฐบาลไหนก็อยากพูดให้ตัวเองดูดี สื่อก็ต้องเอาใจคนดู แดชบอร์ดนี้มีไว้ให้คุณเทียบข้อมูลจากหลายๆ ฝั่ง ไม่ใช่เครื่องบอกความจริงสากล",
+    statelessApproach: "แนวคิดแบบไม่เลือกข้าง",
+    statelessDesc: "เราไม่เชื่อว่ามีความจริงของฝ่ายใดฝ่ายหนึ่ง ความจริงมักซ่อนอยู่ตรงกลางระหว่างเสียงตะโกนของทั้งสองฝ่าย",
   },
   kh: {
-    officialNarrative: "គោលជំហរផ្លូវការ",
-    militaryIntensity: "កម្រិតភាពតានតឹងយោធា",
-    peaceful: "សន្តិភាព",
-    defensive: "ការពារខ្លួន",
-    aggressive: "វាយលុក",
-    intelligenceLog: "កំណត់ត្រាស៊ើបការណ៍",
-    items: "ប្រភព",
-    noArticles: "មិនទាន់មានអត្ថបទនៅឡើយទេ",
-    damageAssessment: "ការវាយតម្លៃការខូចខាត",
-    displacedCivilians: "ជនស៊ីវិលដែលផ្លាស់ទីលំនៅ",
-    civilianInjuries: "ជនស៊ីវិលរងរបួស",
+    officialNarrative: "គោលជំហរផ្លូវការ", // View of govt - natural
+    militaryIntensity: "ស្ថានភាពនៅព្រំដែន", // Situation at border - natural
+    peaceful: "ធម្មតា", // Normal
+    defensive: "ការពារ", // Defend
+    aggressive: "កាច", // Tense
+    intelligenceLog: "ព័ត៌មានថ្មីៗ", // Recent news
+    items: "អត្ថបទ",
+    noArticles: "មិនទាន់មានព័ត៌មាន",
+    noArticlesFiltered: "មិនមានអត្ថបទក្នុងផ្នែកនេះទេ",
+    damageAssessment: "ការវាយតម្លៃការខូចខាត", // Formal but verify
+    displacedCivilians: "ពលរដ្ឋដែលភៀសខ្លួន", // Citizens who fled
+    civilianInjuries: "ពលរដ្ឋរងរបួស",
     propertyDamaged: "ទ្រព្យសម្បត្តិខូចខាត",
     status: "ស្ថានភាព",
-    confirmedOnly: "បានបញ្ជាក់តែប៉ុណ្ណោះ",
-    structures: "រចនាសម្ព័ន្ធ",
-    monitoring: "ការតាមដាន",
+    confirmedOnly: "បានបញ្ជាក់",
+    structures: "សំណង់",
+    monitoring: "កំពុងមើល",
     active: "សកម្ម",
-    situationReport: "របាយការណ៍ស្ថានភាព",
-    autoUpdating: "ធ្វើបច្ចុប្បន្នភាពដោយស្វ័យប្រវត្តរៀងរាល់ 15 នាទីម្តង",
-    keyDevelopments: "ការវិវត្តសំខាន់ៗ",
-    sourcesTracked: "ប្រភពដែលបានតាមដាន",
-    viewMode: "របៀបមើល",
-    analysis: "វិភាគ",
-    losses: "ការបាត់បង់",
+    situationReport: "របាយការណ៍សង្ខេប",
+    autoUpdating: "អាប់ដេតរៀងរាល់ 15 នាទី",
+    keyDevelopments: "ព្រឹត្តិការណ៍សំខាន់ៗ",
+    sourcesTracked: "ប្រភពព័ត៌មាន",
+    viewMode: "មើលជា",
+    analysis: "ការវិភាគ",
+    timeline: "កាលប្បវត្តិ",
+    losses: "ការខូចខាត",
     guide: "ការណែនាំ",
     language: "ភាសា",
-    nextAutoScan: "ស្កេនដោយស្វ័យប្រវត្តិ",
+    nextAutoScan: "ស្កេនម្តងទៀតក្នុង",
     articles: "អត្ថបទ",
-    articlesRead: "អត្ថបទដែលបានអាន",
-    articlesFetched: "អត្ថបទបានទាញយក",
+    articlesRead: "អានបាន",
+    articlesFetched: "ប្រមូលបាន",
     total: "សរុប",
-    sectorMap: "ផែនទីតំបន់ ៤",
-    clashDetected: "បានរកឃើញការប៉ះទង្គិច",
-    live: "ផ្សាយបន្តផ្ទាល់",
-    syncing: "កំពុងធ្វើបច្ចុប្បន្នភាព...",
-    running: "កំពុងដំណើរការ...",
-    systemOnline: "ប្រព័ន្ធដំណើរការ",
-    error: "កំហុស",
+    sectorMap: "ផែនទីតំបន់ 4",
+    clashDetected: "មានការប៉ះទង្គិច",
+    live: "ផ្ទាល់",
+    syncing: "កំពុងអាប់ដេត...",
+    running: "កំពុងដើរ...",
+    systemOnline: "ដំណើរការធម្មតា",
+    error: "មានបញ្ហា",
     awaitingAnalysis: "កំពុងរង់ចាំការវិភាគ...",
     keyPoints: "ចំណុចសំខាន់ៗ",
-    positive: "វិជ្ជមាន",
-    negative: "អវិជ្ជមាន",
-    neutral: "អព្យាក្រឹត",
-    justNow: "ថ្មីៗនេះ",
-    thailand: "ប្រទេសថៃ",
-    cambodia: "កម្ពុជា",
-    neutralAI: "AI អព្យាក្រឹត",
+    positive: "វិជ្ជមាន", // Positive
+    negative: "អវិជ្ជមាន", // Negative
+    neutral: "កណ្តាល", // Middle/Neutral
+    justNow: "មុននេះបន្តិច",
+    thailand: "ថៃ",
+    cambodia: "កម្ពុជា", // Kampuchea
+    neutralAI: "AI អាជ្ញាកណ្តាល",
     intl: "អន្តរជាតិ",
     credibility: "ភាពជឿជាក់",
-    subTitle: "ការត្រួតពិនិត្យភាពតានតឹងនៅព្រំដែនក្នុងពេលវេលាជាក់ស្តែង តាមរយៈការវិភាគពហុទស្សនៈ និងការស៊ើបអង្កេតដែលបានផ្ទៀងផ្ទាត់ដោយ AI",
-    fatalities: "អ្នកស្លាប់ដែលបានបញ្ជាក់",
-    threatLevel: "កម្រិតគំរាមកំហែង",
+    subTitle: "តាមដានស្ថានការណ៍ព្រំដែនភ្លាមៗ វិភាគដោយ AI ដើម្បីដឹងការពិត មិនមែនតាមអារម្មណ៍",
+    fatalities: "អ្នកស្លាប់ (បញ្ជាក់ហើយ)",
+    threatLevel: "កម្រិតគ្រោះថ្នាក់",
     low: "ទាប",
     elevated: "ខ្ពស់",
     critical: "គ្រោះថ្នាក់",
-    injured: "របួស",
-    civilian: "ជនស៊ីវិល",
-    military: "យោធា",
+    injured: "អ្នករបួស",
+    civilian: "ពលរដ្ឋ",
+    military: "ទាហាន",
     fromLastWeek: "ពីសប្តាហ៍មុន",
-    noChange: "មិនមានការផ្លាស់ប្តូរ",
-    visualDamageAssessment: "ការវាយតម្លៃការខូចខាតតាមរូបភាព",
+    noChange: "នៅដដែល",
+    visualDamageAssessment: "រូបភាពការខូចខាត",
     infrastructureDamage: "ការខូចខាតហេដ្ឋារចនាសម្ព័ន្ធ",
-    buildingsDestroyed: "អគារដែលត្រូវបានបំផ្លាញ",
-    displacedPersons: "ជនផ្លាស់ទីលំនៅ",
-    lossImagesPlaceholder: "[រូបភាពនិងវីដេអូនឹងត្រូវបានបង្ហាញនៅទីនេះជាមួយប្រភពដែលបានផ្ទៀងផ្ទាត់]",
-    criticalThinkingGuide: "មគ្គុទ្ទេសក៍ការគិតពិចារណា",
-    dontTrustBlindly: "កុំជឿដោយងងឹតងងុល",
-    dontTrustBlindlyDesc: "ចូរចោទសួរគ្រប់យ៉ាង។ រដ្ឋាភិបាលមានរបៀបវារៈ។ ប្រព័ន្ធផ្សព្វផ្សាយមានភាពលំអៀង។ ផ្ទៀងផ្ទាត់ការអះអាងដោយឯករាជ្យ។ ផ្ទៀងផ្ទាត់ជាមួយប្រភពជាច្រើន។",
-    verificationChecklist: "បញ្ជីផ្ទៀងផ្ទាត់",
-    checkSources: "ពិនិត្យប្រភពឯករាជ្យជាច្រើន",
-    lookForEvidence: "ស្វែងរកភស្តុតាងបឋម (រូបថត វីដេអូ ឯកសារ)",
-    considerBias: "ពិចារណាពីភាពលំអៀងដែលអាចកើតមានរបស់ប្រភព",
-    checkDates: "ពិនិត្យកាលបរិច្ឆេទនៃការផ្សព្វផ្សាយ និងបរិបទ",
-    emotionalManipulation: "ត្រូវសង្ស័យចំពោះការញុះញង់ដោយអារម្មណ៍",
-    propagandaWarning: "សញ្ញាព្រមានអំពីការឃោសនា",
-    propagandaWarningDesc: "ប្រយ័ត្នចំពោះ៖ ភាសាដែលប្រើអារម្មណ៍ខ្លាំងពេក។ ការចោទប្រកាន់ \"ភាគីម្ខាងទៀត\" ថាជាបិសាច។ កង្វះភស្តុតាងជាក់ស្តែង។ ការនិយាយដដែលៗដោយគ្មានខ្លឹមសារ។ ការអំពាវនាវដល់ការភ័យខ្លាច ឬស្នេហាជាតិជាងការពិត។",
-    systemDisclaimer: "ប្រព័ន្ធនេះព្យាយាមវិភាគដោយអព្យាក្រឹត ប៉ុន្តែត្រូវប្រុងប្រយ័ត្ន។ ផ្ទៀងផ្ទាត់អ្វីៗគ្រប់យ៉ាងដោយខ្លួនឯង។",
-    incident: "ឧប្បត្តិហេតុ",
+    buildingsDestroyed: "អគារដែលខូច",
+    displacedPersons: "ជនភៀសខ្លួន",
+    lossImagesPlaceholder: "[កន្លែងបង្ហាញរូបភាពនិងវីដេអូដែលបានត្រួតពិនិត្យ]",
+    criticalThinkingGuide: "គិតមុនគូរ", // Think before believing (Idiom-like) -> "សៀវភៅណែនាំពីការគិត"
+    dontTrustBlindly: "កុំអាលជឿ", // Don't believe immediately
+    dontTrustBlindlyDesc: "សួរខ្លួនឯងសិន។ រដ្ឋាភិបាលមាននយោបាយ។ សារព័ត៌មានអាចលំអៀង។ ពិនិត្យមើលខ្លួនឯងសិន។",
+    verificationChecklist: "អ្វីដែលត្រូវធ្វើមុនជឿ",
+    checkSources: "មើលប្រភពផ្សេងៗគ្នា",
+    lookForEvidence: "រកមើលភស្តុតាង (រូបភាព, វីដេអូ)",
+    considerBias: "តើគេឈរខាងណា?",
+    checkDates: "មើលកាលបរិច្ឆេទ ក្រែងលោរឿងចាស់",
+    emotionalManipulation: "ប្រយ័ត្នព័ត៌មានដែលធ្វើឱ្យខឹងឬស្អប់",
+    propagandaWarning: "សញ្ញានៃការឃោសនា",
+    propagandaWarningDesc: "ប្រយ័ត្ន៖ ប្រើពាក្យលើសៗ, ថាគេអាក្រក់ដាក់យើងល្អ, គ្មានភស្តុតាង, និយាយដដែលៗ, យកជាតិនិយមមកនិយាយជំនួសហេតុផល",
+    systemDisclaimer: "ប្រព័ន្ធនេះព្យាយាមនៅកណ្តាល ប៉ុន្តែអ្នកត្រូវគិតពិចារណាដោយខ្លួនឯង។",
+    incident: "ហេតុការណ៍",
     image: "រូបភាព",
     sector: "តំបន់",
     all: "ទាំងអស់",
     government: "រដ្ឋាភិបាល",
     media: "សារព័ត៌មាន",
     agency: "ទីភ្នាក់ងារ",
-    other: "ផ្សេងទៀត",
-    guideTitle: "មគ្គុទ្ទេសក៍អ្នកប្រើប្រាស់ & អក្ខរកម្មប្រព័ន្ធផ្សព្វផ្សាយ",
-    dashboardGuide: "ការប្រើប្រាស់ផ្ទាំងព័ត៌មាននេះ",
-    dashboardGuideDesc: "ឧបករណ៍នេះប្រមូលផ្តុំទិន្នន័យជម្លោះពីប្រភពថៃ កម្ពុជា និងអន្តរជាតិ។ 'AI អព្យាក្រឹត' វិភាគទស្សនៈទាំងនេះដើម្បីស្វែងរកចំណុចរួម។",
-    aiWarning: "ការព្រមាន៖ AI & Deepfakes",
-    aiWarningDesc: "AI អាចបង្កើតរូបភាពនិងវីដេអូក្លែងក្លាយ (Deepfakes) ដូចការពិត។ កុំជឿជាក់លើប្រព័ន្ធផ្សព្វផ្សាយដោយគ្រាន់តែឃើញនឹងភ្នែក។",
-    deepfakeTips: "ការសម្គាល់ប្រព័ន្ធផ្សព្វផ្សាយក្លែងក្លាយ",
-    dfTip1: "ពិនិត្យមើលភាពមិនប្រក្រតី (ដៃ ភ្នែក អត្ថបទ)",
-    dfTip2: "ផ្ទៀងផ្ទាត់ថាតើព្រឹត្តិការណ៍នេះត្រូវបានរាយការណ៍ដោយសារព័ត៌មានដែលគួរឱ្យទុកចិត្តដែរឬទេ",
-    dfTip3: "ប្រើការស្វែងរកតាមរូបភាពដើម្បីស្វែងរកប្រភពដើម",
-    credibilityScore: "ការយល់ដឹងអំពីភាពជឿជាក់",
-    credibilityDesc: "ពិន្ទុ (០-១០០%) ឆ្លុះបញ្ចាំងពីភាពអាចទុកចិត្តបាននៃប្រភព។ ពិន្ទុទាបជាង ៥០% ទំនងជាការឃោសនា ឬពាក្យចចាមអារ៉ាម។",
+    other: "ផ្សេងៗ",
+    guideTitle: "របៀបប្រើ & ការយល់ដឹង",
+    dashboardGuide: "របៀបមើលតារាងនេះ",
+    dashboardGuideDesc: "យើងប្រមូលព័ត៌មានពីថៃ ខ្មែរ និងបរទេស។ 'AI កណ្តាល' ជួយសង្ខេបដើម្បីឱ្យឃើញចំណុចរួម។",
+    aiWarning: "ប្រយ័ត្ន៖ AI និងរូបក្លែងក្លាយ",
+    aiWarningDesc: "សម័យនេះ AI អាចបង្កើតរូប/វីដេអូក្លែងក្លាយ (Deepfakes) ដូចមែនទែន។ កុំជឿអ្វីដែលឃើញក្នុងអ៊ីនធឺណិតភ្លាមៗ។",
+    deepfakeTips: "របៀបមើលរូបក្លែងក្លាយ",
+    dfTip1: "មើលកន្លែងខុសប្រក្រតី (ម្រាមដៃ, ភ្នែក, អក្សរ)",
+    dfTip2: "មើលថាសារព័ត៌មានធំៗចុះផ្សាយដែរឬទេ",
+    dfTip3: "សាកយករូបទៅស្វែងរកក្នុង Google (Reverse Image Search)",
+    credibilityScore: "តើពិន្ទុភាពជឿជាក់គឺជាអ្វី?",
+    credibilityDesc: "ពិន្ទុ (0-100%) គឺបញ្ជាក់ថាព័ត៌មាននេះគួរឱ្យទុកចិត្តប៉ុណ្ណា។ បើក្រោម 50% ប្រហែលជាព័ត៌មានមិនពិត ឬពាក្យចចាមអារ៉ាម។",
     // Military Posture Context
     postureGaugeTitle: "ជំហរយោធា",
-    territoryOwn: "ទឹកដីខ្លួន",
+    territoryOwn: "ទឹកដីខ្លួនឯង",
     territoryBorder: "តំបន់ព្រំដែន",
     territoryDisputed: "តំបន់ជម្លោះ",
-    territoryForeign: "ទឹកដីបរទេស",
+    territoryForeign: "ទឹកដីគេ",
     postureRationale: "ការវិភាគ",
+    // Timeline & Map
+    historicalTimeline: "កាលប្បវត្តិប្រតិបត្តិការ", // Operational Timeline
+    noTimelineEvents: "មិនទាន់មានរបាយការណ៍ចារកម្ម",
+    runHistorian: "កំពុងប្រមូលទិន្នន័យ...",
+    impact: "ផលប៉ះពាល់",
+    sourcesLower: "ប្រភព",
+    peaceWar: "សន្តិភាព / សង្គ្រាម",
+    thBase: "មូលដ្ឋានថៃ",
+    khOutpost: "ប៉ុស្តិ៍កម្ពុជា",
+    thBaseFull: "មូលដ្ឋានទ័ពថៃ",
+    khOutpostFull: "ប៉ុស្តិ៍ទាហានកម្ពុជា",
+    lat: "LAT",
+    lon: "LON",
 
     // Guide Section
-    howItWorks: "ដំណើរការប្រព័ន្ធ",
-    scoutRole: "ភ្នាក់ងារស្វែងរក (ប្រមូលទិន្នន័យ)",
-    scoutDesc: "ក្រុម AI ស្វែងរកក្នុងប្រព័ន្ធផ្សព្វផ្សាយថៃ កម្ពុជា និងអន្តរជាតិ ២៤/៧។ ពួកគេគ្រាន់តែប្រមូលអត្ថបទដើមពីគ្រប់ប្រភពប៉ុណ្ណោះដោយមិនកែប្រែ។",
-    analystRole: "អ្នកវិភាគ (ការផ្ទៀងផ្ទាត់)",
-    analystDesc: "ស្រទាប់ AI ទីពីរអានរាល់អត្ថបទដើម្បីស្វែងរកភាពលំអៀង។ វាផ្ទៀងផ្ទាត់ការអះអាងជាមួយសារព័ត៌មានអន្តរជាតិ (Reuters, AP) និងសម្គាល់ខ្លឹមសារដែលគួរឱ្យសង្ស័យ ឬប្រើអារម្មណ៍។",
-    managerRole: "អ្នកគ្រប់គ្រង (ការសំយោគ)",
-    managerDesc: "'AI អព្យាក្រឹត' ពិនិត្យមើលរបាយការណ៍ដែលផ្ទុយគ្នាដោយមិនកាន់ជើងខាងណា។ ប្រសិនបើថៃនិយាយ X ហើយកម្ពុជានិយាយ Y វាបង្ហាញពីភាពខុសគ្នានេះ និងគណនាពិន្ទុភាពជឿជាក់។",
-    trustWarning: "កុំជឿជាក់លើនរណាម្នាក់ទាំងស្រុង",
-    trustWarningDesc: "រាល់រដ្ឋាភិបាលមានហេតុផលដើម្បីកុហកអំឡុងពេលជម្លោះ។ រាល់សារព័ត៌មានមានទស្សនិកជនដែលត្រូវផ្គាប់ចិត្ត។ ផ្ទាំងព័ត៌មាននេះគឺជាឧបករណ៍សម្រាប់ប្រៀបធៀបការនិទានរឿង មិនមែនជាម៉ាស៊ីនផលិតការពិតទេ។ ប្រើវាដើម្បីផ្ទៀងផ្ទាត់ មិនមែនដើម្បីបញ្ជាក់អគតិរបស់អ្នកទេ។",
-    statelessApproach: "អភិក្រមឥតរដ្ឋ",
-    statelessDesc: "យើងមិនជឿលើ 'ការពិតរបស់ជាតិ' ទេ។ ការពិតច្រើនតែស្ថិតនៅក្នុងភាពស្ងៀមស្ងាត់រវាងរដ្ឋាភិបាលទាំងពីរដែលកំពុងស្រែកដាក់គ្នា។"
+    howItWorks: "តើគេហទំព័រនេះដំណើរការយ៉ាងដូចម្តេច?",
+    scoutRole: "អ្នកស៊ើបការណ៍ (រកព័ត៌មាន)",
+    scoutDesc: "ក្រុម AI ស្វែងរកក្នុងប្រព័ន្ធផ្សព្វផ្សាយថៃ កម្ពុជា និងអន្តរជាតិ 24ម៉ោង។ គេប្រមូលទាំងអស់មិនរើសមុខ។",
+    analystRole: "អ្នកវិភាគ (ត្រួតពិនិត្យ)",
+    analystDesc: "AI ក្រុមទី2 អានអត្ថបទដើម្បីរកមើលភាពលំអៀង និងផ្ទៀងផ្ទាត់ជាមួយសារព័ត៌មានអន្តរជាតិ (Reuters, AP)។",
+    managerRole: "អ្នកគ្រប់គ្រង (សន្និដ្ឋាន)",
+    managerDesc: "AI កណ្តាល នឹងមើលរបាយការណ៍ដែលផ្ទុយគ្នា (ថៃថាម៉្យាង ខ្មែរថាម៉្យាង) ហើយរាយការណ៍ប្រាប់យើងថាខុសគ្នត្រង់ណា។",
+    trustWarning: "កុំជឿនរណាម្នាក់ងងឹតងងុល",
+    trustWarningDesc: "រដ្ឋាភិបាលណាក៏ចង់និយាយឱ្យខ្លួនឯងល្អ។ សារព័ត៌មានក៏ត្រូវយកចិត្តអ្នកមើល។ ប្រើតារាងនេះដើម្បីប្រៀបធៀបព័ត៌មាន មិនមែនដើម្បីបញ្ជាក់ថាខ្លួនឯងត្រូវទេ។",
+    statelessApproach: "មិនកាន់ជើងខាងណា",
+    statelessDesc: "យើងមិនជឿលើ 'ការពិតរបស់ជាតិ' ទេ។ ការពិតច្រើនតែនៅចន្លោះកណ្តាលរវាងរដ្ឋាភិបាលទាំងពីរ។"
   }
 };
 
@@ -476,30 +530,41 @@ const usePersistentQuery = (query: any, args: any, storageKey: string) => {
 };
 
 // --- Reusable Components ---
-const Card = ({ children, className = "", title, icon: Icon, loading = false, refreshing = false }: any) => (
-  <div className={`bg-riso-paper rough-border p-4 relative overflow-hidden ${className}`}>
-    {loading && (
-      <div className="absolute inset-0 bg-riso-ink/5 z-10 flex items-center justify-center backdrop-blur-[1px]">
-        <div className="flex flex-col items-center">
-          <RefreshCw className="w-8 h-8 text-riso-ink animate-spin mb-2" />
-          <span className="font-mono text-xs uppercase tracking-widest">Updating Data Stream...</span>
+const Card = ({ children, className = "", title, icon: Icon, loading = false, refreshing = false }: any) => {
+  // When h-full is used, we need flex layout to properly distribute space
+  const isFlexLayout = className.includes('h-full');
+
+  return (
+    <div className={`bg-riso-paper rough-border p-4 relative overflow-hidden ${isFlexLayout ? 'flex flex-col' : ''} ${className}`}>
+      {loading && (
+        <div className="absolute inset-0 bg-riso-ink/5 z-10 flex items-center justify-center backdrop-blur-[1px]">
+          <div className="flex flex-col items-center">
+            <RefreshCw className="w-8 h-8 text-riso-ink animate-spin mb-2" />
+            <span className="font-mono text-xs uppercase tracking-widest">Updating Data Stream...</span>
+          </div>
         </div>
-      </div>
-    )}
-    {!loading && refreshing && (
-      <div className="absolute top-2 right-2 z-20 pointer-events-none">
-        <RefreshCw className="w-3 h-3 text-riso-ink/40 animate-spin" />
-      </div>
-    )}
-    {(title || Icon) && (
-      <div className="flex items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2">
-        <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{title}</h3>
-        {Icon && <Icon className="w-6 h-6 text-riso-ink" />}
-      </div>
-    )}
-    {children}
-  </div>
-);
+      )}
+      {!loading && refreshing && (
+        <div className="absolute top-2 right-2 z-20 pointer-events-none">
+          <RefreshCw className="w-3 h-3 text-riso-ink/40 animate-spin" />
+        </div>
+      )}
+      {(title || Icon) && (
+        <div className="flex items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0">
+          <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{title}</h3>
+          {Icon && <Icon className="w-6 h-6 text-riso-ink" />}
+        </div>
+      )}
+      {isFlexLayout ? (
+        <div className="flex-1 flex flex-col min-h-0">
+          {children}
+        </div>
+      ) : (
+        children
+      )}
+    </div>
+  );
+};
 
 const Badge = ({ children, type = "neutral" }: any) => {
   const styles: any = {
@@ -703,6 +768,7 @@ const IntelligenceLog = ({
   lang?: 'en' | 'th' | 'kh';
   isLoading: boolean;
 }) => {
+  const t = TRANSLATIONS[lang as Lang];
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -751,7 +817,11 @@ const IntelligenceLog = ({
         ) : (
           <div className="h-full flex items-center justify-center">
             <p className="text-xs font-mono opacity-40">
-              {categoryFilter ? `No ${categoryFilter} articles` : TRANSLATIONS[lang as Lang].noArticles}
+              {categoryFilter ? (
+                <>
+                  {t.noArticlesFiltered} <span className="opacity-50">({categoryFilter})</span>
+                </>
+              ) : t.noArticles}
             </p>
           </div>
         )}
@@ -988,9 +1058,71 @@ export default function Home() {
   const [lang, setLang] = useState<'en' | 'th' | 'kh'>('en');
   const t = TRANSLATIONS[lang as Lang];
 
+  const [timelineColumns, setTimelineColumns] = useState(5);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [showAllSources, setShowAllSources] = useState(false);
+  const [isModalClosing, setIsModalClosing] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const currentDragOffset = useRef(0);
+
+  // Animated close function for modal
+  const closeModal = () => {
+    setIsModalClosing(true);
+
+    // Animate out - force consistent starting point
+    if (modalRef.current) {
+      // Step 1: Cancel any CSS animation and disable transitions
+      modalRef.current.style.animation = 'none';
+      modalRef.current.style.transition = 'none';
+      // Force starting position (in case CSS animation was mid-flight)
+      modalRef.current.style.transform = 'translateY(0)';
+      modalRef.current.style.opacity = '1';
+
+      // Step 2: Force browser reflow to apply above styles immediately
+      void modalRef.current.offsetHeight;
+
+      // Step 3: Now enable transition and animate to end state
+      modalRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease-in';
+      modalRef.current.style.transform = 'translateY(100%)';
+      modalRef.current.style.opacity = '0';
+    }
+
+    currentDragOffset.current = 0;
+    setTimeout(() => {
+      setSelectedEvent(null);
+      setIsModalClosing(false);
+      setHasInteracted(false); // Reset for next open so slide-up animation plays
+    }, 250); // Match animation duration
+  };
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (selectedEvent) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [selectedEvent]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setTimelineColumns(window.innerWidth < 768 ? 2 : 5);
+    };
+    handleResize(); // Init
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Logic for height synchronization
   const neutralRef = useRef<HTMLDivElement>(null);
   const [neutralColumnHeight, setNeutralColumnHeight] = useState<number | undefined>(undefined);
+
+  // Sidebar height sync for timeline view
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
 
   // Persistent Queries
   const {
@@ -1040,6 +1172,253 @@ export default function Home() {
     isLoading: countsLoading
   } = usePersistentQuery(api.api.getArticleCounts, {}, "borderclash_article_counts") as any;
 
+  const {
+    data: timelineEvents,
+    isLoading: timelineLoading,
+    isRefreshing: timelineRefreshing
+  } = usePersistentQuery(api.api.getTimeline, { limit: 50 }, "borderclash_timeline") as any;
+
+  // --- Modal Navigation & Touch State ---
+
+  // Compute sorted events for navigation (memoized)
+  const sortedEvents = useMemo(() => {
+    if (!timelineEvents) return [];
+    return [...timelineEvents].sort((a: any, b: any) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+  }, [timelineEvents]);
+
+  const currentIndex = selectedEvent ? sortedEvents.findIndex((e: any) => e._id === selectedEvent._id) : -1;
+  const hasNext = currentIndex !== -1 && currentIndex < sortedEvents.length - 1;
+  const hasPrev = currentIndex > 0;
+
+  // Animation logic for Swipe
+  const animateSwipe = (direction: 'next' | 'prev') => {
+    if (!modalRef.current) return;
+
+    const isNext = direction === 'next';
+
+    // Config
+    const exitX = isNext ? '-120vw' : '120vw';
+    const exitRotate = isNext ? '-30deg' : '30deg';
+    const enterX = isNext ? '100vw' : '-120vw'; // Prev: enters from Left
+    const enterRotate = isNext ? '20deg' : '-30deg';
+
+    // 1. Animate Out
+    // For 'next' (Swipe Left), we just throw the card away. The Ghost is behind it.
+    // For 'prev' (Swipe Right), we throw the card away to reveal... wait.
+    // Actually for 'prev', we want the NEW card to enter from Left.
+    // So if 'prev': OLD card exits Right (revealing nothing?). NEW card enters Left.
+
+    modalRef.current.style.transition = 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease-in';
+    modalRef.current.style.transformOrigin = 'bottom center';
+    modalRef.current.style.transform = `translate3d(${exitX}, 0, 0) rotate(${exitRotate})`;
+    modalRef.current.style.opacity = '0';
+
+    // 2. Data Update & Reset
+    setTimeout(() => {
+      if (isNext && hasNext) {
+        setSelectedEvent(sortedEvents[currentIndex + 1]);
+        // For Next: We revealed the ghost. Now we effectively "become" the ghost.
+        // Reset to 0 instantly.
+        if (modalRef.current) {
+          modalRef.current.style.transition = 'none';
+          modalRef.current.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+          modalRef.current.style.opacity = '1';
+        }
+      } else if (!isNext && hasPrev) {
+        setSelectedEvent(sortedEvents[currentIndex - 1]);
+        // For Prev: We need to enter from the Left side.
+        if (modalRef.current) {
+          modalRef.current.style.transition = 'none';
+          modalRef.current.style.transform = `translate3d(${enterX}, 0, 0) rotate(${enterRotate})`;
+          modalRef.current.style.opacity = '1'; // Keep opacity 1 for entry
+
+          // Force Reflow
+          void modalRef.current.offsetHeight;
+
+          // Animate In
+          modalRef.current.style.transition = 'transform 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28)'; // Bouncy
+          modalRef.current.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+        }
+      }
+      setShowAllSources(false);
+    }, 350);
+  };
+
+  const goToNext = () => { animateSwipe('next'); };
+  const goToPrev = () => { animateSwipe('prev'); };
+
+  const [hasInteracted, setHasInteracted] = useState(false);
+
+  // Pointer state ref for drag gestures (Mouse & Touch)
+  const touchRef = useRef({
+    startX: 0,
+    startY: 0,
+    isDraggingVertical: false,
+    isDraggingHorizontal: false,
+    isHeaderDrag: false,
+    isActive: false
+  });
+
+  // Refs for direct DOM manipulation of ghost cards (bypass React render cycle)
+  const ghostPrevRef = useRef<HTMLDivElement>(null);
+  const ghostNextRef = useRef<HTMLDivElement>(null);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    // Check if drag starts on header or handle
+    const isHandle = target.closest('.drag-handle-area') !== null;
+    const isHeader = target.closest('.modal-header') !== null;
+    const isHeaderDrag = isHandle || isHeader;
+
+    // Don't drag if clicking a button
+    if (target.closest('button')) return;
+
+    touchRef.current.startX = e.clientX;
+    touchRef.current.startY = e.clientY;
+    touchRef.current.isDraggingVertical = false;
+    touchRef.current.isDraggingHorizontal = false;
+    touchRef.current.isHeaderDrag = isHeaderDrag;
+    touchRef.current.isActive = true;
+
+    // Set hasInteracted only once (first interaction)
+    if (!hasInteracted) setHasInteracted(true);
+
+    // Disable transition for immediate response during drag
+    if (modalRef.current) {
+      modalRef.current.style.transition = 'none';
+    }
+
+    // Only capture pointer if we are dragging the header (controlling the transform)
+    if (isHeaderDrag) {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!touchRef.current.isActive) return;
+
+    const currentX = e.clientX;
+    const currentY = e.clientY;
+    const deltaX = touchRef.current.startX - currentX;
+    const deltaY = currentY - touchRef.current.startY; // Positive = dragging down
+
+    // Direction Locking Logic
+    if (!touchRef.current.isDraggingVertical && !touchRef.current.isDraggingHorizontal) {
+      if (Math.abs(deltaY) > 5 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        touchRef.current.isDraggingVertical = true;
+      } else if (Math.abs(deltaX) > 5) {
+        touchRef.current.isDraggingHorizontal = true;
+      }
+    }
+
+    // Vertical Drag (Dismiss)
+    // ONLY move if it is a header drag. Body drag should just be ignored here (allowing scroll if not captured)
+    if (touchRef.current.isDraggingVertical && touchRef.current.isHeaderDrag) {
+      // 1:1 tracking for immediate "follow finger" feel
+      // Apply rubber-banding (resistance) only if dragging UP (negative deltaY)
+      const offset = deltaY > 0 ? deltaY : deltaY * 0.3;
+
+      currentDragOffset.current = offset;
+      if (modalRef.current) {
+        modalRef.current.style.transformOrigin = 'center center';
+
+        modalRef.current.style.transform = `translateY(${offset}px)`;
+        modalRef.current.style.opacity = `${Math.max(0.4, 1 - (offset / 400))}`;
+      }
+    }
+
+    // Horizontal Swipe (Nav)
+    if (touchRef.current.isDraggingHorizontal) {
+      // Deck of cards feel: Pivot at bottom
+      if (modalRef.current) {
+        modalRef.current.style.transformOrigin = 'bottom center';
+        // Rotate more as you drag further. deltaX (left) is positive in my calc? 
+        // Wait: deltaX = start - current. 
+        // If I drag Left: current < start. deltaX is Positive. 
+        // Drag Left -> Move card Left (negative X).
+        // So translateX should be -deltaX.
+        const moveX = -deltaX;
+        const rotate = moveX * 0.05; // 100px move = 5deg rotation
+
+        modalRef.current.style.transform = `translate3d(${moveX}px, 0, 0) rotate(${rotate}deg)`;
+
+        // Instant Ghost Card Switching via Refs (Bypass React State)
+        // Drag Right (moveX > 0) -> Show Prev
+        // Drag Left (moveX < 0) -> Show Next
+        if (ghostPrevRef.current) {
+          ghostPrevRef.current.style.visibility = moveX > 0 ? 'visible' : 'hidden';
+        }
+        if (ghostNextRef.current) {
+          ghostNextRef.current.style.visibility = moveX < 0 ? 'visible' : 'hidden';
+        }
+      }
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!touchRef.current.isActive) return;
+
+    const deltaX = touchRef.current.startX - e.clientX;
+    const isHorizontalDrag = touchRef.current.isDraggingHorizontal;
+
+    touchRef.current.isActive = false;
+
+    // Safely release capture if we have it
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) { }
+
+    // Re-enable transition for snap-back animation
+    if (modalRef.current) {
+      modalRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease-out';
+    }
+
+    // Horizontal Swipe (Navigate)
+    if (isHorizontalDrag) {
+      // deltaX = start - current.
+      // Drag Left (Next): start > current => deltaX > 0.
+      // Drag Right (Prev): start < current => deltaX < 0.
+
+      const swipeThreshold = 50;
+
+      if (deltaX > swipeThreshold && hasNext) {
+        animateSwipe('next');
+      } else if (deltaX < -swipeThreshold && hasPrev) {
+        animateSwipe('prev');
+      } else {
+        // Snap back
+        if (modalRef.current) {
+          modalRef.current.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // Bouncy snap back
+          modalRef.current.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+        }
+      }
+
+      // Safely release capture if we have it
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) { }
+
+      currentDragOffset.current = 0;
+      return;
+    }
+
+    // Vertical Drag (Dismiss)
+    if (currentDragOffset.current > 100) {
+      closeModal();
+    } else {
+      // Snap back
+      if (modalRef.current) {
+        modalRef.current.style.transform = '';
+        modalRef.current.style.opacity = '';
+      }
+      currentDragOffset.current = 0;
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') goToNext();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') goToPrev();
+  };
+
   // Derived loading state updated to check combined loading states
   const isLoading = thNewsLoading || khNewsLoading || neutralMetaLoading || dashboardLoading;
   const isSyncing = systemStats?.systemStatus === 'syncing';
@@ -1070,6 +1449,31 @@ export default function Home() {
       window.removeEventListener('resize', measureHeight);
     };
   }, [neutralMeta, isLoading, lang, viewMode]); // Re-measure if data, language, or VIEW MODE changes
+
+  // Measure sidebar height for timeline view sync
+  useLayoutEffect(() => {
+    const measureSidebarHeight = () => {
+      if (window.innerWidth >= 768 && sidebarRef.current) {
+        setSidebarHeight(sidebarRef.current.offsetHeight);
+      } else {
+        setSidebarHeight(undefined);
+      }
+    };
+
+    measureSidebarHeight();
+
+    const resizeObserver = new ResizeObserver(measureSidebarHeight);
+    if (sidebarRef.current) {
+      resizeObserver.observe(sidebarRef.current);
+    }
+
+    window.addEventListener('resize', measureSidebarHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', measureSidebarHeight);
+    };
+  }, [viewMode]); // Re-measure for timeline view
 
   // Timer Logic for countdown display
   useEffect(() => {
@@ -1141,7 +1545,7 @@ export default function Home() {
         <div className="riso-grain"></div>
 
         {/* Left Sidebar / Header (Mobile Top) */}
-        <aside className="md:w-64 flex-shrink-0 flex flex-col gap-3 self-start">
+        <aside ref={sidebarRef} className="md:w-64 flex-shrink-0 flex flex-col gap-3 self-start">
           <div className="border-4 border-riso-ink p-4 bg-riso-paper">
             <h1 className="font-display text-5xl md:text-6xl leading-none tracking-tighter text-riso-ink mb-2">
               BORDER CLASH
@@ -1223,7 +1627,7 @@ export default function Home() {
                   onChange={(e) => setViewMode(e.target.value as any)}
                   className="accent-riso-ink"
                 />
-                <span className="font-bold">{t.losses}</span>
+                <span className="font-bold">{t.timeline}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer hover:bg-riso-ink/5 p-1 transition-colors">
                 <input
@@ -1319,18 +1723,18 @@ export default function Home() {
 
                   {/* Friendly Units */}
                   <rect x="50" y="250" width="8" height="8" fill="#1e3a8a" />
-                  <text x="65" y="258" fontSize="8" fontFamily="monospace" fill="#1e3a8a">TH-BASE</text>
+                  <text x="65" y="258" fontSize="8" fontFamily="monospace" fill="#1e3a8a">{t.thBase}</text>
 
                   {/* Enemy Units */}
                   <rect x="220" y="120" width="8" height="8" fill="none" stroke="#1e3a8a" strokeWidth="2" />
-                  <text x="235" y="128" fontSize="8" fontFamily="monospace" fill="#1e3a8a">KH-OUTPOST</text>
+                  <text x="235" y="128" fontSize="8" fontFamily="monospace" fill="#1e3a8a">{t.khOutpost}</text>
                 </svg>
               </div>
 
               {/* Map Footer / Coords */}
               <div className="h-8 bg-riso-ink/10 flex items-center justify-between px-2 font-mono text-[9px] text-riso-ink">
-                <span>LAT: 14.39N</span>
-                <span>LON: 104.67E</span>
+                <span>{t.lat}: 14.39N</span>
+                <span>{t.lon}: 104.67E</span>
                 <span className="animate-pulse text-riso-accent">{t.live}</span>
               </div>
             </div>
@@ -1583,41 +1987,422 @@ export default function Home() {
           {
             viewMode === 'LOSSES' && (
               <>
-                <div className="md:col-span-2 lg:col-span-3">
-                  <Card title={t.visualDamageAssessment}>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {[1, 2, 3, 4, 5, 6].map(i => (
-                        <div key={i} className="aspect-video bg-riso-ink/10 border-2 border-riso-ink/20 flex items-center justify-center relative overflow-hidden">
-                          <div className="absolute inset-0 bg-riso-ink/5 flex items-center justify-center">
-                            <p className="font-mono text-xs text-riso-ink/40">{t.image} {i}</p>
-                          </div>
-                          <div className="absolute bottom-0 left-0 right-0 bg-riso-ink/90 text-riso-paper p-2">
-                            <p className="font-mono text-[10px]">{t.incident}: {t.sector} {Math.floor(Math.random() * 10)}</p>
-                            <p className="font-mono text-[9px] opacity-70">{new Date(Date.now() - Math.random() * 10000000000).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                </div>
-
-                <div className="md:col-span-2 lg:col-span-3">
-                  <Card title={t.infrastructureDamage}>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-riso-ink/5 p-4 border border-riso-ink/10">
-                          <p className="font-mono text-xs uppercase opacity-60 mb-2">{t.buildingsDestroyed}</p>
-                          <p className="font-display text-5xl text-riso-ink">{displayStats.propertyDamaged}</p>
-                        </div>
-                        <div className="bg-riso-ink/5 p-4 border border-riso-ink/10">
-                          <p className="font-mono text-xs uppercase opacity-60 mb-2">{t.displacedPersons}</p>
-                          <p className="font-display text-5xl text-riso-ink">{displayStats.displacedCivilians.toLocaleString()}</p>
-                        </div>
+                <div className="md:col-span-2 lg:col-span-3" style={{ height: sidebarHeight }}>
+                  <Card title={`📜 ${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full">
+                    {(!timelineEvents || timelineEvents.length === 0) ? (
+                      <div className="text-center py-8">
+                        <p className="font-mono text-sm opacity-60">{t.noTimelineEvents}</p>
+                        <p className="font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
                       </div>
-                      <p className="font-mono text-xs opacity-70 text-center mt-4">
-                        {t.lossImagesPlaceholder}
-                      </p>
-                    </div>
+                    ) : (
+                      <>
+                        {/* Timeline Section - fills remaining space */}
+                        <div className="flex-1 flex flex-col px-8 md:px-16 pt-2 pb-4 min-h-0">
+                          {/* Serpentine Timeline - fills available space */}
+                          {(() => {
+                            const getEventTitle = (event: any) => {
+                              if (lang === 'th' && event.titleTh) return event.titleTh;
+                              if (lang === 'kh' && event.titleKh) return event.titleKh;
+                              return event.title;
+                            };
+
+                            const getEventDescription = (event: any) => {
+                              if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
+                              if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
+                              return event.description;
+                            };
+
+                            // Layout Configuration
+                            const eventsPerRow = timelineColumns;
+                            const sortedEvents = [...timelineEvents].sort((a: any, b: any) =>
+                              new Date(a.date).getTime() - new Date(b.date).getTime()
+                            );
+
+                            // Chunking with Padding for Alignment
+                            const rows: any[][] = [];
+                            for (let i = 0; i < sortedEvents.length; i += eventsPerRow) {
+                              const chunk = sortedEvents.slice(i, i + eventsPerRow);
+                              // Pad the last row with nulls to maintain grid alignment (prevent justify-between spreading too wide)
+                              while (chunk.length < eventsPerRow) {
+                                chunk.push(null);
+                              }
+                              rows.push(chunk);
+                            }
+
+                            const categoryColors: Record<string, string> = {
+                              military: 'bg-red-500',
+                              diplomatic: 'bg-blue-500',
+                              humanitarian: 'bg-yellow-500',
+                              political: 'bg-purple-500',
+                            };
+
+                            // Bigger Dots
+                            const getDotSize = (importance: number) => {
+                              const minSize = 24; // Much bigger base
+                              const maxSize = 56; // Huge max
+                              const size = minSize + ((importance / 100) * (maxSize - minSize));
+                              return Math.round(size);
+                            };
+
+                            return (
+                              <div className="flex-1 flex flex-col justify-between">
+                                {rows.map((row, rowIndex) => {
+                                  const isReversed = rowIndex % 2 === 1;
+                                  const isLastRow = rowIndex === rows.length - 1;
+
+                                  // Lane configuration
+                                  const LANE_HEIGHT = 80; // Heights for the dot container area
+                                  const LINE_OFFSET = 40; // Center of the lane (where the line runs)
+
+                                  // Dynamic Offset Calculation based on column count/padding
+                                  // Mobile: px-2 (0.5rem) + Half w-24 (3rem) = 3.5rem
+                                  // Desktop: px-8 (2rem) + Half w-32 (4rem) = 6rem
+                                  const lineOffsetRem = timelineColumns === 2 ? '3.5rem' : '6rem';
+
+                                  return (
+                                    <div key={rowIndex} className="flex-1 relative flex flex-col justify-start group/row">
+                                      {/* 1. The Horizontal Road Line - Direct Center-to-Center */}
+                                      <div
+                                        className="absolute h-0 border-t-2 border-dashed border-stone-400 z-0"
+                                        style={{
+                                          top: `${LINE_OFFSET}px`,
+                                          left: lineOffsetRem,
+                                          right: lineOffsetRem,
+                                        }}
+                                      />
+
+                                      {/* 2. The Vertical Connector to Next Row (Straight Drop) */}
+                                      {/* Connects the end of this row to the start of the next row vertically */}
+                                      {!isLastRow && (
+                                        <div
+                                          className={`absolute border-l-2 border-dashed border-stone-400 z-0`}
+                                          style={{
+                                            top: `${LINE_OFFSET}px`,
+                                            height: '100%', // Spans to the start of the next row's dot (offset matched)
+                                            // Scale ensures it hits the corresponding dot on the next row
+                                            [isReversed ? 'left' : 'right']: lineOffsetRem,
+                                            width: '0px',
+                                          }}
+                                        />
+                                      )}
+
+                                      {/* 3. The Content Container */}
+                                      <div className={`w-full flex justify-between items-start px-2 md:px-8 z-10 ${isReversed ? 'flex-row-reverse' : ''}`}>
+                                        {row.map((event: any, i: number) => {
+                                          if (!event) {
+                                            // Spacer matches the structure
+                                            return <div key={`spacer-${i}`} className="w-24 md:w-32 flex flex-col items-center opacity-0">
+                                              <div style={{ height: LANE_HEIGHT }} />
+                                            </div>;
+                                          }
+
+                                          const dotColor = categoryColors[event.category] || 'bg-gray-500';
+                                          const dotSize = getDotSize(event.importance || 50);
+
+                                          return (
+                                            <div key={event._id} className="relative flex flex-col items-center w-24 md:w-32">
+                                              {/* 1. Dot Wrapper - Clickable */}
+                                              <div
+                                                className="flex items-center justify-center flex-shrink-0 relative z-20 cursor-pointer"
+                                                style={{ height: `${LANE_HEIGHT}px`, width: `${LANE_HEIGHT}px` }}
+                                                onClick={() => { setSelectedEvent(event); setShowAllSources(false); }}
+                                              >
+                                                <div
+                                                  className={`rounded-full ${dotColor} shadow-lg
+                                                  ring-4 ring-riso-paper hover:scale-110 active:scale-95 transition-transform duration-200`}
+                                                  style={{ width: `${dotSize}px`, height: `${dotSize}px` }}
+                                                />
+                                              </div>
+
+                                              {/* 2. Text Label */}
+                                              <div className="text-center w-full z-30 -mt-2 cursor-pointer" onClick={() => { setSelectedEvent(event); setShowAllSources(false); }}>
+                                                <div className="inline-block bg-[#F2F2E9] bg-opacity-95 px-2 py-1 rounded-md shadow-sm border border-white/20 backdrop-blur-sm">
+                                                  <p className="font-mono text-[10px] font-bold opacity-50 mb-0.5">{event.date}</p>
+                                                  <p className={`font-display text-xs md:text-sm leading-tight text-riso-ink ${lang === 'th' ? 'font-bold' : ''}`}>
+                                                    {getEventTitle(event)}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Event Details Modal - Bottom Sheet with Swipe */}
+                        {selectedEvent && (() => {
+                          const getEventTitle = (event: any) => {
+                            if (lang === 'th' && event.titleTh) return event.titleTh;
+                            if (lang === 'kh' && event.titleKh) return event.titleKh;
+                            return event.title;
+                          };
+                          const getEventDescription = (event: any) => {
+                            if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
+                            if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
+                            return event.description;
+                          };
+                          const categoryColors: Record<string, string> = {
+                            military: 'bg-red-500',
+                            diplomatic: 'bg-blue-500',
+                            humanitarian: 'bg-yellow-500',
+                            political: 'bg-purple-500',
+                          };
+
+                          return (
+                            <div
+                              className={`fixed inset-0 z-[100] flex items-end md:items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm modal-backdrop ${isModalClosing ? 'closing' : ''}`}
+                              onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+                              onKeyDown={handleKeyDown}
+                              tabIndex={0}
+                              ref={(el) => el?.focus()}
+                            >
+                              {/* Card + Navigation Wrapper */}
+                              <div className="relative flex items-center w-full max-w-lg">
+                                {/* Desktop Nav Arrow - Left */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); animateSwipe('prev'); }}
+                                  disabled={!hasPrev}
+                                  className={`hidden md:flex absolute -left-16 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all z-10 ${hasPrev ? 'hover:bg-white hover:scale-110' : 'opacity-30 cursor-not-allowed'}`}
+                                >
+                                  <span className="text-2xl">←</span>
+                                </button>
+
+                                {/* Desktop Nav Arrow - Right */}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); animateSwipe('next'); }}
+                                  disabled={!hasNext}
+                                  className={`hidden md:flex absolute -right-16 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all z-10 ${hasNext ? 'hover:bg-white hover:scale-110' : 'opacity-30 cursor-not-allowed'}`}
+                                >
+                                  <span className="text-2xl">→</span>
+                                </button>
+
+                                {(() => {
+                                  /**
+                              * Inner Component for Card Content
+                              * Defined here to access closure variables like 't', 'lang', 'closeModal'
+                              */
+                                  const CardContent = ({ eventData, isGhost = false, style, forwardedRef, ...props }: any) => {
+                                    if (!eventData) return null;
+                                    return (
+                                      <div
+                                        ref={forwardedRef}
+                                        className={`modal-sheet bg-[#F2F2E9] w-full max-h-[85vh] md:max-h-[90vh] overflow-y-auto rounded-2xl md:rounded-lg border-4 border-riso-ink shadow-xl flex flex-col ${isGhost ? 'absolute inset-0 z-0 pointer-events-none' : 'relative z-10 shadow-2xl'}`}
+                                        style={style}
+                                        {...props}
+                                      >
+                                        {/* Mobile Drag Handle */}
+                                        <div
+                                          className="drag-handle-area md:hidden flex flex-col items-center pt-6 pb-4 sticky top-0 bg-[#F2F2E9] z-20 cursor-grab active:cursor-grabbing select-none"
+                                          style={{ touchAction: 'none' }}
+                                        >
+                                          <div className="w-16 h-2 bg-riso-ink/40 rounded-full mb-3 pointer-events-none"></div>
+                                          <span className="font-mono text-[10px] opacity-50 font-bold pointer-events-none">
+                                            {sortedEvents.indexOf(eventData) + 1}/{sortedEvents.length} • {isGhost ? 'NEXT INTEL' : 'DRAG TO CLOSE'}
+                                          </span>
+                                        </div>
+
+                                        {/* Header */}
+                                        <div
+                                          className="modal-header bg-riso-ink text-riso-paper p-4 flex justify-between items-start sticky top-0 z-10 cursor-grab active:cursor-grabbing"
+                                          style={{ touchAction: 'none' }}
+                                        >
+                                          <div className="pointer-events-none">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <span className="text-[10px] font-mono tracking-[0.2em] uppercase opacity-70">INTEL REPORT</span>
+                                              <div className={`w-2 h-2 rounded-full ${isGhost ? 'bg-gray-500' : 'bg-red-500 animate-pulse'}`}></div>
+                                            </div>
+                                            <h3 className={`font-display text-2xl leading-tight ${lang === 'th' ? 'font-bold' : ''}`}>
+                                              {getEventTitle(eventData)}
+                                            </h3>
+                                          </div>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); closeModal(); }}
+                                            className="p-1 hover:bg-white/10 rounded-full transition-colors pointer-events-auto"
+                                          >
+                                            <IconBase className="w-6 h-6"><path d="M18 6L6 18M6 6l12 12" /></IconBase>
+                                          </button>
+                                        </div>
+
+                                        {/* Body */}
+                                        <div className="p-4 md:p-6 space-y-6 flex-1 min-h-[50vh]">
+                                          {/* Meta Row */}
+                                          <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
+                                            <div>
+                                              <p className="opacity-50 uppercase tracking-wider mb-1">DATE</p>
+                                              <p className="font-bold">{new Date(eventData.date).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                            </div>
+                                            <div>
+                                              <p className="opacity-50 uppercase tracking-wider mb-1">IMPACT</p>
+                                              <div className="flex items-center gap-2">
+                                                <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                  <div className="h-full bg-riso-ink" style={{ width: `${eventData.importance}%` }}></div>
+                                                </div>
+                                                <span className="font-bold">{eventData.importance}/100</span>
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <p className="opacity-50 uppercase tracking-wider mb-1">TYPE</p>
+                                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase text-white ${categoryColors[eventData.category] || 'bg-gray-500'}`}>
+                                                {eventData.category}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          {/* If GHOST, show blurred placeholder structure (optional) or full content? 
+                                                   User wants to "see card below". Rendering full text behind might be heavy but accurate.
+                                                   Let's revert to full content but visually dimmed by parent class. 
+                                                */}
+
+                                          {/* Status */}
+                                          <div className={`p-3 border-l-4 ${eventData.status === 'confirmed' ? 'border-green-500 bg-green-500/10' :
+                                            eventData.status === 'disputed' ? 'border-yellow-500 bg-yellow-500/10' : 'border-red-500 bg-red-500/10'}`}>
+                                            <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mb-1">STATUS</p>
+                                            <p className={`font-bold uppercase tracking-wider ${eventData.status === 'confirmed' ? 'text-green-700' :
+                                              eventData.status === 'disputed' ? 'text-yellow-700' : 'text-red-700'}`}>
+                                              {eventData.status || 'UNVERIFIED'}
+                                            </p>
+                                          </div>
+
+                                          {/* Description */}
+                                          <div>
+                                            <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mb-2">SUMMARY</p>
+                                            <p className={`font-serif text-base leading-relaxed text-gray-800`}>
+                                              {getEventDescription(eventData)}
+                                            </p>
+                                          </div>
+
+                                          {/* Sources */}
+                                          {eventData.sources?.length > 0 && (() => {
+                                            const sources = eventData.sources;
+                                            // For ghost, just show first 3. For active, logic applies.
+                                            const displaySources = (showAllSources && !isGhost) ? sources : sources.slice(0, 3);
+                                            const hasMore = sources.length > 3;
+
+                                            return (
+                                              <div>
+                                                <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mb-2">
+                                                  SOURCES ({sources.length})
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                  {displaySources.map((s: any, idx: number) => (
+                                                    <div
+                                                      key={idx}
+                                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-mono
+                                                                        ${s.credibility > 70 ? 'bg-green-100 border border-green-200' : 'bg-gray-100 border border-gray-200'}`}
+                                                    >
+                                                      <span className="font-bold truncate max-w-[120px]">{s.name}</span>
+                                                      {s.credibility && (
+                                                        <span className={`text-[9px] px-1 py-0.5 rounded ${s.credibility > 70 ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>
+                                                          {s.credibility}%
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  ))}
+                                                  {hasMore && (
+                                                    <button
+                                                      onClick={() => !isGhost && setShowAllSources(!showAllSources)}
+                                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-mono bg-riso-ink/10 hover:bg-riso-ink/20 transition-colors border border-riso-ink/20"
+                                                    >
+                                                      {showAllSources && !isGhost ? '− Less' : `+${sources.length - 3} more`}
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="p-3 border-t border-riso-ink/10 bg-riso-ink/5 flex flex-col items-center justify-center">
+                                          <div className="flex items-center gap-3">
+                                            <div className="flex gap-1">
+                                              {sortedEvents.map((_: any, idx: number) => (
+                                                <div
+                                                  key={idx}
+                                                  className={`w-1.5 h-1.5 rounded-full transition-all ${idx === sortedEvents.indexOf(eventData) ? 'bg-riso-ink scale-125' : 'bg-riso-ink/20'}`}
+                                                />
+                                              ))}
+                                            </div>
+                                            <span className="font-mono text-[10px] font-bold opacity-60">{sortedEvents.indexOf(eventData) + 1} / {sortedEvents.length}</span>
+                                          </div>
+                                          <p className="font-mono text-[8px] opacity-40 uppercase mt-1 hidden md:block">ESC to close • ←→ or arrows to navigate</p>
+                                          <p className="font-mono text-[8px] opacity-40 uppercase mt-1 md:hidden">←→ swipe • drag handle ↓ to close</p>
+                                        </div>
+                                      </div>
+                                    )
+                                  }
+
+                                  const prevEvent = hasPrev ? sortedEvents[currentIndex - 1] : null;
+                                  const nextEvent = hasNext ? sortedEvents[currentIndex + 1] : null;
+
+                                  return (
+                                    <>
+                                      {/* Ghost Prev (Hidden by default, shown by JS when dragging Right) */}
+                                      {prevEvent && (
+                                        <CardContent
+                                          eventData={prevEvent}
+                                          isGhost={true}
+                                          forwardedRef={ghostPrevRef}
+                                          style={{ visibility: 'hidden' }}
+                                        />
+                                      )}
+
+                                      {/* Ghost Next (Hidden by default, shown by JS when dragging Left) */}
+                                      {nextEvent && (
+                                        <CardContent
+                                          eventData={nextEvent}
+                                          isGhost={true}
+                                          forwardedRef={ghostNextRef}
+                                          style={{ visibility: 'hidden' }}
+                                        />
+                                      )}
+
+                                      {/* Active Card - Rendered ON TOP */}
+                                      <CardContent
+                                        eventData={selectedEvent}
+                                        forwardedRef={modalRef}
+                                        style={{
+                                          touchAction: 'pan-y',
+                                          willChange: 'transform, opacity',
+                                          animation: hasInteracted ? 'none' : undefined
+                                        }}
+                                        onClick={(e: any) => e.stopPropagation()}
+                                        onPointerDown={handlePointerDown}
+                                        onPointerMove={handlePointerMove}
+                                        onPointerUp={handlePointerUp}
+                                        onPointerCancel={handlePointerUp}
+                                      />
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Legend - OUTSIDE the timeline flex container, fixed at bottom */}
+                        <div className="flex-shrink-0 flex justify-center gap-8 py-3 px-4 border-t border-riso-ink/10">
+                          {Object.entries({
+                            military: 'bg-red-500',
+                            diplomatic: 'bg-blue-500',
+                            humanitarian: 'bg-yellow-500',
+                            political: 'bg-purple-500'
+                          }).map(([cat, color]) => (
+                            <div key={cat} className="flex items-center gap-2">
+                              <div className={`w-3 h-3 rounded-full ${color}`}></div>
+                              <span className="text-[10px] font-mono uppercase tracking-widest opacity-60">{cat}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )
+                    }
                   </Card>
                 </div>
               </>
@@ -1720,16 +2505,14 @@ export default function Home() {
               </>
             )
           }
-
-        </main >
-
+        </main>
         {/* Decorative footer elements */}
-        < div className="fixed bottom-4 right-4 hidden lg:block" >
+        <div className="fixed bottom-4 right-4 hidden lg:block">
           <div className="vertical-text font-display text-6xl text-riso-ink opacity-10 pointer-events-none select-none">
-            PEACE / WAR
+            {t.peaceWar}
           </div>
-        </div >
+        </div>
       </div>
-    </div>
+    </div >
   );
 }
