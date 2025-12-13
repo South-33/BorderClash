@@ -1149,8 +1149,10 @@ This is the structured memory of key conflict events. Use this as your PRIMARY s
 ${timelineContext}
 
 📜 PREVIOUS ANALYSIS (CONTINUITY CONTEXT):
-The following was the previous analysis. You should UPDATE this based on new information, but maintain continuity.
-If nothing changed, you can keep similar themes. If the situation escalated, update accordingly.
+The following was the previous analysis. Use it for context, but DO NOT be shackled by it.
+- If the situation is unchanged, maintain the narrative (don't force a "new story" just for the sake of it).
+- If new info contradicts the past or signals a shift, UPDATE BOLDLY.
+- Your goal: ACCURACY first. Continuity second.
 
 [PREVIOUS CAMBODIA NARRATIVE]: ${prevCambodia?.officialNarrative || "None"}
 [PREVIOUS THAILAND NARRATIVE]: ${prevThailand?.officialNarrative || "None"}
