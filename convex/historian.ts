@@ -2,6 +2,7 @@
 
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { v } from "convex/values";
 import { GHOST_API_URL } from "./config";
 
 // =============================================================================
@@ -164,6 +165,54 @@ BEFORE adding an event, ask yourself:
    - 30-49: Routine but noteworthy events, minor skirmishes, diplomatic meetings
    - 0-29: Too minor for timeline - ARCHIVE instead
 
+
+🔄 TIMELINE CLEANUP - MERGE & CONSOLIDATE EVENTS:
+As you review the existing timeline, look for events that should be MERGED or CONSOLIDATED.
+
+WHAT TO MERGE:
+
+1. EXACT DUPLICATES - Same event, different wording:
+   - "Shelling in Region 5" vs "Artillery attack in Region 5" → MERGE
+
+2. SAME-DAY RELATED EVENTS - Multiple incidents that are part of one story:
+   - "Dec 12 morning: Village bombed" + "Dec 12 evening: Village bombed again"
+   → CONSOLIDATE into: "Dec 12: Village bombed in morning and evening attacks"
+   
+   - "Dec 13: Thai troops advance" + "Dec 13: Thai troops capture hill"
+   → CONSOLIDATE into: "Dec 13: Thai troops advance and capture strategic hill"
+
+3. FOLLOW-UPS that should be updates:
+   - "Attack on village" + "Attack on village kills 5 (update)"
+   → Keep the more complete one, delete the partial
+
+SIGNS TO LOOK FOR:
+- Same date + same location + same type of action = likely should be ONE event
+- Sequential events that are part of the same operation/response
+- One event is clearly a subset or update of another
+
+HOW TO MERGE:
+Use update_event + delete_event TOGETHER:
+1. Pick the BETTER event to keep (more sources, more complete, higher importance)
+2. Use "update_event" to COMBINE info: merge descriptions, combine time references, adjust importance UP
+3. Use "delete_event" to remove the other, citing the merge in reasoning
+
+Example 1 - Exact duplicate:
+- Event A: "Shelling in Region 5" (importance 60)
+- Event B: "Artillery attacks in Region 5 kill 3" (importance 70)
+→ Keep B, update with A's sources, delete A
+
+Example 2 - Same-day consolidation:
+- Event A: "Dec 12 08:00 - Morning airstrike on border post" (importance 65)
+- Event B: "Dec 12 19:00 - Evening airstrike on same border post" (importance 60)
+→ Update A to: "Dec 12 - Airstrikes hit border post in morning and evening" (importance 75)
+→ Delete B with reasoning: "Consolidated into single Dec 12 airstrike event"
+
+⚠️ DO NOT MERGE if:
+- Events are genuinely different incidents (different locations, different actors)
+- Events span multiple days (keep separate for chronological accuracy)
+- One is an attack, the other is a response (these tell a story - keep both)
+
+
 ⚠️ SYMMETRIC SKEPTICISM:
 - Thai government claims need verification just like Cambodian ones
 - International media has biases too (sensationalism, access limitations)
@@ -221,6 +270,7 @@ OUTPUT "verifiedCredibility" and "credibilityReason" for EVERY action.
    - Event status should change (confirmed → disputed, or disputed → debunked)
    - Importance needs adjustment based on new developments
    - Better title/description is now available
+   - MERGING duplicates: Update the better event with info from duplicate before deleting it
    Requirements:
    - MUST reference targetEventTitle EXACTLY as it appears in the timeline
    - MUST provide reasoning explaining what changed and why
@@ -241,18 +291,18 @@ OUTPUT "verifiedCredibility" and "credibilityReason" for EVERY action.
    Result: Triggers deeper investigation
 
 7. "delete_event" - PERMANENTLY REMOVE an existing timeline event
-   ⚠️ USE EXTREMELY RARELY - This is almost NEVER the right action
-   Use ONLY when: 
+   Use when: 
    - Event is COMPLETELY FABRICATED (never happened at all)
-   - Event is a DUPLICATE of another event (exact same thing)
+   - Event is a DUPLICATE of another event → DELETE after merging info into the better event!
    - Event was added by mistake (wrong conflict, wrong topic entirely)
+   ✅ FOR MERGING DUPLICATES: Use update_event on the better event FIRST, then delete_event on the worse one
    DO NOT USE when:
    - Event has some inaccuracies (use update_event instead)
    - Event is disputed (set status to "disputed" instead)
    - Event was debunked (set status to "debunked" instead - keep for record!)
    Requirements:
    - MUST provide strong reasoning for why deletion is necessary
-   - When in doubt, prefer update_event or setting status to "debunked"
+   - For merges, cite which event you merged it into
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
@@ -348,10 +398,41 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
 RULES:
 - You MUST include <json> and </json> tags
 - Inside the tags, output valid JSON only
-- You can search/think/visit URLs before the tags
 - For create_event, merge_source, and update_event, you MUST set visitedSourceUrl: true
 - Every article in the input MUST have an action
 - Use English numerals (0-9) only - NEVER Thai ๑๒๓ or Khmer ១២៣ numerals
+
+📝 IMPORTANT - ORGANIZE ARTICLES BEFORE JSON:
+Before outputting your JSON, you MUST first list each article with your plan for it.
+This helps you keep track and avoid mixing up URLs/titles/actions between articles.
+
+Example format (put this BEFORE the <json> tags):
+---
+ARTICLE ANALYSIS:
+1. [CAMBODIA] "Hun Manet appeals to UN Security Council"
+   → URL: https://freshnewsasia.com/xxxxx
+   → Verified: ✅ Visited URL, content matches summary
+   → Action: CREATE_EVENT (Major diplomatic development)
+   → Credibility: 75 (Official government source)
+
+2. [THAILAND] "Thai PM rejects ceasefire claims"
+   → URL: https://thairath.co.th/yyyyy
+   → Verified: ✅ Article exists, but summary overstated claims
+   → Action: MERGE_SOURCE into "Thailand-Cambodia Ceasefire Talks Fail"
+   → Credibility: 65 (Single-sided reporting)
+
+3. [INTL] "Minor diplomatic update"
+   → URL: https://reuters.com/zzzzz
+   → Action: ARCHIVE (Routine, not historically significant)
+---
+<json>
+{ ... your JSON actions matching the analysis above ... }
+</json>
+
+⚠️ DOUBLE-CHECK: Before outputting JSON, verify that:
+- Each action's articleTitle matches exactly what you analyzed
+- URLs are correctly associated with the right article
+- You haven't mixed up Article 1's details with Article 2
 `;
 
 // =============================================================================
@@ -1008,5 +1089,235 @@ export const runHistorianCycle = internalAction({
             discarded,
             credibilityUpdated,
         };
+    },
+});
+
+// =============================================================================
+// TIMELINE CLEANUP ACTION
+// Dedicated action to review and merge/consolidate existing timeline events
+// Can be called independently of new articles
+// =============================================================================
+
+const CLEANUP_PROMPT = `You are the TIMELINE CURATOR for BorderClash.
+Your ONLY job right now is to review the existing timeline and find events that should be MERGED or CONSOLIDATED.
+
+🎯 YOUR MISSION:
+Look at the timeline below and identify:
+1. DUPLICATE EVENTS - Same incident reported with different wording
+2. SAME-DAY RELATED EVENTS - Multiple entries for the same day that should be ONE event
+3. SEQUENTIAL EVENTS - Events that are clearly part of one operation/story
+
+📋 EXAMPLES OF WHAT TO MERGE:
+
+Example 1 - Duplicates:
+- "Shelling in Military Region 5" + "Artillery attack in Region 5"
+→ MERGE: Keep the more detailed one, delete the other
+
+Example 2 - Same-day consolidation:
+- "Dec 12 08:00 - Morning airstrike" + "Dec 12 19:00 - Evening airstrike on same target"  
+→ CONSOLIDATE: "Dec 12 - Airstrikes hit target in morning and evening" (delete the other)
+
+Example 3 - Sequential operations:
+- "Dec 13: Troops advance to hill" + "Dec 13: Troops capture hill"
+→ CONSOLIDATE: "Dec 13: Troops advance and capture strategic hill"
+
+⚠️ DO NOT MERGE:
+- Events at different locations (genuinely different incidents)
+- Events on different days (chronology matters)
+- Attack + Response pairs (they tell a story)
+- Events involving different actors
+
+📋 ACTIONS YOU CAN TAKE:
+
+1. "update_event" - Modify an event to include info from another before deleting
+   - targetEventTitle: EXACT title of the event to update
+   - eventUpdates: { title, description, importance, etc. }
+   - reasoning: Why you're updating (e.g., "Consolidating with [other event]")
+
+2. "delete_event" - Remove a duplicate/merged event
+   - targetEventTitle: EXACT title to delete
+   - reasoning: "Merged into [title of kept event]"
+
+3. "no_action" - Use if timeline is already clean!
+
+OUTPUT FORMAT:
+\`\`\`json
+{
+  "analysis": "Brief summary of what you found",
+  "mergeActions": [
+    {
+      "action": "update_event",
+      "targetEventTitle": "Event to keep and update",
+      "eventUpdates": {
+        "title": "New consolidated title",
+        "titleTh": "Thai translation",
+        "titleKh": "Khmer translation", 
+        "description": "Combined description mentioning both incidents",
+        "descriptionTh": "Thai translation",
+        "descriptionKh": "Khmer translation",
+        "importance": 75
+      },
+      "reasoning": "Consolidating morning and evening attacks into single event"
+    },
+    {
+      "action": "delete_event", 
+      "targetEventTitle": "Event to remove after merge",
+      "reasoning": "Merged into 'New consolidated title'"
+    }
+  ],
+  "summary": "Merged X events, deleted Y duplicates, timeline now has Z events"
+}
+\`\`\`
+
+🌐 TRANSLATION RULES:
+- ALWAYS provide Thai (titleTh, descriptionTh) and Khmer (titleKh, descriptionKh) translations for updates
+- For update_event, include translations if you're updating title/description
+- Translation style: NATURAL, CONVERSATIONAL language - how a regular Thai/Khmer person would explain it to a friend or family member
+- NOT formal academic language (ภาษาราชการ), NOT government-speak, NOT news anchor style
+- Thai: Use ภาษาพูด (spoken Thai) - casual but respectful. Like how a Thai taxi driver or office worker would say it.
+- Khmer: Use everyday spoken Khmer (ភាសាប្រចាំថ្ងៃ) - how a Cambodian shopkeeper or student would explain it.
+- Use simple words that everyone understands - avoid technical jargon
+- ALWAYS use English numerals (0-9) in ALL languages - NEVER Thai ๑๒๓ or Khmer ១២៣
+
+Now review this timeline and find events to merge:
+`;
+
+interface CleanupAction {
+    action: "update_event" | "delete_event" | "no_action";
+    targetEventTitle: string;
+    eventUpdates?: {
+        title?: string;
+        titleTh?: string;
+        titleKh?: string;
+        description?: string;
+        descriptionTh?: string;
+        descriptionKh?: string;
+        importance?: number;
+        timeOfDay?: string;
+    };
+    reasoning: string;
+}
+
+interface CleanupResult {
+    analysis: string;
+    mergeActions: CleanupAction[];
+    summary: string;
+}
+
+export const runTimelineCleanup = internalAction({
+    args: {
+        date: v.optional(v.string()),  // Optional: process only events for this date (e.g., "2025-12-12")
+    },
+    handler: async (ctx, args): Promise<{
+        eventsUpdated: number;
+        eventsDeleted: number;
+        summary: string;
+    }> => {
+        console.log("═══════════════════════════════════════════════════════════════");
+        console.log("🧹 TIMELINE CLEANUP STARTED");
+        console.log("═══════════════════════════════════════════════════════════════");
+
+        // Get existing timeline with full details
+        const allTimeline = await ctx.runQuery(internal.api.getRecentTimeline, {
+            limit: 100
+        });
+
+        // Filter by date if provided
+        const timeline = args.date
+            ? allTimeline.filter((e: any) => e.date === args.date)
+            : allTimeline;
+
+        if (args.date) {
+            console.log(`📅 Filtering to date: ${args.date}`);
+            console.log(`   Found ${timeline.length} events on this date (out of ${allTimeline.length} total)`);
+        }
+
+        if (timeline.length < 2) {
+            console.log("✅ Fewer than 2 events for this date - nothing to merge");
+            return { eventsUpdated: 0, eventsDeleted: 0, summary: "Too few events to merge" };
+        }
+
+        console.log(`📜 Reviewing ${timeline.length} timeline events for merges...`);
+
+        // Build timeline context for AI
+        const timelineContext = timeline.map((e: any, idx: number) => {
+            const timeDisplay = e.timeOfDay ? ` ${e.timeOfDay}` : "";
+            return `${idx + 1}. [${e.date}${timeDisplay}] "${e.title}" 
+   Category: ${e.category} | Importance: ${e.importance}/100 | Sources: ${e.sources?.length || 0}
+   Description: ${e.description}`;
+        }).join("\n\n");
+
+        const prompt = `${CLEANUP_PROMPT}
+
+═══════════════════════════════════════════════════════════════
+📜 CURRENT TIMELINE (${timeline.length} events):
+${timelineContext}
+═══════════════════════════════════════════════════════════════
+
+Find duplicate or related events that should be merged. Output JSON with your merge actions.`;
+
+        const response = await callGhostAPI(prompt, "thinking", 2);
+
+        // Extract JSON
+        const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/i) ||
+            response.match(/\{[\s\S]*"mergeActions"[\s\S]*\}/);
+
+        if (!jsonMatch) {
+            console.log("❌ [CLEANUP] No JSON found in response");
+            return { eventsUpdated: 0, eventsDeleted: 0, summary: "AI returned no actions" };
+        }
+
+        let result: CleanupResult;
+        try {
+            const jsonStr = jsonMatch[1] || jsonMatch[0];
+            result = JSON.parse(jsonStr.trim());
+        } catch (e) {
+            console.log(`❌ [CLEANUP] JSON parse error: ${e}`);
+            return { eventsUpdated: 0, eventsDeleted: 0, summary: "Failed to parse AI response" };
+        }
+
+        console.log(`📊 AI Analysis: ${result.analysis}`);
+        console.log(`🎯 Found ${result.mergeActions?.length || 0} merge actions`);
+
+        let eventsUpdated = 0;
+        let eventsDeleted = 0;
+
+        // Execute merge actions
+        for (const action of result.mergeActions || []) {
+            if (action.action === "no_action") continue;
+
+            if (action.action === "update_event" && action.eventUpdates) {
+                // Validate updates
+                const updates: any = { ...action.eventUpdates };
+
+                await ctx.runMutation(internal.api.updateTimelineEvent, {
+                    eventTitle: action.targetEventTitle,
+                    updates,
+                    reason: action.reasoning || "Timeline cleanup merge",
+                });
+                console.log(`✏️ Updated: "${action.targetEventTitle}"`);
+                eventsUpdated++;
+            }
+
+            if (action.action === "delete_event") {
+                await ctx.runMutation(internal.api.deleteTimelineEvent, {
+                    eventTitle: action.targetEventTitle,
+                    reason: action.reasoning || "Merged with another event",
+                });
+                console.log(`🗑️ Deleted: "${action.targetEventTitle}"`);
+                eventsDeleted++;
+            }
+        }
+
+        const summary = result.summary || `Updated ${eventsUpdated}, deleted ${eventsDeleted}`;
+
+        console.log("═══════════════════════════════════════════════════════════════");
+        console.log(`🧹 TIMELINE CLEANUP COMPLETE`);
+        console.log(`   Events updated: ${eventsUpdated}`);
+        console.log(`   Events deleted: ${eventsDeleted}`);
+        console.log(`   Summary: ${summary}`);
+        console.log("═══════════════════════════════════════════════════════════════");
+
+        return { eventsUpdated, eventsDeleted, summary };
     },
 });

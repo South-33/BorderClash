@@ -289,6 +289,33 @@ export const forceReleaseSourceVerificationLock = internalMutation({
     },
 });
 
+/**
+ * Reset source verification status for all articles
+ * This clears sourceVerifiedAt so they will be re-verified
+ */
+export const resetSourceVerification = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        let cleared = 0;
+
+        // Clear from all three tables
+        const tables = ["thailandNews", "cambodiaNews", "internationalNews"] as const;
+
+        for (const table of tables) {
+            const articles = await ctx.db.query(table).collect();
+            for (const article of articles) {
+                if (article.sourceVerifiedAt) {
+                    await ctx.db.patch(article._id, { sourceVerifiedAt: undefined });
+                    cleared++;
+                }
+            }
+        }
+
+        console.log(`🔄 [VERIFY] Reset verification status for ${cleared} articles`);
+        return { cleared };
+    },
+});
+
 // =============================================================================
 // INTERNAL MUTATIONS (Research Agent)
 // =============================================================================
@@ -532,6 +559,35 @@ export const updateArticleContent = internalMutation({
     },
 });
 
+// Update article URL when verifier finds the correct one
+export const updateArticleUrl = internalMutation({
+    args: {
+        country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")),
+        oldTitle: v.string(),
+        newUrl: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const table = args.country === "thailand" ? "thailandNews"
+            : args.country === "cambodia" ? "cambodiaNews"
+                : "internationalNews";
+
+        const article = await ctx.db
+            .query(table)
+            .withIndex("by_title", (q) => q.eq("title", args.oldTitle))
+            .first();
+
+        if (article) {
+            await ctx.db.patch(article._id, {
+                sourceUrl: args.newUrl,
+                sourceVerifiedAt: Date.now(),
+            });
+            console.log(`🔗 Updated URL for "${args.oldTitle}": ${article.sourceUrl} → ${args.newUrl}`);
+        } else {
+            console.log(`⚠️ Could not find article to update URL: "${args.oldTitle}"`);
+        }
+    },
+});
+
 export const upsertAnalysis = internalMutation({
     args: {
         target: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("neutral")),
@@ -769,6 +825,25 @@ export const stopResearchCycle = mutation({
                 systemStatus: "stopped",
                 errorLog: "Cycle manually stopped by user."
             });
+        }
+    },
+});
+
+export const resumeResearchCycle = mutation({
+    args: {},
+    handler: async (ctx) => {
+        console.log("▶️ RESUME: Resuming research cycle...");
+        const existing = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, {
+                isPaused: false,
+                systemStatus: "online",
+                errorLog: undefined  // Clear error log
+            });
+            console.log("✅ Research cycle resumed - status set to online");
         }
     },
 });

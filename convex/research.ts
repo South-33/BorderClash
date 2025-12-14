@@ -526,8 +526,31 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
 RULES:
 - You MUST include <json> and </json> tags
 - Inside the tags, output valid JSON only
-- You can search/think before the tags
 - Use English numerals (0-9) only
+
+📝 IMPORTANT - LIST ARTICLES BEFORE JSON:
+Before outputting your JSON, you MUST first list each article you found in a numbered format.
+This helps you keep track and avoid mixing up URLs/titles/summaries between articles.
+
+Example format (put this BEFORE the <json> tags):
+---
+ARTICLES FOUND:
+1. [Fresh News] "Hun Manet appeals to UN" - https://freshnewsasia.com/xxxxx
+   → About: Cambodia's PM asking UN for intervention
+   → Date: Dec 13, 2025
+
+2. [Khmer Times] "Border clashes continue" - https://khmertimes.com/yyyyy
+   → About: Fighting in Pursat province
+   → Date: Dec 13, 2025
+
+3. (none found that are new/relevant)
+---
+<json>
+{ ... your JSON here, matching the list above ... }
+</json>
+
+⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
+Do NOT mix up Article 1's URL with Article 2's summary!
 
 ✅ IT IS OK TO RETURN ZERO ARTICLES:
 - If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
@@ -704,8 +727,31 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
 RULES:
 - You MUST include <json> and </json> tags
 - Inside the tags, output valid JSON only
-- You can search/think before the tags
 - Use English numerals (0-9) only
+
+📝 IMPORTANT - LIST ARTICLES BEFORE JSON:
+Before outputting your JSON, you MUST first list each article you found in a numbered format.
+This helps you keep track and avoid mixing up URLs/titles/summaries between articles.
+
+Example format (put this BEFORE the <json> tags):
+---
+ARTICLES FOUND:
+1. [Thai Rath] "ทภ.2 สรุปปะทะชายแดน" - https://thairath.co.th/xxxxx
+   → About: Army Region 2 reports on border clashes
+   → Date: Dec 13, 2025
+
+2. [Bangkok Post] "PM rejects ceasefire claims" - https://bangkokpost.com/yyyyy
+   → About: Thai PM denies Trump's ceasefire announcement
+   → Date: Dec 13, 2025
+
+3. (none found that are new/relevant)
+---
+<json>
+{ ... your JSON here, matching the list above ... }
+</json>
+
+⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
+Do NOT mix up Article 1's URL with Article 2's summary!
 
 ✅ IT IS OK TO RETURN ZERO ARTICLES:
 - If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
@@ -886,8 +932,31 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
 RULES:
 - You MUST include <json> and </json> tags
 - Inside the tags, output valid JSON only
-- You can search/think before the tags
 - Use English numerals (0-9) only
+
+📝 IMPORTANT - LIST ARTICLES BEFORE JSON:
+Before outputting your JSON, you MUST first list each article you found in a numbered format.
+This helps you keep track and avoid mixing up URLs/titles/summaries between articles.
+
+Example format (put this BEFORE the <json> tags):
+---
+ARTICLES FOUND:
+1. [Reuters] "Thailand-Cambodia clashes continue" - https://reuters.com/xxxxx
+   → About: Wire service report on ongoing border conflict
+   → Date: Dec 13, 2025
+
+2. [AP News] "UN calls for immediate ceasefire" - https://apnews.com/yyyyy
+   → About: UN Secretary-General's statement
+   → Date: Dec 13, 2025
+
+3. (none found that are new/relevant)
+---
+<json>
+{ ... your JSON here, matching the list above ... }
+</json>
+
+⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
+Do NOT mix up Article 1's URL with Article 2's summary!
 
 ✅ IT IS OK TO RETURN ZERO ARTICLES:
 - If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
@@ -1204,9 +1273,9 @@ export const synthesizeAll = internalAction({
             return null;
         }
 
-        // Helper to format article for prompt
-        const formatArticle = (a: any) =>
-            `- [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
+        // Helper to format article for prompt - numbered for better AI tracking
+        const formatArticle = (a: any, idx: number) =>
+            `${idx + 1}. [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
    URL: ${a.sourceUrl || "(none)"}
    Summary: ${a.summary || "No summary"}`;
 
@@ -1222,9 +1291,9 @@ export const synthesizeAll = internalAction({
             .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
             .slice(0, 15);
 
-        const cambodiaPropaganda = cambodiaLowCred.map(formatArticle).join("\n");
-        const thailandPropaganda = thailandLowCred.map(formatArticle).join("\n");
-        const internationalPropaganda = internationalLowCred.map(formatArticle).join("\n");
+        const cambodiaPropaganda = cambodiaLowCred.map((a, i) => formatArticle(a, i)).join("\n");
+        const thailandPropaganda = thailandLowCred.map((a, i) => formatArticle(a, i)).join("\n");
+        const internationalPropaganda = internationalLowCred.map((a, i) => formatArticle(a, i)).join("\n");
 
         console.log(`📰 [SYNTHESIS] Low-cred articles: Cambodia=${cambodiaLowCred.length}, Thailand=${thailandLowCred.length}, Intl=${internationalLowCred.length}`);
 
@@ -1239,8 +1308,8 @@ export const synthesizeAll = internalAction({
             .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
             .slice(0, 30);
 
-        const breakingNewsList = breakingNews.map((a: any) =>
-            `- [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
+        const breakingNewsList = breakingNews.map((a: any, idx: number) =>
+            `${idx + 1}. [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
    URL: ${a.sourceUrl || "(none)"}
    Summary: ${a.summary || "No summary"}`
         ).join("\n");
@@ -1799,6 +1868,14 @@ export const runResearchCycle = internalAction({
 
         await ctx.runMutation(internal.api.setStatus, { status: "syncing" });
 
+        // Time budget tracking - Convex actions timeout at 600s (10 mins)
+        // Reserve 2 minutes for synthesis to ensure it always runs
+        const cycleStartTime = Date.now();
+        const MAX_CYCLE_TIME_MS = 8 * 60 * 1000; // 8 minutes (leaves 2 mins for synthesis)
+
+        // Returns milliseconds remaining in our time budget (can be negative if over)
+        const getTimeRemainingMs = () => MAX_CYCLE_TIME_MS - (Date.now() - cycleStartTime);
+
         const errors: string[] = [];
 
         // Step 1: Curate news (SEQUENTIAL to respect API rate limits - max 5 concurrent workers)
@@ -1854,11 +1931,20 @@ export const runResearchCycle = internalAction({
         console.log("\n── STEP 3: HISTORIAN LOOP ──");
         let historianLoops = 0;
         const MAX_HISTORIAN_LOOPS = 20;  // Safety cap to prevent infinite loops
+        const MIN_TIME_FOR_ITERATION_MS = 90 * 1000; // Need at least 90s to start a new iteration
 
         try {
             while (historianLoops < MAX_HISTORIAN_LOOPS) {
+                // TIME BUDGET CHECK - Don't start new iteration if we're running low
+                const timeRemaining = getTimeRemainingMs();
+                if (timeRemaining < MIN_TIME_FOR_ITERATION_MS) {
+                    console.log(`   ⏰ Time budget low (${Math.round(timeRemaining / 1000)}s remaining) - stopping historian to ensure synthesis runs`);
+                    console.log(`   📋 Remaining articles will be processed in the next cycle`);
+                    break;
+                }
+
                 historianLoops++;
-                console.log(`\n   📜 Historian iteration ${historianLoops}...`);
+                console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
 
                 const result = await ctx.runAction(internal.historian.runHistorianCycle, {});
 
@@ -2245,18 +2331,26 @@ Credibility: ${a.credibility}`;
 
                 const verificationPrompt = `You are a SOURCE VERIFICATION AGENT. Your job is to verify that articles in our database are REAL and ACCURATE.
 
+⚠️ CRITICAL: VISIT THE URL DIRECTLY
+- DO NOT search for the article by title/name - this can lead to wrong results!
+- DIRECTLY NAVIGATE to the exact URL provided
+- Check if the URL loads the actual article page (not an image or attachment page)
+- If the URL redirects or shows wrong content, try to find the correct article URL
+
 🔍 YOUR TASK:
 For each article below, you MUST:
-1. VISIT the URL and check if it loads (not 404, not blocked)
-2. READ the actual content of the page
-3. COMPARE the stored summary/title against what the page ACTUALLY says
-4. CHECK the publish date on the page
-5. DETERMINE if the article is about Thailand-Cambodia relations
+1. VISIT the URL DIRECTLY (don't search by title!, as we want to make sure the URL is correct)
+2. CHECK if it loads an article page (not an image, not a redirect to wrong page)
+3. READ the actual content
+4. COMPARE the stored summary/title against what the page ACTUALLY says
+5. CHECK the publish date on the page
+6. DETERMINE if the article is about Thailand-Cambodia relations
 
 ⚠️ VERIFICATION CRITERIA:
-- VERIFIED: URL works AND summary accurately reflects the content AND it's about Thailand-Cambodia
-- NEEDS_UPDATE: URL works, article IS about Thailand-Cambodia, but our title/summary/date is WRONG → provide correct ones!
+- VERIFIED: URL works AND shows article page AND summary accurately reflects the content AND it's about Thailand-Cambodia
+- NEEDS_UPDATE: URL works, article IS about Thailand-Cambodia, but our title/summary/date/URL is WRONG → provide corrections!
 - URL_DEAD: The URL returns 404, 403, or page not found
+- URL_WRONG: The URL redirects to wrong page (image, attachment, different article) → provide correctUrl!
 - OFF_TOPIC: The article is NOT about Thailand-Cambodia border/relations (different topic entirely)
 - HALLUCINATED: The URL exists but shows completely different content (e.g., we said "border clash" but page is about "cooking recipes")
 
@@ -2269,24 +2363,23 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
   "results": [
     {
       "articleIndex": 1,
-      "status": "VERIFIED|NEEDS_UPDATE|URL_DEAD|OFF_TOPIC|HALLUCINATED",
+      "status": "VERIFIED|NEEDS_UPDATE|URL_DEAD|URL_WRONG|OFF_TOPIC|HALLUCINATED",
       "actualTitle": "What the page headline actually says (original language)",
       "actualSummary": "2-3 sentence summary of what the article ACTUALLY says",
       "actualPublishedAt": "2025-12-14T10:00:00Z or null if cannot determine",
       "isAboutBorder": true,
       "matchScore": 85,
       "reason": "Why you made this determination",
+      "correctUrl": "https://correct-url.com/article if URL was wrong, otherwise null",
       
       "correctData": {
-        "title": "Original headline from the page",
-        "titleEn": "English translation of headline",
-        "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย - casual spoken Thai",
-        "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ - casual everyday Khmer",
-        "summary": "English summary (same as summaryEn)",
-        "summaryEn": "2-3 sentence summary in English",
-        "summaryTh": "สรุปข่าวภาษาไทย - like how a Thai friend would explain it",
-        "summaryKh": "សង្ខេបជាភាសាខ្មែរ - like how a Cambodian family member would explain it",
-        "publishedAt": "2025-12-14T10:00:00Z or null"
+        // ONLY include fields that need fixing! Omit fields that are already correct.
+        // If only date is wrong, just include: "publishedAt": "2025-12-14T10:00:00Z"
+        // If only title is wrong, include title + translations
+        // Example - only date wrong:
+        // "correctData": { "publishedAt": "2025-12-14T16:00:00Z" }
+        // Example - title wrong:
+        // "correctData": { "title": "...", "titleEn": "...", "titleTh": "...", "titleKh": "..." }
       }
     }
   ]
@@ -2300,12 +2393,48 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 - If unsure about translation quality, leave that translation field as empty string ""
 
+📝 IMPORTANT - ANALYZE ARTICLES IN ORDER BEFORE JSON:
+Before outputting your JSON, you MUST first list each article with your findings.
+This helps you keep track and avoid mixing up URLs/results between articles.
+
+Example format (put this BEFORE the <json> tags):
+---
+VERIFICATION RESULTS:
+1. URL: https://thairath.co.th/xxxxx
+   → Page loads? ✅ Yes, article page
+   → Headline on page: "ทบ.สรุปปะทะชายแดน..."
+   → Matches stored title? ✅ Yes
+   → Matches stored summary? ⚠️ Partial - summary overstates casualty claims
+   → Date on page: Dec 13, 2025
+   → About Thailand-Cambodia? ✅ Yes
+   → STATUS: NEEDS_UPDATE (date wrong)
+
+2. URL: https://freshnews.com/yyyyy
+   → Page loads? ❌ 404 Not Found
+   → STATUS: URL_DEAD
+
+3. URL: https://reuters.com/zzzzz
+   → Page loads? ✅ Yes
+   → Content matches? ✅ Yes
+   → STATUS: VERIFIED
+---
+<json>
+{ ... your JSON results matching the analysis above ... }
+</json>
+
+⚠️ DOUBLE-CHECK: Before outputting JSON, verify that:
+- Each result's articleIndex matches the article you analyzed
+- You haven't mixed up Article 1's URL with Article 2's result
+- The status matches your analysis above
+
 RULES:
 - You MUST visit each URL - do not guess
 - If you cannot access a URL, mark it URL_DEAD
 - matchScore: 0-100, how well the stored summary matches actual content
-- For NEEDS_UPDATE: URL works + article IS about Thailand-Cambodia + our data is wrong
-  → Provide correctData object with all fields so we can FIX it properly!
+- For NEEDS_UPDATE: only include fields that are WRONG in correctData!
+  → Don't include fields that are already correct - that's wasteful
+  → If only date is wrong: correctData: { "publishedAt": "..." }
+  → If title AND summary wrong: include all title/summary fields
 - For dates: Look for "Published:", "Posted:", date in URL, or article metadata. If unclear, set to null
 - Articles about internal Cambodian/Thai politics (not border-related) = OFF_TOPIC`;
 
@@ -2391,6 +2520,48 @@ RULES:
                                 }
                                 break;
 
+                            case "URL_WRONG":
+                                // URL redirects to wrong page - try to fix if correctUrl provided
+                                if (r.correctUrl) {
+                                    // Skip if "new" URL is same as old (AI hallucinated a fix)
+                                    if (r.correctUrl === article.sourceUrl) {
+                                        console.log(`   ⚠️ AI returned same URL as "fix" - skipping`);
+                                        console.log(`      URL: ${article.sourceUrl}`);
+                                        flagged++;
+                                    } else {
+                                        try {
+                                            await ctx.runMutation(internal.api.updateArticleUrl, {
+                                                country: article.country,
+                                                oldTitle: article.title,
+                                                newUrl: r.correctUrl,
+                                            });
+                                            flagged++;
+                                            console.log(`   🔗 URL FIXED`);
+                                            console.log(`      OLD URL: ${article.sourceUrl}`);
+                                            console.log(`      NEW URL: ${r.correctUrl}`);
+                                            console.log(`      Reason: ${r.reason || "URL redirected to wrong page"}`);
+                                        } catch (e) {
+                                            console.log(`   ⚠️ Failed to update URL: "${article.title?.substring(0, 40)}..."`);
+                                            errors++;
+                                        }
+                                    }
+                                } else {
+                                    // No correct URL provided, delete it
+                                    try {
+                                        await ctx.runMutation(internal.api.deleteArticle, {
+                                            title: article.title,
+                                            country: article.country,
+                                        });
+                                        deleted++;
+                                        console.log(`   🗑️ DELETED (Wrong URL, no correction found)`);
+                                        console.log(`      URL: ${article.sourceUrl}`);
+                                        console.log(`      Reason: ${r.reason || "URL redirects to wrong content"}`);
+                                    } catch (e) {
+                                        errors++;
+                                    }
+                                }
+                                break;
+
                             case "HALLUCINATED":
                                 // Hallucinated = definitely delete
                                 try {
@@ -2414,60 +2585,68 @@ RULES:
 
                             case "NEEDS_UPDATE":
                                 // URL is valid, article IS about Thailand-Cambodia, but data is wrong
-                                // FIX IT with proper translations!
-                                const cd = r.correctData || {}; // correctData object
-                                const newTitle = cd.title || r.actualTitle || article.title;
-                                const newTitleEn = cd.titleEn || cd.title || "";
-                                const newTitleTh = cd.titleTh || "";
-                                const newTitleKh = cd.titleKh || "";
-                                const newSummary = cd.summary || cd.summaryEn || r.actualSummary || "";
-                                const newSummaryEn = cd.summaryEn || cd.summary || "";
-                                const newSummaryTh = cd.summaryTh || "";
-                                const newSummaryKh = cd.summaryKh || "";
+                                // Only update fields that AI says need fixing (sparse update)
+                                const cd = r.correctData || {}; // correctData object - only contains fields that need fixing
 
-                                // Parse the corrected date if provided
-                                let newPublishedAt: number | undefined = undefined;
-                                const dateStr = cd.publishedAt || r.actualPublishedAt;
-                                if (dateStr && dateStr !== "null") {
-                                    const parsed = new Date(dateStr).getTime();
-                                    if (!isNaN(parsed)) {
-                                        newPublishedAt = parsed;
+                                // Only use corrected values if AI provided them, otherwise keep existing
+                                const hasTitle = cd.title !== undefined;
+                                const hasSummary = cd.summary !== undefined || cd.summaryEn !== undefined;
+                                const hasDate = cd.publishedAt !== undefined || r.actualPublishedAt !== undefined;
+
+                                // Build update object with only changed fields
+                                const updateData: any = {
+                                    country: article.country,
+                                    oldTitle: article.title,
+                                    credibility: Math.min(100, (article.credibility || 50) + 10), // Boost cred - now verified!
+                                    status: "active",
+                                };
+
+                                // Only add title fields if title needs fixing
+                                if (hasTitle) {
+                                    updateData.newTitle = cd.title || r.actualTitle;
+                                    // Use undefined checks to allow empty strings (clearing values)
+                                    if (cd.titleEn !== undefined) updateData.newTitleEn = cd.titleEn;
+                                    if (cd.titleTh !== undefined) updateData.newTitleTh = cd.titleTh;
+                                    if (cd.titleKh !== undefined) updateData.newTitleKh = cd.titleKh;
+                                }
+
+                                // Only add summary fields if summary needs fixing
+                                if (hasSummary) {
+                                    updateData.newSummary = cd.summary || cd.summaryEn || r.actualSummary || "";
+                                    if (cd.summaryEn !== undefined) updateData.newSummaryEn = cd.summaryEn;
+                                    if (cd.summaryTh !== undefined) updateData.newSummaryTh = cd.summaryTh;
+                                    if (cd.summaryKh !== undefined) updateData.newSummaryKh = cd.summaryKh;
+                                }
+
+                                // Only add date if date needs fixing
+                                if (hasDate) {
+                                    const dateStr = cd.publishedAt || r.actualPublishedAt;
+                                    if (dateStr && dateStr !== "null") {
+                                        const parsed = new Date(dateStr).getTime();
+                                        if (!isNaN(parsed)) {
+                                            updateData.publishedAt = parsed;
+                                        }
                                     }
                                 }
+
                                 try {
-                                    await ctx.runMutation(internal.api.updateArticleContent, {
-                                        country: article.country,
-                                        oldTitle: article.title,
-                                        // Title fields
-                                        newTitle: newTitle,
-                                        newTitleEn: newTitleEn || undefined,
-                                        newTitleTh: newTitleTh || undefined,
-                                        newTitleKh: newTitleKh || undefined,
-                                        // Summary fields
-                                        newSummary: newSummary,
-                                        newSummaryEn: newSummaryEn || undefined,
-                                        newSummaryTh: newSummaryTh || undefined,
-                                        newSummaryKh: newSummaryKh || undefined,
-                                        // Other fields
-                                        publishedAt: newPublishedAt,
-                                        credibility: Math.min(100, (article.credibility || 50) + 10), // Boost cred - now verified!
-                                        status: "active",
-                                    });
-                                    flagged++; // Count as "fixed" 
-                                    console.log(`   📝 UPDATED (Fixed wrong content)`);
+                                    await ctx.runMutation(internal.api.updateArticleContent, updateData);
+                                    flagged++; // Count as "fixed"
+
+                                    // Smart logging - only show what actually changed
+                                    console.log(`   📝 UPDATED`);
                                     console.log(`      URL: ${article.sourceUrl}`);
-                                    console.log(`      OLD Title: "${article.title}"`);
-                                    console.log(`      NEW Title: "${newTitle}"`);
-                                    console.log(`      NEW TitleEn: "${newTitleEn}"`);
-                                    console.log(`      NEW TitleTh: "${newTitleTh}"`);
-                                    console.log(`      NEW TitleKh: "${newTitleKh}"`);
-                                    console.log(`      OLD Summary: "${(article.summary || article.summaryEn || "").substring(0, 80)}..."`);
-                                    console.log(`      NEW SummaryEn: "${(newSummaryEn || "").substring(0, 80)}..."`);
-                                    console.log(`      NEW SummaryTh: "${(newSummaryTh || "").substring(0, 80)}..."`);
-                                    console.log(`      NEW SummaryKh: "${(newSummaryKh || "").substring(0, 80)}..."`);
-                                    if (newPublishedAt) {
-                                        console.log(`      OLD Date: ${article.publishedAt ? new Date(article.publishedAt).toISOString() : "(unknown)"}`);
-                                        console.log(`      NEW Date: ${new Date(newPublishedAt).toISOString()}`);
+
+                                    if (hasTitle) {
+                                        console.log(`      Title: "${article.title?.substring(0, 50)}..." → "${(cd.title || r.actualTitle)?.substring(0, 50)}..."`);
+                                    }
+                                    if (hasSummary) {
+                                        console.log(`      Summary: Updated`);
+                                    }
+                                    if (hasDate && updateData.publishedAt) {
+                                        const oldDate = article.publishedAt ? new Date(article.publishedAt).toISOString() : "(unknown)";
+                                        const newDate = new Date(updateData.publishedAt).toISOString();
+                                        console.log(`      Date: ${oldDate} → ${newDate}`);
                                     }
                                     console.log(`      Reason: ${r.reason || "Data didn't match actual content"}`);
                                 } catch (e) {
