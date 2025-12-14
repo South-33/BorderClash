@@ -34,6 +34,8 @@ export default defineSchema({
         nextReviewAt: v.optional(v.number()), // AI-determined re-check time
         // Timeline processing
         processedToTimeline: v.optional(v.boolean()), // True = Historian has processed this
+        // Source verification (articlecred step)
+        sourceVerifiedAt: v.optional(v.number()), // When AI verified this URL/content is real
     })
         .index("by_status", ["status"])
         .index("by_title", ["title"])
@@ -68,6 +70,8 @@ export default defineSchema({
         nextReviewAt: v.optional(v.number()),
         // Timeline processing
         processedToTimeline: v.optional(v.boolean()),
+        // Source verification (articlecred step)
+        sourceVerifiedAt: v.optional(v.number()),
     })
         .index("by_status", ["status"])
         .index("by_title", ["title"])
@@ -103,6 +107,8 @@ export default defineSchema({
         nextReviewAt: v.optional(v.number()),
         // Timeline processing
         processedToTimeline: v.optional(v.boolean()),
+        // Source verification (articlecred step)
+        sourceVerifiedAt: v.optional(v.number()),
     })
         .index("by_status", ["status"])
         .index("by_title", ["title"])
@@ -238,6 +244,18 @@ export default defineSchema({
         completionPercent: v.number(),
         currentInstruction: v.string(),
         lastUpdatedAt: v.number(),
+    })
+        .index("by_key", ["key"]),
+
+    // Track source verification state (articlecred step)
+    // Prevents duplicate runs and cleans up zombies
+    sourceVerificationState: defineTable({
+        key: v.literal("main"),
+        isRunning: v.boolean(),
+        runId: v.optional(v.string()),     // UUID of current run
+        startedAt: v.optional(v.number()), // When run started
+        lastHeartbeat: v.optional(v.number()), // Last activity (for zombie detection)
+        progress: v.optional(v.string()),  // "batch 5/40"
     })
         .index("by_key", ["key"]),
 

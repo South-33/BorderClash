@@ -356,15 +356,15 @@ RULES:
 
 // =============================================================================
 // PLANNER PROMPT
-// Phase 1: Sees ALL articles, picks 10-15 most important to process
+// Phase 1: Sees ALL articles, picks up to 10 most important to process
 // =============================================================================
 
 const PLANNER_PROMPT = `You are the PLANNER for BorderClash's Timeline Historian system.
-Your job is to look at ALL pending articles and pick the 10-15 MOST IMPORTANT ones to process right now.
+Your job is to look at ALL pending articles and pick UP TO 10 MOST IMPORTANT ones to process right now.
 
 🎯 YOUR MISSION:
 You will receive a list of ALL unprocessed news articles.
-You must select 5-15 that are MOST worth processing based on:
+You must select 5-10 that are MOST worth processing based on:
 
 1. IMPACT - Major events that will shape the conflict
 2. URGENCY - Breaking news that needs immediate processing
@@ -399,7 +399,7 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
     "Exact title of article 2",
     "Exact title of article 3"
   ],
-  "reasoning": "Brief explanation of why these 10-15 were chosen",
+  "reasoning": "Brief explanation of why these 5-10 were chosen",
   "groupedEvents": [
     {
       "eventDescription": "Dec 12 border clash at Preah Vihear",
@@ -410,7 +410,7 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
 </json>
 
 RULES:
-- Select 10-15 articles (no more, no less unless fewer are available)
+- Select 5-10 articles (no more, no less unless fewer are available)
 - Use EXACT article titles from the input
 - You can think before the <json> tags
 `;
@@ -456,9 +456,9 @@ ${articlesContext}
 ${timelineContext}
 ═══════════════════════════════════════════════════════════════
 
-Pick 10-15 articles to process now. Output your selection in JSON.`;
+Pick 5-10 articles to process now. Output your selection in JSON.`;
 
-    console.log("🧠 [PLANNER] Analyzing all articles to pick best 10-15...");
+    console.log("🧠 [PLANNER] Analyzing all articles to pick best 5-10...");
     const response = await callGhostAPI(prompt, "fast", 2);  // Use fast model for planning
 
     // Extract JSON
@@ -669,18 +669,18 @@ export const runHistorianCycle = internalAction({
         console.log(`📊 Timeline stats: ${timelineStats.totalEvents} events, avg importance: ${timelineStats.avgImportance}`);
 
         // ====================================================================
-        // PHASE 1: PLANNER - Pick 10-15 most important articles
+        // PHASE 1: PLANNER - Pick up to 10 most important articles
         // ====================================================================
         console.log("\n🧠 [PHASE 1] PLANNER - Selecting best articles to process...");
 
         let selectedTitles: string[];
 
-        if (allArticles.length <= 15) {
-            // If 15 or fewer, process all
+        if (allArticles.length <= 10) {
+            // If 10 or fewer, process all
             console.log(`   Only ${allArticles.length} articles - processing all`);
             selectedTitles = allArticles.map((a: any) => a.title);
         } else {
-            // Run Planner to pick 10-15
+            // Run Planner to pick 5-10
             const plannerSelection = await runPlanner(
                 allArticles.map((a: any) => ({
                     title: a.title,
@@ -705,10 +705,36 @@ export const runHistorianCycle = internalAction({
             }
         }
 
-        // Filter to selected articles
-        const selectedArticles = allArticles.filter((a: any) =>
-            selectedTitles.includes(a.title)
-        );
+        // Helper for fuzzy title matching (AI often returns slightly different titles)
+        const normalizeTitle = (title: string) =>
+            title.toLowerCase().trim()
+                .replace(/[""'']/g, '"')  // Normalize quotes
+                .replace(/\s+/g, ' ')      // Normalize whitespace
+                .substring(0, 50);         // Compare first 50 chars
+
+        // Filter to selected articles with FUZZY matching
+        let selectedArticles = allArticles.filter((a: any) => {
+            const normalizedDbTitle = normalizeTitle(a.title);
+            return selectedTitles.some(plannerTitle => {
+                const normalizedPlannerTitle = normalizeTitle(plannerTitle);
+                // Exact match OR first 50 chars match OR one contains the other
+                return normalizedDbTitle === normalizedPlannerTitle ||
+                    normalizedDbTitle.includes(normalizedPlannerTitle) ||
+                    normalizedPlannerTitle.includes(normalizedDbTitle);
+            });
+        });
+
+        // If fuzzy matching found nothing, log what planner returned vs what we have
+        if (selectedArticles.length === 0 && selectedTitles.length > 0) {
+            console.log("⚠️ [PLANNER] No titles matched! Planner returned:");
+            selectedTitles.slice(0, 3).forEach(t => console.log(`   → "${t.substring(0, 60)}..."`));
+            console.log("   DB has titles like:");
+            allArticles.slice(0, 3).forEach((a: any) => console.log(`   → "${a.title.substring(0, 60)}..."`));
+
+            // Fallback: just use first 10 articles
+            console.log("   → Falling back to first 10 articles by credibility");
+            selectedArticles = allArticles.slice(0, 10);
+        }
 
         console.log(`\n✅ [PHASE 1 COMPLETE] Selected ${selectedArticles.length} articles to process`);
 

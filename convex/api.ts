@@ -153,6 +153,143 @@ export const getNewsInternal = internalQuery({
 });
 
 // =============================================================================
+// SOURCE VERIFICATION LOCK (articlecred step - prevents zombies)
+// =============================================================================
+
+export const getSourceVerificationState = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        return await ctx.db.query("sourceVerificationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+    },
+});
+
+export const acquireSourceVerificationLock = internalMutation({
+    args: {
+        runId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const existing = await ctx.db.query("sourceVerificationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        const now = Date.now();
+        const ZOMBIE_TIMEOUT = 5 * 60 * 1000; // 5 minutes = zombie
+
+        if (existing) {
+            // Check if there's an active run
+            if (existing.isRunning) {
+                // Check if it's a zombie (no heartbeat in 5 minutes)
+                const lastActivity = existing.lastHeartbeat || existing.startedAt || 0;
+                if (now - lastActivity > ZOMBIE_TIMEOUT) {
+                    console.log(`🧟 [VERIFY] Found zombie run from ${new Date(existing.startedAt || 0).toISOString()}, taking over...`);
+                    // Take over the zombie
+                    await ctx.db.patch(existing._id, {
+                        isRunning: true,
+                        runId: args.runId,
+                        startedAt: now,
+                        lastHeartbeat: now,
+                        progress: "starting...",
+                    });
+                    return { acquired: true, tookOverZombie: true };
+                } else {
+                    // Active run exists, can't acquire
+                    console.log(`⚠️ [VERIFY] Another run is active (started ${Math.floor((now - (existing.startedAt || 0)) / 1000)}s ago)`);
+                    return { acquired: false, activeRunId: existing.runId };
+                }
+            }
+            // No active run, acquire lock
+            await ctx.db.patch(existing._id, {
+                isRunning: true,
+                runId: args.runId,
+                startedAt: now,
+                lastHeartbeat: now,
+                progress: "starting...",
+            });
+        } else {
+            // First time, create the record
+            await ctx.db.insert("sourceVerificationState", {
+                key: "main",
+                isRunning: true,
+                runId: args.runId,
+                startedAt: now,
+                lastHeartbeat: now,
+                progress: "starting...",
+            });
+        }
+        return { acquired: true, tookOverZombie: false };
+    },
+});
+
+export const updateSourceVerificationProgress = internalMutation({
+    args: {
+        runId: v.string(),
+        progress: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const existing = await ctx.db.query("sourceVerificationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (existing && existing.runId === args.runId) {
+            await ctx.db.patch(existing._id, {
+                lastHeartbeat: Date.now(),
+                progress: args.progress,
+            });
+        }
+    },
+});
+
+export const releaseSourceVerificationLock = internalMutation({
+    args: {
+        runId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const existing = await ctx.db.query("sourceVerificationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (existing && existing.runId === args.runId) {
+            await ctx.db.patch(existing._id, {
+                isRunning: false,
+                runId: undefined,
+                startedAt: undefined,
+                lastHeartbeat: undefined,
+                progress: undefined,
+            });
+            console.log(`🔓 [VERIFY] Lock released`);
+        }
+    },
+});
+
+/**
+ * Force release the source verification lock
+ * Use this when a run times out and leaves a zombie lock
+ */
+export const forceReleaseSourceVerificationLock = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const existing = await ctx.db.query("sourceVerificationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, {
+                isRunning: false,
+                runId: undefined,
+                startedAt: undefined,
+                lastHeartbeat: undefined,
+                progress: undefined,
+            });
+            console.log(`🔓 [VERIFY] Lock FORCE released (was held by ${existing.runId})`);
+            return { released: true, wasHeldBy: existing.runId };
+        }
+        return { released: false, message: "No lock found" };
+    },
+});
+
+// =============================================================================
 // INTERNAL MUTATIONS (Research Agent)
 // =============================================================================
 
@@ -303,6 +440,94 @@ export const updateArticleCredibility = internalMutation({
         if (article) {
             await ctx.db.patch(article._id, { credibility: args.credibility });
             console.log(`Updated credibility for "${args.title}" to ${args.credibility}`);
+        }
+    },
+});
+
+/**
+ * Mark an article as source-verified (URL is real, content matches)
+ * Used by verifyAllSources when article passes verification
+ */
+export const markSourceVerified = internalMutation({
+    args: {
+        country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")),
+        title: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const table = args.country === "thailand" ? "thailandNews"
+            : args.country === "cambodia" ? "cambodiaNews"
+                : "internationalNews";
+
+        const article = await ctx.db
+            .query(table)
+            .withIndex("by_title", (q) => q.eq("title", args.title))
+            .first();
+
+        if (article) {
+            await ctx.db.patch(article._id, {
+                sourceVerifiedAt: Date.now(),
+                status: "active", // Mark as active once verified
+            });
+        }
+    },
+});
+
+/**
+ * Update article content (title, summary, date, translations) - used by source verification
+ * When we find the URL is valid but our stored data is wrong
+ */
+export const updateArticleContent = internalMutation({
+    args: {
+        country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")),
+        oldTitle: v.string(),  // Find by old title
+        // New content - all optional
+        newTitle: v.optional(v.string()),
+        newTitleEn: v.optional(v.string()),
+        newTitleTh: v.optional(v.string()),
+        newTitleKh: v.optional(v.string()),
+        newSummary: v.optional(v.string()),
+        newSummaryEn: v.optional(v.string()),
+        newSummaryTh: v.optional(v.string()),
+        newSummaryKh: v.optional(v.string()),
+        publishedAt: v.optional(v.number()),
+        credibility: v.optional(v.number()),
+        status: v.optional(v.union(
+            v.literal("active"),
+            v.literal("unverified"),
+        )),
+    },
+    handler: async (ctx, args) => {
+        const table = args.country === "thailand" ? "thailandNews"
+            : args.country === "cambodia" ? "cambodiaNews"
+                : "internationalNews";
+
+        const article = await ctx.db
+            .query(table)
+            .withIndex("by_title", (q) => q.eq("title", args.oldTitle))
+            .first();
+
+        if (article) {
+            await ctx.db.patch(article._id, {
+                // Title fields
+                ...(args.newTitle !== undefined && { title: args.newTitle }),
+                ...(args.newTitleEn !== undefined && { titleEn: args.newTitleEn }),
+                ...(args.newTitleTh !== undefined && { titleTh: args.newTitleTh }),
+                ...(args.newTitleKh !== undefined && { titleKh: args.newTitleKh }),
+                // Summary fields
+                ...(args.newSummary !== undefined && { summary: args.newSummary }),
+                ...(args.newSummaryEn !== undefined && { summaryEn: args.newSummaryEn }),
+                ...(args.newSummaryTh !== undefined && { summaryTh: args.newSummaryTh }),
+                ...(args.newSummaryKh !== undefined && { summaryKh: args.newSummaryKh }),
+                // Other fields
+                ...(args.publishedAt !== undefined && { publishedAt: args.publishedAt }),
+                ...(args.credibility !== undefined && { credibility: args.credibility }),
+                ...(args.status !== undefined && { status: args.status }),
+                lastReviewedAt: Date.now(),
+                sourceVerifiedAt: Date.now(), // Mark as source-verified
+            });
+            console.log(`📝 Updated content for "${args.oldTitle}" → "${args.newTitle || args.oldTitle}"`);
+        } else {
+            console.log(`⚠️ Could not find article to update: "${args.oldTitle}"`);
         }
     },
 });

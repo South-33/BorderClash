@@ -387,17 +387,24 @@ export const curateCambodia = internalAction({
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
         console.log("🇰🇭 [CAMBODIA] Curating news via Ghost API...");
 
-        // Get existing articles to avoid duplicates
+        // Get existing URLs to avoid duplicates (only pass URLs, not titles)
         const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "cambodia" });
-        const existingList: string = existing.map((a: { source: string; title: string; sourceUrl: string }) =>
-            `- "${a.title}" (${a.source}) - ${a.sourceUrl}`
-        ).join("\n");
+        const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
 
         const prompt: string = `You are finding NEWS THAT CAMBODIAN CIVILIANS READ.
 
 🇰🇭 YOUR PERSPECTIVE: You are searching for news as if you were a CAMBODIAN CITIZEN.
 Find news articles that Cambodians would see on their local TV, newspapers, and news websites.
 This means searching CAMBODIAN news outlets that publish news FOR Cambodians.
+
+⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES ⛔⛔⛔
+🚫 DO NOT FABRICATE URLS - Every URL you return MUST be a real page you actually found
+🚫 DO NOT GUESS URLS - If you found a news outlet but can't find the exact article URL, DO NOT RETURN IT
+🚫 DO NOT INVENT ARTICLES - Only return articles you can verify exist right now
+🚫 ZERO ARTICLES IS ACCEPTABLE - If you cannot find any real, verifiable articles, return an empty array
+🚫 QUALITY OVER QUANTITY - 1 real article is infinitely better than 10 hallucinated ones
+
+⚠️ WE VERIFY EVERY URL - If your URL returns 404 or doesn't match your summary, you have failed
 
 🚨 PRIORITY: RECENT BREAKING NEWS & MAJOR DEVELOPMENTS
 - Focus on news from the LAST 24-48 HOURS
@@ -416,9 +423,18 @@ This means searching CAMBODIAN news outlets that publish news FOR Cambodians.
 ⚠️ CRITICAL REQUIREMENTS:
 - SEARCH THE WEB - do not rely on memory
 - ONLY include articles from CAMBODIAN news organizations (or international outlets covering Cambodia)
-- Each article MUST have a REAL, working sourceUrl
-- Do NOT fabricate URLs - if you can't find any, return empty array
+- Each article MUST have a REAL, working sourceUrl that you VERIFIED exists
+- CLICK ON EACH URL before including it - if it 404s or doesn't load, DO NOT INCLUDE IT
+- Do NOT fabricate URLs - if you can't find any REAL articles, return {"newArticles": [], "flaggedTitles": []}
+- The summary MUST match what the actual article says - read the article before summarizing
 - Focus on what Cambodian media is reporting to its own citizens
+
+🔗 URL VALIDATION - CRITICAL:
+- NEVER include URLs with "/attachment/" in them - these are image links, not articles!
+- NEVER include URLs ending with image extensions (.jpg, .png, .gif, .webp)
+- Use the CANONICAL article URL - check the browser address bar after the page fully loads
+- If the URL redirects, use the FINAL destination URL
+- Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
 
 📺 CAMBODIAN NEWS SOURCES (these are what Cambodians read):
 KHMER LANGUAGE (prioritize these!):
@@ -438,8 +454,10 @@ ENGLISH LANGUAGE:
 • Cambodia Daily (cambodiadaily.com)
 • AKP - Agence Kampuchea Presse (akp.gov.kh) - Government
 
-EXISTING IN DATABASE (skip these):
-${existingList || "(none yet)"}
+⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
+${existingUrls || "(database is empty - find new articles!)"}
+
+☝️ DO NOT return any article with a URL from the list above. Check EVERY URL you find against this list!
 
 FOCUS:
 - What is CAMBODIAN media telling its citizens about the border situation?
@@ -465,6 +483,14 @@ SCORING GUIDE:
 • 25-39: Heavy propaganda, emotional language, unverified, missing URL
 • Below 25: Obvious misinformation or fabrication
 
+⚠️ SUMMARY ACCURACY - CRITICAL:
+- Your summary MUST match what the article ACTUALLY says - DO NOT embellish or add details
+- If the article says "security reasons" - write "security reasons", NOT "due to attacks" 
+- If the article doesn't mention casualties - DON'T add casualties to the summary
+- QUOTE the article's actual words when possible
+- DO NOT INFER or EXTRAPOLATE beyond what's written
+- If unsure, keep summary SHORTER and more conservative
+
 TRANSLATION REQUIREMENTS:
 - Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
 - Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
@@ -503,6 +529,11 @@ RULES:
 - You can search/think before the tags
 - Use English numerals (0-9) only
 
+✅ IT IS OK TO RETURN ZERO ARTICLES:
+- If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
+- This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
+- Do NOT feel pressured to fill the array - empty is fine!
+
 📅 DATE HANDLING - BE STRICT, DON'T GUESS:
 - ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
 - If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
@@ -511,6 +542,12 @@ RULES:
 - Common bad dates to REJECT: dates in the far future, dates from years ago for current news
 - Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
 - WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
+
+🔴 FINAL CHECK BEFORE RESPONDING:
+For EACH article in your response, ask yourself:
+1. Did I actually visit this URL and see it load? If NO → remove it
+2. Does my summary match what the page actually says? If NO → remove it
+3. Is this about Thailand-Cambodia relations? If NO → remove it
 
 If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
 
@@ -527,17 +564,24 @@ export const curateThailand = internalAction({
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
         console.log("🇹🇭 [THAILAND] Curating news via Ghost API...");
 
-        // Get existing articles to avoid duplicates
+        // Get existing URLs to avoid duplicates (only pass URLs, not titles)
         const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "thailand" });
-        const existingList: string = existing.map((a: { source: string; title: string; sourceUrl: string }) =>
-            `- "${a.title}" (${a.source}) - ${a.sourceUrl}`
-        ).join("\n");
+        const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
 
         const prompt: string = `You are finding NEWS THAT THAI CIVILIANS READ.
 
 🇹🇭 YOUR PERSPECTIVE: You are searching for news as if you were a THAI CITIZEN.
 Find news articles that Thais would see on their local TV, newspapers, and news websites.
 This means searching THAI news outlets that publish news FOR Thai people.
+
+⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES ⛔⛔⛔
+🚫 DO NOT FABRICATE URLS - Every URL you return MUST be a real page you actually found
+🚫 DO NOT GUESS URLS - If you found a news outlet but can't find the exact article URL, DO NOT RETURN IT
+🚫 DO NOT INVENT ARTICLES - Only return articles you can verify exist right now
+🚫 ZERO ARTICLES IS ACCEPTABLE - If you cannot find any real, verifiable articles, return an empty array
+🚫 QUALITY OVER QUANTITY - 1 real article is infinitely better than 10 hallucinated ones
+
+⚠️ WE VERIFY EVERY URL - If your URL returns 404 or doesn't match your summary, you have failed
 
 🚨 PRIORITY: RECENT BREAKING NEWS & MAJOR DEVELOPMENTS
 - Focus on news from the LAST 24-48 HOURS
@@ -556,9 +600,18 @@ This means searching THAI news outlets that publish news FOR Thai people.
 ⚠️ CRITICAL REQUIREMENTS:
 - SEARCH THE WEB - do not rely on memory
 - ONLY include articles from THAI news organizations (or international outlets covering Thailand)
-- Each article MUST have a REAL, working sourceUrl
-- Do NOT fabricate URLs - if you can't find any, return empty array
+- Each article MUST have a REAL, working sourceUrl that you VERIFIED exists
+- CLICK ON EACH URL before including it - if it 404s or doesn't load, DO NOT INCLUDE IT
+- Do NOT fabricate URLs - if you can't find any REAL articles, return {"newArticles": [], "flaggedTitles": []}
+- The summary MUST match what the actual article says - read the article before summarizing
 - Focus on what Thai media is reporting to its own citizens
+
+🔗 URL VALIDATION - CRITICAL:
+- NEVER include URLs with "/attachment/" in them - these are image links, not articles!
+- NEVER include URLs ending with image extensions (.jpg, .png, .gif, .webp)
+- Use the CANONICAL article URL - check the browser address bar after the page fully loads
+- If the URL redirects, use the FINAL destination URL
+- Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
 
 📺 THAI NEWS SOURCES (these are what Thais read):
 THAI LANGUAGE (prioritize these!):
@@ -580,8 +633,10 @@ ENGLISH LANGUAGE:
 • Thai PBS World (thaipbsworld.com)
 • Khaosod English (khaosodenglish.com)
 
-EXISTING IN DATABASE (skip these):
-${existingList || "(none yet)"}
+⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
+${existingUrls || "(database is empty - find new articles!)"}
+
+☝️ DO NOT return any article with a URL from the list above. Check EVERY URL you find against this list!
 
 FOCUS:
 - What is THAI media telling its citizens about the border situation?
@@ -600,12 +655,19 @@ Don't just score based on source name. Analyze the CONTENT:
 🔴 LOWER SCORE IF: Emotional language, no evidence cited, one-sided, exaggerated claims, "sources say" without naming who
 🟢 HIGHER SCORE IF: Quotes both sides, cites specific evidence, admits uncertainty, neutral factual tone, matches international reports
 
-SCORING GUIDE:
 • 75-100: Factual, evidence-based, matches international sources, quotes multiple sides (RARE)
 • 55-74: Solid reporting with working URL, mostly verifiable claims
 • 40-54: Some bias or propaganda elements, needs verification
 • 25-39: Heavy propaganda, emotional language, unverified, missing URL
 • Below 25: Obvious misinformation or fabrication
+
+⚠️ SUMMARY ACCURACY - CRITICAL:
+- Your summary MUST match what the article ACTUALLY says - DO NOT embellish or add details
+- If the article says "security reasons" - write "security reasons", NOT "due to attacks" 
+- If the article doesn't mention casualties - DON'T add casualties to the summary
+- QUOTE the article's actual words when possible
+- DO NOT INFER or EXTRAPOLATE beyond what's written
+- If unsure, keep summary SHORTER and more conservative
 
 TRANSLATION REQUIREMENTS:
 - Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
@@ -645,6 +707,11 @@ RULES:
 - You can search/think before the tags
 - Use English numerals (0-9) only
 
+✅ IT IS OK TO RETURN ZERO ARTICLES:
+- If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
+- This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
+- Do NOT feel pressured to fill the array - empty is fine!
+
 📅 DATE HANDLING - BE STRICT, DON'T GUESS:
 - ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
 - If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
@@ -653,6 +720,12 @@ RULES:
 - Common bad dates to REJECT: dates in the far future, dates from years ago for current news
 - Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
 - WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
+
+🔴 FINAL CHECK BEFORE RESPONDING:
+For EACH article in your response, ask yourself:
+1. Did I actually visit this URL and see it load? If NO → remove it
+2. Does my summary match what the page actually says? If NO → remove it
+3. Is this about Thailand-Cambodia relations? If NO → remove it
 
 If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
 
@@ -669,17 +742,24 @@ export const curateInternational = internalAction({
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
         console.log("🌍 [INTERNATIONAL] Curating news via Ghost API...");
 
-        // Get existing articles to avoid duplicates
+        // Get existing URLs to avoid duplicates (only pass URLs, not titles)
         const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "international" });
-        const existingList: string = existing.map((a: { source: string; title: string; sourceUrl: string }) =>
-            `- "${a.title}" (${a.source}) - ${a.sourceUrl}`
-        ).join("\n");
+        const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
 
         const prompt: string = `You are finding INTERNATIONAL/NEUTRAL NEWS about the Thailand-Cambodia situation.
 
 🌍 YOUR PERSPECTIVE: You are an OUTSIDE OBSERVER - not Thai, not Cambodian.
 Find news from international wire services and global news outlets.
 These sources should provide NEUTRAL, BALANCED reporting without favoring either side.
+
+⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES ⛔⛔⛔
+🚫 DO NOT FABRICATE URLS - Every URL you return MUST be a real page you actually found
+🚫 DO NOT GUESS URLS - If you found a news outlet but can't find the exact article URL, DO NOT RETURN IT
+🚫 DO NOT INVENT ARTICLES - Only return articles you can verify exist right now
+🚫 ZERO ARTICLES IS ACCEPTABLE - If you cannot find any real, verifiable articles, return an empty array
+🚫 QUALITY OVER QUANTITY - 1 real article is infinitely better than 10 hallucinated ones
+
+⚠️ WE VERIFY EVERY URL - If your URL returns 404 or doesn't match your summary, you have failed
 
 🚨 PRIORITY: RECENT BREAKING NEWS & MAJOR DEVELOPMENTS
 - Focus on news from the LAST 24-48 HOURS
@@ -698,9 +778,18 @@ These sources should provide NEUTRAL, BALANCED reporting without favoring either
 ⚠️ CRITICAL REQUIREMENTS:
 - SEARCH THE WEB - do not rely on memory
 - ONLY use INTERNATIONAL sources (NOT Thai or Cambodian domestic outlets)
-- Each article MUST have a REAL, working sourceUrl
-- Do NOT fabricate URLs - if you can't find any, return empty array
+- Each article MUST have a REAL, working sourceUrl that you VERIFIED exists
+- CLICK ON EACH URL before including it - if it 404s or doesn't load, DO NOT INCLUDE IT
+- Do NOT fabricate URLs - if you can't find any REAL articles, return {"newArticles": [], "flaggedTitles": []}
+- The summary MUST match what the actual article says - read the article before summarizing
 - Focus on NEUTRAL, OBJECTIVE reporting
+
+🔗 URL VALIDATION - CRITICAL:
+- NEVER include URLs with "/attachment/" in them - these are image links, not articles!
+- NEVER include URLs ending with image extensions (.jpg, .png, .gif, .webp)
+- Use the CANONICAL article URL - check the browser address bar after the page fully loads
+- If the URL redirects, use the FINAL destination URL
+- Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
 
 📺 INTERNATIONAL SOURCES (prioritize these):
 WIRE SERVICES (highest credibility):
@@ -726,8 +815,10 @@ OFFICIAL INTERNATIONAL:
 • UN News (news.un.org)
 • ASEAN official statements
 
-EXISTING IN DATABASE (skip these):
-${existingList || "(none yet)"}
+⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
+${existingUrls || "(database is empty - find new articles!)"}
+
+☝️ DO NOT return any article with a URL from the list above. Check EVERY URL you find against this list!
 
 FOCUS:
 - Neutral, fact-based reporting
@@ -753,11 +844,18 @@ SCORING GUIDE:
 • 40-54: Questionable claims, missing verification
 • Below 40: Unreliable, missing URL, contradicted by other sources
 
+⚠️ SUMMARY ACCURACY - CRITICAL:
+- Your summary MUST match what the article ACTUALLY says - DO NOT embellish or add details
+- If the article says "security reasons" - write "security reasons", NOT "due to attacks" 
+- If the article doesn't mention casualties - DON'T add casualties to the summary
+- QUOTE the article's actual words when possible
+- DO NOT INFER or EXTRAPOLATE beyond what's written
+- If unsure, keep summary SHORTER and more conservative
+
 TRANSLATION REQUIREMENTS:
 - Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
-- Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
-- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language like how a Cambodian would explain to family
-- NOT formal/government language - use words regular people actually use
+- Thai: ภาษาพูด (spoken Thai) - casual everyday language
+- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 - If unsure about translation quality, leave field empty
 
@@ -791,6 +889,11 @@ RULES:
 - You can search/think before the tags
 - Use English numerals (0-9) only
 
+✅ IT IS OK TO RETURN ZERO ARTICLES:
+- If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
+- This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
+- Do NOT feel pressured to fill the array - empty is fine!
+
 📅 DATE HANDLING - BE STRICT, DON'T GUESS:
 - ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
 - If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
@@ -799,6 +902,12 @@ RULES:
 - Common bad dates to REJECT: dates in the far future, dates from years ago for current news
 - Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
 - WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
+
+🔴 FINAL CHECK BEFORE RESPONDING:
+For EACH article in your response, ask yourself:
+1. Did I actually visit this URL and see it load? If NO → remove it
+2. Does my summary match what the page actually says? If NO → remove it
+3. Is this about Thailand-Cambodia relations? If NO → remove it
 
 If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
 
@@ -1729,8 +1838,20 @@ export const runResearchCycle = internalAction({
             return;
         }
 
-        // Step 2: Historian Loop - Process ALL unprocessed articles
-        console.log("\n── STEP 2: HISTORIAN LOOP ──");
+        // Step 2: Source Verification - Verify URLs and content accuracy
+        console.log("\n── STEP 2: SOURCE VERIFICATION ──");
+        try {
+            console.log("   > Verifying article sources...");
+            const verifyResult = await ctx.runAction(internal.research.verifyAllSources, {});
+            console.log(`   ✅ Verified: ${verifyResult.verified}, Updated: ${verifyResult.updated}, Deleted: ${verifyResult.deleted}, Errors: ${verifyResult.errors}`);
+        } catch (e) {
+            console.error("❌ [STEP 2] Source Verification Failed:", e);
+            errors.push(`Verification: ${String(e)}`);
+            // Non-fatal - continue with historian even if verification fails
+        }
+
+        // Step 3: Historian Loop - Process ALL unprocessed articles
+        console.log("\n── STEP 3: HISTORIAN LOOP ──");
         let historianLoops = 0;
         const MAX_HISTORIAN_LOOPS = 20;  // Safety cap to prevent infinite loops
 
@@ -1759,16 +1880,16 @@ export const runResearchCycle = internalAction({
 
             console.log(`   📊 Historian completed after ${historianLoops} iterations`);
         } catch (e) {
-            console.error("❌ [STEP 2] Historian Failed:", e);
+            console.error("❌ [STEP 3] Historian Failed:", e);
             errors.push(`Historian: ${String(e)}`);
         }
 
-        // Step 3: Combined Synthesis
-        console.log("\n── STEP 3: SYNTHESIS ──");
+        // Step 4: Combined Synthesis
+        console.log("\n── STEP 4: SYNTHESIS ──");
         try {
             await ctx.runAction(internal.research.synthesizeAll, {});
         } catch (e) {
-            console.error("❌ [STEP 3] Synthesis Failed:", e);
+            console.error("❌ [STEP 4] Synthesis Failed:", e);
             errors.push(`Synthesis: ${String(e)}`);
         }
 
@@ -2013,5 +2134,470 @@ RULES:
             console.error("❌ [DASHBOARD] Update failed:", error);
         }
     }
+});
+
+// =============================================================================
+// SOURCE VERIFICATION / ARTICLE CREDIBILITY ("articlecred" step)
+// Pipeline: curator > articlecred > historian > synth
+// Note: The old validation.ts loop is deprecated. This is the new approach.
+// =============================================================================
+
+/**
+ * Verify all sources in the database
+ * Goes through each article, fetches the URL via Ghost API, and verifies:
+ * 1. URL is accessible (not 404)
+ * 2. Summary matches actual content
+ * 3. Title is accurate
+ * 4. Article is about Thailand-Cambodia relations
+ * 
+ * Articles that fail verification get marked for deletion or credibility reduced
+ */
+export const verifyAllSources = internalAction({
+    args: {},
+    handler: async (ctx): Promise<{ verified: number; updated: number; deleted: number; errors: number }> => {
+        console.log("🔍 [SOURCE VERIFY] Starting comprehensive source verification...");
+
+        // Generate unique run ID
+        const runId = `verify-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+        // Try to acquire lock (prevents duplicate runs, cleans up zombies)
+        const lockResult = await ctx.runMutation(internal.api.acquireSourceVerificationLock, { runId });
+
+        if (!lockResult.acquired) {
+            console.log(`❌ [SOURCE VERIFY] Could not acquire lock - another run is active`);
+            return { verified: 0, updated: 0, deleted: 0, errors: 0 };
+        }
+
+        if (lockResult.tookOverZombie) {
+            console.log(`🧟 [SOURCE VERIFY] Took over zombie session`);
+        }
+
+        console.log(`🔒 [SOURCE VERIFY] Lock acquired (runId: ${runId})`);
+
+        // Wrap in try/finally to ensure lock is always released
+        try {
+            // Get all articles from all tables
+            const cambodiaArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "cambodia", limit: 500 });
+            const thailandArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "thailand", limit: 500 });
+            const internationalArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "international", limit: 500 });
+
+            const allArticlesRaw = [
+                ...cambodiaArticles.map(a => ({ ...a, country: "cambodia" as const })),
+                ...thailandArticles.map(a => ({ ...a, country: "thailand" as const })),
+                ...internationalArticles.map(a => ({ ...a, country: "international" as const })),
+            ];
+
+            // Filter out articles without URLs (can't verify without a URL)
+            const withUrls = allArticlesRaw.filter(a => a.sourceUrl && a.sourceUrl.length > 10);
+            const skippedNoUrl = allArticlesRaw.length - withUrls.length;
+
+            // Filter out already-verified articles (only check new/unverified)
+            const allArticles = withUrls.filter(a => !a.sourceVerifiedAt);
+            const alreadyVerified = withUrls.length - allArticles.length;
+
+            console.log(`📊 [SOURCE VERIFY] Found ${allArticlesRaw.length} total articles`);
+            console.log(`   Cambodia: ${cambodiaArticles.length}, Thailand: ${thailandArticles.length}, International: ${internationalArticles.length}`);
+            if (skippedNoUrl > 0) {
+                console.log(`   ⚠️ Skipping ${skippedNoUrl} articles without valid URLs`);
+            }
+            if (alreadyVerified > 0) {
+                console.log(`   ✅ Skipping ${alreadyVerified} already-verified articles`);
+            }
+            console.log(`   → Will verify: ${allArticles.length} NEW articles`);
+
+            let verified = 0;
+            let flagged = 0;
+            let deleted = 0;
+            let errors = 0;
+
+            // Early return if no articles to verify
+            if (allArticles.length === 0) {
+                console.log(`✅ [SOURCE VERIFY] No articles to verify!`);
+                return { verified: 0, updated: 0, deleted: 0, errors: 0 };
+            }
+
+            // Process 1 article at a time to avoid Ghost API timeouts
+            const BATCH_SIZE = 5;
+
+            for (let i = 0; i < allArticles.length; i += BATCH_SIZE) {
+                const batch = allArticles.slice(i, i + BATCH_SIZE);
+                const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+                const totalBatches = Math.ceil(allArticles.length / BATCH_SIZE);
+                console.log(`\n📦 [SOURCE VERIFY] Processing batch ${batchNum}/${totalBatches}...`);
+
+                // Update heartbeat so we don't get marked as zombie
+                await ctx.runMutation(internal.api.updateSourceVerificationProgress, {
+                    runId,
+                    progress: `batch ${batchNum}/${totalBatches}`,
+                });
+
+                // Build verification prompt for the batch
+                const articlesToVerify = batch.map((a, idx) => {
+                    const storedDate = a.publishedAt ? new Date(a.publishedAt).toISOString() : "(unknown)";
+                    return `ARTICLE ${idx + 1}:
+URL: ${a.sourceUrl || "(missing)"}
+Stored Title: "${a.title}"
+Stored Summary: "${a.summary || a.summaryEn || "(none)"}"
+Stored Date: ${storedDate}
+Country: ${a.country}
+Credibility: ${a.credibility}`;
+                }).join("\n\n");
+
+                const verificationPrompt = `You are a SOURCE VERIFICATION AGENT. Your job is to verify that articles in our database are REAL and ACCURATE.
+
+🔍 YOUR TASK:
+For each article below, you MUST:
+1. VISIT the URL and check if it loads (not 404, not blocked)
+2. READ the actual content of the page
+3. COMPARE the stored summary/title against what the page ACTUALLY says
+4. CHECK the publish date on the page
+5. DETERMINE if the article is about Thailand-Cambodia relations
+
+⚠️ VERIFICATION CRITERIA:
+- VERIFIED: URL works AND summary accurately reflects the content AND it's about Thailand-Cambodia
+- NEEDS_UPDATE: URL works, article IS about Thailand-Cambodia, but our title/summary/date is WRONG → provide correct ones!
+- URL_DEAD: The URL returns 404, 403, or page not found
+- OFF_TOPIC: The article is NOT about Thailand-Cambodia border/relations (different topic entirely)
+- HALLUCINATED: The URL exists but shows completely different content (e.g., we said "border clash" but page is about "cooking recipes")
+
+📋 ARTICLES TO VERIFY:
+${articlesToVerify}
+
+OUTPUT FORMAT - Wrap your JSON in <json> tags:
+<json>
+{
+  "results": [
+    {
+      "articleIndex": 1,
+      "status": "VERIFIED|NEEDS_UPDATE|URL_DEAD|OFF_TOPIC|HALLUCINATED",
+      "actualTitle": "What the page headline actually says (original language)",
+      "actualSummary": "2-3 sentence summary of what the article ACTUALLY says",
+      "actualPublishedAt": "2025-12-14T10:00:00Z or null if cannot determine",
+      "isAboutBorder": true,
+      "matchScore": 85,
+      "reason": "Why you made this determination",
+      
+      "correctData": {
+        "title": "Original headline from the page",
+        "titleEn": "English translation of headline",
+        "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย - casual spoken Thai",
+        "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ - casual everyday Khmer",
+        "summary": "English summary (same as summaryEn)",
+        "summaryEn": "2-3 sentence summary in English",
+        "summaryTh": "สรุปข่าวภาษาไทย - like how a Thai friend would explain it",
+        "summaryKh": "សង្ខេបជាភាសាខ្មែរ - like how a Cambodian family member would explain it",
+        "publishedAt": "2025-12-14T10:00:00Z or null"
+      }
+    }
+  ]
+}
+</json>
+
+🌐 TRANSLATION RULES (for correctData):
+- Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
+- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language like how a Cambodian would explain to family
+- NOT formal/government language - use words regular people actually use
+- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
+- If unsure about translation quality, leave that translation field as empty string ""
+
+RULES:
+- You MUST visit each URL - do not guess
+- If you cannot access a URL, mark it URL_DEAD
+- matchScore: 0-100, how well the stored summary matches actual content
+- For NEEDS_UPDATE: URL works + article IS about Thailand-Cambodia + our data is wrong
+  → Provide correctData object with all fields so we can FIX it properly!
+- For dates: Look for "Published:", "Posted:", date in URL, or article metadata. If unclear, set to null
+- Articles about internal Cambodian/Thai politics (not border-related) = OFF_TOPIC`;
+
+                try {
+                    const response = await callGhostAPI(verificationPrompt, "fast", 2);
+
+                    // Extract JSON
+                    let jsonStr: string | null = null;
+                    const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
+                    if (tagMatch) {
+                        jsonStr = tagMatch[1].trim();
+                    } else {
+                        const cleanedResponse = response
+                            .replace(/```json\s*/g, "").replace(/```\s*/g, "")
+                            .trim();
+                        const firstOpen = cleanedResponse.indexOf('{');
+                        const lastClose = cleanedResponse.lastIndexOf('}');
+                        if (firstOpen !== -1 && lastClose !== -1) {
+                            jsonStr = cleanedResponse.substring(firstOpen, lastClose + 1);
+                        }
+                    }
+
+                    if (!jsonStr) {
+                        console.log(`   ⚠️ No JSON in response, skipping batch`);
+                        errors += batch.length;
+                        continue;
+                    }
+
+                    // Parse JSON with error handling
+                    let result;
+                    try {
+                        result = JSON.parse(jsonStr);
+                    } catch (parseError: any) {
+                        console.log(`   ⚠️ Failed to parse JSON: ${parseError.message}`);
+                        console.log(`   Raw JSON (first 200 chars): ${jsonStr.substring(0, 200)}`);
+                        errors += batch.length;
+                        continue;
+                    }
+
+                    // Track which articles in batch were processed
+                    const processedIndices = new Set<number>();
+
+                    // Process results
+                    for (const r of result.results || []) {
+                        const articleIndex = (r.articleIndex || 1) - 1;
+                        if (articleIndex < 0 || articleIndex >= batch.length) {
+                            console.log(`   ⚠️ Invalid articleIndex ${r.articleIndex}, skipping`);
+                            continue;
+                        }
+
+                        processedIndices.add(articleIndex);
+                        const article = batch[articleIndex];
+                        const status = r.status?.toUpperCase() || "UNKNOWN";
+
+                        switch (status) {
+                            case "VERIFIED":
+                                // Mark as source-verified so it won't be re-checked
+                                await ctx.runMutation(internal.api.markSourceVerified, {
+                                    title: article.title,
+                                    country: article.country,
+                                });
+                                verified++;
+                                console.log(`   ✅ VERIFIED: "${article.title?.substring(0, 50)}..."`);
+                                console.log(`      URL: ${article.sourceUrl}`);
+                                console.log(`      Match: ${r.matchScore || 100}%`);
+                                break;
+
+                            case "URL_DEAD":
+                                // Delete articles with dead URLs
+                                try {
+                                    await ctx.runMutation(internal.api.deleteArticle, {
+                                        title: article.title,
+                                        country: article.country,
+                                    });
+                                    deleted++;
+                                    console.log(`   🗑️ DELETED (404 - URL Dead)`);
+                                    console.log(`      URL: ${article.sourceUrl}`);
+                                    console.log(`      Old Title: "${article.title}"`);
+                                    console.log(`      Reason: ${r.reason || "URL not accessible"}`);
+                                } catch (e) {
+                                    console.log(`   ⚠️ Failed to delete: "${article.title?.substring(0, 40)}..."`);
+                                    flagged++;
+                                }
+                                break;
+
+                            case "HALLUCINATED":
+                                // Hallucinated = definitely delete
+                                try {
+                                    await ctx.runMutation(internal.api.deleteArticle, {
+                                        title: article.title,
+                                        country: article.country,
+                                    });
+                                    deleted++;
+                                    console.log(`   🗑️ DELETED (HALLUCINATED - Curator made this up!)`);
+                                    console.log(`      URL: ${article.sourceUrl}`);
+                                    console.log(`      Curator said: "${article.title}"`);
+                                    console.log(`      Curator summary: "${(article.summary || article.summaryEn || "").substring(0, 100)}..."`);
+                                    console.log(`      Page actually says: "${r.actualTitle || "(couldn't read)"}"`);
+                                    console.log(`      Page is about: ${r.actualSummary || r.actualTopic || "(unknown)"}`);
+                                    console.log(`      Reason: ${r.reason || "Content completely different"}`);
+                                } catch (e) {
+                                    console.log(`   ⚠️ Failed to delete hallucinated article`);
+                                    flagged++;
+                                }
+                                break;
+
+                            case "NEEDS_UPDATE":
+                                // URL is valid, article IS about Thailand-Cambodia, but data is wrong
+                                // FIX IT with proper translations!
+                                const cd = r.correctData || {}; // correctData object
+                                const newTitle = cd.title || r.actualTitle || article.title;
+                                const newTitleEn = cd.titleEn || cd.title || "";
+                                const newTitleTh = cd.titleTh || "";
+                                const newTitleKh = cd.titleKh || "";
+                                const newSummary = cd.summary || cd.summaryEn || r.actualSummary || "";
+                                const newSummaryEn = cd.summaryEn || cd.summary || "";
+                                const newSummaryTh = cd.summaryTh || "";
+                                const newSummaryKh = cd.summaryKh || "";
+
+                                // Parse the corrected date if provided
+                                let newPublishedAt: number | undefined = undefined;
+                                const dateStr = cd.publishedAt || r.actualPublishedAt;
+                                if (dateStr && dateStr !== "null") {
+                                    const parsed = new Date(dateStr).getTime();
+                                    if (!isNaN(parsed)) {
+                                        newPublishedAt = parsed;
+                                    }
+                                }
+                                try {
+                                    await ctx.runMutation(internal.api.updateArticleContent, {
+                                        country: article.country,
+                                        oldTitle: article.title,
+                                        // Title fields
+                                        newTitle: newTitle,
+                                        newTitleEn: newTitleEn || undefined,
+                                        newTitleTh: newTitleTh || undefined,
+                                        newTitleKh: newTitleKh || undefined,
+                                        // Summary fields
+                                        newSummary: newSummary,
+                                        newSummaryEn: newSummaryEn || undefined,
+                                        newSummaryTh: newSummaryTh || undefined,
+                                        newSummaryKh: newSummaryKh || undefined,
+                                        // Other fields
+                                        publishedAt: newPublishedAt,
+                                        credibility: Math.min(100, (article.credibility || 50) + 10), // Boost cred - now verified!
+                                        status: "active",
+                                    });
+                                    flagged++; // Count as "fixed" 
+                                    console.log(`   📝 UPDATED (Fixed wrong content)`);
+                                    console.log(`      URL: ${article.sourceUrl}`);
+                                    console.log(`      OLD Title: "${article.title}"`);
+                                    console.log(`      NEW Title: "${newTitle}"`);
+                                    console.log(`      NEW TitleEn: "${newTitleEn}"`);
+                                    console.log(`      NEW TitleTh: "${newTitleTh}"`);
+                                    console.log(`      NEW TitleKh: "${newTitleKh}"`);
+                                    console.log(`      OLD Summary: "${(article.summary || article.summaryEn || "").substring(0, 80)}..."`);
+                                    console.log(`      NEW SummaryEn: "${(newSummaryEn || "").substring(0, 80)}..."`);
+                                    console.log(`      NEW SummaryTh: "${(newSummaryTh || "").substring(0, 80)}..."`);
+                                    console.log(`      NEW SummaryKh: "${(newSummaryKh || "").substring(0, 80)}..."`);
+                                    if (newPublishedAt) {
+                                        console.log(`      OLD Date: ${article.publishedAt ? new Date(article.publishedAt).toISOString() : "(unknown)"}`);
+                                        console.log(`      NEW Date: ${new Date(newPublishedAt).toISOString()}`);
+                                    }
+                                    console.log(`      Reason: ${r.reason || "Data didn't match actual content"}`);
+                                } catch (e) {
+                                    console.log(`   ⚠️ Failed to update article content`);
+                                    errors++;
+                                }
+                                break;
+
+                            case "OFF_TOPIC":
+                                // Delete off-topic articles
+                                try {
+                                    await ctx.runMutation(internal.api.deleteArticle, {
+                                        title: article.title,
+                                        country: article.country,
+                                    });
+                                    deleted++;
+                                    console.log(`   🗑️ DELETED (OFF-TOPIC - Not about Thailand-Cambodia)`);
+                                    console.log(`      URL: ${article.sourceUrl}`);
+                                    console.log(`      Curator said: "${article.title}"`);
+                                    console.log(`      Page is actually about: ${r.actualSummary || r.actualTopic || "(unknown)"}`);
+                                    console.log(`      Reason: ${r.reason || "Not related to Thailand-Cambodia border"}`);
+                                } catch (e) {
+                                    console.log(`   ⚠️ Failed to delete off-topic article`);
+                                    flagged++;
+                                }
+                                break;
+
+                            default:
+                                console.log(`   ❓ Unknown status "${status}" for: "${article.title?.substring(0, 40)}..."`);
+                                errors++;
+                        }
+                    }
+
+                    // Check for articles not returned by AI (missing from results)
+                    const unprocessedCount = batch.length - processedIndices.size;
+                    if (unprocessedCount > 0) {
+                        console.log(`   ⚠️ ${unprocessedCount} article(s) not returned by AI - counting as errors`);
+                        for (let idx = 0; idx < batch.length; idx++) {
+                            if (!processedIndices.has(idx)) {
+                                console.log(`      Missing: "${batch[idx].title?.substring(0, 40)}..."`);
+                            }
+                        }
+                        errors += unprocessedCount;
+                    }
+
+                } catch (error: any) {
+                    console.log(`   ❌ Batch error: ${error.message}`);
+                    errors += batch.length;
+                }
+
+                // Add delay between batches to avoid rate limiting
+                if (i + BATCH_SIZE < allArticles.length) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+
+            console.log(`\n═══════════════════════════════════════════════════════════════`);
+            console.log(`🔍 [SOURCE VERIFY] COMPLETE`);
+            console.log(`   ✅ Verified: ${verified}`);
+            console.log(`   📝 Updated (fixed content): ${flagged}`);
+            console.log(`   🗑️ Deleted: ${deleted}`);
+            console.log(`   ❌ Errors: ${errors}`);
+            console.log(`═══════════════════════════════════════════════════════════════`);
+
+            return { verified, updated: flagged, deleted, errors };
+        } finally {
+            // Always release the lock, even if there's an error
+            await ctx.runMutation(internal.api.releaseSourceVerificationLock, { runId });
+        }
+    },
+});
+
+/**
+ * Verify a single article - useful for testing
+ */
+export const verifySingleSource = internalAction({
+    args: {
+        url: v.string(),
+        storedTitle: v.string(),
+        storedSummary: v.string(),
+    },
+    handler: async (ctx, args): Promise<{ status: string; actualTitle?: string; actualTopic?: string; matchScore?: number; reason: string }> => {
+        console.log(`🔍 [SINGLE VERIFY] Checking: ${args.url}`);
+
+        const verificationPrompt = `You are a SOURCE VERIFICATION AGENT.
+
+🔍 YOUR TASK:
+1. VISIT this URL: ${args.url}
+2. READ the actual content of the page
+3. COMPARE against what we have stored:
+   - Stored Title: "${args.storedTitle}"
+   - Stored Summary: "${args.storedSummary}"
+4. DETERMINE if this is a valid article about Thailand-Cambodia relations
+
+OUTPUT FORMAT - Wrap your JSON in <json> tags:
+<json>
+{
+  "status": "VERIFIED|URL_DEAD|CONTENT_MISMATCH|OFF_TOPIC|HALLUCINATED",
+  "actualTitle": "What the page actually says",
+  "actualTopic": "Brief description of what the article is actually about",
+  "matchScore": 85,
+  "reason": "Detailed explanation of your determination"
+}
+</json>
+
+RULES:
+- You MUST visit the URL - do not guess
+- If you cannot access it, mark it URL_DEAD
+- Be honest about whether the stored summary matches the actual content`;
+
+        try {
+            const response = await callGhostAPI(verificationPrompt, "fast", 2);
+
+            // Extract JSON
+            let jsonStr: string | null = null;
+            const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
+            if (tagMatch) {
+                jsonStr = tagMatch[1].trim();
+            }
+
+            if (!jsonStr) {
+                return { status: "ERROR", reason: "Failed to parse AI response" };
+            }
+
+            return JSON.parse(jsonStr);
+
+        } catch (error: any) {
+            console.log(`❌ Verification failed: ${error.message}`);
+            return { status: "ERROR", reason: error.message };
+        }
+    },
 });
 
