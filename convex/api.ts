@@ -23,6 +23,40 @@ export const getNews = query({
     },
 });
 
+// Slim query for list view - excludes heavy fields (summary, entities) to save ~70% bandwidth
+export const getNewsSlim = query({
+    args: {
+        country: v.union(v.literal("thailand"), v.literal("cambodia")),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const table = args.country === "thailand" ? "thailandNews" : "cambodiaNews";
+        const articles = await ctx.db
+            .query(table)
+            .order("desc")
+            .take(args.limit ?? 20);
+
+        // Map to slim object
+        return articles
+            .filter(a => a.status === "active" || a.status === "unverified")
+            .map(a => ({
+                _id: a._id,
+                title: a.title,
+                titleEn: a.titleEn,
+                titleTh: a.titleTh,
+                titleKh: a.titleKh,
+                publishedAt: a.publishedAt,
+                fetchedAt: a.fetchedAt,
+                source: a.source,
+                sourceUrl: a.sourceUrl,
+                category: a.category,
+                credibility: a.credibility,
+                status: a.status,
+                // Exclude: summary, summaryEn/Th/Kh, keyPoints, entities
+            }));
+    },
+});
+
 export const getAnalysis = query({
     args: {
         target: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("neutral")),
@@ -39,9 +73,18 @@ export const getAnalysis = query({
 export const getStats = query({
     args: {},
     handler: async (ctx) => {
-        return await ctx.db.query("systemStats")
+        const stats = await ctx.db.query("systemStats")
             .withIndex("by_key", (q) => q.eq("key", "main"))
             .first();
+
+        // Bandwidth Optimization: Only return fields that trigger UI updates (status/timer)
+        // We EXCLUDE "totalArticlesFetched" because it changes constantly and triggers
+        // a websocket push to ALL clients for every single article found.
+        return stats ? {
+            lastResearchAt: stats.lastResearchAt,
+            systemStatus: stats.systemStatus,
+            isPaused: stats.isPaused,
+        } : null;
     },
 });
 
@@ -68,15 +111,18 @@ export const getDashboardStats = query({
 export const getArticleCounts = query({
     args: {},
     handler: async (ctx) => {
-        // Count all articles (active + unverified), not just active
-        const thailandAll = await ctx.db.query("thailandNews").collect();
-        const cambodiaAll = await ctx.db.query("cambodiaNews").collect();
-        const internationalAll = await ctx.db.query("internationalNews").collect();
+        // Optimized counting using indexes - NO document fetching
 
-        // Filter to show active + unverified (not false/outdated/archived)
-        const thailand = thailandAll.filter(a => a.status === "active" || a.status === "unverified").length;
-        const cambodia = cambodiaAll.filter(a => a.status === "active" || a.status === "unverified").length;
-        const international = internationalAll.filter(a => a.status === "active" || a.status === "unverified").length;
+        // Helper to count active + unverified
+        const countTable = async (tableName: "thailandNews" | "cambodiaNews" | "internationalNews") => {
+            const activeDocs = await ctx.db.query(tableName).withIndex("by_status", q => q.eq("status", "active")).collect();
+            const unverifiedDocs = await ctx.db.query(tableName).withIndex("by_status", q => q.eq("status", "unverified")).collect();
+            return activeDocs.length + unverifiedDocs.length;
+        };
+
+        const thailand = await countTable("thailandNews");
+        const cambodia = await countTable("cambodiaNews");
+        const international = await countTable("internationalNews");
 
         return {
             thailand,
@@ -97,7 +143,7 @@ export const getTimeline = query({
             .query("timelineEvents")
             .withIndex("by_date")
             .order("desc")
-            .take(args.limit ?? 50);
+            .take(args.limit ?? 200);
         return events;
     },
 });
@@ -380,16 +426,6 @@ export const insertArticle = internalMutation({
             summaryKh: args.summaryKh,
             fetchedAt: Date.now(),
         });
-
-        const stats = await ctx.db.query("systemStats")
-            .withIndex("by_key", (q) => q.eq("key", "main"))
-            .first();
-
-        if (stats) {
-            await ctx.db.patch(stats._id, {
-                totalArticlesFetched: (stats.totalArticlesFetched || 0) + 1
-            });
-        }
 
         return newId;
     },

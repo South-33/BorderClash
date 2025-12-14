@@ -4,10 +4,11 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 // =============================================================================
-// AUTOMATION - Full Research Cycle (runs every hour)
+// AUTOMATION - Full Research Cycle (runs every 3 hours)
 // Runs: Curation -> Validation -> Dashboard -> Synthesis
+// Changed from 60min to 180min to reduce bandwidth usage
 // =============================================================================
-crons.interval("research-cycle", { minutes: 60 }, internal.research.runResearchCycle);
+crons.interval("research-cycle", { minutes: 180 }, internal.research.runResearchCycle);
 
 // =============================================================================
 // GHOST API KEEPALIVE - Ping Koyeb to prevent instance sleep (every 4 minutes)

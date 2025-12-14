@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
+import { useQuery, useMutation, useConvex } from 'convex/react';
+import { FunctionReference } from 'convex/server';
 import { api } from '../../convex/_generated/api';
 
 // --- Icon Components ---
@@ -105,7 +106,7 @@ const TRANSLATIONS = {
     monitoring: "MONITORING",
     active: "ACTIVE",
     situationReport: "SITUATION REPORT",
-    autoUpdating: "Auto-updating every 60 minutes",
+    autoUpdating: "Auto-updating every 3 hours",
     keyDevelopments: "Key Developments",
     sourcesTracked: "SOURCES TRACKED",
     viewMode: "VIEW MODE",
@@ -238,7 +239,7 @@ const TRANSLATIONS = {
     monitoring: "กำลังจับตา",
     active: "ใช้งานอยู่",
     situationReport: "รายงานสถานการณ์สด",
-    autoUpdating: "อัปเดตเองทุก 60 นาที",
+    autoUpdating: "อัปเดตเองทุก 3 ชั่วโมง",
     keyDevelopments: "เหตุการณ์สำคัญ",
     sourcesTracked: "แหล่งข่าวที่ติดตาม",
     viewMode: "โหมดดูข้อมูล",
@@ -371,7 +372,7 @@ const TRANSLATIONS = {
     monitoring: "កំពុងមើល",
     active: "សកម្ម",
     situationReport: "របាយការណ៍សង្ខេប",
-    autoUpdating: "អាប់ដេតរៀងរាល់ 60 នាទី",
+    autoUpdating: "អាប់ដេតរៀងរាល់ 3 ម៉ោង",
     keyDevelopments: "ព្រឹត្តិការណ៍សំខាន់ៗ",
     sourcesTracked: "ប្រភពព័ត៌មាន",
     viewMode: "មើលជា",
@@ -527,6 +528,108 @@ const usePersistentQuery = (query: any, args: any, storageKey: string) => {
   const isRefreshing = isHydrated && convexData === undefined && localData !== null;
 
   return { data, isLoading, isRefreshing };
+};
+
+// =============================================================================
+// BANDWIDTH-OPTIMIZED QUERY HOOK
+// Only fetches data on mount and when research cycle completes (lastResearchAt changes)
+// Uses manual fetch instead of live subscriptions = ~90% bandwidth reduction
+// =============================================================================
+
+// Global ref to track lastResearchAt (updated by Home component)
+const globalLastResearchAt = { current: null as number | null };
+
+// The optimized query hook - NO live subscription, just cached data
+const useCachedQuery = <T,>(
+  queryFn: FunctionReference<"query">,
+  args: Record<string, unknown>,
+  storageKey: string,
+  lastResearchAt?: number | null // Pass this from the component that has systemStats
+): { data: T | undefined; isLoading: boolean; isRefreshing: boolean } => {
+  const convex = useConvex();
+
+  // Use passed prop if available, otherwise fall back to global ref
+  const effectiveLastResearchAt = lastResearchAt ?? globalLastResearchAt.current;
+
+  const [data, setData] = useState<T | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const lastFetchedAt = useRef<number | null>(null);
+  const hasDoneInitialFetch = useRef(false);
+
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setData(parsed.data);
+          lastFetchedAt.current = parsed.fetchedAt || 0;
+        } catch (e) {
+          console.error("Failed to parse cache for", storageKey, e);
+        }
+      }
+      setIsHydrated(true);
+    }
+  }, [storageKey]);
+
+  // Fetch data function
+  const fetchData = useCallback(async () => {
+    try {
+      const result = await convex.query(queryFn, args);
+      setData(result as T);
+      lastFetchedAt.current = Date.now();
+
+      // Save to localStorage with timestamp
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(storageKey, JSON.stringify({
+          data: result,
+          fetchedAt: Date.now()
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch data for", storageKey, error);
+    }
+  }, [convex, queryFn, JSON.stringify(args), storageKey]);
+
+  // Initial fetch after hydration
+  useEffect(() => {
+    if (!isHydrated || hasDoneInitialFetch.current) return;
+
+    const doInitialFetch = async () => {
+      hasDoneInitialFetch.current = true;
+      setIsLoading(data === undefined);
+      setIsRefreshing(data !== undefined);
+      await fetchData();
+      setIsLoading(false);
+      setIsRefreshing(false);
+    };
+
+    doInitialFetch();
+  }, [isHydrated, fetchData, data]);
+
+  // Refresh when research cycle completes (lastResearchAt changes)
+  useEffect(() => {
+    if (!isHydrated || effectiveLastResearchAt === null) return;
+
+    // Skip if we haven't done initial fetch yet
+    if (lastFetchedAt.current === null) return;
+
+    // Only refresh if cycle completed AFTER our last fetch
+    if (effectiveLastResearchAt > lastFetchedAt.current) {
+      console.log(`🔄 [${storageKey}] Cycle completed, refreshing data...`);
+      setIsRefreshing(true);
+      fetchData().then(() => setIsRefreshing(false));
+    }
+  }, [effectiveLastResearchAt, isHydrated, fetchData, storageKey]);
+
+  return {
+    data,
+    isLoading: !isHydrated || (isLoading && data === undefined),
+    isRefreshing,
+  };
 };
 
 // --- Reusable Components ---
@@ -1125,59 +1228,71 @@ export default function Home() {
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
 
-  // Persistent Queries
-  const {
-    data: thailandNews,
-    isLoading: thNewsLoading,
-    isRefreshing: thNewsRefreshing
-  } = usePersistentQuery(api.api.getNews, { country: "thailand", limit: 50 }, "borderclash_th_news") as { data: any[] | undefined, isLoading: boolean, isRefreshing: boolean };
+  // Persistent Queries - OPTIMIZED with useCachedQuery (no live subscriptions)
+  // These only refresh when research cycle completes = ~90% bandwidth reduction
 
-  const {
-    data: cambodiaNews,
-    isLoading: khNewsLoading,
-    isRefreshing: khNewsRefreshing
-  } = usePersistentQuery(api.api.getNews, { country: "cambodia", limit: 50 }, "borderclash_kh_news") as { data: any[] | undefined, isLoading: boolean, isRefreshing: boolean };
-
-  const {
-    data: thailandMeta,
-    isLoading: thMetaLoading,
-    isRefreshing: thMetaRefreshing
-  } = usePersistentQuery(api.api.getAnalysis, { target: "thailand" }, "borderclash_th_meta") as any;
-
-  const {
-    data: cambodiaMeta,
-    isLoading: khMetaLoading,
-    isRefreshing: khMetaRefreshing
-  } = usePersistentQuery(api.api.getAnalysis, { target: "cambodia" }, "borderclash_kh_meta") as any;
-
-  const {
-    data: neutralMeta,
-    isLoading: neutralMetaLoading,
-    isRefreshing: neutralMetaRefreshing
-  } = usePersistentQuery(api.api.getAnalysis, { target: "neutral" }, "borderclash_neutral_meta") as any;
-
-  const {
-    data: dashboardStats,
-    isLoading: dashboardLoading,
-    isRefreshing: dashboardRefreshing
-  } = usePersistentQuery(api.api.getDashboardStats, {}, "borderclash_dashboard_stats") as any;
-
+  // SystemStats MUST be first - it's the ONLY live subscription
+  // It tracks when cycles complete so cached queries know when to refresh
   const {
     data: systemStats,
     isLoading: sysStatsLoading,
     isRefreshing: sysStatsRefreshing
   } = usePersistentQuery(api.api.getStats, {}, "borderclash_system_stats") as any;
 
+  // Update global ref so cached queries can access it
+  useEffect(() => {
+    if (systemStats?.lastResearchAt) {
+      globalLastResearchAt.current = systemStats.lastResearchAt;
+    }
+  }, [systemStats?.lastResearchAt]);
+
+  // All other queries use cached fetch - NO live subscriptions!
+  const {
+    data: thailandNews,
+    isLoading: thNewsLoading,
+    isRefreshing: thNewsRefreshing
+  } = useCachedQuery<any[]>(api.api.getNewsSlim, { country: "thailand", limit: 20 }, "borderclash_th_news_v2", systemStats?.lastResearchAt);
+
+  const {
+    data: cambodiaNews,
+    isLoading: khNewsLoading,
+    isRefreshing: khNewsRefreshing
+  } = useCachedQuery<any[]>(api.api.getNewsSlim, { country: "cambodia", limit: 20 }, "borderclash_kh_news_v2", systemStats?.lastResearchAt);
+
+  const {
+    data: thailandMeta,
+    isLoading: thMetaLoading,
+    isRefreshing: thMetaRefreshing
+  } = useCachedQuery<any>(api.api.getAnalysis, { target: "thailand" }, "borderclash_th_meta_v2", systemStats?.lastResearchAt);
+
+  const {
+    data: cambodiaMeta,
+    isLoading: khMetaLoading,
+    isRefreshing: khMetaRefreshing
+  } = useCachedQuery<any>(api.api.getAnalysis, { target: "cambodia" }, "borderclash_kh_meta_v2", systemStats?.lastResearchAt);
+
+  const {
+    data: neutralMeta,
+    isLoading: neutralMetaLoading,
+    isRefreshing: neutralMetaRefreshing
+  } = useCachedQuery<any>(api.api.getAnalysis, { target: "neutral" }, "borderclash_neutral_meta_v2", systemStats?.lastResearchAt);
+
+  const {
+    data: dashboardStats,
+    isLoading: dashboardLoading,
+    isRefreshing: dashboardRefreshing
+  } = useCachedQuery<any>(api.api.getDashboardStats, {}, "borderclash_dashboard_stats_v2", systemStats?.lastResearchAt);
+
   const {
     data: articleCounts,
     isLoading: countsLoading
-  } = usePersistentQuery(api.api.getArticleCounts, {}, "borderclash_article_counts") as any;
+  } = useCachedQuery<any>(api.api.getArticleCounts, {}, "borderclash_article_counts_v2", systemStats?.lastResearchAt);
 
   const {
     data: timelineEvents,
     isLoading: timelineLoading,
     isRefreshing: timelineRefreshing
-  } = usePersistentQuery(api.api.getTimeline, { limit: 50 }, "borderclash_timeline") as any;
+  } = useCachedQuery<any>(api.api.getTimeline, {}, "borderclash_timeline_v2", systemStats?.lastResearchAt);
 
 
 
@@ -1426,6 +1541,94 @@ export default function Home() {
   const isLoading = thNewsLoading || khNewsLoading || neutralMetaLoading || dashboardLoading;
   const isSyncing = systemStats?.systemStatus === 'syncing';
 
+  // --- TIMELINE STATE AND LOGIC ---
+  const [selectedTimelineDate, setSelectedTimelineDate] = useState<string | null>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
+
+  // Derive available dates and group ALL events by date (for continuous scroll)
+  const { timelineDates, groupedEvents, dateCounts } = useMemo(() => {
+    if (!timelineEvents || timelineEvents.length === 0) {
+      return { timelineDates: [], groupedEvents: {} as Record<string, any[]>, dateCounts: {} };
+    }
+
+    // counts per date and group events
+    const counts: Record<string, number> = {};
+    const groups: Record<string, any[]> = {};
+
+    timelineEvents.forEach((e: any) => {
+      if (e.date) {
+        counts[e.date] = (counts[e.date] || 0) + 1;
+        if (!groups[e.date]) groups[e.date] = [];
+        groups[e.date].push(e);
+      }
+    });
+
+    // Sort events within each group by time ascending (morning first)
+    Object.keys(groups).forEach(date => {
+      groups[date].sort((a: any, b: any) => {
+        const timeA = a.timeOfDay || '23:59';
+        const timeB = b.timeOfDay || '23:59';
+        if (timeA !== timeB) return timeA.localeCompare(timeB);
+        return (b.importance || 0) - (a.importance || 0);
+      });
+    });
+
+    // Unique dates sorted ascending (oldest first)
+    const dates = Object.keys(counts).sort();
+
+    return { timelineDates: dates, groupedEvents: groups, dateCounts: counts };
+  }, [timelineEvents]);
+
+  // Set default selected date to the first (oldest) since scroll starts at top
+  useEffect(() => {
+    if (!selectedTimelineDate && timelineDates.length > 0) {
+      setSelectedTimelineDate(timelineDates[0]);
+    }
+  }, [timelineDates, selectedTimelineDate]);
+
+  // Scroll to selected date section
+  const scrollToDate = (date: string) => {
+    setSelectedTimelineDate(date);
+    const element = document.getElementById(`timeline-date-${date}`);
+    if (element && timelineScrollRef.current) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Sync date selector when user scrolls (Intersection Observer)
+  useEffect(() => {
+    if (!timelineScrollRef.current || timelineDates.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the entry that's most visible at the top
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.1) {
+            const dateId = entry.target.id.replace('timeline-date-', '');
+            if (dateId && timelineDates.includes(dateId)) {
+              setSelectedTimelineDate(dateId);
+              break;
+            }
+          }
+        }
+      },
+      {
+        root: timelineScrollRef.current,
+        rootMargin: '-10% 0px -80% 0px', // Trigger when section is near top
+        threshold: [0.1, 0.5],
+      }
+    );
+
+    // Observe all date sections
+    timelineDates.forEach((date) => {
+      const element = document.getElementById(`timeline-date-${date}`);
+      if (element) observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, [timelineDates]);
+
+
   // Measure Neutral Card Height to set siblings
   useLayoutEffect(() => {
     const measureHeight = () => {
@@ -1483,12 +1686,12 @@ export default function Home() {
     if (!systemStats?.lastResearchAt) return;
 
     const updateCountdown = () => {
-      // 60 minutes in milliseconds (matches cron schedule)
-      const sixtyMinutes = 60 * 60 * 1000;
+      // 180 minutes (3 hours) in milliseconds (matches cron schedule)
+      const cycleInterval = 180 * 60 * 1000;
       // Calculate time since the last research finished
       const timeSinceLastUpdate = Date.now() - systemStats.lastResearchAt;
       // Calculate remaining time until next check
-      const remaining = Math.max(0, sixtyMinutes - timeSinceLastUpdate);
+      const remaining = Math.max(0, cycleInterval - timeSinceLastUpdate);
       setNextUpdateIn(Math.floor(remaining / 1000));
     };
 
@@ -2016,459 +2219,175 @@ export default function Home() {
           {
             viewMode === 'LOSSES' && (
               <>
-                <div className="md:col-span-2 lg:col-span-3" style={{ height: sidebarHeight }}>
-                  <Card title={`📜 ${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full">
+                <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4" style={{ height: sidebarHeight }}>
+                  <Card title={`📜 ${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col">
+
                     {(!timelineEvents || timelineEvents.length === 0) ? (
-                      <div className="text-center py-8">
+                      <div className="text-center py-12 flex-1 flex flex-col justify-center items-center">
                         <p className="font-mono text-sm opacity-60">{t.noTimelineEvents}</p>
                         <p className="font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
                       </div>
                     ) : (
-                      <>
-                        {/* Timeline Section - fills remaining space */}
-                        <div className="flex-1 flex flex-col px-8 md:px-16 pt-2 pb-4 min-h-0">
-                          {/* Serpentine Timeline - fills available space */}
-                          {(() => {
-                            const getEventTitle = (event: any) => {
-                              if (lang === 'th' && event.titleTh) return event.titleTh;
-                              if (lang === 'kh' && event.titleKh) return event.titleKh;
-                              return event.title;
-                            };
-
-                            const getEventDescription = (event: any) => {
-                              if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
-                              if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
-                              return event.description;
-                            };
-
-                            // Layout Configuration
-                            // Mobile: 2 items per row (left/right), unlimited rows (user scrolls)
-                            // Desktop: 5 fixed rows, items distributed evenly
-                            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-
-                            // Sort by date first, then by timeOfDay for same-day events
-                            const sortedEvents = [...timelineEvents].sort((a: any, b: any) => {
-                              // First compare by date string (YYYY-MM-DD format)
-                              const dateCompare = (a.date || '').localeCompare(b.date || '');
-                              if (dateCompare !== 0) return dateCompare;
-
-                              // Same date: compare by timeOfDay (HH:MM format)
-                              // Events without timeOfDay sort to end of their day
-                              const timeA = a.timeOfDay || '99:99';
-                              const timeB = b.timeOfDay || '99:99';
-                              return timeA.localeCompare(timeB);
-                            });
-
-                            const totalEvents = sortedEvents.length;
-                            const rows: any[][] = [];
-
-                            if (isMobile) {
-                              // Mobile: Fixed 2 items per row
-                              const itemsPerRow = 2;
-                              for (let i = 0; i < totalEvents; i += itemsPerRow) {
-                                rows.push(sortedEvents.slice(i, i + itemsPerRow));
-                              }
-                            } else {
-                              // Desktop: Fixed 5 rows, distribute evenly
-                              const targetRows = 5;
-                              const baseEventsPerRow = Math.floor(totalEvents / targetRows);
-                              const extraEvents = totalEvents % targetRows;
-                              let eventIndex = 0;
-                              for (let rowIdx = 0; rowIdx < targetRows && eventIndex < totalEvents; rowIdx++) {
-                                const itemsThisRow = rowIdx < extraEvents ? baseEventsPerRow + 1 : baseEventsPerRow;
-                                if (itemsThisRow > 0) {
-                                  rows.push(sortedEvents.slice(eventIndex, eventIndex + itemsThisRow));
-                                  eventIndex += itemsThisRow;
-                                }
-                              }
-                            }
-
-                            const categoryColors: Record<string, string> = {
-                              military: 'bg-red-500',
-                              diplomatic: 'bg-blue-500',
-                              humanitarian: 'bg-yellow-500',
-                              political: 'bg-purple-500',
-                            };
-
-                            // Dot size based on importance (0-100)
-                            const getDotSize = (importance: number) => {
-                              const minSize = 20;  // Small dots for low impact (0)
-                              const maxSize = 56;  // Large dots for high impact (100)
-                              const clampedImportance = Math.max(0, Math.min(100, importance || 50));
-                              const size = minSize + ((clampedImportance / 100) * (maxSize - minSize));
-                              return Math.round(size);
-                            };
-
-                            // Lane configuration - taller on mobile to give labels space
-                            const LANE_HEIGHT = isMobile ? 60 : 80;
-                            const LINE_OFFSET = isMobile ? 30 : 40;
-                            const ROW_MIN_HEIGHT = isMobile ? 160 : undefined; // Extra height for mobile labels
-
-                            return (
-                              <div className={`flex-1 flex flex-col ${isMobile ? '' : 'justify-between'}`}>
-                                {rows.map((row, rowIndex) => {
-                                  const isReversed = rowIndex % 2 === 1;
-                                  const isLastRow = rowIndex === rows.length - 1;
-                                  const itemCount = row.length;
-
-                                  // Pre-calculate all dot sizes for this row
-                                  const dotSizes = row.map((event: any) => getDotSize(event.importance || 50));
-
-                                  // Line spans from first dot center to last dot center
-                                  const firstDotHalfWidth = dotSizes[0] / 2;
-                                  const lastDotHalfWidth = dotSizes[dotSizes.length - 1] / 2;
-
-                                  return (
-                                    <div
-                                      key={rowIndex}
-                                      className="relative flex flex-col justify-start group/row"
-                                      style={{ minHeight: ROW_MIN_HEIGHT }}
-                                    >
-                                      {/* 1. The Horizontal Road Line - from first dot center to last dot center */}
-                                      <div
-                                        className="absolute h-0 border-t-2 border-dashed border-stone-400 z-0"
-                                        style={{
-                                          top: `${LINE_OFFSET}px`,
-                                          left: `${firstDotHalfWidth}px`,
-                                          right: `${lastDotHalfWidth}px`,
-                                        }}
-                                      />
-
-                                      {/* 2. The Vertical Connector to Next Row */}
-                                      {!isLastRow && (
-                                        <div
-                                          className="absolute border-l-2 border-dashed border-stone-400 z-0"
-                                          style={{
-                                            top: `${LINE_OFFSET}px`,
-                                            height: '100%',
-                                            [isReversed ? 'left' : 'right']: `${isReversed ? firstDotHalfWidth : lastDotHalfWidth}px`,
-                                            width: '0px',
-                                          }}
-                                        />
-                                      )}
-
-                                      {/* 3. The Content Container - dots at exact edges */}
-                                      <div
-                                        className={`w-full flex items-start z-10 ${itemCount === 1 ? 'justify-center' : 'justify-between'} ${isReversed ? 'flex-row-reverse' : ''}`}
-                                      >
-                                        {row.map((event: any, idx: number) => {
-                                          const dotColor = categoryColors[event.category] || 'bg-gray-500';
-                                          const dotSize = dotSizes[idx];
-
-                                          return (
-                                            <div
-                                              key={event._id}
-                                              className="relative flex flex-col items-center"
-                                              style={{ width: `${dotSize}px` }} // Container width = dot width, so center aligns with edge
-                                            >
-                                              {/* Dot - centered in container (which IS edge-aligned) */}
-                                              <div
-                                                className="flex items-center justify-center relative z-20 cursor-pointer"
-                                                style={{ height: `${LANE_HEIGHT}px`, width: `${dotSize}px` }}
-                                                onClick={() => { setSelectedEvent(event); setShowAllSources(false); }}
-                                              >
-                                                <div
-                                                  className={`rounded-full ${dotColor} shadow-lg
-                                                  ring-4 ring-riso-paper hover:scale-110 active:scale-95 transition-transform duration-200`}
-                                                  style={{ width: `${dotSize}px`, height: `${dotSize}px` }}
-                                                />
-                                              </div>
-
-                                              {/* Text Label - overflows to center on dot, max 3 lines */}
-                                              <div
-                                                className="absolute z-30 cursor-pointer text-center"
-                                                style={{
-                                                  top: `${LANE_HEIGHT - 8}px`,
-                                                  left: '50%',
-                                                  transform: 'translateX(-50%)',
-                                                  minWidth: isMobile ? '160px' : '130px',
-                                                  maxWidth: isMobile ? '160px' : '180px',
-                                                }}
-                                                onClick={() => { setSelectedEvent(event); setShowAllSources(false); }}
-                                              >
-                                                <div className="inline-block bg-[#F2F2E9] bg-opacity-95 px-2 py-1 pb-2 rounded-md shadow-sm border border-white/20 backdrop-blur-sm">
-                                                  <p className="font-mono text-[10px] font-bold opacity-50 mb-0.5">{event.date}</p>
-                                                  <p
-                                                    className="font-display text-[12px] md:text-sm text-riso-ink"
-                                                    style={{
-                                                      display: '-webkit-box',
-                                                      WebkitLineClamp: 3,
-                                                      WebkitBoxOrient: 'vertical',
-                                                      overflow: 'hidden',
-                                                      textOverflow: 'ellipsis',
-                                                      lineHeight: '1.4',
-                                                      paddingBottom: '2px', // Space for descenders
-                                                    }}
-                                                  >
-                                                    {getEventTitle(event)}
-                                                  </p>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()}
+                      <div className="flex flex-col h-full min-h-0">
+                        {/* --- DATE SELECTOR BAR --- */}
+                        <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5">
+                          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2" style={{ scrollbarWidth: 'none' }}>
+                            {timelineDates.map((date) => {
+                              const isSelected = selectedTimelineDate === date;
+                              const count = dateCounts[date] || 0;
+                              return (
+                                <button
+                                  key={date}
+                                  onClick={() => scrollToDate(date)}
+                                  className={`
+                                     flex flex-col items-center justify-center
+                                     min-w-[80px] px-3 py-2 rounded-sm border-2 transition-all flex-shrink-0
+                                     ${isSelected
+                                      ? 'bg-riso-ink border-riso-ink text-riso-paper shadow-lg scale-105'
+                                      : 'bg-riso-paper border-riso-ink/20 text-riso-ink hover:border-riso-ink/50 hover:bg-white'}
+                                   `}
+                                >
+                                  <span className={`font-mono text-[10px] uppercase tracking-wider mb-1 ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
+                                    {new Date(date).getFullYear()}
+                                  </span>
+                                  <span className="font-display text-xl leading-none uppercase">
+                                    {new Date(date).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-US', { month: 'short', day: 'numeric' })}
+                                  </span>
+                                  <span className={`text-[9px] font-mono mt-1 px-1.5 rounded-full ${isSelected ? 'bg-riso-paper text-riso-ink' : 'bg-riso-ink/10 text-riso-ink'}`}>
+                                    {count} Events
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
 
-                        {/* Event Details Modal - Bottom Sheet with Swipe */}
-                        {selectedEvent && (() => {
-                          const getEventTitle = (event: any) => {
-                            if (lang === 'th' && event.titleTh) return event.titleTh;
-                            if (lang === 'kh' && event.titleKh) return event.titleKh;
-                            return event.title;
-                          };
-                          const getEventDescription = (event: any) => {
-                            if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
-                            if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
-                            return event.description;
-                          };
-                          const categoryColors: Record<string, string> = {
-                            military: 'bg-red-500',
-                            diplomatic: 'bg-blue-500',
-                            humanitarian: 'bg-yellow-500',
-                            political: 'bg-purple-500',
-                          };
+                        {/* --- CONTINUOUS SCROLL TIMELINE --- */}
+                        <div ref={timelineScrollRef} className="flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] scroll-smooth" style={{ willChange: 'scroll-position' }}>
+                          <div className="relative pb-12">
+                            {/* Center Line - spans full content height, z-0 so headers cover it */}
+                            <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2 z-0"></div>
+                            {timelineDates.map((date) => {
+                              const events = groupedEvents[date] || [];
+                              const categoryColors: Record<string, string> = {
+                                military: 'bg-red-500',
+                                diplomatic: 'bg-blue-500',
+                                humanitarian: 'bg-yellow-500',
+                                political: 'bg-purple-500',
+                              };
 
-                          return (
-                            <div
-                              className={`fixed inset-0 z-[100] flex items-end md:items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm modal-backdrop ${isModalClosing ? 'closing' : ''}`}
-                              onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
-                              onKeyDown={handleKeyDown}
-                              tabIndex={0}
-                              ref={(el) => el?.focus()}
-                            >
-                              {/* Card + Navigation Wrapper */}
-                              <div className="relative flex items-center w-full max-w-lg">
-                                {/* Desktop Nav Arrow - Left */}
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); animateSwipe('prev'); }}
-                                  disabled={!hasPrev}
-                                  className={`hidden md:flex absolute -left-16 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all z-10 ${hasPrev ? 'hover:bg-white hover:scale-110' : 'opacity-30 cursor-not-allowed'}`}
-                                >
-                                  <span className="text-2xl">←</span>
-                                </button>
-
-                                {/* Desktop Nav Arrow - Right */}
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); animateSwipe('next'); }}
-                                  disabled={!hasNext}
-                                  className={`hidden md:flex absolute -right-16 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all z-10 ${hasNext ? 'hover:bg-white hover:scale-110' : 'opacity-30 cursor-not-allowed'}`}
-                                >
-                                  <span className="text-2xl">→</span>
-                                </button>
-
-                                {(() => {
-                                  /**
-                              * Inner Component for Card Content
-                              * Defined here to access closure variables like 't', 'lang', 'closeModal'
-                              */
-                                  const CardContent = ({ eventData, isGhost = false, style, forwardedRef, ...props }: any) => {
-                                    if (!eventData) return null;
-                                    return (
-                                      <div
-                                        ref={forwardedRef}
-                                        className={`modal-sheet bg-[#F2F2E9] w-full max-h-[85vh] md:max-h-[90vh] overflow-y-auto rounded-2xl md:rounded-lg border-4 border-riso-ink shadow-xl flex flex-col ${isGhost ? 'absolute inset-0 z-0 pointer-events-none' : 'relative z-10 shadow-2xl'}`}
-                                        style={style}
-                                        {...props}
-                                      >
-                                        {/* Mobile Drag Handle */}
-                                        <div
-                                          className="drag-handle-area md:hidden flex flex-col items-center pt-6 pb-4 sticky top-0 bg-[#F2F2E9] z-20 cursor-grab active:cursor-grabbing select-none"
-                                          style={{ touchAction: 'none' }}
-                                        >
-                                          <div className="w-16 h-2 bg-riso-ink/40 rounded-full mb-3 pointer-events-none"></div>
-                                          <span className="font-mono text-[10px] opacity-50 font-bold pointer-events-none">
-                                            {sortedEvents.indexOf(eventData) + 1}/{sortedEvents.length} • {isGhost ? 'NEXT INTEL' : 'DRAG TO CLOSE'}
-                                          </span>
+                              return (
+                                <div key={date} id={`timeline-date-${date}`}>
+                                  {/* Date Header - pins flush to top with shadow fade */}
+                                  <div className="sticky top-0 z-20">
+                                    <div className="bg-riso-paper/95 backdrop-blur-sm border-b border-riso-ink/10 py-3 px-4 md:px-8">
+                                      <div className="flex items-center justify-between max-w-2xl mx-auto">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
+                                          <h3 className="font-display text-xl uppercase tracking-wide">
+                                            {new Date(date).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                                          </h3>
                                         </div>
-
-                                        {/* Header */}
-                                        <div
-                                          className="modal-header bg-riso-ink text-riso-paper p-4 flex justify-between items-start sticky top-0 z-10 cursor-grab active:cursor-grabbing"
-                                          style={{ touchAction: 'none' }}
-                                        >
-                                          <div className="pointer-events-none">
-                                            <div className="flex items-center gap-2 mb-1">
-                                              <span className="text-[10px] font-mono tracking-[0.2em] uppercase opacity-70">INTEL REPORT</span>
-                                              <div className={`w-2 h-2 rounded-full ${isGhost ? 'bg-gray-500' : 'bg-red-500 animate-pulse'}`}></div>
-                                            </div>
-                                            <h3 className={`font-display text-2xl leading-tight ${lang === 'th' ? 'font-bold' : ''}`}>
-                                              {getEventTitle(eventData)}
-                                            </h3>
-                                          </div>
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); closeModal(); }}
-                                            className="p-1 hover:bg-white/10 rounded-full transition-colors pointer-events-auto"
-                                          >
-                                            <IconBase className="w-6 h-6"><path d="M18 6L6 18M6 6l12 12" /></IconBase>
-                                          </button>
-                                        </div>
-
-                                        {/* Body */}
-                                        <div className="p-4 md:p-6 space-y-6 flex-1 min-h-[50vh]">
-                                          {/* Meta Row */}
-                                          <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
-                                            <div>
-                                              <p className="opacity-50 uppercase tracking-wider mb-1">DATE</p>
-                                              <p className="font-bold">{new Date(eventData.date).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                                            </div>
-                                            <div>
-                                              <p className="opacity-50 uppercase tracking-wider mb-1">IMPACT</p>
-                                              <div className="flex items-center gap-2">
-                                                <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                                  <div className="h-full bg-riso-ink" style={{ width: `${eventData.importance}%` }}></div>
-                                                </div>
-                                                <span className="font-bold">{eventData.importance}/100</span>
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <p className="opacity-50 uppercase tracking-wider mb-1">TYPE</p>
-                                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase text-white ${categoryColors[eventData.category] || 'bg-gray-500'}`}>
-                                                {eventData.category}
-                                              </span>
-                                            </div>
-                                          </div>
-
-                                          {/* If GHOST, show blurred placeholder structure (optional) or full content? 
-                                                   User wants to "see card below". Rendering full text behind might be heavy but accurate.
-                                                   Let's revert to full content but visually dimmed by parent class. 
-                                                */}
-
-                                          {/* Status */}
-                                          <div className={`p-3 border-l-4 ${eventData.status === 'confirmed' ? 'border-green-500 bg-green-500/10' :
-                                            eventData.status === 'disputed' ? 'border-yellow-500 bg-yellow-500/10' : 'border-red-500 bg-red-500/10'}`}>
-                                            <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mb-1">STATUS</p>
-                                            <p className={`font-bold uppercase tracking-wider ${eventData.status === 'confirmed' ? 'text-green-700' :
-                                              eventData.status === 'disputed' ? 'text-yellow-700' : 'text-red-700'}`}>
-                                              {eventData.status || 'UNVERIFIED'}
-                                            </p>
-                                          </div>
-
-                                          {/* Description */}
-                                          <div>
-                                            <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mb-2">SUMMARY</p>
-                                            <p className={`font-serif text-base leading-relaxed text-gray-800`}>
-                                              {getEventDescription(eventData)}
-                                            </p>
-                                          </div>
-
-                                          {/* Sources */}
-                                          {eventData.sources?.length > 0 && (() => {
-                                            const sources = eventData.sources;
-                                            // For ghost, just show first 3. For active, logic applies.
-                                            const displaySources = (showAllSources && !isGhost) ? sources : sources.slice(0, 3);
-                                            const hasMore = sources.length > 3;
-
-                                            return (
-                                              <div>
-                                                <p className="font-mono text-[10px] uppercase tracking-widest opacity-60 mb-2">
-                                                  SOURCES ({sources.length})
-                                                </p>
-                                                <div className="flex flex-wrap gap-2">
-                                                  {displaySources.map((s: any, idx: number) => (
-                                                    <div
-                                                      key={idx}
-                                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-mono
-                                                                        ${s.credibility > 70 ? 'bg-green-100 border border-green-200' : 'bg-gray-100 border border-gray-200'}`}
-                                                    >
-                                                      <span className="font-bold truncate max-w-[120px]">{s.name}</span>
-                                                      {s.credibility && (
-                                                        <span className={`text-[9px] px-1 py-0.5 rounded ${s.credibility > 70 ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>
-                                                          {s.credibility}%
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                  ))}
-                                                  {hasMore && (
-                                                    <button
-                                                      onClick={() => !isGhost && setShowAllSources(!showAllSources)}
-                                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-mono bg-riso-ink/10 hover:bg-riso-ink/20 transition-colors border border-riso-ink/20"
-                                                    >
-                                                      {showAllSources && !isGhost ? '− Less' : `+${sources.length - 3} more`}
-                                                    </button>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            );
-                                          })()}
-                                        </div>
-
-                                        {/* Footer */}
-                                        <div className="p-3 border-t border-riso-ink/10 bg-riso-ink/5 flex flex-col items-center justify-center">
-                                          <div className="flex items-center gap-3">
-                                            <div className="flex gap-1">
-                                              {sortedEvents.map((_: any, idx: number) => (
-                                                <div
-                                                  key={idx}
-                                                  className={`w-1.5 h-1.5 rounded-full transition-all ${idx === sortedEvents.indexOf(eventData) ? 'bg-riso-ink scale-125' : 'bg-riso-ink/20'}`}
-                                                />
-                                              ))}
-                                            </div>
-                                            <span className="font-mono text-[10px] font-bold opacity-60">{sortedEvents.indexOf(eventData) + 1} / {sortedEvents.length}</span>
-                                          </div>
-                                          <p className="font-mono text-[8px] opacity-40 uppercase mt-1 hidden md:block">ESC to close • ←→ or arrows to navigate</p>
-                                          <p className="font-mono text-[8px] opacity-40 uppercase mt-1 md:hidden">←→ swipe • drag handle ↓ to close</p>
-                                        </div>
+                                        <span className="font-mono text-xs opacity-50">{events.length} REPORTS</span>
                                       </div>
-                                    )
-                                  }
+                                    </div>
+                                    {/* Gradient fade shadow */}
+                                    <div className="h-4 bg-gradient-to-b from-riso-paper/80 to-transparent pointer-events-none"></div>
+                                  </div>
 
-                                  const prevEvent = hasPrev ? sortedEvents[currentIndex - 1] : null;
-                                  const nextEvent = hasNext ? sortedEvents[currentIndex + 1] : null;
+                                  {/* Events for this date */}
+                                  <div className="space-y-6 px-4 md:px-8 py-6">
+                                    {events.map((event: any, index: number) => {
+                                      const isRight = index % 2 === 0;
+                                      const dotSize = Math.max(12, Math.min(24, (event.importance || 50) / 4));
+                                      const isImportant = (event.importance || 0) > 75;
 
-                                  return (
-                                    <>
-                                      {/* Ghost Prev (Hidden by default, shown by JS when dragging Right) */}
-                                      {prevEvent && (
-                                        <CardContent
-                                          eventData={prevEvent}
-                                          isGhost={true}
-                                          forwardedRef={ghostPrevRef}
-                                          style={{ visibility: 'hidden' }}
-                                        />
-                                      )}
+                                      return (
+                                        <div key={event._id} className={`relative flex md:items-center ${isRight ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row ml-8 md:ml-0`}>
+                                          <div className="hidden md:block flex-1"></div>
 
-                                      {/* Ghost Next (Hidden by default, shown by JS when dragging Left) */}
-                                      {nextEvent && (
-                                        <CardContent
-                                          eventData={nextEvent}
-                                          isGhost={true}
-                                          forwardedRef={ghostNextRef}
-                                          style={{ visibility: 'hidden' }}
-                                        />
-                                      )}
+                                          {/* Center Node */}
+                                          <div className="absolute left-[-2rem] md:left-1/2 flex items-center justify-center w-8 h-8 transform md:-translate-x-1/2 z-10">
+                                            <div
+                                              className={`rounded-full border-2 border-riso-paper shadow-sm transition-all hover:scale-125 cursor-pointer
+                                                ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}
+                                                ${isImportant ? 'animate-pulse ring-2 ring-offset-2 ring-riso-accent' : ''}`}
+                                              style={{ width: dotSize * 1.5, height: dotSize * 1.5 }}
+                                              onClick={() => setSelectedEvent(event)}
+                                            ></div>
+                                          </div>
 
-                                      {/* Active Card - Rendered ON TOP */}
-                                      <CardContent
-                                        eventData={selectedEvent}
-                                        forwardedRef={modalRef}
-                                        style={{
-                                          touchAction: 'pan-y',
-                                          willChange: 'transform, opacity',
-                                          animation: hasInteracted ? 'none' : undefined
-                                        }}
-                                        onClick={(e: any) => e.stopPropagation()}
-                                        onPointerDown={handlePointerDown}
-                                        onPointerMove={handlePointerMove}
-                                        onPointerUp={handlePointerUp}
-                                        onPointerCancel={handlePointerUp}
-                                      />
-                                    </>
-                                  );
-                                })()}
+                                          {/* Connector Line */}
+                                          <div className={`hidden md:block absolute top-1/2 h-px bg-riso-ink/20 w-8 md:w-16 ${isRight ? 'left-8 md:left-[calc(50%+1rem)]' : 'right-8 md:right-[calc(50%+1rem)]'}`}></div>
+
+                                          {/* Event Card */}
+                                          <div className={`flex-1 ${isRight ? 'md:pl-12' : 'md:pr-12'}`}>
+                                            <div
+                                              className={`relative bg-riso-paper p-3 rounded-sm border hover:shadow-lg transition-all cursor-pointer group
+                                                ${isImportant ? 'border-riso-accent border-2' : 'border-riso-ink/20 dashed-border-sm'}`}
+                                              onClick={() => setSelectedEvent(event)}
+                                            >
+                                              <div className="flex justify-between items-start mb-1">
+                                                <span className={`font-mono text-[10px] uppercase font-bold px-1.5 py-0.5 rounded text-white ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}`}>
+                                                  {event.category}
+                                                </span>
+                                                <span className="font-mono text-[10px] opacity-50">
+                                                  {event.timeOfDay || 'All Day'}
+                                                </span>
+                                              </div>
+
+                                              <h4 className={`font-bold leading-tight mb-1 group-hover:text-blue-700 transition-colors ${lang === 'kh' || lang === 'th' ? 'text-base font-serif' : 'text-sm font-display uppercase tracking-wide'}`}>
+                                                {(() => {
+                                                  if (lang === 'th' && event.titleTh) return event.titleTh;
+                                                  if (lang === 'kh' && event.titleKh) return event.titleKh;
+                                                  return event.title;
+                                                })()}
+                                              </h4>
+
+                                              <p className={`line-clamp-2 opacity-70 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
+                                                {(() => {
+                                                  if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
+                                                  if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
+                                                  return event.description;
+                                                })()}
+                                              </p>
+
+                                              {event.sources && event.sources.length > 0 && (
+                                                <div className="mt-2 flex items-center gap-1">
+                                                  <div className="flex -space-x-1">
+                                                    {[...Array(Math.min(3, event.sources.length))].map((_, i) => (
+                                                      <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-mono">📄</div>
+                                                    ))}
+                                                  </div>
+                                                  <span className="text-[9px] font-mono opacity-50">+{event.sources.length} Sources</span>
+                                                </div>
+                                              )}
+
+                                              <div className={`absolute top-1/2 w-2 h-2 bg-riso-ink rounded-full ${isRight ? '-left-1' : '-right-1'} transform -translate-y-1/2 hidden md:block opacity-20`}></div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {timelineDates.length === 0 && (
+                              <div className="flex flex-col items-center justify-center py-20 opacity-50">
+                                <div className="w-16 h-16 border-2 border-dashed border-riso-ink rounded-full flex items-center justify-center mb-4">
+                                  <span className="text-2xl">?</span>
+                                </div>
+                                <p className="font-mono text-sm">No confirmed reports.</p>
                               </div>
-                            </div>
-                          );
-                        })()}
+                            )}
 
-                        {/* Legend - OUTSIDE the timeline flex container, fixed at bottom */}
-                        <div className="flex-shrink-0 flex justify-center gap-8 py-3 px-4 border-t border-riso-ink/10">
+                          </div>
+                        </div>
+
+                        {/* Legend - Fixed at bottom */}
+                        <div className="flex-none flex justify-center gap-6 py-2 border-t border-riso-ink/10 bg-riso-ink/5 text-[10px] font-mono">
                           {Object.entries({
                             military: 'bg-red-500',
                             diplomatic: 'bg-blue-500',
@@ -2476,15 +2395,159 @@ export default function Home() {
                             political: 'bg-purple-500'
                           }).map(([cat, color]) => (
                             <div key={cat} className="flex items-center gap-2">
-                              <div className={`w-3 h-3 rounded-full ${color}`}></div>
-                              <span className="text-[10px] font-mono uppercase tracking-widest opacity-60">{cat}</span>
+                              <div className={`w-2 h-2 rounded-full ${color}`}></div>
+                              <span className="uppercase opacity-60">{cat}</span>
                             </div>
                           ))}
                         </div>
-                      </>
-                    )
-                    }
+                      </div>
+                    )}
                   </Card>
+
+                  {/* --- MODAL (Kept outside loop but assumes selectedEvent is global in this scope) --- */}
+                  {/* Event Details Modal - Bottom Sheet with Swipe logic preserved */}
+                  {selectedEvent && (() => {
+                    const getEventTitle = (event: any) => {
+                      if (lang === 'th' && event.titleTh) return event.titleTh;
+                      if (lang === 'kh' && event.titleKh) return event.titleKh;
+                      return event.title;
+                    };
+                    const getEventDescription = (event: any) => {
+                      if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
+                      if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
+                      return event.description;
+                    };
+                    const categoryColors: Record<string, string> = {
+                      military: 'bg-red-500',
+                      diplomatic: 'bg-blue-500',
+                      humanitarian: 'bg-yellow-500',
+                      political: 'bg-purple-500',
+                    };
+
+                    return (
+                      <div
+                        className="fixed inset-0 z-[100] flex items-end md:items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm modal-backdrop"
+                        onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+                        onKeyDown={handleKeyDown}
+                        tabIndex={0}
+                        ref={(el) => el?.focus()}
+                      >
+                        <div className="relative flex items-center w-full max-w-lg">
+                          {/* Desktop Nav Arrows */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); animateSwipe('prev'); }}
+                            disabled={!hasPrev}
+                            className={`hidden md:flex absolute -left-16 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all z-10 ${hasPrev ? 'hover:bg-white hover:scale-110' : 'opacity-30 cursor-not-allowed'}`}
+                          >
+                            <span className="text-2xl">←</span>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); animateSwipe('next'); }}
+                            disabled={!hasNext}
+                            className={`hidden md:flex absolute -right-16 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all z-10 ${hasNext ? 'hover:bg-white hover:scale-110' : 'opacity-30 cursor-not-allowed'}`}
+                          >
+                            <span className="text-2xl">→</span>
+                          </button>
+
+                          {/* SWIPEABLE CONTENT WRAPPER */}
+                          {(() => {
+                            // Simple internal component to avoid repetition
+                            const CardContent = ({ eventData, isGhost = false, style, forwardedRef, ...props }: any) => {
+                              if (!eventData) return null;
+                              return (
+                                <div
+                                  ref={forwardedRef}
+                                  className={`bg-[#F2F2E9] w-full max-h-[85vh] md:max-h-[90vh] overflow-y-auto rounded-2xl md:rounded-lg border-4 border-riso-ink shadow-xl flex flex-col ${isGhost ? 'absolute inset-0 z-0 pointer-events-none' : 'relative z-10 shadow-2xl'}`}
+                                  style={style}
+                                  {...props}
+                                >
+                                  {/* Mobile Hande */}
+                                  <div className="md:hidden flex flex-col items-center pt-6 pb-4 sticky top-0 bg-[#F2F2E9] z-20 cursor-grab active:cursor-grabbing select-none" style={{ touchAction: 'none' }}>
+                                    <div className="w-16 h-2 bg-riso-ink/40 rounded-full mb-3 pointer-events-none"></div>
+                                    <span className="font-mono text-[10px] opacity-50 font-bold pointer-events-none">
+                                      {sortedEvents.indexOf(eventData) + 1}/{sortedEvents.length} • {isGhost ? 'NEXT' : 'DRAG TO CLOSE'}
+                                    </span>
+                                  </div>
+
+                                  {/* Header */}
+                                  <div className="bg-riso-ink text-riso-paper p-4 flex justify-between items-start sticky top-0 z-10 cursor-grab active:cursor-grabbing" style={{ touchAction: 'none' }}>
+                                    <div className="pointer-events-none">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-[10px] font-mono tracking-[0.2em] uppercase opacity-70">INTEL REPORT</span>
+                                        <div className={`w-2 h-2 rounded-full ${isGhost ? 'bg-gray-500' : 'bg-red-500 animate-pulse'}`}></div>
+                                      </div>
+                                      <h3 className={`font-display text-2xl leading-tight ${lang === 'th' ? 'font-bold' : ''}`}>
+                                        {getEventTitle(eventData)}
+                                      </h3>
+                                    </div>
+                                    <button onClick={(e) => { e.stopPropagation(); closeModal(); }} className="p-1 hover:bg-white/10 rounded-full transition-colors pointer-events-auto">
+                                      <XIcon className="w-6 h-6" />
+                                    </button>
+                                  </div>
+
+                                  {/* Body */}
+                                  <div className="p-4 md:p-6 space-y-6 flex-1">
+                                    {/* Meta */}
+                                    <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
+                                      <div>
+                                        <p className="opacity-50 uppercase tracking-wider mb-1">DATE</p>
+                                        <p className="font-bold">{new Date(eventData.date).toLocaleDateString()}</p>
+                                      </div>
+                                      <div>
+                                        <p className="opacity-50 uppercase tracking-wider mb-1">IMPACT</p>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-bold">{eventData.importance}/100</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Desc */}
+                                    <p className="font-serif text-base leading-relaxed text-gray-800">
+                                      {getEventDescription(eventData)}
+                                    </p>
+
+                                    {/* Sources */}
+                                    {eventData.sources?.length > 0 && (
+                                      <div className="space-y-2">
+                                        <p className="font-mono text-[10px] uppercase opacity-50">SOURCES</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {eventData.sources.map((s: any, idx: number) => (
+                                            <span key={idx} className="inline-block px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono">
+                                              {s.name} ({s.credibility}%)
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            };
+
+                            const prevEvent = hasPrev ? sortedEvents[currentIndex - 1] : null;
+                            const nextEvent = hasNext ? sortedEvents[currentIndex + 1] : null;
+
+                            return (
+                              <>
+                                {prevEvent && <CardContent eventData={prevEvent} isGhost={true} forwardedRef={ghostPrevRef} style={{ visibility: 'hidden' }} />}
+                                {nextEvent && <CardContent eventData={nextEvent} isGhost={true} forwardedRef={ghostNextRef} style={{ visibility: 'hidden' }} />}
+                                <CardContent
+                                  eventData={selectedEvent}
+                                  forwardedRef={modalRef}
+                                  style={{ touchAction: 'pan-y', willChange: 'transform, opacity' }}
+                                  onClick={(e: any) => e.stopPropagation()}
+                                  onPointerDown={handlePointerDown}
+                                  onPointerMove={handlePointerMove}
+                                  onPointerUp={handlePointerUp}
+                                  onPointerCancel={handlePointerUp}
+                                />
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </>
             )
