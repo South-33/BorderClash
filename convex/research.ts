@@ -276,7 +276,7 @@ Please output the FIXED JSON wrapped in <json> tags:
 
 export const pingGhostAPI = internalAction({
     args: {},
-    handler: async (): Promise<void> => {
+    handler: async (ctx): Promise<void> => {
         try {
             // 1. Health check ping (keeps Koyeb instance awake)
             const response = await fetch(`${GHOST_API_URL}/health`, {
@@ -291,7 +291,14 @@ export const pingGhostAPI = internalAction({
                 console.log(`⚠️ [KEEPALIVE] Ghost API ping failed: ${response.status}`);
             }
 
-            // 2. Cookie refresh (harvests fresh cookies and revives dead workers)
+            // 2. Check if system is busy before doing cookie refresh
+            const systemStats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+            if (systemStats?.systemStatus === 'syncing') {
+                console.log(`⏸️ [KEEPALIVE] Skipping cookie refresh - system is syncing`);
+                return;
+            }
+
+            // 3. Cookie refresh (harvests fresh cookies and revives dead workers)
             try {
                 const refreshResponse = await fetch(`${GHOST_API_URL}/v1/refresh`, {
                     method: "POST",
