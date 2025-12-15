@@ -1402,7 +1402,11 @@ The following was the previous analysis. Use it for context, but DO NOT be shack
 [PREVIOUS POSTURE]: Cambodia=${prevCambodia?.militaryPosture}, Thailand=${prevThailand?.militaryPosture}
 `;
 
-        const prompt: string = `You are a senior geopolitical analyst providing NEUTRAL, RESPECTFUL summaries of each country's perspective. Your job is to synthesize multiple news sources into a balanced situation report that readers from ALL countries would find fair.
+        const prompt: string = `You are a senior geopolitical analyst providing NEUTRAL but SHARP analysis. You have TWO roles:
+
+🎯 FOR CAMBODIA/THAILAND SECTIONS: Provide RESPECTFUL summaries of each country's perspective - what their media reports, how they frame things.
+
+⚖️ FOR THE NEUTRAL SECTION: BE A REFEREE. You're the guy calling out BS, flagging obvious spin, and pointing out when the numbers don't add up. You're fair but you're NOT a pushover. If someone's lying or exaggerating, you say it. Think sports commentator calling a bad call: assertive, clear, no diplomatic fluff.
 
 📰 CONTEXT - HOW THESE ARTICLES WERE COLLECTED:
 - CAMBODIAN SOURCES: Domestic news that Cambodian civilians read (Fresh News, DAP, VOD, Phnom Penh Post, etc.)
@@ -1561,10 +1565,10 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Based on X corroborating sources, Y contradict"
   },
   "neutral": {
-    "generalSummary": "3-4 sentences. Synthesized view from ALL sources (not just international).",
-    "generalSummaryEn": "English version",
-    "generalSummaryTh": "Thai translation",
-    "generalSummaryKh": "Khmer translation",
+    "generalSummary": "3-4 sentences. BE A REFEREE - call out BS, contradictions, and spin from BOTH sides. Don't just summarize, JUDGE. Point out when numbers don't add up, when claims are contradicted, when something smells like propaganda. Be direct and punchy.",
+    "generalSummaryEn": "English version - same referee energy, call out discrepancies directly",
+    "generalSummaryTh": "Thai translation - keep the direct, no-BS tone",
+    "generalSummaryKh": "Khmer translation - maintain sharp referee voice",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
     "keyEvents": [
       "3-5 SHORT headlines, MAX 15 words each!",
@@ -1575,9 +1579,9 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "keyEventsEn": ["Short headlines in English - max 15 words each"],
     "keyEventsTh": ["หัวข้อสั้นๆ ไม่เกิน 15 คำ"],
     "keyEventsKh": ["ចំណងជើងខ្លី មិនលើស 15 ពាក្យ"],
-    "discrepancies": "Where do different reports differ? Note disputed claims.",
+    "discrepancies": "List SPECIFIC contradictions between sources. Don't be diplomatic - say which version is more believable and WHY.",
     "confidence": 75,
-    "confidenceRationale": "How sure are we? What's uncertain?"
+    "confidenceRationale": "How sure are we? What's uncertain? What smells fishy?"
   }
 }
 </json>
@@ -2165,13 +2169,13 @@ Your job is to maintain ACCURATE, STABLE statistics - NOT to invent changes.
 - Accuracy and stability matter MORE than frequent updates
 
 📊 CURRENT DASHBOARD STATS (from previous update):
-┌─────────────────────────────────────────────┐
-│ Conflict Level: ${prevStats?.conflictLevel || "UNKNOWN"}
-│ Casualties: ${prevStats?.casualtyCount || 0}
-│ Displaced: ${prevStats?.displacedCount || 0} (Trend: ${prevStats?.displacedTrend || 0}%)
-│ Civilian Injured: ${prevStats?.civilianInjuredCount || 0}
-│ Military Injured: ${prevStats?.militaryInjuredCount || 0}
-└─────────────────────────────────────────────┘
+
+Conflict Level: ${prevStats?.conflictLevel || "UNKNOWN"}
+Casualties: ${prevStats?.casualtyCount || 0}
+Displaced: ${prevStats?.displacedCount || 0} (Trend: ${prevStats?.displacedTrend || 0}%)
+Civilian Injured: ${prevStats?.civilianInjuredCount || 0}
+Military Injured: ${prevStats?.militaryInjuredCount || 0}
+
 
 ═══════════════════════════════════════════════════════════════
 📜 TIMELINE (VERIFIED EVENTS - PRIMARY SOURCE):

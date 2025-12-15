@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } fr
 import { useQuery, useMutation, useConvex } from 'convex/react';
 import { FunctionReference } from 'convex/server';
 import { api } from '../../convex/_generated/api';
+import { Swords, Handshake, Heart, Landmark, Circle } from 'lucide-react';
 
 // --- Icon Components ---
 const IconBase = ({ children, className = "", ...props }: any) => (
@@ -197,6 +198,11 @@ const TRANSLATIONS = {
     dfTip3: "Use reverse image search to find the original context.",
     credibilityScore: "UNDERSTANDING CREDIBILITY",
     credibilityDesc: "Scores (0-100%) reflect source reliability and cross-verification. Scores <50% likely indicate propaganda or unverified rumors.",
+    // Categories
+    cat_military: "MILITARY",
+    cat_diplomatic: "DIPLOMATIC",
+    cat_humanitarian: "HUMANITARIAN",
+    cat_political: "POLITICAL",
     // Military Posture Context
     postureGaugeTitle: "MILITARY POSTURE",
     territoryOwn: "Own Territory",
@@ -260,19 +266,23 @@ const TRANSLATIONS = {
     sourceGov: "GOVT: Official statements (Usually biased/PR).",
     sourceMedia: "MEDIA: News outlets (Check who owns them).",
     sourceAgency: "AGENCY: Wire services like Reuters/AP (More neutral).",
+    // Country labels
+    labelKH: "KH",
+    labelINTL: "INTL",
+    labelTH: "TH",
   },
   th: {
     officialNarrative: "มุมมองจากทางการ",
     militaryIntensity: "สถานการณ์ความตึงเครียด",
     peaceful: "เหตุการณ์ปกติ",
     defensive: "เตรียมพร้อม/ตั้งรับ",
-    aggressive: "ปะทะ/ตึงเครียด",
+    aggressive: "เดือด", // Matches 'Kach' (Fierce) - Short for UI
     intelligenceLog: "ข่าวกรองล่าสุด",
     items: "รายการ",
     noArticles: "ยังไม่มีข้อมูล",
     noArticlesFiltered: "ไม่พบบทความในหมวดนี้",
-    damageAssessment: "ประเมินความเสียหาย (โดยประมาณ)",
-    displacedCivilians: "ชาวบ้านที่ต้องอพยพ",
+    damageAssessment: "สรุปความเสียหาย", // Simplified
+    displacedCivilians: "ชาวบ้านพลัดถิ่น", // Matches 'Relocated citizens' nuance
     civilianInjuries: "ชาวบ้านบาดเจ็บ",
     propertyDamaged: "ทรัพย์สินเสียหาย",
     status: "สถานะ",
@@ -341,7 +351,7 @@ const TRANSLATIONS = {
     checkDates: "ดูวันที่ดีๆ ข่าวเก่าเล่าใหม่หรือเปล่า",
     emotionalManipulation: "ระวังข่าวที่เขียนปลุกอารมณ์โกรธ/เกลียด",
     propagandaWarning: "สัญญาณจับผิดโฆษณาชวนเชื่อ",
-    propagandaWarningDesc: "ระวัง: ใช้คำดราม่าล้นๆ, ป้ายสีอีกฝั่งเป็นตัวร้าย, ไม่มีหลักฐานชัดเจน, พูดซ้ำๆ แต่ไม่มีเนื้อหา, ปลุกระดมให้รักชาติ/เกลียดชังแทนที่จะพูดด้วยเหตุผล",
+    propagandaWarningDesc: "ระวังโพสต์ยั่วโมโห หวังยอด Like และ Share", // Social media context
     systemDisclaimer: "ระบบนี้พยายามเป็นกลางที่สุด แต่คุณต้องใช้วิจารณญาณตัวเองด้วย",
     incident: "เหตุการณ์",
     image: "รูปภาพ",
@@ -360,8 +370,13 @@ const TRANSLATIONS = {
     dfTip1: "สังเกตจุดแปลกๆ (นิ้วมือ, แววตา, ตัวหนังสือเบี้ยว)",
     dfTip2: "เช็คว่ามีสำนักข่าวหลักรายงานเรื่องนี้ไหม",
     dfTip3: "ลองเอารูปไปค้นหาต้นฉบับ (Reverse Image Search)",
-    credibilityScore: "คะแนนความน่าเชื่อถือดูยังไง?",
+    credibilityScore: "คะแนนพวกนี้บอกอะไร?", // Casual
     credibilityDesc: "คะแนน (0-100%) คือความชัวร์ของข่าว ถ้าต่ำกว่า 50% คือเสี่ยงเป็นข่าวโคมลอย หรือข่าวปั่น",
+    // Categories
+    cat_military: "การทหาร",
+    cat_diplomatic: "การทูต",
+    cat_humanitarian: "มนุษยธรรม",
+    cat_political: "การเมือง",
     // Military Posture Context
     postureGaugeTitle: "ท่าทีของกองทัพ",
     territoryOwn: "ในเขตแดนตนเอง",
@@ -425,19 +440,23 @@ const TRANSLATIONS = {
     sourceGov: "รัฐบาล: แถลงการณ์ทางการ (มักจะอวยตัวเอง)",
     sourceMedia: "สื่อ: ข่าวทั่วไป (ต้องดูว่าเจ้าของสื่อเป็นใคร)",
     sourceAgency: "สำนักข่าวตปท.: พวก Reuters/AP (เป็นกลางกว่า)",
+    // Country labels
+    labelKH: "กัมพูชา",
+    labelINTL: "ตปท.",
+    labelTH: "ไทย",
   },
   kh: {
     officialNarrative: "គោលជំហរផ្លូវការ", // View of govt - natural
     militaryIntensity: "ស្ថានភាពនៅព្រំដែន", // Situation at border - natural
     peaceful: "ធម្មតា", // Normal
     defensive: "ការពារ", // Defend
-    aggressive: "កាច", // Tense
+    aggressive: "កាច", // Tense - kept short as requested
     intelligenceLog: "ព័ត៌មានថ្មីៗ", // Recent news
     items: "អត្ថបទ",
     noArticles: "មិនទាន់មានព័ត៌មាន",
     noArticlesFiltered: "មិនមានអត្ថបទក្នុងផ្នែកនេះទេ",
-    damageAssessment: "ការវាយតម្លៃការខូចខាត (ប៉ាន់ស្មាន)",
-    displacedCivilians: "ពលរដ្ឋដែលភៀសខ្លួន", // Citizens who fled
+    damageAssessment: "ការខូចខាតសរុប", // Total damage - Simplified
+    displacedCivilians: "ពលរដ្ឋដែលបានផ្លាស់​ទីលំនៅ", // Citizen relocation
     civilianInjuries: "ពលរដ្ឋរងរបួស",
     propertyDamaged: "ទ្រព្យសម្បត្តិខូចខាត",
     status: "ស្ថានភាព",
@@ -488,7 +507,7 @@ const TRANSLATIONS = {
     civilian: "ពលរដ្ឋ",
     military: "ទាហាន",
     fromLastWeek: "ពីសប្តាហ៍មុន",
-    lastUpdated: "អាប់ដេតចុងក្រោយ",
+    lastUpdated: "អាប់ដេតចុងក្រោយ ",
     estimated: "ប៉ាន់ស្មាន",
     noChange: "នៅដដែល",
     visualDamageAssessment: "រូបភាពការខូចខាត",
@@ -506,7 +525,7 @@ const TRANSLATIONS = {
     checkDates: "មើលកាលបរិច្ឆេទ ក្រែងលោរឿងចាស់",
     emotionalManipulation: "ប្រយ័ត្នព័ត៌មានដែលធ្វើឱ្យខឹងឬស្អប់",
     propagandaWarning: "សញ្ញានៃការឃោសនា",
-    propagandaWarningDesc: "ប្រយ័ត្ន៖ ប្រើពាក្យលើសៗ, ថាគេអាក្រក់ដាក់យើងល្អ, គ្មានភស្តុតាង, និយាយដដែលៗ, យកជាតិនិយមមកនិយាយជំនួសហេតុផល",
+    propagandaWarningDesc: "សង្ស័យការបង្ហោះដែលបង្កកំហឹង ដើម្បីទាក់ទាញ like និង share",
     systemDisclaimer: "ប្រព័ន្ធនេះព្យាយាមនៅកណ្តាល ប៉ុន្តែអ្នកត្រូវគិតពិចារណាដោយខ្លួនឯង។",
     incident: "ហេតុការណ៍",
     image: "រូបភាព",
@@ -527,6 +546,11 @@ const TRANSLATIONS = {
     dfTip3: "សាកយករូបទៅស្វែងរកក្នុង Google (Reverse Image Search)",
     credibilityScore: "តើពិន្ទុភាពជឿជាក់គឺជាអ្វី?",
     credibilityDesc: "ពិន្ទុ (0-100%) គឺបញ្ជាក់ថាព័ត៌មាននេះគួរឱ្យទុកចិត្តប៉ុណ្ណា។ បើក្រោម 50% ប្រហែលជាព័ត៌មានមិនពិត ឬពាក្យចចាមអារ៉ាម។",
+    // Categories
+    cat_military: "យោធា",
+    cat_diplomatic: "ការទូត",
+    cat_humanitarian: "មនុស្សធម៌",
+    cat_political: "នយោបាយ",
     // Military Posture Context
     postureGaugeTitle: "ជំហរយោធា",
     territoryOwn: "ទឹកដីខ្លួនឯង",
@@ -538,7 +562,7 @@ const TRANSLATIONS = {
     historicalTimeline: "កាលប្បវត្តិប្រតិបត្តិការ", // Operational Timeline
     noTimelineEvents: "មិនទាន់មានរបាយការណ៍ចារកម្ម",
     runHistorian: "កំពុងប្រមូលទិន្នន័យ...",
-    impact: "ផលប៉ះពាល់",
+    impact: "សារៈសំខាន់",
     sourcesLower: "ប្រភព",
     peaceWar: "សន្តិភាព / សង្គ្រាម",
     thBase: "មូលដ្ឋានថៃ",
@@ -567,8 +591,8 @@ const TRANSLATIONS = {
     hide: "លាក់",
     show: "បង្ហាញ",
     moreSources: "ប្រភពបន្ថែម",
-    prev: "មុន",
-    next: "បន្ទាប់",
+    prev: "ថយក្រោយ",
+    next: "ទៅមុខ",
     navHint: "ប្រើប៊ូតុង ← → ដើម្បីប្តូរទំព័រ",
     reports: "របាយការណ៍",
     sources: "ប្រភព",
@@ -582,7 +606,7 @@ const TRANSLATIONS = {
     propaganda1: "ព័ត៌មានបំប៉ោង: ប្រើពាក្យលើសៗ (វីរបុរស, ជនក្បត់ជាតិ, អាក្រក់)។",
     fact2: "ការពិត: មានរូប មានភស្តុតាង ប្រាប់ប្រភពច្បាស់លាស់។",
     propaganda2: "ព័ត៌មានបំប៉ោង: ថា 'គេប្រាប់ថា' តែមិនប្រាប់ថាជាអ្នកណា។",
-    understandingScores: "ពិន្ទុទាំងនេះមានន័យថាម៉េច?",
+    understandingScores: "ពិន្ទុទាំងនេះប្រាប់អីខ្លះ?",
     scoreHigh: "70-100% (ច្បាស់): សារព័ត៌មានច្រើនចុះដូចគ្នា ជឿបាន។",
     scoreMid: "40-69% (ស្តាប់បានខ្លះ): ព័ត៌មានមិនទាន់ច្បាស់ ប្រភពនិយាយមិនត្រូវគ្នា។",
     scoreLow: "0-39% (មិនពិត): ពាក្យចចាមអារ៉ាម ព័ត៌មានបំប៉ោង កុំអាលចែករំលែកត។",
@@ -590,6 +614,10 @@ const TRANSLATIONS = {
     sourceGov: "រដ្ឋាភិបាល: សេចក្តីប្រកាសផ្លូវការ (ភាគច្រើននិយាយល្អពីខ្លួនឯង)។",
     sourceMedia: "សារព័ត៌មាន: ព័ត៌មានទូទៅ (មើលថានរណាជាម្ចាស់ផង)។",
     sourceAgency: "ទីភ្នាក់ងារបរទេស: ដូចជា Reuters/AP (មានភាពកណ្តាលជាង)។",
+    // Country labels
+    labelKH: "កម្ពុជា",
+    labelINTL: "អន្តរជាតិ",
+    labelTH: "ថៃ",
   }
 };
 
@@ -856,7 +884,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
       </div>
 
       {/* Title - use language-specific title if available */}
-      <p className="leading-snug font-semibold">
+      <p className={`font-semibold ${lang === 'kh' ? 'font-mono leading-relaxed' : lang === 'th' ? 'font-mono leading-snug' : 'leading-snug'}`}>
         {lang === 'th' && article.titleTh ? article.titleTh :
           lang === 'kh' && article.titleKh ? article.titleKh :
             article.titleEn || article.title}
@@ -878,7 +906,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
       {isExpanded && (
         <div className="mt-3 pt-3 border-t border-riso-ink/10 space-y-3">
           {/* Summary */}
-          <p className="text-xs opacity-80 leading-relaxed">
+          <p className={`text-xs opacity-80 ${lang === 'kh' ? 'leading-relaxed' : lang === 'th' ? 'leading-relaxed' : 'leading-relaxed'}`}>
             {lang === 'th' && article.summaryTh ? article.summaryTh :
               lang === 'kh' && article.summaryKh ? article.summaryKh :
                 article.summaryEn || article.summary}
@@ -1676,10 +1704,7 @@ export default function Home() {
     return meta.keyEventsEn || meta.keyEvents || [];
   };
 
-  const TH_MONTHS_SHORT = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
-  ];
+
 
   // Helper to format dates correctly for all languages (fixing Chrome/Khmer issues)
   const formatDate = (dateInput: string | number | Date, formatStr: 'short' | 'long' | 'weekday' = 'long') => {
@@ -1767,9 +1792,19 @@ export default function Home() {
                       className={`rounded-full border-2 border-riso-paper shadow-sm transition-all hover:scale-125 cursor-pointer
                         ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}
                         ${isImportant ? 'animate-pulse ring-2 ring-offset-1 md:ring-offset-2 ring-riso-accent' : ''}
-                        w-4 h-4 md:w-5 md:h-5`}
+                        w-6 h-6 md:w-8 md:h-8 flex items-center justify-center`}
                       onClick={() => setSelectedEvent(event)}
-                    ></div>
+                    >
+                      {(() => {
+                        const cat = event.category?.toLowerCase();
+                        const IconClass = "w-3 h-3 md:w-4 md:h-4 text-white drop-shadow-sm";
+                        if (cat === 'military') return <Swords className={IconClass} />;
+                        if (cat === 'diplomatic') return <Handshake className={IconClass} />;
+                        if (cat === 'humanitarian') return <Heart className={IconClass} />;
+                        if (cat === 'political') return <Landmark className={IconClass} />;
+                        return null;
+                      })()}
+                    </div>
                   </div>
 
                   {/* Connector Line */}
@@ -1783,15 +1818,15 @@ export default function Home() {
                       onClick={() => setSelectedEvent(event)}
                     >
                       <div className="flex justify-between items-start mb-1">
-                        <span className={`font-mono text-[10px] uppercase font-bold px-1.5 py-0.5 rounded text-white ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}`}>
-                          {event.category}
+                        <span className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[13px] font-semibold' : 'text-[10px] font-bold uppercase'} ${lang === 'kh' ? 'leading-relaxed py-1' : 'py-0.5'} px-1.5 rounded text-white ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}`}>
+                          {t[`cat_${event.category?.toLowerCase()}` as keyof typeof t] || event.category}
                         </span>
                         <span className="font-mono text-[10px] opacity-50">
                           {event.timeOfDay || 'All Day'}
                         </span>
                       </div>
 
-                      <h4 className={`font-bold leading-tight mb-1 group-hover:text-blue-700 transition-colors ${lang === 'kh' || lang === 'th' ? 'text-base font-serif' : 'text-sm font-display uppercase tracking-wide'}`}>
+                      <h4 className={`font-bold leading-tight mb-1 group-hover:text-blue-700 transition-colors ${lang === 'kh' ? 'text-base font-mono leading-relaxed' : lang === 'th' ? 'text-base font-mono' : 'text-sm font-display uppercase tracking-wide'}`}>
                         {(() => {
                           if (lang === 'th' && event.titleTh) return event.titleTh;
                           if (lang === 'kh' && event.titleKh) return event.titleKh;
@@ -1799,7 +1834,7 @@ export default function Home() {
                         })()}
                       </h4>
 
-                      <p className={`line-clamp-2 opacity-70 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
+                      <p className={`line-clamp-2 opacity-70 ${lang === 'kh' ? 'text-sm leading-relaxed' : lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
                         {(() => {
                           if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
                           if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
@@ -1920,15 +1955,15 @@ export default function Home() {
               <div className="flex justify-between text-[10px] font-mono font-bold pt-1.5">
                 <span className="flex items-center gap-1.5 text-[#032EA1]">
                   <span className="w-2 h-2 bg-[#032EA1] rounded-full"></span>
-                  KH {articleCounts?.cambodia || 0}
+                  {t.labelKH} {articleCounts?.cambodia || 0}
                 </span>
                 <span className="flex items-center gap-1.5 text-gray-600">
                   <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                  INTL {articleCounts?.international || 0}
+                  {t.labelINTL} {articleCounts?.international || 0}
                 </span>
                 <span className="flex items-center gap-1.5 text-[#241D4F]">
                   <span className="w-2 h-2 bg-[#241D4F] rounded-full"></span>
-                  TH {articleCounts?.thailand || 0}
+                  {t.labelTH} {articleCounts?.thailand || 0}
                 </span>
               </div>
             </div>
@@ -2093,9 +2128,15 @@ export default function Home() {
                         <span className="font-display text-5xl md:text-6xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString()}</span>
                       </div>
                       {/* Trend Indicator - Show last updated instead */}
-                      <div className="text-[10px] font-mono opacity-50 uppercase tracking-wider">
+                      <div className={`font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-xs' : 'text-[10px]'}`}>
                         {dashboardStats?.lastUpdatedAt ? (
-                          <span>{t.lastUpdated}: {new Date(dashboardStats.lastUpdatedAt).toLocaleDateString(lang === 'th' ? 'th-TH' : lang === 'kh' ? 'km-KH' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>{t.lastUpdated}: {(() => {
+                            const d = new Date(dashboardStats.lastUpdatedAt);
+                            const day = d.getDate();
+                            const month = lang === 'kh' ? KH_MONTHS[d.getMonth()] : lang === 'th' ? TH_MONTHS_SHORT[d.getMonth()] : d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+                            const time = d.toLocaleTimeString(lang === 'th' ? 'th-TH' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+                            return `${month} ${day}, ${time}`;
+                          })()}</span>
                         ) : (
                           <span>{t.estimated}</span>
                         )}
@@ -2161,10 +2202,10 @@ export default function Home() {
                     <div className="flex-1 flex flex-col space-y-4 min-h-0">
                       {/* Official Narrative */}
                       <div>
-                        <h4 className="font-mono text-xs font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1">{t.officialNarrative}</h4>
+                        <h4 className="font-mono text-[12px] font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1">{t.officialNarrative}</h4>
                         {getNarrative(cambodiaMeta) ? (
                           <>
-                            <p className={`font-serif italic leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                            <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[17px] font-mono leading-relaxed' : lang === 'th' ? 'text-[17px] font-mono' : 'text-base font-serif'}`}>
                               "{getNarrative(cambodiaMeta)}"
                             </p>
                             <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta.narrativeSource || t.aiAnalysis}</p>
@@ -2201,7 +2242,7 @@ export default function Home() {
                 </div>
 
                 {/* Section 3: Neutral Analysis (Center) - MASTER height */}
-                <div className="flex flex-col gap-4 self-start min-h-[600px]" id="neutral-master" ref={neutralRef}>
+                <div className="flex flex-col gap-4 self-start min-h-[400px] lg:min-h-[670px]" id="neutral-master" ref={neutralRef}>
                   <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
                     <Scale size={18} /> {t.neutralAI}
                   </div>
@@ -2222,7 +2263,7 @@ export default function Home() {
                         </p>
                       </div>
 
-                      <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                      <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
                         {getSummary(neutralMeta) || t.analyzingFeeds}
                       </div>
 
@@ -2255,7 +2296,7 @@ export default function Home() {
                         <h4 className="font-mono text-xs font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1">{t.officialNarrative}</h4>
                         {getNarrative(thailandMeta) ? (
                           <>
-                            <p className={`font-serif italic leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                            <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[17px] font-mono leading-relaxed' : lang === 'th' ? 'text-[17px] font-mono' : 'text-base font-serif'}`}>
                               "{getNarrative(thailandMeta)}"
                             </p>
                             <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta.narrativeSource || t.aiAnalysis}</p>
@@ -2364,19 +2405,6 @@ export default function Home() {
                         </div>
 
                         {/* Legend - Fixed at bottom */}
-                        <div className="flex-none flex flex-wrap justify-center gap-3 md:gap-6 py-2 px-2 border-t border-riso-ink/10 bg-riso-ink/5 text-[10px] font-mono">
-                          {Object.entries({
-                            military: 'bg-red-500',
-                            diplomatic: 'bg-blue-500',
-                            humanitarian: 'bg-yellow-500',
-                            political: 'bg-purple-500'
-                          }).map(([cat, color]) => (
-                            <div key={cat} className="flex items-center gap-1.5">
-                              <div className={`w-2 h-2 rounded-full ${color}`}></div>
-                              <span className="uppercase opacity-60">{cat}</span>
-                            </div>
-                          ))}
-                        </div>
                       </div>
                     )}
                   </Card>
@@ -2451,14 +2479,14 @@ export default function Home() {
                               </div>
                               <div>
                                 <p className="opacity-50 uppercase tracking-wider mb-1">{t.category}</p>
-                                <span className={`inline-block px-2 py-0.5 rounded text-white text-[10px] uppercase font-bold ${categoryColors[evt.category?.toLowerCase()] || 'bg-gray-500'}`}>
-                                  {evt.category}
+                                <span className={`inline-block px-2 rounded text-white font-bold ${categoryColors[evt.category?.toLowerCase()] || 'bg-gray-500'} ${lang === 'kh' ? 'text-[13px] font-semibold leading-relaxed py-1' : lang === 'th' ? 'text-[13px] font-semibold py-0.5' : 'text-[10px] uppercase py-0.5'}`}>
+                                  {t[`cat_${evt.category?.toLowerCase()}` as keyof typeof t] || evt.category}
                                 </span>
                               </div>
                             </div>
 
                             {/* Description */}
-                            <p className="font-serif text-base leading-relaxed text-gray-800">
+                            <p className={`text-base leading-relaxed text-gray-800 ${lang === 'kh' ? 'font-mono leading-relaxed' : lang === 'th' ? 'font-mono' : 'font-serif'}`}>
                               {getEventDescription(evt)}
                             </p>
 

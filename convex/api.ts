@@ -14,10 +14,11 @@ export const getNews = query({
     handler: async (ctx, args) => {
         const table = args.country === "thailand" ? "thailandNews" : "cambodiaNews";
         // Show both verified (active) and unverified articles
+        const limit = Math.min(args.limit ?? 50, 100);
         const articles = await ctx.db
             .query(table)
             .order("desc")
-            .take(args.limit ?? 50);
+            .take(limit);
         // Filter to only show active or unverified (not false, outdated, archived)
         return articles.filter(a => a.status === "active" || a.status === "unverified");
     },
@@ -31,10 +32,11 @@ export const getNewsSlim = query({
     },
     handler: async (ctx, args) => {
         const table = args.country === "thailand" ? "thailandNews" : "cambodiaNews";
+        const limit = Math.min(args.limit ?? 20, 100);
         const articles = await ctx.db
             .query(table)
             .order("desc")
-            .take(args.limit ?? 20);
+            .take(limit);
 
         // Map to slim object
         return articles
@@ -139,11 +141,12 @@ export const getTimeline = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
+        const limit = Math.min(args.limit ?? 200, 500);
         const events = await ctx.db
             .query("timelineEvents")
             .withIndex("by_date")
             .order("desc")
-            .take(args.limit ?? 200);
+            .take(limit);
         return events;
     },
 });
