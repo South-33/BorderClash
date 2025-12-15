@@ -1878,119 +1878,137 @@ export const runResearchCycle = internalAction({
 
         const errors: string[] = [];
 
-        // Step 1: Curate news (SEQUENTIAL to respect API rate limits - max 5 concurrent workers)
-        console.log("\n── STEP 1: NEWS CURATION ──");
-
+        // ===== MAIN CYCLE BODY - WRAPPED IN TRY-FINALLY TO ENSURE STATUS RESET =====
         try {
-            console.log("   > Curating Cambodia...");
-            await ctx.runAction(internal.research.curateCambodia, {});
-            await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
-        } catch (e) {
-            console.error("❌ [STEP 1] Cambodia Curation Failed:", e);
-            errors.push(`Cambodia: ${String(e)}`);
-        }
+            // Step 1: Curate news (SEQUENTIAL to respect API rate limits - max 5 concurrent workers)
+            console.log("\n── STEP 1: NEWS CURATION ──");
 
-        try {
-            console.log("   > Curating Thailand...");
-            await ctx.runAction(internal.research.curateThailand, {});
-            await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
-        } catch (e) {
-            console.error("❌ [STEP 1] Thailand Curation Failed:", e);
-            errors.push(`Thailand: ${String(e)}`);
-        }
-
-        try {
-            console.log("   > Curating International...");
-            await ctx.runAction(internal.research.curateInternational, {});
-            await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
-        } catch (e) {
-            console.error("❌ [STEP 1] International Curation Failed:", e);
-            errors.push(`International: ${String(e)}`);
-        }
-
-        // ABSOLUTE STOP CHECK: If curation failed completely, there's no point continuing
-        if (errors.length >= 3) {
-            console.error("🛑 ALL CURATION STEPS FAILED. Aborting cycle.");
-            await ctx.runMutation(internal.api.setStatus, { status: "error", errorLog: "Curation failed completely" });
-            return;
-        }
-
-        // Step 2: Source Verification - Verify URLs and content accuracy
-        console.log("\n── STEP 2: SOURCE VERIFICATION ──");
-        try {
-            console.log("   > Verifying article sources...");
-            const verifyResult = await ctx.runAction(internal.research.verifyAllSources, {});
-            console.log(`   ✅ Verified: ${verifyResult.verified}, Updated: ${verifyResult.updated}, Deleted: ${verifyResult.deleted}, Errors: ${verifyResult.errors}`);
-        } catch (e) {
-            console.error("❌ [STEP 2] Source Verification Failed:", e);
-            errors.push(`Verification: ${String(e)}`);
-            // Non-fatal - continue with historian even if verification fails
-        }
-
-        // Step 3: Historian Loop - Process ALL unprocessed articles
-        console.log("\n── STEP 3: HISTORIAN LOOP ──");
-        let historianLoops = 0;
-        const MAX_HISTORIAN_LOOPS = 20;  // Safety cap to prevent infinite loops
-        const MIN_TIME_FOR_ITERATION_MS = 90 * 1000; // Need at least 90s to start a new iteration
-
-        try {
-            while (historianLoops < MAX_HISTORIAN_LOOPS) {
-                // TIME BUDGET CHECK - Don't start new iteration if we're running low
-                const timeRemaining = getTimeRemainingMs();
-                if (timeRemaining < MIN_TIME_FOR_ITERATION_MS) {
-                    console.log(`   ⏰ Time budget low (${Math.round(timeRemaining / 1000)}s remaining) - stopping historian to ensure synthesis runs`);
-                    console.log(`   📋 Remaining articles will be processed in the next cycle`);
-                    break;
-                }
-
-                historianLoops++;
-                console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
-
-                const result = await ctx.runAction(internal.historian.runHistorianCycle, {});
-
-                // Check if historian found any articles to process
-                if (!result || result.processed === 0) {
-                    console.log("   ✅ Historian complete - no more articles to process");
-                    break;
-                }
-
-                console.log(`   Processed ${result.processed} articles, created ${result.eventsCreated} events`);
-
-                // Brief cooldown between iterations
-                await new Promise(resolve => setTimeout(resolve, 2000));
+            try {
+                console.log("   > Curating Cambodia...");
+                await ctx.runAction(internal.research.curateCambodia, {});
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
+            } catch (e) {
+                console.error("❌ [STEP 1] Cambodia Curation Failed:", e);
+                errors.push(`Cambodia: ${String(e)}`);
             }
 
-            if (historianLoops >= MAX_HISTORIAN_LOOPS) {
-                console.warn(`   ⚠️ Historian reached max iterations (${MAX_HISTORIAN_LOOPS})`);
+            try {
+                console.log("   > Curating Thailand...");
+                await ctx.runAction(internal.research.curateThailand, {});
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
+            } catch (e) {
+                console.error("❌ [STEP 1] Thailand Curation Failed:", e);
+                errors.push(`Thailand: ${String(e)}`);
             }
 
-            console.log(`   📊 Historian completed after ${historianLoops} iterations`);
-        } catch (e) {
-            console.error("❌ [STEP 3] Historian Failed:", e);
-            errors.push(`Historian: ${String(e)}`);
-        }
+            try {
+                console.log("   > Curating International...");
+                await ctx.runAction(internal.research.curateInternational, {});
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
+            } catch (e) {
+                console.error("❌ [STEP 1] International Curation Failed:", e);
+                errors.push(`International: ${String(e)}`);
+            }
 
-        // Step 4: Combined Synthesis
-        console.log("\n── STEP 4: SYNTHESIS ──");
-        try {
-            await ctx.runAction(internal.research.synthesizeAll, {});
-        } catch (e) {
-            console.error("❌ [STEP 4] Synthesis Failed:", e);
-            errors.push(`Synthesis: ${String(e)}`);
-        }
+            // ABSOLUTE STOP CHECK: If curation failed completely, there's no point continuing
+            if (errors.length >= 3) {
+                console.error("🛑 ALL CURATION STEPS FAILED. Aborting cycle.");
+                await ctx.runMutation(internal.api.setStatus, { status: "error", errorLog: "Curation failed completely" });
+                return;
+            }
 
-        // Final Status Update
-        if (errors.length === 0) {
-            await ctx.runMutation(internal.api.setStatus, { status: "online" });
-            console.log("═══════════════════════════════════════════════════════════════");
-            console.log("✅ RESEARCH CYCLE COMPLETE (SUCCESS)");
-            console.log("═══════════════════════════════════════════════════════════════");
-        } else {
-            console.log("═══════════════════════════════════════════════════════════════");
-            console.log("⚠️ RESEARCH CYCLE COMPLETE (WITH ERRORS)");
-            console.log("Errors encountered:", errors);
-            console.log("═══════════════════════════════════════════════════════════════");
-            await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: errors.join(" | ") });
+            // Step 2: Source Verification - Verify URLs and content accuracy
+            console.log("\n── STEP 2: SOURCE VERIFICATION ──");
+            try {
+                console.log("   > Verifying article sources...");
+                const verifyResult = await ctx.runAction(internal.research.verifyAllSources, {});
+                console.log(`   ✅ Verified: ${verifyResult.verified}, Updated: ${verifyResult.updated}, Deleted: ${verifyResult.deleted}, Errors: ${verifyResult.errors}`);
+            } catch (e) {
+                console.error("❌ [STEP 2] Source Verification Failed:", e);
+                errors.push(`Verification: ${String(e)}`);
+                // Non-fatal - continue with historian even if verification fails
+            }
+
+            // Step 3: Historian Loop - Process ALL unprocessed articles
+            console.log("\n── STEP 3: HISTORIAN LOOP ──");
+            let historianLoops = 0;
+            const MAX_HISTORIAN_LOOPS = 20;  // Safety cap to prevent infinite loops
+            const MIN_TIME_FOR_ITERATION_MS = 90 * 1000; // Need at least 90s to start a new iteration
+
+            try {
+                while (historianLoops < MAX_HISTORIAN_LOOPS) {
+                    // TIME BUDGET CHECK - Don't start new iteration if we're running low
+                    const timeRemaining = getTimeRemainingMs();
+                    if (timeRemaining < MIN_TIME_FOR_ITERATION_MS) {
+                        console.log(`   ⏰ Time budget low (${Math.round(timeRemaining / 1000)}s remaining) - stopping historian to ensure synthesis runs`);
+                        console.log(`   📋 Remaining articles will be processed in the next cycle`);
+                        break;
+                    }
+
+                    historianLoops++;
+                    console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
+
+                    const result = await ctx.runAction(internal.historian.runHistorianCycle, {});
+
+                    // Check if historian found any articles to process
+                    if (!result || result.processed === 0) {
+                        console.log("   ✅ Historian complete - no more articles to process");
+                        break;
+                    }
+
+                    console.log(`   Processed ${result.processed} articles, created ${result.eventsCreated} events`);
+
+                    // Brief cooldown between iterations
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+
+                if (historianLoops >= MAX_HISTORIAN_LOOPS) {
+                    console.warn(`   ⚠️ Historian reached max iterations (${MAX_HISTORIAN_LOOPS})`);
+                }
+
+                console.log(`   📊 Historian completed after ${historianLoops} iterations`);
+            } catch (e) {
+                console.error("❌ [STEP 3] Historian Failed:", e);
+                errors.push(`Historian: ${String(e)}`);
+            }
+
+            // Step 4: Combined Synthesis
+            console.log("\n── STEP 4: SYNTHESIS ──");
+            try {
+                await ctx.runAction(internal.research.synthesizeAll, {});
+            } catch (e) {
+                console.error("❌ [STEP 4] Synthesis Failed:", e);
+                errors.push(`Synthesis: ${String(e)}`);
+            }
+
+            // Final Status Update (inside try block)
+            if (errors.length === 0) {
+                console.log("═══════════════════════════════════════════════════════════════");
+                console.log("✅ RESEARCH CYCLE COMPLETE (SUCCESS)");
+                console.log("═══════════════════════════════════════════════════════════════");
+            } else {
+                console.log("═══════════════════════════════════════════════════════════════");
+                console.log("⚠️ RESEARCH CYCLE COMPLETE (WITH ERRORS)");
+                console.log("Errors encountered:", errors);
+                console.log("═══════════════════════════════════════════════════════════════");
+            }
+        } catch (unexpectedError) {
+            // Catch any unexpected errors that weren't caught by individual step handlers
+            console.error("🛑 RESEARCH CYCLE CRASHED WITH UNEXPECTED ERROR:", unexpectedError);
+            errors.push(`Unexpected: ${String(unexpectedError)}`);
+        } finally {
+            // ===== ALWAYS RESET STATUS - EVEN ON CRASH =====
+            // This ensures the frontend timer doesn't get stuck on "RUNNING..."
+            console.log("🔄 Resetting status to online (finally block)");
+            try {
+                if (errors.length > 0) {
+                    await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: errors.join(" | ") });
+                } else {
+                    await ctx.runMutation(internal.api.setStatus, { status: "online" });
+                }
+            } catch (statusError) {
+                console.error("❌ Failed to reset status:", statusError);
+            }
         }
     },
 });
