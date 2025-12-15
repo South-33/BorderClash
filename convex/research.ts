@@ -24,6 +24,12 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
     console.log(`🤖 [GHOST API] Calling ${model} model...`);
 
     const RETRY_DELAY = 5000; // 5 seconds
+    const PENDING_POLL_DELAY = 45000; // Wait 45s before polling for pending result
+    const PENDING_POLL_INTERVAL = 10000; // Poll every 10s
+    const PENDING_MAX_POLLS = 12; // Max 2 minutes of polling (12 * 10s)
+
+    // Generate unique request ID for timeout recovery
+    const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const startTime = Date.now();
@@ -31,7 +37,7 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
             const response = await fetch(`${GHOST_API_URL}/v1/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: prompt, model }),
+                body: JSON.stringify({ message: prompt, model, request_id: requestId }),
             });
 
             const duration = Date.now() - startTime;
@@ -41,6 +47,43 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
                 // Truncate error to avoid log pollution
                 const safeError = errorText.substring(0, 200) + (errorText.length > 200 ? "..." : "");
                 console.warn(`⚠️ [GHOST API] Error ${response.status} after ${duration}ms`);
+
+                // Check for 504 Gateway Timeout - worker might still be processing
+                if (response.status === 504) {
+                    console.log(`⏳ [GHOST API] HTTP timeout (504) - worker may still be processing...`);
+                    console.log(`⏳ [GHOST API] Waiting ${PENDING_POLL_DELAY / 1000}s before polling for result...`);
+
+                    // Wait for the worker to finish
+                    await new Promise(resolve => setTimeout(resolve, PENDING_POLL_DELAY));
+
+                    // Poll for pending result
+                    for (let poll = 1; poll <= PENDING_MAX_POLLS; poll++) {
+                        console.log(`🔍 [GHOST API] Polling for pending result (attempt ${poll}/${PENDING_MAX_POLLS})...`);
+
+                        try {
+                            const pendingResponse = await fetch(`${GHOST_API_URL}/v1/pending/${requestId}`);
+
+                            if (pendingResponse.ok) {
+                                const pendingData = await pendingResponse.json();
+
+                                if (pendingData.success && pendingData.response) {
+                                    console.log(`✅ [GHOST API] Retrieved pending result (${pendingData.response.length} chars)`);
+                                    return pendingData.response;
+                                }
+                            }
+                        } catch (pollError) {
+                            console.warn(`⚠️ [GHOST API] Poll error: ${pollError}`);
+                        }
+
+                        // Wait before next poll
+                        if (poll < PENDING_MAX_POLLS) {
+                            await new Promise(resolve => setTimeout(resolve, PENDING_POLL_INTERVAL));
+                        }
+                    }
+
+                    console.warn(`⚠️ [GHOST API] Pending result not found after polling`);
+                }
+
                 throw new Error(`Ghost API error (${response.status}): ${safeError}`);
             }
 
@@ -2109,6 +2152,11 @@ export const updateDashboard = internalAction({
         const prompt = `You are the DASHBOARD CONTROLLER for the BorderClash monitor.
 Your job is to maintain ACCURATE, STABLE statistics - NOT to invent changes.
 
+⏱️ TIME CONSTRAINT: You have MAX 60 SECONDS to respond. Be decisive and concise.
+- Don't overthink - scan the data quickly and make a decision
+- If numbers look stable, just return unchanged
+- Skip lengthy reasoning - go straight to the JSON output
+
 ⚠️ CRITICAL RULE - STABILITY OVER ACTIVITY:
 - Numbers should ONLY change when there is NEW, VERIFIED evidence
 - If nothing has changed, RETURN THE SAME NUMBERS
@@ -2177,7 +2225,6 @@ If your search confirms the current numbers are still accurate, KEEP THEM.
 
 🔢 STATS RULES:
 - displaced: Only change if NEW displacement events in timeline
-- displacedTrend: PERCENTAGE CHANGE from 1 week ago (keep at 0 if stable)
 - fatalities: CUMULATIVE total - can only increase, never decrease
 - civilianInjured: Separate civilian injuries
 - militaryInjured: Separate military injuries
@@ -2190,7 +2237,6 @@ Wrap your response in <json> tags:
   "changeReason": "No new verified information - keeping stable values",
   "stats": {
     "displaced": ${prevStats?.displacedCount || 0},
-    "displacedTrend": ${prevStats?.displacedTrend || 0},
     "fatalities": ${prevStats?.casualtyCount || 0},
     "civilianInjured": ${prevStats?.civilianInjuredCount || 0},
     "militaryInjured": ${prevStats?.militaryInjuredCount || 0}

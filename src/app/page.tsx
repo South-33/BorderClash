@@ -84,6 +84,16 @@ const categoryIcons: Record<string, string> = {
   diplomatic: '🤝',
 };
 
+// --- Khmer Date Constants ---
+const KH_MONTHS = [
+  "មករា", "កុម្ភៈ", "មីនា", "មេសា", "ឧសភា", "មិថុនា",
+  "កក្កដា", "សីហា", "កញ្ញា", "តុលា", "វិច្ឆិកា", "ធ្នូ"
+];
+const TH_MONTHS_SHORT = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
+];
+
 // --- Translations ---
 const TRANSLATIONS = {
   en: {
@@ -96,7 +106,7 @@ const TRANSLATIONS = {
     items: "items",
     noArticles: "No articles yet",
     noArticlesFiltered: "No articles in this category",
-    damageAssessment: "DAMAGE ASSESSMENT",
+    damageAssessment: "ESTIMATED DAMAGE",
     displacedCivilians: "Displaced Civilians",
     civilianInjuries: "Civilian Injuries",
     propertyDamaged: "Property Damaged",
@@ -148,6 +158,8 @@ const TRANSLATIONS = {
     civilian: "CIVILIAN",
     military: "MILITARY",
     fromLastWeek: "FROM LAST WEEK",
+    lastUpdated: "Last updated",
+    estimated: "ESTIMATED",
     noChange: "NO CHANGE",
     visualDamageAssessment: "VISUAL DAMAGE ASSESSMENT",
     infrastructureDamage: "INFRASTRUCTURE DAMAGE",
@@ -218,6 +230,36 @@ const TRANSLATIONS = {
     trustWarningDesc: "Every government has an incentive to lie during conflict. Every news outlet has an audience to please. This dashboard is a tool, not a truth machine. Use it to compare narratives, not to validate your biases.",
     statelessApproach: "THE STATELESS APPROACH",
     statelessDesc: "We do not believe in 'National Truth'. Truth is often found in the silence between two shouting governments.",
+    intelReport: "INTEL REPORT",
+    date: "Date",
+    category: "Category",
+    topSources: "Top Sources",
+    hide: "Hide",
+    show: "Show",
+    moreSources: "more sources",
+    prev: "PREV",
+    next: "NEXT",
+    navHint: "Use ← → keys to navigate",
+    reports: "REPORTS",
+    sources: "Sources",
+    paused: "PAUSED",
+    aiAnalysis: "AI Analysis",
+    analyzingFeeds: "Analyzing global intelligence feeds... The system is monitoring news from both Thailand and Cambodia perspectives to synthesize a balanced report.",
+    events: "Events",
+    // New Guide Content
+    factVsPropaganda: "FACT VS PROPAGANDA",
+    fact1: "Fact: Describes what happened, where, and when.",
+    propaganda1: "Propaganda: Uses emotional words (hero, traitor, evil).",
+    fact2: "Fact: Cites verified sources or photos.",
+    propaganda2: "Propaganda: Says 'sources say' but doesn't name them.",
+    understandingScores: "WHAT DO THE SCORES MEAN?",
+    scoreHigh: "70-100% (High Confidence): Multiple sources agree. Likely true.",
+    scoreMid: "40-69% (Unverified): Sources conflict or are vague. Be careful.",
+    scoreLow: "0-39% (Rumor/Fake): Likely propaganda or fake news. Don't share.",
+    whoIsTalking: "WHO IS TALKING?",
+    sourceGov: "GOVT: Official statements (Usually biased/PR).",
+    sourceMedia: "MEDIA: News outlets (Check who owns them).",
+    sourceAgency: "AGENCY: Wire services like Reuters/AP (More neutral).",
   },
   th: {
     officialNarrative: "มุมมองจากทางการ",
@@ -229,7 +271,7 @@ const TRANSLATIONS = {
     items: "รายการ",
     noArticles: "ยังไม่มีข้อมูล",
     noArticlesFiltered: "ไม่พบบทความในหมวดนี้",
-    damageAssessment: "ประเมินความเสียหาย",
+    damageAssessment: "ประเมินความเสียหาย (โดยประมาณ)",
     displacedCivilians: "ชาวบ้านที่ต้องอพยพ",
     civilianInjuries: "ชาวบ้านบาดเจ็บ",
     propertyDamaged: "ทรัพย์สินเสียหาย",
@@ -281,6 +323,8 @@ const TRANSLATIONS = {
     civilian: "พลเรือน",
     military: "ทหาร",
     fromLastWeek: "จากสัปดาห์ก่อน",
+    lastUpdated: "อัปเดตล่าสุด",
+    estimated: "ประมาณ",
     noChange: "เท่าเดิม",
     visualDamageAssessment: "ภาพความเสียหาย",
     infrastructureDamage: "ความเสียหายโครงสร้างพื้นฐาน",
@@ -351,6 +395,36 @@ const TRANSLATIONS = {
     trustWarningDesc: "เวลารบกัน รัฐบาลไหนก็อยากพูดให้ตัวเองดูดี สื่อก็ต้องเอาใจคนดู แดชบอร์ดนี้มีไว้ให้คุณเทียบข้อมูลจากหลายๆ ฝั่ง ไม่ใช่เครื่องบอกความจริงสากล",
     statelessApproach: "แนวคิดแบบไม่เลือกข้าง",
     statelessDesc: "เราไม่เชื่อว่ามีความจริงของฝ่ายใดฝ่ายหนึ่ง ความจริงมักซ่อนอยู่ตรงกลางระหว่างเสียงตะโกนของทั้งสองฝ่าย",
+    intelReport: "รายงานข่าวกรอง",
+    date: "วันที่",
+    category: "หมวดหมู่",
+    topSources: "แหล่งข่าวหลัก",
+    hide: "ซ่อน",
+    show: "แสดง",
+    moreSources: "แหล่งข่าวเพิ่มเติม",
+    prev: "ก่อนหน้า",
+    next: "ถัดไป",
+    navHint: "ใช้ปุ่ม ← → เพื่อเปลี่ยนหน้า",
+    reports: "รายงาน",
+    sources: "แหล่งข่าว",
+    paused: "หยุดชั่วคราว",
+    aiAnalysis: "วิเคราะห์โดย AI",
+    analyzingFeeds: "กำลังวิเคราะห์ข้อมูลข่าวกรองทั่วโลก... ระบบกำลังติดตามข่าวสารจากทั้งฝั่งไทยและกัมพูชาเพื่อสรุปรายงานที่สมดุล",
+    events: "เหตุการณ์",
+    // New Guide Content (Thai Spoken/Casual)
+    factVsPropaganda: "เรื่องจริง vs ข่าวปั่น",
+    fact1: "เรื่องจริง: บอกแค่เกิดอะไร ที่ไหน เมื่อไหร่ จบ",
+    propaganda1: "ข่าวปั่น: ชอบใช้คําเว่อร์ๆ (ฮีโร่, คนขายชาติ, เลว)",
+    fact2: "เรื่องจริง: มีรูป มีหลักฐาน อ้างที่มาชัดเจน",
+    propaganda2: "ข่าวปั่น: บอกว่า 'เขาเล่าว่า' แต่ไม่บอกว่าใคร",
+    understandingScores: "คะแนนพวกนี้หมายถึงอะไร?",
+    scoreHigh: "70-100% (ชัวร์): หลายสื่อลงตรงกัน เชื่อได้",
+    scoreMid: "40-69% (ฟังหูไว้หู): ข่าวยังไม่นิ่ง แหล่งข่าวพูดไม่ตรงกัน",
+    scoreLow: "0-39% (มั่ว): ข่าวลือ ข่าวปั่น อย่าเพิ่งแชร์",
+    whoIsTalking: "ใครเป็นคนพูด?",
+    sourceGov: "รัฐบาล: แถลงการณ์ทางการ (มักจะอวยตัวเอง)",
+    sourceMedia: "สื่อ: ข่าวทั่วไป (ต้องดูว่าเจ้าของสื่อเป็นใคร)",
+    sourceAgency: "สำนักข่าวตปท.: พวก Reuters/AP (เป็นกลางกว่า)",
   },
   kh: {
     officialNarrative: "គោលជំហរផ្លូវការ", // View of govt - natural
@@ -362,7 +436,7 @@ const TRANSLATIONS = {
     items: "អត្ថបទ",
     noArticles: "មិនទាន់មានព័ត៌មាន",
     noArticlesFiltered: "មិនមានអត្ថបទក្នុងផ្នែកនេះទេ",
-    damageAssessment: "ការវាយតម្លៃការខូចខាត", // Formal but verify
+    damageAssessment: "ការវាយតម្លៃការខូចខាត (ប៉ាន់ស្មាន)",
     displacedCivilians: "ពលរដ្ឋដែលភៀសខ្លួន", // Citizens who fled
     civilianInjuries: "ពលរដ្ឋរងរបួស",
     propertyDamaged: "ទ្រព្យសម្បត្តិខូចខាត",
@@ -404,16 +478,18 @@ const TRANSLATIONS = {
     neutralAI: "AI អាជ្ញាកណ្តាល",
     intl: "អន្តរជាតិ",
     credibility: "ភាពជឿជាក់",
-    subTitle: "តាមដានស្ថានការណ៍ព្រំដែនភ្លាមៗ វិភាគដោយ AI ដើម្បីដឹងការពិត មិនមែនតាមអារម្មណ៍",
+    subTitle: "តាមដានស្ថានការណ៍ព្រំដែនភ្លាមៗ វិភាគដោយ AI ដើម្បីដឹងការពិត មិនលំអៀង",
     fatalities: "អ្នកស្លាប់ (បញ្ជាក់ហើយ)",
     threatLevel: "កម្រិតគ្រោះថ្នាក់",
     low: "ទាប",
     elevated: "ខ្ពស់",
-    critical: "គ្រោះថ្នាក់",
+    critical: "ខ្លាំង",
     injured: "អ្នករបួស",
     civilian: "ពលរដ្ឋ",
     military: "ទាហាន",
     fromLastWeek: "ពីសប្តាហ៍មុន",
+    lastUpdated: "អាប់ដេតចុងក្រោយ",
+    estimated: "ប៉ាន់ស្មាន",
     noChange: "នៅដដែល",
     visualDamageAssessment: "រូបភាពការខូចខាត",
     infrastructureDamage: "ការខូចខាតហេដ្ឋារចនាសម្ព័ន្ធ",
@@ -440,7 +516,7 @@ const TRANSLATIONS = {
     media: "សារព័ត៌មាន",
     agency: "ទីភ្នាក់ងារ",
     other: "ផ្សេងៗ",
-    guideTitle: "របៀបប្រើ & ការយល់ដឹង",
+    guideTitle: "របៀបប្រើ និង ការយល់ដឹង",
     dashboardGuide: "របៀបមើលតារាងនេះ",
     dashboardGuideDesc: "យើងប្រមូលព័ត៌មានពីថៃ ខ្មែរ និងបរទេស។ 'AI កណ្តាល' ជួយសង្ខេបដើម្បីឱ្យឃើញចំណុចរួម។",
     aiWarning: "ប្រយ័ត្ន៖ AI និងរូបក្លែងក្លាយ",
@@ -483,7 +559,37 @@ const TRANSLATIONS = {
     trustWarning: "កុំជឿនរណាម្នាក់ងងឹតងងុល",
     trustWarningDesc: "រដ្ឋាភិបាលណាក៏ចង់និយាយឱ្យខ្លួនឯងល្អ។ សារព័ត៌មានក៏ត្រូវយកចិត្តអ្នកមើល។ ប្រើតារាងនេះដើម្បីប្រៀបធៀបព័ត៌មាន មិនមែនដើម្បីបញ្ជាក់ថាខ្លួនឯងត្រូវទេ។",
     statelessApproach: "មិនកាន់ជើងខាងណា",
-    statelessDesc: "យើងមិនជឿលើ 'ការពិតរបស់ជាតិ' ទេ។ ការពិតច្រើនតែនៅចន្លោះកណ្តាលរវាងរដ្ឋាភិបាលទាំងពីរ។"
+    statelessDesc: "យើងមិនជឿលើ 'ការពិតរបស់ជាតិ' ទេ។ ការពិតច្រើនតែនៅចន្លោះកណ្តាលរវាងរដ្ឋាភិបាលទាំងពីរ។",
+    intelReport: "របាយការណ៍ចារកម្ម",
+    date: "កាលបរិច្ឆេទ",
+    category: "ប្រភេទ",
+    topSources: "ប្រភពសំខាន់ៗ",
+    hide: "លាក់",
+    show: "បង្ហាញ",
+    moreSources: "ប្រភពបន្ថែម",
+    prev: "មុន",
+    next: "បន្ទាប់",
+    navHint: "ប្រើប៊ូតុង ← → ដើម្បីប្តូរទំព័រ",
+    reports: "របាយការណ៍",
+    sources: "ប្រភព",
+    paused: "ផ្អាក",
+    aiAnalysis: "ការវិភាគដោយ AI",
+    analyzingFeeds: "កំពុងវិភាគទិន្នន័យចារកម្មសកល... ប្រព័ន្ធកំពុងតាមដានព័ត៌មានពីទាំងភាគីថៃនិងកម្ពុជាដើម្បីសង្ខេបរបាយការណ៍ដែលមានតុល្យភាព។",
+    events: "ព្រឹត្តិការណ៍",
+    // New Guide Content (Khmer Casual/Spoken)
+    factVsPropaganda: "ការពិត vs ព័ត៌មានបំប៉ោង",
+    fact1: "ការពិត: ប្រាប់ថាមានរឿងអី នៅណា ពេលណា ចប់។",
+    propaganda1: "ព័ត៌មានបំប៉ោង: ប្រើពាក្យលើសៗ (វីរបុរស, ជនក្បត់ជាតិ, អាក្រក់)។",
+    fact2: "ការពិត: មានរូប មានភស្តុតាង ប្រាប់ប្រភពច្បាស់លាស់។",
+    propaganda2: "ព័ត៌មានបំប៉ោង: ថា 'គេប្រាប់ថា' តែមិនប្រាប់ថាជាអ្នកណា។",
+    understandingScores: "ពិន្ទុទាំងនេះមានន័យថាម៉េច?",
+    scoreHigh: "70-100% (ច្បាស់): សារព័ត៌មានច្រើនចុះដូចគ្នា ជឿបាន។",
+    scoreMid: "40-69% (ស្តាប់បានខ្លះ): ព័ត៌មានមិនទាន់ច្បាស់ ប្រភពនិយាយមិនត្រូវគ្នា។",
+    scoreLow: "0-39% (មិនពិត): ពាក្យចចាមអារ៉ាម ព័ត៌មានបំប៉ោង កុំអាលចែករំលែកត។",
+    whoIsTalking: "នរណាជាអ្នកនិយាយ?",
+    sourceGov: "រដ្ឋាភិបាល: សេចក្តីប្រកាសផ្លូវការ (ភាគច្រើននិយាយល្អពីខ្លួនឯង)។",
+    sourceMedia: "សារព័ត៌មាន: ព័ត៌មានទូទៅ (មើលថានរណាជាម្ចាស់ផង)។",
+    sourceAgency: "ទីភ្នាក់ងារបរទេស: ដូចជា Reuters/AP (មានភាពកណ្តាលជាង)។",
   }
 };
 
@@ -1173,37 +1279,14 @@ export default function Home() {
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [showAllSources, setShowAllSources] = useState(false);
   const [isModalClosing, setIsModalClosing] = useState(false);
-  const modalRef = useRef<HTMLDivElement>(null);
-  const currentDragOffset = useRef(0);
 
-  // Animated close function for modal
+  // Simple close function for modal
   const closeModal = () => {
     setIsModalClosing(true);
-
-    // Animate out - force consistent starting point
-    if (modalRef.current) {
-      // Step 1: Cancel any CSS animation and disable transitions
-      modalRef.current.style.animation = 'none';
-      modalRef.current.style.transition = 'none';
-      // Force starting position (in case CSS animation was mid-flight)
-      modalRef.current.style.transform = 'translateY(0)';
-      modalRef.current.style.opacity = '1';
-
-      // Step 2: Force browser reflow to apply above styles immediately
-      void modalRef.current.offsetHeight;
-
-      // Step 3: Now enable transition and animate to end state
-      modalRef.current.style.transition = 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease-in';
-      modalRef.current.style.transform = 'translateY(100%)';
-      modalRef.current.style.opacity = '0';
-    }
-
-    currentDragOffset.current = 0;
     setTimeout(() => {
       setSelectedEvent(null);
       setIsModalClosing(false);
-      setHasInteracted(false); // Reset for next open so slide-up animation plays
-    }, 250); // Match animation duration
+    }, 300); // Give animation time to complete (200ms transition + buffer)
   };
 
   // Lock body scroll when modal is open
@@ -1310,227 +1393,40 @@ export default function Home() {
   const hasNext = currentIndex !== -1 && currentIndex < sortedEvents.length - 1;
   const hasPrev = currentIndex > 0;
 
-  // Animation logic for Swipe
-  const animateSwipe = (direction: 'next' | 'prev') => {
-    if (!modalRef.current) return;
+  // Navigation fade state
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [previousEvent, setPreviousEvent] = useState<any>(null);
 
-    const isNext = direction === 'next';
-
-    // Config
-    const exitX = isNext ? '-120vw' : '120vw';
-    const exitRotate = isNext ? '-30deg' : '30deg';
-    const enterX = isNext ? '100vw' : '-120vw'; // Prev: enters from Left
-    const enterRotate = isNext ? '20deg' : '-30deg';
-
-    // 1. Animate Out
-    // For 'next' (Swipe Left), we just throw the card away. The Ghost is behind it.
-    // For 'prev' (Swipe Right), we throw the card away to reveal... wait.
-    // Actually for 'prev', we want the NEW card to enter from Left.
-    // So if 'prev': OLD card exits Right (revealing nothing?). NEW card enters Left.
-
-    modalRef.current.style.transition = 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease-in';
-    modalRef.current.style.transformOrigin = 'bottom center';
-    modalRef.current.style.transform = `translate3d(${exitX}, 0, 0) rotate(${exitRotate})`;
-    modalRef.current.style.opacity = '0';
-
-    // 2. Data Update & Reset
-    setTimeout(() => {
-      if (isNext && hasNext) {
-        setSelectedEvent(sortedEvents[currentIndex + 1]);
-        // For Next: We revealed the ghost. Now we effectively "become" the ghost.
-        // Reset to 0 instantly.
-        if (modalRef.current) {
-          modalRef.current.style.transition = 'none';
-          modalRef.current.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
-          modalRef.current.style.opacity = '1';
-        }
-      } else if (!isNext && hasPrev) {
-        setSelectedEvent(sortedEvents[currentIndex - 1]);
-        // For Prev: We need to enter from the Left side.
-        if (modalRef.current) {
-          modalRef.current.style.transition = 'none';
-          modalRef.current.style.transform = `translate3d(${enterX}, 0, 0) rotate(${enterRotate})`;
-          modalRef.current.style.opacity = '1'; // Keep opacity 1 for entry
-
-          // Force Reflow
-          void modalRef.current.offsetHeight;
-
-          // Animate In
-          modalRef.current.style.transition = 'transform 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28)'; // Bouncy
-          modalRef.current.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
-        }
-      }
+  // Crossfade navigation - overlap old and new
+  const goToNext = () => {
+    if (hasNext && !isNavigating) {
+      setPreviousEvent(selectedEvent);
+      setSelectedEvent(sortedEvents[currentIndex + 1]);
       setShowAllSources(false);
-    }, 350);
-  };
+      setIsNavigating(true);
 
-  const goToNext = () => { animateSwipe('next'); };
-  const goToPrev = () => { animateSwipe('prev'); };
-
-  const [hasInteracted, setHasInteracted] = useState(false);
-
-  // Pointer state ref for drag gestures (Mouse & Touch)
-  const touchRef = useRef({
-    startX: 0,
-    startY: 0,
-    isDraggingVertical: false,
-    isDraggingHorizontal: false,
-    isHeaderDrag: false,
-    isActive: false
-  });
-
-  // Refs for direct DOM manipulation of ghost cards (bypass React render cycle)
-  const ghostPrevRef = useRef<HTMLDivElement>(null);
-  const ghostNextRef = useRef<HTMLDivElement>(null);
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    const target = e.target as HTMLElement;
-    // Check if drag starts on header or handle
-    const isHandle = target.closest('.drag-handle-area') !== null;
-    const isHeader = target.closest('.modal-header') !== null;
-    const isHeaderDrag = isHandle || isHeader;
-
-    // Don't drag if clicking a button
-    if (target.closest('button')) return;
-
-    touchRef.current.startX = e.clientX;
-    touchRef.current.startY = e.clientY;
-    touchRef.current.isDraggingVertical = false;
-    touchRef.current.isDraggingHorizontal = false;
-    touchRef.current.isHeaderDrag = isHeaderDrag;
-    touchRef.current.isActive = true;
-
-    // Set hasInteracted only once (first interaction)
-    if (!hasInteracted) setHasInteracted(true);
-
-    // Disable transition for immediate response during drag
-    if (modalRef.current) {
-      modalRef.current.style.transition = 'none';
-    }
-
-    // Only capture pointer if we are dragging the header (controlling the transform)
-    if (isHeaderDrag) {
-      e.currentTarget.setPointerCapture(e.pointerId);
+      setTimeout(() => {
+        setIsNavigating(false);
+        setPreviousEvent(null);
+      }, 300);
     }
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!touchRef.current.isActive) return;
+  const goToPrev = () => {
+    if (hasPrev && !isNavigating) {
+      setPreviousEvent(selectedEvent);
+      setSelectedEvent(sortedEvents[currentIndex - 1]);
+      setShowAllSources(false);
+      setIsNavigating(true);
 
-    const currentX = e.clientX;
-    const currentY = e.clientY;
-    const deltaX = touchRef.current.startX - currentX;
-    const deltaY = currentY - touchRef.current.startY; // Positive = dragging down
-
-    // Direction Locking Logic
-    if (!touchRef.current.isDraggingVertical && !touchRef.current.isDraggingHorizontal) {
-      if (Math.abs(deltaY) > 5 && Math.abs(deltaY) > Math.abs(deltaX)) {
-        touchRef.current.isDraggingVertical = true;
-      } else if (Math.abs(deltaX) > 5) {
-        touchRef.current.isDraggingHorizontal = true;
-      }
-    }
-
-    // Vertical Drag (Dismiss)
-    // ONLY move if it is a header drag. Body drag should just be ignored here (allowing scroll if not captured)
-    if (touchRef.current.isDraggingVertical && touchRef.current.isHeaderDrag) {
-      // 1:1 tracking for immediate "follow finger" feel
-      // Apply rubber-banding (resistance) only if dragging UP (negative deltaY)
-      const offset = deltaY > 0 ? deltaY : deltaY * 0.3;
-
-      currentDragOffset.current = offset;
-      if (modalRef.current) {
-        modalRef.current.style.transformOrigin = 'center center';
-
-        modalRef.current.style.transform = `translateY(${offset}px)`;
-        modalRef.current.style.opacity = `${Math.max(0.4, 1 - (offset / 400))}`;
-      }
-    }
-
-    // Horizontal Swipe (Nav)
-    if (touchRef.current.isDraggingHorizontal) {
-      // Deck of cards feel: Pivot at bottom
-      if (modalRef.current) {
-        modalRef.current.style.transformOrigin = 'bottom center';
-        // Rotate more as you drag further. deltaX (left) is positive in my calc? 
-        // Wait: deltaX = start - current. 
-        // If I drag Left: current < start. deltaX is Positive. 
-        // Drag Left -> Move card Left (negative X).
-        // So translateX should be -deltaX.
-        const moveX = -deltaX;
-        const rotate = moveX * 0.05; // 100px move = 5deg rotation
-
-        modalRef.current.style.transform = `translate3d(${moveX}px, 0, 0) rotate(${rotate}deg)`;
-
-        // Instant Ghost Card Switching via Refs (Bypass React State)
-        // Drag Right (moveX > 0) -> Show Prev
-        // Drag Left (moveX < 0) -> Show Next
-        if (ghostPrevRef.current) {
-          ghostPrevRef.current.style.visibility = moveX > 0 ? 'visible' : 'hidden';
-        }
-        if (ghostNextRef.current) {
-          ghostNextRef.current.style.visibility = moveX < 0 ? 'visible' : 'hidden';
-        }
-      }
+      setTimeout(() => {
+        setIsNavigating(false);
+        setPreviousEvent(null);
+      }, 300);
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (!touchRef.current.isActive) return;
-
-    const deltaX = touchRef.current.startX - e.clientX;
-    const isHorizontalDrag = touchRef.current.isDraggingHorizontal;
-
-    touchRef.current.isActive = false;
-
-    // Safely release capture if we have it
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) { }
-
-    // Re-enable transition for snap-back animation
-    if (modalRef.current) {
-      modalRef.current.style.transition = 'transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease-out';
-    }
-
-    // Horizontal Swipe (Navigate)
-    if (isHorizontalDrag) {
-      // deltaX = start - current.
-      // Drag Left (Next): start > current => deltaX > 0.
-      // Drag Right (Prev): start < current => deltaX < 0.
-
-      const swipeThreshold = 50;
-
-      if (deltaX > swipeThreshold && hasNext) {
-        animateSwipe('next');
-      } else if (deltaX < -swipeThreshold && hasPrev) {
-        animateSwipe('prev');
-      } else {
-        // Snap back
-        if (modalRef.current) {
-          modalRef.current.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // Bouncy snap back
-          modalRef.current.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
-        }
-      }
-
-      // Safely release capture if we have it
-      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) { }
-
-      currentDragOffset.current = 0;
-      return;
-    }
-
-    // Vertical Drag (Dismiss)
-    if (currentDragOffset.current > 100) {
-      closeModal();
-    } else {
-      // Snap back
-      if (modalRef.current) {
-        modalRef.current.style.transform = '';
-        modalRef.current.style.opacity = '';
-      }
-      currentDragOffset.current = 0;
-    }
-  };
-
+  // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') closeModal();
     if (e.key === 'ArrowRight' || e.key === 'ArrowUp') goToNext();
@@ -1544,6 +1440,7 @@ export default function Home() {
   // --- TIMELINE STATE AND LOGIC ---
   const [selectedTimelineDate, setSelectedTimelineDate] = useState<string | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const datePickerRef = useRef<HTMLDivElement>(null);
 
   // Derive available dates and group ALL events by date (for continuous scroll)
   const { timelineDates, groupedEvents, dateCounts } = useMemo(() => {
@@ -1586,6 +1483,17 @@ export default function Home() {
     }
   }, [timelineDates, selectedTimelineDate]);
 
+  // Auto-scroll date picker to show selected date
+  useEffect(() => {
+    if (!selectedTimelineDate || !datePickerRef.current) return;
+
+    const button = datePickerRef.current.querySelector(`[data-date="${selectedTimelineDate}"]`) as HTMLElement;
+    if (button) {
+      // Scroll the button into view within the horizontal container
+      button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [selectedTimelineDate]);
+
   // Scroll to selected date section
   const scrollToDate = (date: string) => {
     setSelectedTimelineDate(date);
@@ -1595,38 +1503,72 @@ export default function Home() {
     }
   };
 
-  // Sync date selector when user scrolls (Intersection Observer)
+  // Sync date selector when user scrolls (debounced for smooth mobile)
   useEffect(() => {
     if (!timelineScrollRef.current || timelineDates.length === 0) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Find the entry that's most visible at the top
-        for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio > 0.1) {
-            const dateId = entry.target.id.replace('timeline-date-', '');
-            if (dateId && timelineDates.includes(dateId)) {
-              setSelectedTimelineDate(dateId);
-              break;
-            }
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const lastSelectedDateRef = { current: selectedTimelineDate };
+
+    const findNearestDate = () => {
+      const container = timelineScrollRef.current;
+      if (!container) return null;
+
+      let nearestDate = timelineDates[0];
+      let nearestDistance = Infinity;
+
+      // Find the date section closest to the top of the container
+      for (const date of timelineDates) {
+        const element = document.getElementById(`timeline-date-${date}`);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          const distanceFromTop = rect.top - containerRect.top;
+
+          // Find section closest to top (within reasonable range)
+          if (Math.abs(distanceFromTop) < Math.abs(nearestDistance)) {
+            nearestDistance = distanceFromTop;
+            nearestDate = date;
           }
+          // If this section is below viewport, previous was our target
+          if (distanceFromTop > container.clientHeight * 0.3) break;
         }
-      },
-      {
-        root: timelineScrollRef.current,
-        rootMargin: '-10% 0px -80% 0px', // Trigger when section is near top
-        threshold: [0.1, 0.5],
       }
-    );
+      return nearestDate;
+    };
 
-    // Observe all date sections
-    timelineDates.forEach((date) => {
-      const element = document.getElementById(`timeline-date-${date}`);
-      if (element) observer.observe(element);
-    });
+    const handleScroll = () => {
+      // Clear previous debounce
+      if (debounceTimer) clearTimeout(debounceTimer);
 
-    return () => observer.disconnect();
-  }, [timelineDates]);
+      // Debounce: wait 80ms after scroll stops to update
+      debounceTimer = setTimeout(() => {
+        const nearestDate = findNearestDate();
+        if (nearestDate && nearestDate !== lastSelectedDateRef.current) {
+          lastSelectedDateRef.current = nearestDate;
+          setSelectedTimelineDate(nearestDate);
+        }
+      }, 80);
+    };
+
+    const container = timelineScrollRef.current;
+    container.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Run initial check after a short delay to ensure DOM is ready
+    const initialCheck = setTimeout(() => {
+      const nearestDate = findNearestDate();
+      if (nearestDate) {
+        lastSelectedDateRef.current = nearestDate;
+        setSelectedTimelineDate(nearestDate);
+      }
+    }, 100);
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      clearTimeout(initialCheck);
+    };
+  }, [timelineDates]); // Removed selectedTimelineDate to prevent recreation
 
 
   // Measure Neutral Card Height to set siblings
@@ -1734,6 +1676,43 @@ export default function Home() {
     return meta.keyEventsEn || meta.keyEvents || [];
   };
 
+  const TH_MONTHS_SHORT = [
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+  ];
+
+  // Helper to format dates correctly for all languages (fixing Chrome/Khmer issues)
+  const formatDate = (dateInput: string | number | Date, formatStr: 'short' | 'long' | 'weekday' = 'long') => {
+    const d = new Date(dateInput);
+
+    if (lang === 'kh') {
+      const day = d.getDate();
+      const month = KH_MONTHS[d.getMonth()];
+      const year = d.getFullYear();
+
+      if (formatStr === 'short') return `${day} ${month}`;
+      if (formatStr === 'weekday') return `${day} ${month}`; // Simplified for header if needed
+      return `${day} ${month} ${year}`; // Default long
+    }
+
+    if (lang === 'th' && formatStr === 'short') {
+      const day = d.getDate();
+      const month = TH_MONTHS_SHORT[d.getMonth()];
+      return `${day} ${month}`;
+    }
+
+    // Existing logic for others
+    const locale = lang === 'th' ? 'th-TH' : 'en-US';
+
+    if (formatStr === 'short') {
+      return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+    }
+    if (formatStr === 'weekday') {
+      return d.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+    return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
   // Default stats (analyses table removed - using simple defaults)
   const displayStats = {
     displacedCivilians: 0,
@@ -1743,6 +1722,113 @@ export default function Home() {
 
   // Language class for font-size boost (Thai/Khmer need larger text)
   const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
+
+  // Memoize the timeline list to prevent re-renders on scroll (Date Picker updates)
+  const timelineContent = useMemo(() => {
+    return timelineDates.map((date) => {
+      const events = groupedEvents[date] || [];
+      const categoryColors: Record<string, string> = {
+        military: 'bg-red-500',
+        diplomatic: 'bg-blue-500',
+        humanitarian: 'bg-yellow-500',
+        political: 'bg-purple-500',
+      };
+
+      return (
+        <div key={date} id={`timeline-date-${date}`}>
+          {/* Date Header - pins flush to top */}
+          <div className="sticky top-0 z-30 transform-gpu">
+            <div className="bg-riso-paper border-b border-riso-ink/10 py-3 px-4 md:px-8 shadow-sm">
+              <div className="flex items-center justify-between max-w-2xl mx-auto">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
+                  <h3 className="font-display text-xl uppercase tracking-wide">
+                    {formatDate(date, 'weekday')}
+                  </h3>
+                </div>
+                <span className="font-mono text-xs opacity-50">{events.length} {t.reports}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Events for this date */}
+          <div className="space-y-6 px-4 md:px-8 py-6">
+            {events.map((event: any, index: number) => {
+              const isRight = index % 2 === 0;
+              const isImportant = (event.importance || 0) > 75;
+
+              return (
+                <div key={event._id} className={`relative flex md:items-center ${isRight ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row ml-6 md:ml-0`}>
+                  <div className="hidden md:block flex-1"></div>
+
+                  {/* Center Node - Vertically centered on mobile */}
+                  <div className="absolute left-[-2.25rem] md:left-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 md:w-8 md:h-8 md:-translate-x-1/2 z-10">
+                    <div
+                      className={`rounded-full border-2 border-riso-paper shadow-sm transition-all hover:scale-125 cursor-pointer
+                        ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}
+                        ${isImportant ? 'animate-pulse ring-2 ring-offset-1 md:ring-offset-2 ring-riso-accent' : ''}
+                        w-4 h-4 md:w-5 md:h-5`}
+                      onClick={() => setSelectedEvent(event)}
+                    ></div>
+                  </div>
+
+                  {/* Connector Line */}
+                  <div className={`hidden md:block absolute top-1/2 h-px bg-riso-ink/20 w-8 md:w-16 ${isRight ? 'left-8 md:left-[calc(50%+1rem)]' : 'right-8 md:right-[calc(50%+1rem)]'}`}></div>
+
+                  {/* Event Card */}
+                  <div className={`flex-1 ${isRight ? 'md:pl-12' : 'md:pr-12'}`}>
+                    <div
+                      className={`relative bg-riso-paper p-3 rounded-sm border hover:shadow-lg transition-all cursor-pointer group
+                        ${isImportant ? 'border-riso-accent border-2' : 'border-riso-ink/20 dashed-border-sm'}`}
+                      onClick={() => setSelectedEvent(event)}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <span className={`font-mono text-[10px] uppercase font-bold px-1.5 py-0.5 rounded text-white ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}`}>
+                          {event.category}
+                        </span>
+                        <span className="font-mono text-[10px] opacity-50">
+                          {event.timeOfDay || 'All Day'}
+                        </span>
+                      </div>
+
+                      <h4 className={`font-bold leading-tight mb-1 group-hover:text-blue-700 transition-colors ${lang === 'kh' || lang === 'th' ? 'text-base font-serif' : 'text-sm font-display uppercase tracking-wide'}`}>
+                        {(() => {
+                          if (lang === 'th' && event.titleTh) return event.titleTh;
+                          if (lang === 'kh' && event.titleKh) return event.titleKh;
+                          return event.title;
+                        })()}
+                      </h4>
+
+                      <p className={`line-clamp-2 opacity-70 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
+                        {(() => {
+                          if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
+                          if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
+                          return event.description;
+                        })()}
+                      </p>
+
+                      {event.sources && event.sources.length > 0 && (
+                        <div className="mt-2 flex items-center gap-1">
+                          <div className="flex -space-x-1">
+                            {[...Array(Math.min(3, event.sources.length))].map((_, i) => (
+                              <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-mono">📄</div>
+                            ))}
+                          </div>
+                          <span className="text-[9px] font-mono opacity-50">+{event.sources.length} {t.sources}</span>
+                        </div>
+                      )}
+
+                      <div className={`absolute top-1/2 w-2 h-2 bg-riso-ink rounded-full ${isRight ? '-left-1' : '-right-1'} transform -translate-y-1/2 hidden md:block opacity-20`}></div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    });
+  }, [timelineDates, groupedEvents, lang]);
 
   return (
     <div className={`min-h-screen flex flex-col justify-center ${langClass}`}>
@@ -1776,7 +1862,7 @@ export default function Home() {
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.nextAutoScan}</p>
                 <p className="font-mono text-3xl font-bold">
                   {systemStats?.isPaused ? (
-                    <span className="text-yellow-600">PAUSED</span>
+                    <span className="text-yellow-600">{t.paused}</span>
                   ) : isSyncing ? (
                     <span className="animate-pulse text-riso-accent">{t.running}</span>
                   ) : (sysStatsLoading || nextUpdateIn === null) ? (
@@ -1850,10 +1936,10 @@ export default function Home() {
 
           {/* View Selector */}
           <div className={`rough-border-sm p-4 bg-white/50 font-mono flex flex-col ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-            <div className="flex items-center gap-2 mb-3 uppercase font-bold border-b border-riso-ink/20 pb-2">
+            <div className="flex items-center gap-2 mb-1 uppercase font-bold border-b border-riso-ink/20 pb-1">
               {t.viewMode}
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
               <label className="flex items-center gap-2 cursor-pointer hover:bg-riso-ink/5 p-1 transition-colors">
                 <input
                   type="radio"
@@ -2006,17 +2092,13 @@ export default function Home() {
                         <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.displacedCivilians}</h4>
                         <span className="font-display text-5xl md:text-6xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString()}</span>
                       </div>
-                      {/* Trend Indicator */}
-                      <div className={`text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 ${(dashboardStats?.displacedTrend || 0) > 0 ? 'text-riso-accent' :
-                        (dashboardStats?.displacedTrend || 0) < 0 ? 'text-green-600' : 'opacity-50'
-                        }`}>
-                        {(dashboardStats?.displacedTrend || 0) !== 0 && (
-                          <>
-                            <span>{(dashboardStats?.displacedTrend || 0) > 0 ? '↑' : '↓'}</span>
-                            <span>{Math.abs(dashboardStats?.displacedTrend || 0)}% {t.fromLastWeek}</span>
-                          </>
+                      {/* Trend Indicator - Show last updated instead */}
+                      <div className="text-[10px] font-mono opacity-50 uppercase tracking-wider">
+                        {dashboardStats?.lastUpdatedAt ? (
+                          <span>{t.lastUpdated}: {new Date(dashboardStats.lastUpdatedAt).toLocaleDateString(lang === 'th' ? 'th-TH' : lang === 'kh' ? 'km-KH' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        ) : (
+                          <span>{t.estimated}</span>
                         )}
-                        {(dashboardStats?.displacedTrend || 0) === 0 && <span>{t.noChange}</span>}
                       </div>
                     </div>
 
@@ -2052,9 +2134,9 @@ export default function Home() {
                     </div>
 
                     {/* Status / Threat Level - Uses dashboardStats for conflict level */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between h-32">
-                      <div>
-                        <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.threatLevel}</h4>
+                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col h-32">
+                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.threatLevel}</h4>
+                      <div className="flex-1 flex items-center">
                         <span className={`font-display text-4xl md:text-5xl leading-none uppercase ${(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
                           (dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'
                           }`}>
@@ -2063,7 +2145,6 @@ export default function Home() {
                               t.low}
                         </span>
                       </div>
-                      <div className="text-[10px] font-mono opacity-40 uppercase tracking-wider">{t.active}</div>
                     </div>
                   </div>
                 </Card>
@@ -2086,7 +2167,7 @@ export default function Home() {
                             <p className={`font-serif italic leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
                               "{getNarrative(cambodiaMeta)}"
                             </p>
-                            <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta.narrativeSource || 'AI Analysis'}</p>
+                            <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta.narrativeSource || t.aiAnalysis}</p>
                           </>
                         ) : (
                           <p className="font-mono text-xs opacity-50">{t.awaitingAnalysis}</p>
@@ -2142,7 +2223,7 @@ export default function Home() {
                       </div>
 
                       <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
-                        {getSummary(neutralMeta) || "Analyzing global intelligence feeds... The system is monitoring news from both Thailand and Cambodia perspectives to synthesize a balanced report."}
+                        {getSummary(neutralMeta) || t.analyzingFeeds}
                       </div>
 
                       {getKeyEvents(neutralMeta).length > 0 && (
@@ -2177,7 +2258,7 @@ export default function Home() {
                             <p className={`font-serif italic leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
                               "{getNarrative(thailandMeta)}"
                             </p>
-                            <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta.narrativeSource || 'AI Analysis'}</p>
+                            <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta.narrativeSource || t.aiAnalysis}</p>
                           </>
                         ) : (
                           <p className="font-mono text-xs opacity-50">{t.awaitingAnalysis}</p>
@@ -2219,8 +2300,8 @@ export default function Home() {
           {
             viewMode === 'LOSSES' && (
               <>
-                <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4" style={{ height: sidebarHeight }}>
-                  <Card title={`📜 ${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col">
+                <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 h-[calc(100dvh-8rem)] md:h-auto" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
+                  <Card title={`📜 ${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
 
                     {(!timelineEvents || timelineEvents.length === 0) ? (
                       <div className="text-center py-12 flex-1 flex flex-col justify-center items-center">
@@ -2231,30 +2312,31 @@ export default function Home() {
                       <div className="flex flex-col h-full min-h-0">
                         {/* --- DATE SELECTOR BAR --- */}
                         <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5">
-                          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2" style={{ scrollbarWidth: 'none' }}>
+                          <div ref={datePickerRef} className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2" style={{ scrollbarWidth: 'none' }}>
                             {timelineDates.map((date) => {
                               const isSelected = selectedTimelineDate === date;
                               const count = dateCounts[date] || 0;
                               return (
                                 <button
                                   key={date}
+                                  data-date={date}
                                   onClick={() => scrollToDate(date)}
                                   className={`
                                      flex flex-col items-center justify-center
-                                     min-w-[80px] px-3 py-2 rounded-sm border-2 transition-all flex-shrink-0
+                                     min-w-[80px] px-3 ${lang === 'kh' || lang === 'th' ? 'py-3' : 'py-2'} rounded-sm border-2 transition-colors duration-150 flex-shrink-0
                                      ${isSelected
-                                      ? 'bg-riso-ink border-riso-ink text-riso-paper shadow-lg scale-105'
+                                      ? 'bg-riso-ink border-riso-ink text-riso-paper'
                                       : 'bg-riso-paper border-riso-ink/20 text-riso-ink hover:border-riso-ink/50 hover:bg-white'}
                                    `}
                                 >
                                   <span className={`font-mono text-[10px] uppercase tracking-wider mb-1 ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
                                     {new Date(date).getFullYear()}
                                   </span>
-                                  <span className="font-display text-xl leading-none uppercase">
-                                    {new Date(date).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-US', { month: 'short', day: 'numeric' })}
+                                  <span className={`font-display text-xl uppercase ${lang === 'kh' || lang === 'th' ? 'leading-relaxed py-0.5' : 'leading-none'}`}>
+                                    {formatDate(date, 'short')}
                                   </span>
                                   <span className={`text-[9px] font-mono mt-1 px-1.5 rounded-full ${isSelected ? 'bg-riso-paper text-riso-ink' : 'bg-riso-ink/10 text-riso-ink'}`}>
-                                    {count} Events
+                                    {count} {t.events}
                                   </span>
                                 </button>
                               );
@@ -2263,116 +2345,11 @@ export default function Home() {
                         </div>
 
                         {/* --- CONTINUOUS SCROLL TIMELINE --- */}
-                        <div ref={timelineScrollRef} className="flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] scroll-smooth" style={{ willChange: 'scroll-position' }}>
+                        <div ref={timelineScrollRef} className="flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] overscroll-contain">
                           <div className="relative pb-12">
                             {/* Center Line - spans full content height, z-0 so headers cover it */}
                             <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2 z-0"></div>
-                            {timelineDates.map((date) => {
-                              const events = groupedEvents[date] || [];
-                              const categoryColors: Record<string, string> = {
-                                military: 'bg-red-500',
-                                diplomatic: 'bg-blue-500',
-                                humanitarian: 'bg-yellow-500',
-                                political: 'bg-purple-500',
-                              };
-
-                              return (
-                                <div key={date} id={`timeline-date-${date}`}>
-                                  {/* Date Header - pins flush to top with shadow fade */}
-                                  <div className="sticky top-0 z-20">
-                                    <div className="bg-riso-paper/95 backdrop-blur-sm border-b border-riso-ink/10 py-3 px-4 md:px-8">
-                                      <div className="flex items-center justify-between max-w-2xl mx-auto">
-                                        <div className="flex items-center gap-3">
-                                          <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
-                                          <h3 className="font-display text-xl uppercase tracking-wide">
-                                            {new Date(date).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                                          </h3>
-                                        </div>
-                                        <span className="font-mono text-xs opacity-50">{events.length} REPORTS</span>
-                                      </div>
-                                    </div>
-                                    {/* Gradient fade shadow */}
-                                    <div className="h-4 bg-gradient-to-b from-riso-paper/80 to-transparent pointer-events-none"></div>
-                                  </div>
-
-                                  {/* Events for this date */}
-                                  <div className="space-y-6 px-4 md:px-8 py-6">
-                                    {events.map((event: any, index: number) => {
-                                      const isRight = index % 2 === 0;
-                                      const dotSize = Math.max(12, Math.min(24, (event.importance || 50) / 4));
-                                      const isImportant = (event.importance || 0) > 75;
-
-                                      return (
-                                        <div key={event._id} className={`relative flex md:items-center ${isRight ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row ml-8 md:ml-0`}>
-                                          <div className="hidden md:block flex-1"></div>
-
-                                          {/* Center Node */}
-                                          <div className="absolute left-[-2rem] md:left-1/2 flex items-center justify-center w-8 h-8 transform md:-translate-x-1/2 z-10">
-                                            <div
-                                              className={`rounded-full border-2 border-riso-paper shadow-sm transition-all hover:scale-125 cursor-pointer
-                                                ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}
-                                                ${isImportant ? 'animate-pulse ring-2 ring-offset-2 ring-riso-accent' : ''}`}
-                                              style={{ width: dotSize * 1.5, height: dotSize * 1.5 }}
-                                              onClick={() => setSelectedEvent(event)}
-                                            ></div>
-                                          </div>
-
-                                          {/* Connector Line */}
-                                          <div className={`hidden md:block absolute top-1/2 h-px bg-riso-ink/20 w-8 md:w-16 ${isRight ? 'left-8 md:left-[calc(50%+1rem)]' : 'right-8 md:right-[calc(50%+1rem)]'}`}></div>
-
-                                          {/* Event Card */}
-                                          <div className={`flex-1 ${isRight ? 'md:pl-12' : 'md:pr-12'}`}>
-                                            <div
-                                              className={`relative bg-riso-paper p-3 rounded-sm border hover:shadow-lg transition-all cursor-pointer group
-                                                ${isImportant ? 'border-riso-accent border-2' : 'border-riso-ink/20 dashed-border-sm'}`}
-                                              onClick={() => setSelectedEvent(event)}
-                                            >
-                                              <div className="flex justify-between items-start mb-1">
-                                                <span className={`font-mono text-[10px] uppercase font-bold px-1.5 py-0.5 rounded text-white ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}`}>
-                                                  {event.category}
-                                                </span>
-                                                <span className="font-mono text-[10px] opacity-50">
-                                                  {event.timeOfDay || 'All Day'}
-                                                </span>
-                                              </div>
-
-                                              <h4 className={`font-bold leading-tight mb-1 group-hover:text-blue-700 transition-colors ${lang === 'kh' || lang === 'th' ? 'text-base font-serif' : 'text-sm font-display uppercase tracking-wide'}`}>
-                                                {(() => {
-                                                  if (lang === 'th' && event.titleTh) return event.titleTh;
-                                                  if (lang === 'kh' && event.titleKh) return event.titleKh;
-                                                  return event.title;
-                                                })()}
-                                              </h4>
-
-                                              <p className={`line-clamp-2 opacity-70 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
-                                                {(() => {
-                                                  if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
-                                                  if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
-                                                  return event.description;
-                                                })()}
-                                              </p>
-
-                                              {event.sources && event.sources.length > 0 && (
-                                                <div className="mt-2 flex items-center gap-1">
-                                                  <div className="flex -space-x-1">
-                                                    {[...Array(Math.min(3, event.sources.length))].map((_, i) => (
-                                                      <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-mono">📄</div>
-                                                    ))}
-                                                  </div>
-                                                  <span className="text-[9px] font-mono opacity-50">+{event.sources.length} Sources</span>
-                                                </div>
-                                              )}
-
-                                              <div className={`absolute top-1/2 w-2 h-2 bg-riso-ink rounded-full ${isRight ? '-left-1' : '-right-1'} transform -translate-y-1/2 hidden md:block opacity-20`}></div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                            {timelineContent}
 
                             {timelineDates.length === 0 && (
                               <div className="flex flex-col items-center justify-center py-20 opacity-50">
@@ -2387,14 +2364,14 @@ export default function Home() {
                         </div>
 
                         {/* Legend - Fixed at bottom */}
-                        <div className="flex-none flex justify-center gap-6 py-2 border-t border-riso-ink/10 bg-riso-ink/5 text-[10px] font-mono">
+                        <div className="flex-none flex flex-wrap justify-center gap-3 md:gap-6 py-2 px-2 border-t border-riso-ink/10 bg-riso-ink/5 text-[10px] font-mono">
                           {Object.entries({
                             military: 'bg-red-500',
                             diplomatic: 'bg-blue-500',
                             humanitarian: 'bg-yellow-500',
                             political: 'bg-purple-500'
                           }).map(([cat, color]) => (
-                            <div key={cat} className="flex items-center gap-2">
+                            <div key={cat} className="flex items-center gap-1.5">
                               <div className={`w-2 h-2 rounded-full ${color}`}></div>
                               <span className="uppercase opacity-60">{cat}</span>
                             </div>
@@ -2424,126 +2401,197 @@ export default function Home() {
                       political: 'bg-purple-500',
                     };
 
+                    const renderInnerContent = (evt: any, isGhost: boolean) => {
+                      if (!evt) return null;
+                      const evtIndex = sortedEvents.indexOf(evt);
+                      const evtHasNext = evtIndex !== -1 && evtIndex < sortedEvents.length - 1;
+                      const evtHasPrev = evtIndex > 0;
+
+                      return (
+                        <div
+                          className={`flex flex-col h-full w-full overflow-hidden ${isGhost ? 'absolute inset-0 z-20 bg-[#F2F2E9]' : 'relative z-10'}`}
+                          style={isGhost ? { animation: 'borderClashFadeOut 200ms ease-out forwards', pointerEvents: 'none' } : {}}
+                        >
+                          {/* Header with Navigation */}
+                          <div className="bg-riso-ink text-riso-paper p-4 flex justify-between items-start flex-shrink-0">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[10px] font-mono tracking-[0.2em] uppercase opacity-70">{t.intelReport}</span>
+                                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                                <span className="text-[10px] font-mono opacity-50 ml-auto">
+                                  {evtIndex + 1} / {sortedEvents.length}
+                                </span>
+                              </div>
+                              <h3 className={`font-display text-xl md:text-2xl leading-tight ${lang === 'th' ? 'font-bold' : ''}`}>
+                                {getEventTitle(evt)}
+                              </h3>
+                            </div>
+                            <button
+                              onClick={closeModal}
+                              className="p-2 hover:bg-white/10 rounded-full transition-colors ml-4"
+                              aria-label="Close modal"
+                            >
+                              <XIcon className="w-6 h-6" />
+                            </button>
+                          </div>
+
+                          {/* Scrollable Body */}
+                          <div className={`p-4 md:p-6 space-y-6 flex-1 ${isGhost ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+                            {/* Meta Info */}
+                            <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
+                              <div>
+                                <p className="opacity-50 uppercase tracking-wider mb-1">{t.date}</p>
+                                <p className="font-bold">{formatDate(evt.date, 'long')}</p>
+                              </div>
+                              <div>
+                                <p className="opacity-50 uppercase tracking-wider mb-1">{t.impact}</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold">{evt.importance}/100</span>
+                                </div>
+                              </div>
+                              <div>
+                                <p className="opacity-50 uppercase tracking-wider mb-1">{t.category}</p>
+                                <span className={`inline-block px-2 py-0.5 rounded text-white text-[10px] uppercase font-bold ${categoryColors[evt.category?.toLowerCase()] || 'bg-gray-500'}`}>
+                                  {evt.category}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Description */}
+                            <p className="font-serif text-base leading-relaxed text-gray-800">
+                              {getEventDescription(evt)}
+                            </p>
+
+                            {/* Sources */}
+                            {evt.sources?.length > 0 && (() => {
+                              // Sort by credibility (highest first)
+                              const sortedSources = [...evt.sources].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
+                              const topSources = sortedSources.slice(0, 3);
+                              const remainingSources = sortedSources.slice(3);
+
+                              return (
+                                <div className="space-y-3">
+                                  <p className="font-mono text-[10px] uppercase opacity-50">{t.topSources} ({evt.sources.length} {t.total})</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {topSources.map((s: any, idx: number) => (
+                                      s.url ? (
+                                        <a
+                                          key={idx}
+                                          href={s.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer"
+                                        >
+                                          {s.name} ({s.credibility}%)
+                                          <span className="opacity-50">↗</span>
+                                        </a>
+                                      ) : (
+                                        <span key={idx} className="inline-block px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono">
+                                          {s.name} ({s.credibility}%)
+                                        </span>
+                                      )
+                                    ))}
+                                  </div>
+
+                                  {/* Expandable remaining sources */}
+                                  {remainingSources.length > 0 && (
+                                    <div>
+                                      <button
+                                        onClick={() => setShowAllSources(!showAllSources)}
+                                        className="text-xs font-mono text-blue-600 hover:text-blue-800 underline"
+                                      >
+                                        {showAllSources ? `↑ ${t.hide}` : `↓ ${t.show} ${remainingSources.length} ${t.moreSources}`}
+                                      </button>
+
+                                      {showAllSources && (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                          {remainingSources.map((s: any, idx: number) => (
+                                            s.url ? (
+                                              <a
+                                                key={idx + 3}
+                                                href={s.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer"
+                                              >
+                                                {s.name} ({s.credibility}%)
+                                                <span className="opacity-50">↗</span>
+                                              </a>
+                                            ) : (
+                                              <span key={idx + 3} className="inline-block px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-mono">
+                                                {s.name} ({s.credibility}%)
+                                              </span>
+                                            )
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Navigation Footer */}
+                          <div className="bg-riso-ink/5 border-t border-riso-ink/20 p-3 flex-shrink-0">
+                            <div className="flex items-center justify-between gap-4">
+                              <button
+                                onClick={goToPrev}
+                                disabled={!evtHasPrev}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasPrev ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                              >
+                                <span>←</span>
+                                <span className="hidden sm:inline">{t.prev}</span>
+                              </button>
+
+                              <span className="font-mono text-xs opacity-50">
+                                {t.navHint}
+                              </span>
+
+                              <button
+                                onClick={goToNext}
+                                disabled={!evtHasNext}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasNext ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                              >
+                                <span className="hidden sm:inline">{t.next}</span>
+                                <span>→</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    };
+
                     return (
                       <div
-                        className="fixed inset-0 z-[100] flex items-end md:items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm modal-backdrop"
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
                         onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
                         onKeyDown={handleKeyDown}
                         tabIndex={0}
                         ref={(el) => el?.focus()}
+                        style={{
+                          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                          animation: isModalClosing
+                            ? 'borderClashFadeOut 250ms ease-out forwards'
+                            : 'borderClashFadeIn 250ms ease-out forwards',
+                        }}
                       >
-                        <div className="relative flex items-center w-full max-w-lg">
-                          {/* Desktop Nav Arrows */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); animateSwipe('prev'); }}
-                            disabled={!hasPrev}
-                            className={`hidden md:flex absolute -left-16 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all z-10 ${hasPrev ? 'hover:bg-white hover:scale-110' : 'opacity-30 cursor-not-allowed'}`}
-                          >
-                            <span className="text-2xl">←</span>
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); animateSwipe('next'); }}
-                            disabled={!hasNext}
-                            className={`hidden md:flex absolute -right-16 top-1/2 -translate-y-1/2 w-12 h-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-all z-10 ${hasNext ? 'hover:bg-white hover:scale-110' : 'opacity-30 cursor-not-allowed'}`}
-                          >
-                            <span className="text-2xl">→</span>
-                          </button>
+                        {/* Full-screen Card Modal */}
+                        <div
+                          className="relative bg-[#F2F2E9] w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-xl border-4 border-riso-ink shadow-2xl flex flex-col"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            // Only handle Open/Close animations on the container
+                            animation: isModalClosing
+                              ? 'borderClashCardOut 250ms ease-out forwards'
+                              : 'borderClashCardIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                          }}
+                        >
+                          {/* Main Card (always visible underneath) */}
+                          {renderInnerContent(selectedEvent, false)}
 
-                          {/* SWIPEABLE CONTENT WRAPPER */}
-                          {(() => {
-                            // Simple internal component to avoid repetition
-                            const CardContent = ({ eventData, isGhost = false, style, forwardedRef, ...props }: any) => {
-                              if (!eventData) return null;
-                              return (
-                                <div
-                                  ref={forwardedRef}
-                                  className={`bg-[#F2F2E9] w-full max-h-[85vh] md:max-h-[90vh] overflow-y-auto rounded-2xl md:rounded-lg border-4 border-riso-ink shadow-xl flex flex-col ${isGhost ? 'absolute inset-0 z-0 pointer-events-none' : 'relative z-10 shadow-2xl'}`}
-                                  style={style}
-                                  {...props}
-                                >
-                                  {/* Mobile Hande */}
-                                  <div className="md:hidden flex flex-col items-center pt-6 pb-4 sticky top-0 bg-[#F2F2E9] z-20 cursor-grab active:cursor-grabbing select-none" style={{ touchAction: 'none' }}>
-                                    <div className="w-16 h-2 bg-riso-ink/40 rounded-full mb-3 pointer-events-none"></div>
-                                    <span className="font-mono text-[10px] opacity-50 font-bold pointer-events-none">
-                                      {sortedEvents.indexOf(eventData) + 1}/{sortedEvents.length} • {isGhost ? 'NEXT' : 'DRAG TO CLOSE'}
-                                    </span>
-                                  </div>
-
-                                  {/* Header */}
-                                  <div className="bg-riso-ink text-riso-paper p-4 flex justify-between items-start sticky top-0 z-10 cursor-grab active:cursor-grabbing" style={{ touchAction: 'none' }}>
-                                    <div className="pointer-events-none">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-[10px] font-mono tracking-[0.2em] uppercase opacity-70">INTEL REPORT</span>
-                                        <div className={`w-2 h-2 rounded-full ${isGhost ? 'bg-gray-500' : 'bg-red-500 animate-pulse'}`}></div>
-                                      </div>
-                                      <h3 className={`font-display text-2xl leading-tight ${lang === 'th' ? 'font-bold' : ''}`}>
-                                        {getEventTitle(eventData)}
-                                      </h3>
-                                    </div>
-                                    <button onClick={(e) => { e.stopPropagation(); closeModal(); }} className="p-1 hover:bg-white/10 rounded-full transition-colors pointer-events-auto">
-                                      <XIcon className="w-6 h-6" />
-                                    </button>
-                                  </div>
-
-                                  {/* Body */}
-                                  <div className="p-4 md:p-6 space-y-6 flex-1">
-                                    {/* Meta */}
-                                    <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
-                                      <div>
-                                        <p className="opacity-50 uppercase tracking-wider mb-1">DATE</p>
-                                        <p className="font-bold">{new Date(eventData.date).toLocaleDateString()}</p>
-                                      </div>
-                                      <div>
-                                        <p className="opacity-50 uppercase tracking-wider mb-1">IMPACT</p>
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-bold">{eventData.importance}/100</span>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Desc */}
-                                    <p className="font-serif text-base leading-relaxed text-gray-800">
-                                      {getEventDescription(eventData)}
-                                    </p>
-
-                                    {/* Sources */}
-                                    {eventData.sources?.length > 0 && (
-                                      <div className="space-y-2">
-                                        <p className="font-mono text-[10px] uppercase opacity-50">SOURCES</p>
-                                        <div className="flex flex-wrap gap-2">
-                                          {eventData.sources.map((s: any, idx: number) => (
-                                            <span key={idx} className="inline-block px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono">
-                                              {s.name} ({s.credibility}%)
-                                            </span>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            };
-
-                            const prevEvent = hasPrev ? sortedEvents[currentIndex - 1] : null;
-                            const nextEvent = hasNext ? sortedEvents[currentIndex + 1] : null;
-
-                            return (
-                              <>
-                                {prevEvent && <CardContent eventData={prevEvent} isGhost={true} forwardedRef={ghostPrevRef} style={{ visibility: 'hidden' }} />}
-                                {nextEvent && <CardContent eventData={nextEvent} isGhost={true} forwardedRef={ghostNextRef} style={{ visibility: 'hidden' }} />}
-                                <CardContent
-                                  eventData={selectedEvent}
-                                  forwardedRef={modalRef}
-                                  style={{ touchAction: 'pan-y', willChange: 'transform, opacity' }}
-                                  onClick={(e: any) => e.stopPropagation()}
-                                  onPointerDown={handlePointerDown}
-                                  onPointerMove={handlePointerMove}
-                                  onPointerUp={handlePointerUp}
-                                  onPointerCancel={handlePointerUp}
-                                />
-                              </>
-                            );
-                          })()}
+                          {/* Ghost Card (fades out on top) */}
+                          {isNavigating && previousEvent && renderInnerContent(previousEvent, true)}
                         </div>
                       </div>
                     );
@@ -2576,9 +2624,9 @@ export default function Home() {
                         </div>
 
                         {/* Anti-Propaganda Checklist */}
-                        <div className="space-y-4">
-                          <h4 className="font-mono text-sm font-bold uppercase border-b-2 border-riso-ink/20 pb-2">{t.verificationChecklist}</h4>
-                          <ul className="space-y-3 font-mono text-xs">
+                        <div>
+                          <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink/20 pb-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.verificationChecklist}</h4>
+                          <ul className="space-y-2 font-mono text-xs">
                             {[
                               { icon: "🕵️", text: t.checkSources },
                               { icon: "📸", text: t.lookForEvidence },
@@ -2588,7 +2636,7 @@ export default function Home() {
                             ].map((item, i) => (
                               <li key={i} className="flex items-start gap-4 p-2 bg-white/50 border border-transparent hover:border-riso-ink/20 transition-all rounded group">
                                 <span className="text-xl filter sepia-[1] hue-rotate-[60deg] saturate-[1] opacity-70 group-hover:filter-none group-hover:opacity-100 transition-all duration-300">{item.icon}</span>
-                                <span className={`opacity-80 mt-1 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{item.text}</span>
+                                <span className={`opacity-80 mt-1 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{item.text}</span>
                               </li>
                             ))}
                           </ul>
@@ -2597,11 +2645,32 @@ export default function Home() {
                         {/* Deepfake Warning */}
                         <div className="border-l-4 border-riso-accent pl-4 py-2 bg-riso-accent/5">
                           <h5 className="font-display text-lg text-riso-accent mb-1">{t.aiWarning}</h5>
-                          <p className={`font-mono opacity-70 mb-2 ${lang === 'kh' || lang === 'th' ? 'text-xs' : 'text-[10px]'}`}>{t.aiWarningDesc}</p>
+                          <p className={`font-mono opacity-70 mb-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-[10px]'}`}>{t.aiWarningDesc}</p>
                           <div className="flex gap-2 text-xs font-mono font-bold text-riso-accent">
                             <span>{t.dfTip1}</span>
                           </div>
                         </div>
+
+
+                        {/* FACT VS PROPAGANDA */}
+                        <div className="space-y-4">
+                          <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink/20 pb-2 flex items-center gap-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                            <span className="text-xl">⚖️</span> {t.factVsPropaganda}
+                          </h4>
+                          <div className="grid grid-cols-1 gap-3">
+                            {/* Comparison 1 */}
+                            <div className={`bg-white/50 p-3 rounded border border-riso-ink/10 font-mono space-y-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                              <p className="text-green-700 flex gap-2"><span className="font-bold">✓</span> {t.fact1}</p>
+                              <p className="text-red-700 flex gap-2"><span className="font-bold">✗</span> {t.propaganda1}</p>
+                            </div>
+                            {/* Comparison 2 */}
+                            <div className={`bg-white/50 p-3 rounded border border-riso-ink/10 font-mono space-y-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                              <p className="text-green-700 flex gap-2"><span className="font-bold">✓</span> {t.fact2}</p>
+                              <p className="text-red-700 flex gap-2"><span className="font-bold">✗</span> {t.propaganda2}</p>
+                            </div>
+                          </div>
+                        </div>
+
                       </div>
 
                       {/* RIGHT COLUMN: HOW IT WORKS */}
@@ -2642,6 +2711,38 @@ export default function Home() {
                           <p className={`font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.statelessDesc}</p>
                         </div>
 
+                        {/* DATA EXPLAINER */}
+                        <div className="space-y-6 pt-4 border-t border-riso-ink/10">
+                          {/* Scores */}
+                          <div>
+                            <h4 className={`font-mono font-bold uppercase mb-3 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.understandingScores}</h4>
+                            <div className={`space-y-2 font-mono ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                                <p>{t.scoreHigh}</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                <p>{t.scoreMid}</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                <p>{t.scoreLow}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Sources */}
+                          <div>
+                            <h4 className={`font-mono font-bold uppercase mb-3 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.whoIsTalking}</h4>
+                            <div className={`space-y-2 font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                              <p>🏛️ {t.sourceGov}</p>
+                              <p>📰 {t.sourceMedia}</p>
+                              <p>📡 {t.sourceAgency}</p>
+                            </div>
+                          </div>
+                        </div>
+
                       </div>
                     </div>
                   </Card>
@@ -2649,14 +2750,14 @@ export default function Home() {
               </>
             )
           }
-        </main>
+        </main >
         {/* Decorative footer elements */}
-        <div className="fixed bottom-4 right-4 hidden lg:block">
+        < div className="fixed bottom-4 right-4 hidden lg:block" >
           <div className="vertical-text font-display text-6xl text-riso-ink opacity-10 pointer-events-none select-none">
             {t.peaceWar}
           </div>
-        </div>
-      </div>
+        </div >
+      </div >
     </div >
   );
 }
