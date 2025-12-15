@@ -226,6 +226,7 @@ export const pingGhostAPI = internalAction({
     args: {},
     handler: async (): Promise<void> => {
         try {
+            // 1. Health check ping (keeps Koyeb instance awake)
             const response = await fetch(`${GHOST_API_URL}/health`, {
                 method: "GET",
                 headers: { "Content-Type": "application/json" },
@@ -236,6 +237,26 @@ export const pingGhostAPI = internalAction({
                 console.log(`🏓 [KEEPALIVE] Ghost API ping successful: ${data.message || "healthy"}`);
             } else {
                 console.log(`⚠️ [KEEPALIVE] Ghost API ping failed: ${response.status}`);
+            }
+
+            // 2. Cookie refresh (harvests fresh cookies and revives dead workers)
+            try {
+                const refreshResponse = await fetch(`${GHOST_API_URL}/v1/refresh`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                });
+
+                if (refreshResponse.ok) {
+                    const refreshData = await refreshResponse.json();
+                    if (refreshData.revived > 0) {
+                        console.log(`🍪 [KEEPALIVE] Cookie refresh: Revived ${refreshData.revived} workers!`);
+                    } else if (refreshData.still_dead > 0) {
+                        console.log(`🍪 [KEEPALIVE] Cookie refresh: ${refreshData.still_dead} workers still dead`);
+                    }
+                }
+            } catch (refreshError) {
+                // Non-fatal - refresh might not be implemented in older versions
+                console.log(`⚠️ [KEEPALIVE] Cookie refresh unavailable`);
             }
         } catch (error) {
             console.log(`❌ [KEEPALIVE] Ghost API unreachable: ${error}`);
