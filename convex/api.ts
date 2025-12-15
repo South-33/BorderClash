@@ -161,8 +161,15 @@ export const getExistingTitlesInternal = internalQuery({
         const table = args.country === "thailand" ? "thailandNews"
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
+
+        // Only get articles from last 2 days to keep prompt size small
+        const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+        const cutoff = Date.now() - TWO_DAYS_MS;
+
         const articles = await ctx.db.query(table).collect();
-        return articles.map(a => ({ title: a.title, source: a.source, sourceUrl: a.sourceUrl }));
+        return articles
+            .filter(a => (a.publishedAt || a.fetchedAt) > cutoff)
+            .map(a => ({ title: a.title, source: a.source, sourceUrl: a.sourceUrl }));
     },
 });
 

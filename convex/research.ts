@@ -581,7 +581,7 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
       "titleEn": "English translation of headline",
       "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
       "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
-      "publishedAt": "YYYY-MM-DDTHH:mm:ssZ",
+      "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time as shown on the page - Thailand/Cambodia are both UTC+7)",
       "sourceUrl": "https://actual-url.com/path",
       "source": "Publication Name",
       "category": "military|political|humanitarian|diplomatic",
@@ -636,7 +636,7 @@ Do NOT mix up Article 1's URL with Article 2's summary!
 - DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
 - DO NOT use today's date unless the article explicitly says \"Published today\" with a date
 - Common bad dates to REJECT: dates in the far future, dates from years ago for current news
-- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
+- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ss+07:00\" or \"YYYY-MM-DD\" (Use LOCAL Thai/Khmer time)
 - WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
 
 🔴 FINAL CHECK BEFORE RESPONDING:
@@ -782,7 +782,7 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
       "titleEn": "English translation of headline",
       "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
       "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
-      "publishedAt": "YYYY-MM-DDTHH:mm:ssZ",
+      "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time as shown on the page - Thailand is UTC+7)",
       "sourceUrl": "https://actual-url.com/path",
       "source": "Publication Name",
       "category": "military|political|humanitarian|diplomatic",
@@ -837,7 +837,7 @@ Do NOT mix up Article 1's URL with Article 2's summary!
 - DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
 - DO NOT use today's date unless the article explicitly says \"Published today\" with a date
 - Common bad dates to REJECT: dates in the far future, dates from years ago for current news
-- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
+- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ss+07:00\" or \"YYYY-MM-DD\" (Use LOCAL Thai time)
 - WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
 
 🔴 FINAL CHECK BEFORE RESPONDING:
@@ -987,7 +987,7 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
       "titleEn": "English translation of headline",
       "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
       "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
-      "publishedAt": "YYYY-MM-DDTHH:mm:ssZ",
+      "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time - convert to Thailand/Cambodia time UTC+7)",
       "sourceUrl": "https://actual-url.com/path",
       "source": "Publication Name",
       "category": "military|political|humanitarian|diplomatic",
@@ -1042,7 +1042,7 @@ Do NOT mix up Article 1's URL with Article 2's summary!
 - DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
 - DO NOT use today's date unless the article explicitly says \"Published today\" with a date
 - Common bad dates to REJECT: dates in the far future, dates from years ago for current news
-- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ssZ\" or \"YYYY-MM-DD\"
+- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ss+07:00\" or \"YYYY-MM-DD\" (Convert to Thai/Khmer local time)
 - WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
 
 🔴 FINAL CHECK BEFORE RESPONDING:
@@ -2459,8 +2459,8 @@ export const verifyAllSources = internalAction({
                 return { verified: 0, updated: 0, deleted: 0, errors: 0 };
             }
 
-            // Process 1 article at a time to avoid Ghost API timeouts
-            const BATCH_SIZE = 5;
+            // Process 3 articles at a time - smaller batches for better URL verification
+            const BATCH_SIZE = 3;
 
             for (let i = 0; i < allArticles.length; i += BATCH_SIZE) {
                 const batch = allArticles.slice(i, i + BATCH_SIZE);
@@ -2506,10 +2506,17 @@ For each article below, you MUST:
 ⚠️ VERIFICATION CRITERIA:
 - VERIFIED: URL works AND shows article page AND summary accurately reflects the content AND it's about Thailand-Cambodia
 - NEEDS_UPDATE: URL works, article IS about Thailand-Cambodia, but our title/summary/date/URL is WRONG → provide corrections!
-- URL_DEAD: The URL returns 404, 403, or page not found
+- URL_DEAD: You ACTUALLY received a 404, 403, or explicit "page not found" error. NOT just "couldn't load" or "search didn't find it"
 - URL_WRONG: The URL redirects to wrong page (image, attachment, different article) → provide correctUrl!
 - OFF_TOPIC: The article is NOT about Thailand-Cambodia border/relations (different topic entirely)
 - HALLUCINATED: The URL exists but shows completely different content (e.g., we said "border clash" but page is about "cooking recipes")
+- SKIP: You could not access the URL (timeout, blocked, etc.) - DO NOT mark as dead if you just couldn't reach it!
+
+⚠️ IMPORTANT - BE CONSERVATIVE:
+- Major news sites like Yahoo News, Reuters, AP, BBC are UNLIKELY to have dead URLs for recent articles
+- If you cannot visit a URL, use SKIP rather than URL_DEAD
+- Only use URL_DEAD when you see ACTUAL 404/403 errors, not just because you couldn't load the page
+- "Search didn't find it" is NOT the same as "URL is dead" - use SKIP in this case
 
 📋 ARTICLES TO VERIFY:
 ${articlesToVerify}
@@ -2523,7 +2530,7 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
       "status": "VERIFIED|NEEDS_UPDATE|URL_DEAD|URL_WRONG|OFF_TOPIC|HALLUCINATED",
       "actualTitle": "What the page headline actually says (original language)",
       "actualSummary": "2-3 sentence summary of what the article ACTUALLY says",
-      "actualPublishedAt": "2025-12-14T10:00:00Z or null if cannot determine",
+      "actualPublishedAt": "2025-12-14T10:00:00+07:00 (Use LOCAL Thai/Khmer time, NOT UTC. Both countries are UTC+7)",
       "isAboutBorder": true,
       "matchScore": 85,
       "reason": "Why you made this determination",
@@ -2531,10 +2538,11 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
       
       "correctData": {
         // ONLY include fields that need fixing! Omit fields that are already correct.
-        // If only date is wrong, just include: "publishedAt": "2025-12-14T10:00:00Z"
+        // If only date is wrong, just include: "publishedAt": "2025-12-14T16:00:00+07:00"
+        // NOTE: Our dates are stored in LOCAL time (UTC+7), not UTC!
         // If only title is wrong, include title + translations
         // Example - only date wrong:
-        // "correctData": { "publishedAt": "2025-12-14T16:00:00Z" }
+        // "correctData": { "publishedAt": "2025-12-14T16:00:00+07:00" }
         // Example - title wrong:
         // "correctData": { "title": "...", "titleEn": "...", "titleTh": "...", "titleKh": "..." }
       }
@@ -2829,6 +2837,14 @@ RULES:
                                     console.log(`   ⚠️ Failed to delete off-topic article`);
                                     flagged++;
                                 }
+                                break;
+
+                            case "SKIP":
+                                // AI couldn't access URL - DON'T mark as verified so we can retry later
+                                console.log(`   ⏭️ SKIPPED (AI couldn't access URL - will retry next cycle)`);
+                                console.log(`      URL: ${article.sourceUrl}`);
+                                console.log(`      Reason: ${r.reason || "Could not access URL"}`);
+                                // Don't increment any counter - article stays unverified for next attempt
                                 break;
 
                             default:
