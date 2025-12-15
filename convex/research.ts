@@ -163,7 +163,8 @@ async function callGhostWithSelfHealing<T>(
     prompt: string,
     initialModel: "thinking" | "fast" = "thinking",
     maxRetries: number = 3,
-    debugLabel: string = "GHOST"
+    debugLabel: string = "GHOST",
+    modelSequence?: Array<"thinking" | "fast"> // Optional: explicit model for each attempt
 ): Promise<T | null> {
     let currentPrompt = prompt;
     let modelToUse = initialModel;
@@ -172,13 +173,21 @@ async function callGhostWithSelfHealing<T>(
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         let rawResponse = "";
         try {
-            console.log(`🤖 [${debugLabel}] Attempt ${attempt}/${maxRetries} (${modelToUse})...`);
+            // Determine model: use sequence if provided, else default behavior
+            const actualModel = modelSequence && modelSequence[attempt - 1]
+                ? modelSequence[attempt - 1]
+                : (attempt > 1 ? "fast" : modelToUse);
+            console.log(`🤖 [${debugLabel}] Attempt ${attempt}/${maxRetries} (${actualModel})...`);
+
+            // Add speed hint on 2nd thinking attempt
+            let promptToSend = currentPrompt;
+            if (attempt === 2 && actualModel === "thinking") {
+                promptToSend = `⏱️ SPEED NOTE: please work efficiently to avoid timeout. Maintain accuracy.\n\n${currentPrompt}`;
+            }
 
             // 1. CALL API
             try {
-                // If repair attempt, force fast model for speed unless it's deep research
-                const actualModel = attempt > 1 ? "fast" : modelToUse;
-                rawResponse = await callGhostAPI(currentPrompt, actualModel, 1);
+                rawResponse = await callGhostAPI(promptToSend, actualModel, 1);
             } catch (networkError: any) {
                 // Handle Network/Timeout
                 const errStr = String(networkError);
@@ -1404,14 +1413,14 @@ The following was the previous analysis. Use it for context, but DO NOT be shack
 
         const prompt: string = `You are a senior geopolitical analyst providing NEUTRAL but SHARP analysis. You have TWO roles:
 
-🎯 FOR CAMBODIA/THAILAND SECTIONS: Provide RESPECTFUL summaries of each country's perspective - what their media reports, how they frame things.
+🎯 FOR CAMBODIA/THAILAND SECTIONS: Provide RESPECTFUL summaries of each country's perspective - what their media reports, how they frame things. You are a REPORTER here, not a judge.
 
 ⚖️ FOR THE NEUTRAL SECTION: BE A REFEREE. You're the guy calling out BS, flagging obvious spin, and pointing out when the numbers don't add up. You're fair but you're NOT a pushover. If someone's lying or exaggerating, you say it. Think sports commentator calling a bad call: assertive, clear, no diplomatic fluff.
 
 📰 CONTEXT - HOW THESE ARTICLES WERE COLLECTED:
 - CAMBODIAN SOURCES: Domestic news that Cambodian civilians read (Fresh News, DAP, VOD, Phnom Penh Post, etc.)
 - THAI SOURCES: Domestic news that Thai civilians read (Thai Rath, Matichon, Bangkok Post, etc.)
-- INTERNATIONAL SOURCES: Outside observers (Reuters, AP, BBC, Al Jazeera, etc.)
+- INTERNATIONAL SOURCES: Outside observers (Reuters, AP, BBC, etc.) — NOTE: "International" doesn't mean "neutral". These outlets may have access biases (e.g., easier access to one government's officials) or editorial leanings. Treat them as additional perspectives, not automatic truth.
 
 ${memoryContext}
 
@@ -1423,15 +1432,68 @@ ${memoryContext}
 - Apply balanced judgment to differing accounts
 - You may reference previous analysis for CONTEXT, but evaluate current news on its own merits. If evidence changes, your analysis should change.
 
-⚠️ IMPORTANT - SYMMETRIC CRITICAL ANALYSIS:
+═══════════════════════════════════════════════════════════════
+🛡️ BULLETPROOF NEUTRALITY RULES (CRITICAL - READ CAREFULLY)
+═══════════════════════════════════════════════════════════════
+
+These rules ensure NO reader from ANY country can accuse you of bias:
+
+📐 RULE 1: SYMMETRIC LANGUAGE
+If you use a negative word for one country, you MUST use equally weighted language for the other.
+❌ BAD: "Country A's claim is propaganda" vs "Country B's claim is unverified"
+   → "Propaganda" = accusation of lying. "Unverified" = neutral uncertainty.
+✅ GOOD: "Country A's claim is unverified" AND "Country B's claim is unverified"
+✅ ALSO GOOD: "Country A's claim appears exaggerated" AND "Country B's claim appears exaggerated"
+
+📐 RULE 2: ATTRIBUTION MANDATE
+NEVER say "verified" or "confirmed" without naming WHO verified it.
+❌ BAD: "The verified death toll is 30"
+✅ GOOD: "Per Reuters/AP estimates, the death toll is approximately 30"
+✅ GOOD: "International monitors (ICRC, UN) report 30-50 casualties"
+If you cannot name a verifier, say "reported" not "verified".
+
+📐 RULE 3: CONFIDENCE PARITY
+Cambodia and Thailand confidence scores should be within 10 points of each other UNLESS you can justify the gap in one sentence in confidenceRationale.
+❌ BAD: Cambodia 70%, Thailand 90% with no explanation
+✅ GOOD: Cambodia 75%, Thailand 85% + "Higher Thai confidence due to more international wire coverage of their offensive operations"
+
+📐 RULE 4: PROPORTIONAL CRITICISM (NEUTRAL SECTION)
+Criticism should be proportional to actual discrepancies found, NOT forced 50/50 balance.
+❌ BAD: Forcing equal criticism when evidence clearly shows one side fabricating more
+❌ ALSO BAD: 5 paragraphs criticizing one side, silence on the other
+✅ GOOD: If one side has objectively more spin, criticize proportionally BUT explicitly state: "Analysis shows more discrepancies in [Country]'s claims this period."
+✅ KEY: No side gets a pass. Even if one side is worse, the other side's issues still get mentioned.
+
+📐 RULE 5: NO EDITORIALIZING ON THIRD PARTIES
+Describe what foreign leaders/organizations DID, not whether it was smart.
+❌ BAD: "The US announcement was detached from reality"
+✅ GOOD: "The US announced X; Country A rejected it, Country B welcomed it"
+
+📐 RULE 6: RANGE OVER PICKING SIDES
+When sources give conflicting numbers, report the RANGE, not your favorite.
+❌ BAD: "Death toll is 30" (picking the international number)
+✅ GOOD: "Death toll disputed: 30-50 per international monitors, 480+ per Country A claims"
+
+📏 FICTIONAL EXAMPLES (to show the PATTERN - these are NOT about Cambodia/Thailand):
+Example of SYMMETRIC criticism:
+"Country A claims to have killed 500 enemy soldiers; international tallies suggest 40-60. Similarly, Country B claims zero civilian casualties from its shelling, contradicted by NGO reports of 12 civilian deaths. BOTH governments appear to be manipulating figures for domestic audiences."
+
+Example of ATTRIBUTED claims:
+"According to Red Cross field reports, approximately 2,000 civilians have fled the border region. Country A's government puts this figure at 10,000; Country B disputes any displacement occurred. The Red Cross figure is considered most reliable due to on-ground presence."
+
+Example of BALANCED referee call:
+"The situation reveals classic information warfare from BOTH sides: Country A's state media emphasizes enemy atrocities while minimizing own-side incidents; Country B's coverage does the mirror opposite. Neither domestic narrative can be taken at face value."
+═══════════════════════════════════════════════════════════════
+
+⚠️ ADDITIONAL CRITICAL ANALYSIS PRINCIPLES:
 - ALL parties in a conflict have incentives to exaggerate successes and minimize losses
 - Apply EQUAL skepticism to: (1) Thai government/military, (2) Cambodian government/military, (3) Both domestic media, (4) International media (which may have its own editorial biases)
 - NO source type is automatically 'truth' - prioritize claims corroborated by MULTIPLE independent sources regardless of origin
 - If sources disagree, NOTE THE DISCREPANCY without assuming either is correct
 - BE DIRECT about discrepancies between ANY sources (Thai vs Cambodian, domestic vs international, etc.)
-- CALL OUT all sides equally when they exaggerate, omit facts, or use nationalist framing
+- CALL OUT all sides proportionally when they exaggerate, omit facts, or use nationalist framing — don't force false equivalence, but don't give anyone a free pass either
 - DON'T pick sides - acknowledge uncertainty when evidence is conflicting
-- For casualty figures: if sources disagree, report the RANGE (e.g., '1-5 reported') rather than picking one number
+- CUMULATIVE BIAS CHECK: After drafting, ask yourself: "Did I give one country benefit-of-doubt more often across ALL claims?" If yes, rebalance or explicitly justify why.
 
 📊 ARTICLE COUNT NOTE:
 - The number of articles from each country may vary - this is normal and does NOT indicate importance
@@ -1456,16 +1518,16 @@ If high-cred and low-cred articles conflict, TRUST THE HIGH-CRED SOURCE.
 - If unsure, leave blank rather than guess wrong
 
 ═══════════════════════════════════════════════════════════════
-🔴 PROPAGANDA / LOW-CREDIBILITY ARTICLES (analyze for bias & lies):
-These are the LEAST credible articles from each side. Use these to understand what spin/propaganda each country is pushing.
+🔶 LOW-CREDIBILITY / UNVERIFIED ARTICLES (analyze for spin & framing):
+These articles scored lowest on credibility. They may contain TRUE information presented with spin, or outright fabrications. Your job: extract what's real, flag what's exaggerated, note the framing each side uses.
 
-🇰🇭 CAMBODIAN LOW-CRED (${cambodiaLowCred.length} articles - analyze for Cambodian propaganda):
+🇰🇭 CAMBODIAN LOW-CRED (${cambodiaLowCred.length} articles):
 ${cambodiaPropaganda || "(no articles)"}
 
-🇹🇭 THAI LOW-CRED (${thailandLowCred.length} articles - analyze for Thai propaganda):
+🇹🇭 THAI LOW-CRED (${thailandLowCred.length} articles):
 ${thailandPropaganda || "(no articles)"}
 
-🌍 INTERNATIONAL LOW-CRED (${internationalLowCred.length} articles - analyze for international bias):
+🌍 INTERNATIONAL LOW-CRED (${internationalLowCred.length} articles):
 ${internationalPropaganda || "(no articles)"}
 
 ⚡ BREAKING NEWS (${breakingNews.length} most recent articles across all sources):
@@ -1482,31 +1544,34 @@ The bar position MUST match the posture category.
    - 11-20: Normal patrols, routine operations
    - 21-30: Heightened awareness, but no military action
 
-🟡 DEFENSIVE (intensity: 31-65): Protecting own territory, responding to threats
+🟡 DEFENSIVE (intensity: 31-55): Protecting own territory, responding to threats
    - 31-40: Reinforcing borders, moving to defensive positions
    - 41-50: Active defense, fortifying against incursion
-   - 51-65: Heavy defensive action (returning fire, repelling attack) BUT staying in own territory
+   - 51-55: Heavy defensive action (returning fire, repelling attack) BUT staying in own territory
 
-🔴 AGGRESSIVE (intensity: 66-100): Attacking, invading, or initiating conflict
-   - 66-75: Cross-border strikes, entering disputed territory
-   - 76-85: Active invasion, seizing territory
-   - 86-100: Full-scale offensive war
+🔴 AGGRESSIVE (intensity: 70-100): Attacking, invading, or initiating conflict
+   - 70-80: Cross-border strikes, entering disputed territory
+   - 81-90: Active invasion, seizing territory
+   - 91-100: Full-scale offensive war
 
-⚠️ CRITICAL RULE: militaryIntensity MUST be within the posture range!
+⚠️ CRITICAL RULES:
    - If posture is PEACEFUL → intensity must be 0-30
-   - If posture is DEFENSIVE → intensity must be 31-65
-   - If posture is AGGRESSIVE → intensity must be 66-100
+   - If posture is DEFENSIVE → intensity must be 31-55
+   - If posture is AGGRESSIVE → intensity must be 70-100
+   - ASYMMETRY RULE: If one country is AGGRESSIVE and the other is DEFENSIVE, the gap MUST be at least 20 points
+   - BOTH-AGGRESSIVE IS ALLOWED: If BOTH countries are conducting cross-border operations, BOTH can be AGGRESSIVE. Assign intensity based on scale/severity of each side's actions.
 
-🏷️ POSTURE LABEL - MUST BE SHORT (MAX 4 WORDS):
+🏷️ POSTURE LABEL - MUST BE SHORT (MAX 6 WORDS):
 Examples by posture:
   PEACEFUL: "Routine Patrols", "Normal Operations", "Diplomatic Talks"
   DEFENSIVE: "Border Reinforcement", "Defensive Positions", "Repelling Attack"
   AGGRESSIVE: "Cross-Border Strike", "Territory Seizure", "Invasion Underway"
 
-💡 KEY QUESTION: Is the country INSIDE its own borders or OUTSIDE?
-- Troops in OWN territory (even with heavy weapons) → DEFENSIVE
-- Troops in ENEMY territory (even "defensively") → AGGRESSIVE
-- Firing AT troops entering YOUR territory → DEFENSIVE
+💡 TERRITORIAL ASSESSMENT:
+- Troops in UNDISPUTED own territory → DEFENSIVE
+- Troops in ENEMY'S undisputed territory → AGGRESSIVE
+- Troops in DISPUTED territory (e.g., areas both countries claim) → Use context. Note: "Defensive per [Country]'s claim" if ambiguous. The key is WHO MOVED FIRST into the disputed area this cycle.
+- Firing AT troops entering YOUR undisputed territory → DEFENSIVE
 
 🛡️ VERIFICATION & ACCURACY RULES:
 1. NO SPECIFICITY WITHOUT SOURCE: Do NOT invent specific names (e.g., specific hill numbers, bridge names, or unit IDs) unless EXPLICITLY present in the source text. Use general terms like "high ground" or "infrastructure" if unsure.
@@ -1516,14 +1581,14 @@ Examples by posture:
 
 📰 KEY EVENTS STYLE GUIDE (3-5 events MAX, KEEP EACH SHORT!):
 Write KEY EVENTS as SHORT headline-style bullets. MAX 20 WORDS each!
-❌ TOO LONG: "Trump announces 'Ceasefire', but fighting intensifies hours later as Thailand rejects the truce and continues offensive"
-❌ TOO LONG: "Humanitarian Crisis: 330,000+ civilians displaced as Cambodia officially closes all border crossings"
+❌ TOO LONG: "Country A announces 'Ceasefire', but fighting intensifies hours later as Country B rejects the truce"
+❌ TOO LONG: "Humanitarian Crisis: 330,000+ civilians displaced as borders close"
 ✅ GOOD: "Ceasefire collapses hours after announcement"
-✅ GOOD: "F-16s destroy Victory Bridge; Cambodia responds with rockets"
-✅ GOOD: "330,000+ civilians displaced; all borders closed"
-✅ GOOD: "Thailand invokes UN Article 51; Cambodia demands intervention"
+✅ GOOD: "Airstrikes hit key bridge; other side responds with rockets"
+✅ GOOD: "330,000+ civilians displaced; borders closed"
+✅ GOOD: "Both sides invoke self-defense claims at UN"
 
-Be CONCISE. Each event = 1 short line. No multi-clause sentences.
+Be CONCISE. Each event = 1 short line. No multi-clause sentences. Frame events NEUTRALLY - don't imply who "started it" unless clearly established.
 
 ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
 <json>
@@ -1565,23 +1630,22 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Based on X corroborating sources, Y contradict"
   },
   "neutral": {
-    "generalSummary": "3-4 sentences. BE A REFEREE - call out BS, contradictions, and spin from BOTH sides. Don't just summarize, JUDGE. Point out when numbers don't add up, when claims are contradicted, when something smells like propaganda. Be direct and punchy.",
-    "generalSummaryEn": "English version - same referee energy, call out discrepancies directly",
-    "generalSummaryTh": "Thai translation - keep the direct, no-BS tone",
-    "generalSummaryKh": "Khmer translation - maintain sharp referee voice",
+    "generalSummary": "3-4 sentences. BE A REFEREE. Use SYMMETRIC language - if you criticize one side, criticize the other equally. ATTRIBUTE all claims (per Reuters, per ICRC, etc). Call out BOTH sides' BS.",
+    "generalSummaryEn": "English version - MUST use symmetric language for both countries",
+    "generalSummaryTh": "Thai translation - keep sharp but BALANCED tone",
+    "generalSummaryKh": "Khmer translation - sharp but BALANCED, no favoritism",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
     "keyEvents": [
       "3-5 SHORT headlines, MAX 15 words each!",
-      "Ceasefire collapses hours after announcement",
-      "F-16s destroy Victory Bridge; rockets hit Thai territory",
-      "330,000+ displaced; borders closed"
+      "Use NEUTRAL framing - no loaded words",
+      "Include events from BOTH sides fairly"
     ],
     "keyEventsEn": ["Short headlines in English - max 15 words each"],
     "keyEventsTh": ["หัวข้อสั้นๆ ไม่เกิน 15 คำ"],
     "keyEventsKh": ["ចំណងជើងខ្លី មិនលើស 15 ពាក្យ"],
-    "discrepancies": "List SPECIFIC contradictions between sources. Don't be diplomatic - say which version is more believable and WHY.",
+    "discrepancies": "List SPECIFIC contradictions. Use SYMMETRIC language: 'Country A claims X, Country B claims Y, international sources suggest Z'. ATTRIBUTE the 'believable' version to a NAMED source (Reuters, ICRC, etc), don't just pick one.",
     "confidence": 75,
-    "confidenceRationale": "How sure are we? What's uncertain? What smells fishy?"
+    "confidenceRationale": "Must justify if Cambodia/Thailand confidence differs by >10 points. What's verified? What's propaganda from EACH side?"
   }
 }
 </json>
@@ -1590,7 +1654,16 @@ RULES:
 - You MUST include <json> and </json> tags
 - Inside the tags, output valid JSON only
 - You can analyze/think before the tags
-- Use English numerals (0-9) only`;
+- Use English numerals (0-9) only
+
+🔍 MANDATORY SELF-CHECK (DO THIS BEFORE OUTPUTTING):
+1. SYMMETRIC LANGUAGE: Count negative words for each country in neutral section - roughly proportional to actual discrepancies found?
+2. ATTRIBUTION: Every "verified/confirmed" claim has a NAMED source (Reuters, ICRC, etc)?
+3. CONFIDENCE PARITY: Cambodia/Thailand confidence within 10 points, OR gap justified in rationale?
+4. INTENSITY COHERENCE: If one is AGGRESSIVE and other is DEFENSIVE, is the intensity gap ≥20 points? If both AGGRESSIVE, are intensities proportional to actions?
+5. NO EDITORIAL: No adjectives for third parties (Trump, UN) - only describe what they DID?
+6. CUMULATIVE BIAS: Across ALL claims, did you give one country benefit-of-doubt more often? If so, explicitly note it or rebalance.
+7. FOG OF WAR: If information is genuinely unclear/conflicting, say so. "Insufficient verified information" is a valid answer.`;
 
         try {
             // Use generic self-healing helper
@@ -1598,7 +1671,7 @@ RULES:
                 cambodia: any;
                 thailand: any;
                 neutral: any;
-            }>(prompt, "thinking", 3, "SYNTHESIS");
+            }>(prompt, "thinking", 3, "SYNTHESIS", ["thinking", "thinking", "fast"]);
 
             if (!result) {
                 console.log("❌ [SYNTHESIS] Invalid or missing JSON response");
@@ -1622,12 +1695,12 @@ RULES:
                     officialNarrativeTh: result.cambodia.officialNarrativeTh,
                     officialNarrativeKh: result.cambodia.officialNarrativeKh,
                     narrativeSource: result.cambodia.narrativeSource || "Unknown",
-                    // Enforce intensity matches posture range
+                    // Enforce intensity matches posture range (DEFENSIVE: 31-55, AGGRESSIVE: 70-100)
                     militaryIntensity: posture === "PEACEFUL"
                         ? Math.max(0, Math.min(30, result.cambodia.militaryIntensity || 15))
                         : posture === "DEFENSIVE"
-                            ? Math.max(31, Math.min(65, result.cambodia.militaryIntensity || 48))
-                            : Math.max(66, Math.min(100, result.cambodia.militaryIntensity || 80)),
+                            ? Math.max(31, Math.min(55, result.cambodia.militaryIntensity || 45))
+                            : Math.max(70, Math.min(100, result.cambodia.militaryIntensity || 80)),
                     militaryPosture: posture,
                     postureLabel: result.cambodia.postureLabel || result.cambodia.postureLabelEn,
                     postureLabelEn: result.cambodia.postureLabelEn || result.cambodia.postureLabel,
@@ -1659,12 +1732,12 @@ RULES:
                     officialNarrativeTh: result.thailand.officialNarrativeTh,
                     officialNarrativeKh: result.thailand.officialNarrativeKh,
                     narrativeSource: result.thailand.narrativeSource || "Unknown",
-                    // Enforce intensity matches posture range
+                    // Enforce intensity matches posture range (DEFENSIVE: 31-55, AGGRESSIVE: 70-100)
                     militaryIntensity: posture === "PEACEFUL"
                         ? Math.max(0, Math.min(30, result.thailand.militaryIntensity || 15))
                         : posture === "DEFENSIVE"
-                            ? Math.max(31, Math.min(65, result.thailand.militaryIntensity || 48))
-                            : Math.max(66, Math.min(100, result.thailand.militaryIntensity || 80)),
+                            ? Math.max(31, Math.min(55, result.thailand.militaryIntensity || 45))
+                            : Math.max(70, Math.min(100, result.thailand.militaryIntensity || 80)),
                     militaryPosture: posture,
                     postureLabel: result.thailand.postureLabel || result.thailand.postureLabelEn,
                     postureLabelEn: result.thailand.postureLabelEn || result.thailand.postureLabel,
@@ -2155,11 +2228,6 @@ export const updateDashboard = internalAction({
 
         const prompt = `You are the DASHBOARD CONTROLLER for the BorderClash monitor.
 Your job is to maintain ACCURATE, STABLE statistics - NOT to invent changes.
-
-⏱️ TIME CONSTRAINT: You have MAX 60 SECONDS to respond. Be decisive and concise.
-- Don't overthink - scan the data quickly and make a decision
-- If numbers look stable, just return unchanged
-- Skip lengthy reasoning - go straight to the JSON output
 
 ⚠️ CRITICAL RULE - STABILITY OVER ACTIVITY:
 - Numbers should ONLY change when there is NEW, VERIFIED evidence
