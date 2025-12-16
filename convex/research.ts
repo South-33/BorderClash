@@ -105,6 +105,20 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
     throw new Error("Ghost API failed after max retries");
 }
 
+// =============================================================================
+// SHARED HELPER: Format timeline events consistently for all AI prompts
+// =============================================================================
+
+function formatTimelineEvent(e: any, idx?: number): string {
+    const time = e.timeOfDay ? ` ${e.timeOfDay}` : "";
+    const sources = e.sources?.slice(0, 2).map((s: any) => `${s.name}(${s.credibility}): ${s.url}`).join(" | ") || "(none)";
+    const trans = (e.titleTh && e.titleKh) ? "✓" : "⚠️needs-trans";
+    const prefix = idx !== undefined ? `${idx + 1}. ` : "";
+    return `${prefix}[${e.date}${time}] "${e.title}" (${e.status}, ${e.category}, imp:${e.importance}) [${trans}]
+   ${e.description}
+   Sources: ${sources}`;
+}
+
 /**
  * Call the Ghost API Deep Research endpoint
  * @param message - The research query
@@ -1311,22 +1325,10 @@ export const synthesizeAll = internalAction({
 
         console.log(`📜 Timeline: ${timeline.length} events (avg importance: ${timelineStats.avgImportance})`);
 
+        // Build timeline context using shared helper
         const timelineContext = timeline.length > 0
-            ? timeline.map((e: any) => {
-                const timeDisplay = e.timeOfDay ? `, ${e.timeOfDay}` : "";
-                // Get top 3 most credible sources with URLs for verification (matching historian.ts)
-                const topSources = [...e.sources]
-                    .sort((a: any, b: any) => (b.credibility || 50) - (a.credibility || 50))
-                    .slice(0, 3);
-                const sourceDetails = topSources
-                    .map((s: any) => `${s.name} (cred:${s.credibility || 50}): ${s.url}`)
-                    .join("\n     ");
-                return `[${e.date}${timeDisplay}] ${e.title} (${e.category}, ${e.status}, importance:${e.importance})
-   ${e.description}
-   Sources (${e.sources.length} total, top 3):
-     ${sourceDetails || "(none)"}`;
-            }).join("\n\n")
-            : "(No timeline events yet - first run)";
+            ? timeline.map((e: any) => formatTimelineEvent(e)).join("\n\n")
+            : "(No timeline events yet)";
 
         // ==================== STRATIFIED ARTICLE SAMPLING ====================
         // Timeline has verified/credible sources, so we DON'T need high-cred articles again.
@@ -2182,19 +2184,9 @@ export const updateDashboard = internalAction({
 
         // ==================== TIMELINE CONTEXT (same as synthesizeAll) ====================
         const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 30 });
+        // Build timeline context using shared helper
         const timelineContext = timeline.length > 0
-            ? timeline.map((e: any) => {
-                const timeDisplay = e.timeOfDay ? `, ${e.timeOfDay}` : "";
-                const topSources = [...e.sources]
-                    .sort((a: any, b: any) => (b.credibility || 50) - (a.credibility || 50))
-                    .slice(0, 3);
-                const sourceDetails = topSources
-                    .map((s: any) => `${s.name} (cred:${s.credibility || 50}): ${s.url}`)
-                    .join("\n     ");
-                return `[${e.date}${timeDisplay}] ${e.title} (${e.category}, importance:${e.importance})
-   ${e.description}
-   Sources: ${sourceDetails || "(none)"}`;
-            }).join("\n\n")
+            ? timeline.map((e: any) => formatTimelineEvent(e)).join("\n\n")
             : "(No timeline events)";
 
         // ==================== ARTICLE CONTEXT (same as synthesizeAll) ====================

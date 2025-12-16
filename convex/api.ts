@@ -1645,11 +1645,33 @@ export const updateTimelineEvent = internalMutation({
         reason: v.string(), // Required - audit trail
     },
     handler: async (ctx, args) => {
-        // Find event by title
-        const event = await ctx.db
+        // Try exact match first
+        let event = await ctx.db
             .query("timelineEvents")
             .filter(q => q.eq(q.field("title"), args.eventTitle))
             .first();
+
+        // If no exact match, try fuzzy matching
+        if (!event) {
+            const allEvents = await ctx.db.query("timelineEvents").collect();
+            const searchLower = args.eventTitle.toLowerCase().trim();
+
+            // Try to find a close match
+            event = allEvents.find(e => {
+                const titleLower = e.title.toLowerCase().trim();
+                // Exact lowercase match
+                if (titleLower === searchLower) return true;
+                // One contains the other (for partial matches)
+                if (titleLower.includes(searchLower) || searchLower.includes(titleLower)) return true;
+                // First 40 chars match (for truncated titles)
+                if (titleLower.substring(0, 40) === searchLower.substring(0, 40)) return true;
+                return false;
+            }) || null;
+
+            if (event) {
+                console.log(`🔍 Fuzzy matched "${args.eventTitle}" → "${event.title}"`);
+            }
+        }
 
         if (!event) {
             console.log(`⚠️ Event not found for update: "${args.eventTitle}"`);
@@ -1689,10 +1711,33 @@ export const deleteTimelineEvent = internalMutation({
         reason: v.string(), // Required - must justify deletion
     },
     handler: async (ctx, args) => {
-        const event = await ctx.db
+        // Try exact match first
+        let event = await ctx.db
             .query("timelineEvents")
             .filter(q => q.eq(q.field("title"), args.eventTitle))
             .first();
+
+        // If no exact match, try fuzzy matching
+        if (!event) {
+            const allEvents = await ctx.db.query("timelineEvents").collect();
+            const searchLower = args.eventTitle.toLowerCase().trim();
+
+            // Try to find a close match
+            event = allEvents.find(e => {
+                const titleLower = e.title.toLowerCase().trim();
+                // Exact lowercase match
+                if (titleLower === searchLower) return true;
+                // One contains the other (for partial matches)
+                if (titleLower.includes(searchLower) || searchLower.includes(titleLower)) return true;
+                // First 40 chars match (for truncated titles)
+                if (titleLower.substring(0, 40) === searchLower.substring(0, 40)) return true;
+                return false;
+            }) || null;
+
+            if (event) {
+                console.log(`🔍 Fuzzy matched for delete "${args.eventTitle}" → "${event.title}"`);
+            }
+        }
 
         if (!event) {
             console.log(`⚠️ Event not found for deletion: "${args.eventTitle}"`);
