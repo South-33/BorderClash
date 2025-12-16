@@ -23,12 +23,11 @@ import { GHOST_API_URL } from "./config";
 async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetries: number = 3): Promise<string> {
     console.log(`🤖 [GHOST API] Calling ${model} model...`);
 
-    const RETRY_DELAY = 5000; // 5 seconds
-    const PENDING_POLL_DELAY = 45000; // Wait 45s before polling for pending result
-    const PENDING_POLL_INTERVAL = 10000; // Poll every 10s
-    const PENDING_MAX_POLLS = 12; // Max 2 minutes of polling (12 * 10s)
+    const RETRY_DELAY = 5000; // 5 seconds between retries
+    const POLL_INTERVAL = 10000; // 10 seconds between polls
+    const MAX_POLLS = 6; // Try polling 6 times (60s total)
 
-    // Generate unique request ID for timeout recovery
+    // Use SAME request_id for all retries so we can find pending result
     const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -44,30 +43,23 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
 
             if (!response.ok) {
                 const errorText = await response.text();
-                // Truncate error to avoid log pollution
                 const safeError = errorText.substring(0, 200) + (errorText.length > 200 ? "..." : "");
                 console.warn(`⚠️ [GHOST API] Error ${response.status} after ${duration}ms`);
 
-                // Check for 504 Gateway Timeout - worker might still be processing
+                // On 504 Gateway Timeout - poll for pending result
                 if (response.status === 504) {
-                    console.log(`⏳ [GHOST API] HTTP timeout (504) - worker may still be processing...`);
-                    console.log(`⏳ [GHOST API] Waiting ${PENDING_POLL_DELAY / 1000}s before polling for result...`);
+                    console.log(`⏳ [GHOST API] HTTP timeout (504) - polling for result...`);
 
-                    // Wait for the worker to finish
-                    await new Promise(resolve => setTimeout(resolve, PENDING_POLL_DELAY));
-
-                    // Poll for pending result
-                    for (let poll = 1; poll <= PENDING_MAX_POLLS; poll++) {
-                        console.log(`🔍 [GHOST API] Polling for pending result (attempt ${poll}/${PENDING_MAX_POLLS})...`);
-
+                    // Poll for the pending result (Gemini might have finished thinking)
+                    for (let poll = 1; poll <= MAX_POLLS; poll++) {
                         try {
+                            console.log(`🔍 [GHOST API] Poll ${poll}/${MAX_POLLS} for request ${requestId.substring(0, 8)}...`);
                             const pendingResponse = await fetch(`${GHOST_API_URL}/v1/pending/${requestId}`);
 
                             if (pendingResponse.ok) {
                                 const pendingData = await pendingResponse.json();
-
                                 if (pendingData.success && pendingData.response) {
-                                    console.log(`✅ [GHOST API] Retrieved pending result (${pendingData.response.length} chars)`);
+                                    console.log(`✅ [GHOST API] Got pending result (${pendingData.response.length} chars)!`);
                                     return pendingData.response;
                                 }
                             }
@@ -75,13 +67,13 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
                             console.warn(`⚠️ [GHOST API] Poll error: ${pollError}`);
                         }
 
-                        // Wait before next poll
-                        if (poll < PENDING_MAX_POLLS) {
-                            await new Promise(resolve => setTimeout(resolve, PENDING_POLL_INTERVAL));
+                        if (poll < MAX_POLLS) {
+                            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
                         }
                     }
 
-                    console.warn(`⚠️ [GHOST API] Pending result not found after polling`);
+                    console.log(`⏳ [GHOST API] No pending result found, will retry request...`);
+                    throw new Error(`Gateway timeout (504) - polling failed`);
                 }
 
                 throw new Error(`Ghost API error (${response.status}): ${safeError}`);
@@ -105,7 +97,7 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
             } else {
                 console.error(`❌ [GHOST API] All ${maxRetries} attempts failed.`);
-                throw error; // Re-throw the last error
+                throw error;
             }
         }
     }
@@ -1420,6 +1412,8 @@ The following was the previous analysis. Use it for context, but DO NOT be shack
 
         const prompt: string = `You are a senior geopolitical analyst providing NEUTRAL but SHARP analysis. You have TWO roles:
 
+⏱️ TIME CONSTRAINT: Respond EFFICIENTLY. Don't over-analyze - trust your expertise and give concise, confident assessments.
+
 🎯 FOR CAMBODIA/THAILAND SECTIONS: Provide RESPECTFUL summaries of each country's perspective - what their media reports, how they frame things. You are a REPORTER here, not a judge.
 
 ⚖️ FOR THE NEUTRAL SECTION: BE A REFEREE. You're the guy calling out BS, flagging obvious spin, and pointing out when the numbers don't add up. You're fair but you're NOT a pushover. If someone's lying or exaggerating, you say it. Think sports commentator calling a bad call: assertive, clear, no diplomatic fluff.
@@ -1991,9 +1985,10 @@ RULES:
 });
 
 // =============================================================================
-// ORCHESTRATOR
+// ORCHESTRATOR - CHAINED ACTIONS (Each step gets its own 10-min timer)
 // =============================================================================
 
+// Step 1: Curation - Fetches news from all sources
 export const runResearchCycle = internalAction({
     args: {},
     handler: async (ctx) => {
@@ -2001,162 +1996,174 @@ export const runResearchCycle = internalAction({
         const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
         if (stats?.skipNextCycle) {
             console.log("⏭️ SKIPPING THIS CYCLE (skipNextCycle was set)");
-            // Reset the flag so next cycle runs normally
             await ctx.runMutation(internal.api.setStatus, { status: "online" });
             await ctx.runMutation(internal.api.clearSkipNextCycle, {});
             return;
         }
 
-        // Note: isPaused check removed - pause only affects automatic cron (which is disabled)
-        // Manual runs via npx convex run always execute
-
         console.log("═══════════════════════════════════════════════════════════════");
-        console.log("🔄 RESEARCH CYCLE STARTED");
+        console.log("🔄 RESEARCH CYCLE STARTED (Chained Actions Mode)");
         console.log("═══════════════════════════════════════════════════════════════");
 
         await ctx.runMutation(internal.api.setStatus, { status: "syncing" });
 
-        // Time budget tracking - Convex actions timeout at 600s (10 mins)
-        // Reserve 2 minutes for synthesis to ensure it always runs
-        const cycleStartTime = Date.now();
-        const MAX_CYCLE_TIME_MS = 8 * 60 * 1000; // 8 minutes (leaves 2 mins for synthesis)
-
-        // Returns milliseconds remaining in our time budget (can be negative if over)
-        const getTimeRemainingMs = () => MAX_CYCLE_TIME_MS - (Date.now() - cycleStartTime);
-
         const errors: string[] = [];
 
-        // ===== MAIN CYCLE BODY - WRAPPED IN TRY-FINALLY TO ENSURE STATUS RESET =====
+        // ── STEP 1: NEWS CURATION ──
+        console.log("\n── STEP 1: NEWS CURATION ──");
+
         try {
-            // Step 1: Curate news (SEQUENTIAL to respect API rate limits - max 5 concurrent workers)
-            console.log("\n── STEP 1: NEWS CURATION ──");
+            console.log("   > Curating Cambodia...");
+            await ctx.runAction(internal.research.curateCambodia, {});
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (e) {
+            console.error("❌ [STEP 1] Cambodia Curation Failed:", e);
+            errors.push(`Cambodia: ${String(e)}`);
+        }
 
-            try {
-                console.log("   > Curating Cambodia...");
-                await ctx.runAction(internal.research.curateCambodia, {});
-                await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
-            } catch (e) {
-                console.error("❌ [STEP 1] Cambodia Curation Failed:", e);
-                errors.push(`Cambodia: ${String(e)}`);
-            }
+        try {
+            console.log("   > Curating Thailand...");
+            await ctx.runAction(internal.research.curateThailand, {});
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (e) {
+            console.error("❌ [STEP 1] Thailand Curation Failed:", e);
+            errors.push(`Thailand: ${String(e)}`);
+        }
 
-            try {
-                console.log("   > Curating Thailand...");
-                await ctx.runAction(internal.research.curateThailand, {});
-                await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
-            } catch (e) {
-                console.error("❌ [STEP 1] Thailand Curation Failed:", e);
-                errors.push(`Thailand: ${String(e)}`);
-            }
+        try {
+            console.log("   > Curating International...");
+            await ctx.runAction(internal.research.curateInternational, {});
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (e) {
+            console.error("❌ [STEP 1] International Curation Failed:", e);
+            errors.push(`International: ${String(e)}`);
+        }
 
-            try {
-                console.log("   > Curating International...");
-                await ctx.runAction(internal.research.curateInternational, {});
-                await new Promise(resolve => setTimeout(resolve, 2000)); // 2s cooler
-            } catch (e) {
-                console.error("❌ [STEP 1] International Curation Failed:", e);
-                errors.push(`International: ${String(e)}`);
-            }
+        // If all curation failed, abort the chain
+        if (errors.length >= 3) {
+            console.error("🛑 ALL CURATION STEPS FAILED. Aborting cycle.");
+            await ctx.runMutation(internal.api.setStatus, { status: "error", errorLog: "Curation failed completely" });
+            return;
+        }
 
-            // ABSOLUTE STOP CHECK: If curation failed completely, there's no point continuing
-            if (errors.length >= 3) {
-                console.error("🛑 ALL CURATION STEPS FAILED. Aborting cycle.");
-                await ctx.runMutation(internal.api.setStatus, { status: "error", errorLog: "Curation failed completely" });
-                return;
-            }
+        console.log("✅ Step 1 complete. Scheduling Step 2...");
 
-            // Step 2: Source Verification - Verify URLs and content accuracy
-            console.log("\n── STEP 2: SOURCE VERIFICATION ──");
-            try {
-                console.log("   > Verifying article sources...");
-                const verifyResult = await ctx.runAction(internal.research.verifyAllSources, {});
-                console.log(`   ✅ Verified: ${verifyResult.verified}, Updated: ${verifyResult.updated}, Deleted: ${verifyResult.deleted}, Errors: ${verifyResult.errors}`);
-            } catch (e) {
-                console.error("❌ [STEP 2] Source Verification Failed:", e);
-                errors.push(`Verification: ${String(e)}`);
-                // Non-fatal - continue with historian even if verification fails
-            }
+        // Chain to Step 2 (runs immediately with fresh 10-min timer)
+        await ctx.scheduler.runAfter(0, internal.research.step2_verification, {
+            errors: errors
+        });
+    },
+});
 
-            // Step 3: Historian Loop - Process ALL unprocessed articles
-            console.log("\n── STEP 3: HISTORIAN LOOP ──");
-            let historianLoops = 0;
-            const MAX_HISTORIAN_LOOPS = 20;  // Safety cap to prevent infinite loops
-            const MIN_TIME_FOR_ITERATION_MS = 90 * 1000; // Need at least 90s to start a new iteration
+// Step 2: Source Verification
+export const step2_verification = internalAction({
+    args: { errors: v.array(v.string()) },
+    handler: async (ctx, { errors }) => {
+        console.log("\n── STEP 2: SOURCE VERIFICATION ──");
+        const stepErrors = [...errors];
 
-            try {
-                while (historianLoops < MAX_HISTORIAN_LOOPS) {
-                    // TIME BUDGET CHECK - Don't start new iteration if we're running low
-                    const timeRemaining = getTimeRemainingMs();
-                    if (timeRemaining < MIN_TIME_FOR_ITERATION_MS) {
-                        console.log(`   ⏰ Time budget low (${Math.round(timeRemaining / 1000)}s remaining) - stopping historian to ensure synthesis runs`);
-                        console.log(`   📋 Remaining articles will be processed in the next cycle`);
-                        break;
-                    }
+        try {
+            console.log("   > Verifying article sources...");
+            const verifyResult = await ctx.runAction(internal.research.verifyAllSources, {});
+            console.log(`   ✅ Verified: ${verifyResult.verified}, Updated: ${verifyResult.updated}, Deleted: ${verifyResult.deleted}, Errors: ${verifyResult.errors}`);
+        } catch (e) {
+            console.error("❌ [STEP 2] Source Verification Failed:", e);
+            stepErrors.push(`Verification: ${String(e)}`);
+            // Non-fatal - continue with historian
+        }
 
-                    historianLoops++;
-                    console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
+        console.log("✅ Step 2 complete. Scheduling Step 3...");
 
-                    const result = await ctx.runAction(internal.historian.runHistorianCycle, {});
+        // Chain to Step 3 (fresh 10-min timer)
+        await ctx.scheduler.runAfter(0, internal.research.step3_historian, {
+            errors: stepErrors
+        });
+    },
+});
 
-                    // Check if historian found any articles to process
-                    if (!result || result.processed === 0) {
-                        console.log("   ✅ Historian complete - no more articles to process");
-                        break;
-                    }
+// Step 3: Historian Loop - Now has full 10 mins for processing articles
+export const step3_historian = internalAction({
+    args: { errors: v.array(v.string()) },
+    handler: async (ctx, { errors }) => {
+        console.log("\n── STEP 3: HISTORIAN LOOP ──");
+        const stepErrors = [...errors];
 
-                    console.log(`   Processed ${result.processed} articles, created ${result.eventsCreated} events`);
+        // With chaining, we now have full 10 mins for historian
+        const startTime = Date.now();
+        const MAX_RUNTIME_MS = 8 * 60 * 1000; // 8 mins (2 min buffer)
+        const getTimeRemaining = () => MAX_RUNTIME_MS - (Date.now() - startTime);
 
-                    // Brief cooldown between iterations
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+        let historianLoops = 0;
+        const MAX_HISTORIAN_LOOPS = 30; // Can do more now since we have more time
+
+        try {
+            while (historianLoops < MAX_HISTORIAN_LOOPS) {
+                const timeRemaining = getTimeRemaining();
+                if (timeRemaining < 90 * 1000) { // 90s minimum
+                    console.log(`   ⏰ Time budget low (${Math.round(timeRemaining / 1000)}s) - moving to synthesis`);
+                    break;
                 }
 
-                if (historianLoops >= MAX_HISTORIAN_LOOPS) {
-                    console.warn(`   ⚠️ Historian reached max iterations (${MAX_HISTORIAN_LOOPS})`);
+                historianLoops++;
+                console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
+
+                const result = await ctx.runAction(internal.historian.runHistorianCycle, {});
+
+                if (!result || result.processed === 0) {
+                    console.log("   ✅ Historian complete - no more articles to process");
+                    break;
                 }
 
-                console.log(`   📊 Historian completed after ${historianLoops} iterations`);
-            } catch (e) {
-                console.error("❌ [STEP 3] Historian Failed:", e);
-                errors.push(`Historian: ${String(e)}`);
+                console.log(`   Processed ${result.processed} articles, created ${result.eventsCreated} events`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
 
-            // Step 4: Combined Synthesis
-            console.log("\n── STEP 4: SYNTHESIS ──");
-            try {
-                await ctx.runAction(internal.research.synthesizeAll, {});
-            } catch (e) {
-                console.error("❌ [STEP 4] Synthesis Failed:", e);
-                errors.push(`Synthesis: ${String(e)}`);
+            if (historianLoops >= MAX_HISTORIAN_LOOPS) {
+                console.warn(`   ⚠️ Historian reached max iterations (${MAX_HISTORIAN_LOOPS})`);
             }
 
-            // Final Status Update (inside try block)
-            if (errors.length === 0) {
-                console.log("═══════════════════════════════════════════════════════════════");
-                console.log("✅ RESEARCH CYCLE COMPLETE (SUCCESS)");
-                console.log("═══════════════════════════════════════════════════════════════");
-            } else {
-                console.log("═══════════════════════════════════════════════════════════════");
-                console.log("⚠️ RESEARCH CYCLE COMPLETE (WITH ERRORS)");
-                console.log("Errors encountered:", errors);
-                console.log("═══════════════════════════════════════════════════════════════");
-            }
-        } catch (unexpectedError) {
-            // Catch any unexpected errors that weren't caught by individual step handlers
-            console.error("🛑 RESEARCH CYCLE CRASHED WITH UNEXPECTED ERROR:", unexpectedError);
-            errors.push(`Unexpected: ${String(unexpectedError)}`);
-        } finally {
-            // ===== ALWAYS RESET STATUS - EVEN ON CRASH =====
-            // This ensures the frontend timer doesn't get stuck on "RUNNING..."
-            console.log("🔄 Resetting status to online (finally block)");
-            try {
-                if (errors.length > 0) {
-                    await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: errors.join(" | ") });
-                } else {
-                    await ctx.runMutation(internal.api.setStatus, { status: "online" });
-                }
-            } catch (statusError) {
-                console.error("❌ Failed to reset status:", statusError);
-            }
+            console.log(`   📊 Historian completed after ${historianLoops} iterations`);
+        } catch (e) {
+            console.error("❌ [STEP 3] Historian Failed:", e);
+            stepErrors.push(`Historian: ${String(e)}`);
+        }
+
+        console.log("✅ Step 3 complete. Scheduling Step 4...");
+
+        // Chain to Step 4 (fresh 10-min timer for synthesis)
+        await ctx.scheduler.runAfter(0, internal.research.step4_synthesis, {
+            errors: stepErrors
+        });
+    },
+});
+
+// Step 4: Synthesis - Final analysis (gets full 10 mins)
+export const step4_synthesis = internalAction({
+    args: { errors: v.array(v.string()) },
+    handler: async (ctx, { errors }) => {
+        console.log("\n── STEP 4: SYNTHESIS ──");
+        const stepErrors = [...errors];
+
+        try {
+            await ctx.runAction(internal.research.synthesizeAll, {});
+            console.log("   ✅ Synthesis complete");
+        } catch (e) {
+            console.error("❌ [STEP 4] Synthesis Failed:", e);
+            stepErrors.push(`Synthesis: ${String(e)}`);
+        }
+
+        // ═══ CYCLE COMPLETE ═══
+        if (stepErrors.length === 0) {
+            console.log("═══════════════════════════════════════════════════════════════");
+            console.log("✅ RESEARCH CYCLE COMPLETE (SUCCESS)");
+            console.log("═══════════════════════════════════════════════════════════════");
+            await ctx.runMutation(internal.api.setStatus, { status: "online" });
+        } else {
+            console.log("═══════════════════════════════════════════════════════════════");
+            console.log("⚠️ RESEARCH CYCLE COMPLETE (WITH ERRORS)");
+            console.log("Errors encountered:", stepErrors);
+            console.log("═══════════════════════════════════════════════════════════════");
+            await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: stepErrors.join(" | ") });
         }
     },
 });
@@ -2469,7 +2476,21 @@ export const verifyAllSources = internalAction({
             // Process 3 articles at a time - smaller batches for better URL verification
             const BATCH_SIZE = 3;
 
+            // Time budget - stop processing before Convex timeout
+            const startTime = Date.now();
+            const MAX_RUNTIME_MS = 8 * 60 * 1000; // 8 mins (2 min buffer before 10 min limit)
+            const getTimeRemaining = () => MAX_RUNTIME_MS - (Date.now() - startTime);
+
             for (let i = 0; i < allArticles.length; i += BATCH_SIZE) {
+                // TIME CHECK - Stop if running low on time
+                const timeRemaining = getTimeRemaining();
+                if (timeRemaining < 60 * 1000) { // Need at least 1 min for a batch
+                    const remaining = allArticles.length - i;
+                    console.log(`\n⏰ [SOURCE VERIFY] Time budget exhausted (${Math.round(timeRemaining / 1000)}s left)`);
+                    console.log(`   📋 ${remaining} articles will be verified in the next cycle`);
+                    break;
+                }
+
                 const batch = allArticles.slice(i, i + BATCH_SIZE);
                 const batchNum = Math.floor(i / BATCH_SIZE) + 1;
                 const totalBatches = Math.ceil(allArticles.length / BATCH_SIZE);

@@ -70,6 +70,9 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
 const HISTORIAN_PROMPT = `You are the HISTORIAN for BorderClash, a Thailand-Cambodia border conflict monitoring system.
 Your job is to decide what news becomes PERMANENT HISTORICAL RECORD on the timeline.
 
+⏱️ TIME CONSTRAINT: You have LIMITED processing time. Be EFFICIENT:
+- Don't over-analyze. Make quick, confident decisions.
+
 🔍 YOU CAN AND SHOULD:
 - SEARCH THE WEB to verify claims
 - VISIT SOURCE URLs directly before adding events to timeline
@@ -542,6 +545,36 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
     console.log("🧠 [PLANNER] Analyzing all articles to pick best 5-10...");
     const response = await callGhostAPI(prompt, "fast", 2);  // Use fast model for planning
 
+    // Helper to clean and parse JSON with multiple fallback strategies
+    const tryParseJson = (jsonStr: string): any => {
+        // Strategy 1: Direct parse
+        try {
+            return JSON.parse(jsonStr);
+        } catch { /* continue */ }
+
+        // Strategy 2: Remove control characters + trailing commas
+        try {
+            const cleaned = jsonStr
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                .replace(/,\s*([\]\}])/g, '$1');
+            return JSON.parse(cleaned);
+        } catch { /* continue */ }
+
+        // Strategy 3: Escape unescaped newlines inside strings
+        try {
+            const escaped = jsonStr.replace(
+                /"([^"\\]|\\.)*"/g,
+                (match) => match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+            );
+            const cleaned = escaped
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                .replace(/,\s*([\]\}])/g, '$1');
+            return JSON.parse(cleaned);
+        } catch { /* continue */ }
+
+        return null;
+    };
+
     // Extract JSON
     const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
     if (!tagMatch) {
@@ -549,16 +582,14 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
         return null;
     }
 
-    try {
-        const result = JSON.parse(tagMatch[1].trim());
-        if (result.selectedArticles && Array.isArray(result.selectedArticles)) {
-            console.log(`✅ [PLANNER] Selected ${result.selectedArticles.length} articles`);
-            console.log(`   Reasoning: ${result.reasoning}`);
-            return result.selectedArticles;
-        }
-    } catch (e: unknown) {
-        console.log(`❌ [PLANNER] Parse error: ${e instanceof Error ? e.message : String(e)}`);
+    const result = tryParseJson(tagMatch[1].trim());
+    if (result && result.selectedArticles && Array.isArray(result.selectedArticles)) {
+        console.log(`✅ [PLANNER] Selected ${result.selectedArticles.length} articles`);
+        console.log(`   Reasoning: ${result.reasoning}`);
+        return result.selectedArticles;
     }
+
+    console.log("❌ [PLANNER] Invalid result structure or parse failed");
     return null;
 }
 
@@ -680,30 +711,92 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
 
     const response = await callGhostAPI(prompt, "thinking", 2);
 
+    // Helper to clean and parse JSON with multiple fallback strategies
+    const tryParseJson = (jsonStr: string): HistorianResult | null => {
+        // Strategy 1: Direct parse (fastest)
+        try {
+            return JSON.parse(jsonStr);
+        } catch { /* continue */ }
+
+        // Strategy 2: Remove control characters + trailing commas
+        try {
+            const cleaned = jsonStr
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                .replace(/,\s*([\]\}])/g, '$1');
+            return JSON.parse(cleaned);
+        } catch { /* continue */ }
+
+        // Strategy 3: Escape unescaped newlines inside strings
+        // This regex finds strings and replaces real newlines with \n
+        try {
+            const escaped = jsonStr.replace(
+                /"([^"\\]|\\.)*"/g,
+                (match) => match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+            );
+            const cleaned = escaped
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                .replace(/,\s*([\]\}])/g, '$1');
+            return JSON.parse(cleaned);
+        } catch { /* continue */ }
+
+        return null;
+    };
+
     // Extract JSON from response
     const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
-    if (!tagMatch) {
+    let jsonStr: string | null = null;
+
+    if (tagMatch) {
+        jsonStr = tagMatch[1].trim();
+    } else {
         // Fallback: try to find raw JSON
         const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            console.log("❌ [HISTORIAN] No JSON found in response");
-            return null;
-        }
-        try {
-            return JSON.parse(jsonMatch[0]);
-        } catch {
-            console.log("❌ [HISTORIAN] Failed to parse JSON");
-            return null;
+        if (jsonMatch) {
+            jsonStr = jsonMatch[0];
         }
     }
 
-    try {
-        const result = JSON.parse(tagMatch[1].trim());
-        return result;
-    } catch (e: unknown) {
-        console.log(`❌ [HISTORIAN] JSON parse error: ${e instanceof Error ? e.message : String(e)}`);
+    if (!jsonStr) {
+        console.log("❌ [HISTORIAN] No JSON found in response");
         return null;
     }
+
+    // Try to parse with all strategies
+    const result = tryParseJson(jsonStr);
+    if (result) {
+        return result;
+    }
+
+    // Strategy 4: Ask AI to repair the broken JSON
+    console.log("🔧 [HISTORIAN] JSON parse failed, asking AI to repair...");
+    try {
+        const repairPrompt = `The following JSON has syntax errors. Fix them and output ONLY valid JSON wrapped in <json> tags.
+
+BROKEN JSON:
+${jsonStr.substring(0, 3000)}${jsonStr.length > 3000 ? '...(truncated)' : ''}
+
+Rules:
+- Fix any unescaped characters in strings
+- Fix trailing commas
+- Fix unclosed brackets
+- Output ONLY the fixed JSON in <json>...</json> tags`;
+
+        const repairResponse = await callGhostAPI(repairPrompt, "fast", 1);
+        const repairMatch = repairResponse.match(/<json>([\s\S]*?)<\/json>/i);
+
+        if (repairMatch) {
+            const repaired = tryParseJson(repairMatch[1].trim());
+            if (repaired) {
+                console.log("✅ [HISTORIAN] JSON repaired successfully by AI");
+                return repaired;
+            }
+        }
+    } catch (repairError) {
+        console.log(`❌ [HISTORIAN] AI repair failed: ${repairError}`);
+    }
+
+    console.log("❌ [HISTORIAN] All JSON parse attempts failed");
+    return null;
 }
 
 // =============================================================================
@@ -976,7 +1069,11 @@ export const runHistorianCycle = internalAction({
                     // Update an existing timeline event with new info
                     if (action.targetEventTitle && action.eventUpdates) {
                         // Validate category if provided
-                        const updates = { ...action.eventUpdates };
+                        const updates = { ...action.eventUpdates } as any;
+
+                        // Strip out 'reasoning' if AI included it in updates (not in validator)
+                        delete updates.reasoning;
+
                         if (updates.category) {
                             const validCategories = ["military", "diplomatic", "humanitarian", "political"];
                             if (!validCategories.includes(updates.category)) {
