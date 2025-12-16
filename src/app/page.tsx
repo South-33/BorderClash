@@ -1410,11 +1410,22 @@ export default function Home() {
   // --- Modal Navigation & Touch State ---
 
   // Compute sorted events for navigation (memoized)
+  // Sort by date first, then by timeOfDay, then by importance (matching timeline display order)
   const sortedEvents = useMemo(() => {
     if (!timelineEvents) return [];
-    return [...timelineEvents].sort((a: any, b: any) =>
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
+    return [...timelineEvents].sort((a: any, b: any) => {
+      // First sort by date
+      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (dateCompare !== 0) return dateCompare;
+
+      // Then by time of day (ascending - earliest first)
+      const timeA = a.timeOfDay || '23:59';
+      const timeB = b.timeOfDay || '23:59';
+      if (timeA !== timeB) return timeA.localeCompare(timeB);
+
+      // Finally by importance (descending - most important first)
+      return (b.importance || 0) - (a.importance || 0);
+    });
   }, [timelineEvents]);
 
   const currentIndex = selectedEvent ? sortedEvents.findIndex((e: any) => e._id === selectedEvent._id) : -1;
@@ -1596,7 +1607,7 @@ export default function Home() {
       if (debounceTimer) clearTimeout(debounceTimer);
       clearTimeout(initialCheck);
     };
-  }, [timelineDates]); // Removed selectedTimelineDate to prevent recreation
+  }, [timelineDates, lang]); // Re-initialize when language changes (date headers re-render)
 
 
   // Measure Neutral Card Height to set siblings
@@ -2470,6 +2481,9 @@ export default function Home() {
                               <div>
                                 <p className="opacity-50 uppercase tracking-wider mb-1">{t.date}</p>
                                 <p className="font-bold">{formatDate(evt.date, 'long')}</p>
+                                {evt.timeOfDay && (
+                                  <p className="text-[10px] opacity-60 mt-0.5">{evt.timeOfDay}</p>
+                                )}
                               </div>
                               <div>
                                 <p className="opacity-50 uppercase tracking-wider mb-1">{t.impact}</p>
