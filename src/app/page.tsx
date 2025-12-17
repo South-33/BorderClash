@@ -179,6 +179,8 @@ const TRANSLATIONS = {
     propagandaWarning: "PROPAGANDA WARNING SIGNS",
     propagandaWarningDesc: "Watch for: Overly emotional language. Demonization of \"the other side\". Lack of concrete evidence. Repetition without substance. Appeals to fear or patriotism over facts.",
     systemDisclaimer: "THIS SYSTEM ATTEMPTS NEUTRAL ANALYSIS BUT REMAIN CRITICAL. VERIFY EVERYTHING YOURSELF.",
+    disclaimerTitle: "100% AUTOMATED SYSTEM",
+    disclaimerBody: "This entire dashboard is run by AI agents with absolutely zero human intervention. It may contain errors or hallucinations. Visit the 'GUIDE' section to learn how it works.",
     incident: "INCIDENT",
     image: "IMAGE",
     sector: "SECTOR",
@@ -226,16 +228,18 @@ const TRANSLATIONS = {
 
     // Guide Section
     howItWorks: "HOW IT WORKS",
-    scoutRole: "THE SCOUTS (Data Collection)",
-    scoutDesc: "Teams of AI agents scour Thai, Cambodian, and International media 24/7. They don't analyze; they only collect raw articles from every possible source.",
-    analystRole: "THE ANALYST (Verification)",
-    analystDesc: "A second layer of AI reads every article looking for bias. It cross-references claims against international wire services (Reuters, AP) and flags suspicious, emotional, or unverified content.",
-    managerRole: "THE MANAGER (Synthesis)",
-    managerDesc: "The 'Neutral AI' reviews conflicting reports without taking sides. If Thailand says X and Cambodia says Y, it reports the discrepancy and calculates a confidence score.",
+    curatorRole: "THE CURATOR (Scanning)",
+    curatorDesc: "AI agents monitor thousands of sources across Thailand, Cambodia, and the world 24/7. They don't judge; they just collect everything related to the border conflict.",
+    verifierRole: "THE VERIFIER (Fact-Checking)",
+    verifierDesc: "A specialized AI reads every collected article. It checks for dead links, identifies the publisher's bias, and flags potential propaganda or emotional language.",
+    historianRole: "THE HISTORIAN (Context)",
+    historianDesc: "This AI looks at the bigger picture. It connects new reports to past events, building a chronological timeline operation-by-operation to show how we got here.",
+    synthRole: "THE SYNTHESIZER (Synthesis)",
+    synthDesc: "The final 'Neutral AI' compares conflicting narratives. If one side says 'Attack' and the other says 'Defense', it analyzes the discrepancies and produces a balanced Situation Report.",
     trustWarning: "TRUST NO ONE BLINDLY",
     trustWarningDesc: "Every government has an incentive to lie during conflict. Every news outlet has an audience to please. This dashboard is a tool, not a truth machine. Use it to compare narratives, not to validate your biases.",
-    statelessApproach: "THE STATELESS APPROACH",
-    statelessDesc: "We do not believe in 'National Truth'. Truth is often found in the silence between two shouting governments.",
+    statelessApproach: "WE TAKE NO SIDES. WE TRUST NO ONE.",
+    statelessDesc: "We don't believe the governments. We don't believe the media. We don't care about 'national pride'. We only care about the hard facts on the ground.",
     intelReport: "INTEL REPORT",
     date: "Date",
     category: "Category",
@@ -353,6 +357,8 @@ const TRANSLATIONS = {
     propagandaWarning: "สัญญาณจับผิดโฆษณาชวนเชื่อ",
     propagandaWarningDesc: "ระวังโพสต์ยั่วโมโห หวังยอด Like และ Share", // Social media context
     systemDisclaimer: "ระบบนี้พยายามเป็นกลางที่สุด แต่คุณต้องใช้วิจารณญาณตัวเองด้วย",
+    disclaimerTitle: "ระบบอัตโนมัติ 100%",
+    disclaimerBody: "แดชบอร์ดนี้รันโดย AI ทั้งหมดโดยไม่มีคนเข้ามาแทรกแซง ข้อมูลอาจมีความผิดพลาดได้ โปรดอ่านวิธีใช้งานในหน้า 'คู่มือ'",
     incident: "เหตุการณ์",
     image: "รูปภาพ",
     sector: "เขต",
@@ -400,16 +406,18 @@ const TRANSLATIONS = {
 
     // Guide Section
     howItWorks: "ระบบทำงานยังไง?",
-    scoutRole: "หน่วยสอดแนม (หาข่าว)",
-    scoutDesc: "AI ทีมแรกจะวิ่งหาข่าวจากสื่อไทย เขมร และตปท. ตลอด 24 ชม. กวาดมาหมดทุกข่าวไม่เลือกข้าง",
-    analystRole: "นักวิเคราะห์ (กรองข่าว)",
-    analystDesc: "AI ทีมสองจะอ่านทุกข่าวเพื่อจับผิดอคติ เทียบกับสำนักข่าวกลาง (Reuters, AP) อันไหนเขียนเว่อร์หรือมั่วจะถูกติดธงเตือน",
-    managerRole: "ผู้จัดการ (สรุปผล)",
-    managerDesc: "AI ตัวกลางจะอ่านข้อมูลที่ขัดแย้งกัน (เช่น ไทยบอกอย่าง เขมรบอกอย่าง) แล้วสรุปให้ฟังว่าตรงไหนไม่ตรงกัน พร้อมให้คะแนนความน่าเชื่อถือ",
+    curatorRole: "THE CURATOR (คนหาข่าว)",
+    curatorDesc: "ทีม AI จะคอยส่องข่าวจากทุกที่ ทั้งไทย เขมร แล้วก็สื่อโลกตลอด 24 ชั่วโมง คือเก็บหมดทุกเม็ดที่เกี่ยวกับเรื่องชายแดน ไม่เลือกข้าง",
+    verifierRole: "THE VERIFIER (คนคัดกรอง)",
+    verifierDesc: "พอได้ข่าวมา ตัวนี้จะคอยเช็คเลยว่าลิงก์เสียมั้ย ใครเป็นคนเขียน เชียร์ข้างไหน หรือใช้ภาษาปลุกปั่นหรือเปล่า เพื่อคัดของดีออกมา",
+    historianRole: "THE HISTORIAN (คนจดบันทึก)",
+    historianDesc: "ตัวนี้จะดูภาพรวม ย้อนดูอดีตว่าเมื่อก่อนเกิดอะไรขึ้นบ้าง แล้วเอาข่าวใหม่มาเรียงต่อกันเป็นไทม์ไลน์ จะได้เห็นชัดๆ ว่าเรื่องมันมายังไง",
+    synthRole: "THE SYNTHESIZER (คนสรุป)",
+    synthDesc: "AI ตัวสุดท้ายจะเป็นกรรมการกลาง เอาข้อมูลที่ขัดแย้งกันมาเทียบดู ถ้าฝั่งนึงบอกบุก อีกฝั่งบอกกัน ตัวนี้จะสรุปให้ว่าจริงๆ แล้วมันน่าจะเป็นยังไงกันแน่",
     trustWarning: "อย่าเชื่อใจใครง่ายๆ",
     trustWarningDesc: "เวลารบกัน รัฐบาลไหนก็อยากพูดให้ตัวเองดูดี สื่อก็ต้องเอาใจคนดู แดชบอร์ดนี้มีไว้ให้คุณเทียบข้อมูลจากหลายๆ ฝั่ง ไม่ใช่เครื่องบอกความจริงสากล",
-    statelessApproach: "แนวคิดแบบไม่เลือกข้าง",
-    statelessDesc: "เราไม่เชื่อว่ามีความจริงของฝ่ายใดฝ่ายหนึ่ง ความจริงมักซ่อนอยู่ตรงกลางระหว่างเสียงตะโกนของทั้งสองฝ่าย",
+    statelessApproach: "ไม่เข้าข้างใคร และไม่เชื่อใครทั้งนั้น",
+    statelessDesc: "เราไม่สนว่าใครเป็นใคร ไม่ได้อยู่ฝั่งไทย ไม่ได้อยู่ฝั่งเขมร เราสนแค่ความจริงที่เกิดขึ้นตรงหน้าเท่านั้น",
     intelReport: "รายงานข่าวกรอง",
     date: "วันที่",
     category: "หมวดหมู่",
@@ -527,6 +535,8 @@ const TRANSLATIONS = {
     propagandaWarning: "សញ្ញានៃការឃោសនា",
     propagandaWarningDesc: "សង្ស័យការបង្ហោះដែលបង្កកំហឹង ដើម្បីទាក់ទាញ like និង share",
     systemDisclaimer: "ប្រព័ន្ធនេះព្យាយាមនៅកណ្តាល ប៉ុន្តែអ្នកត្រូវគិតពិចារណាដោយខ្លួនឯង។",
+    disclaimerTitle: "ប្រព័ន្ធស្វ័យប្រវត្តិ 100%",
+    disclaimerBody: "ផ្ទាំងព័ត៌មាននេះដំណើរការដោយ AI ទាំងស្រុង គ្មានមនុស្សគ្រប់គ្រងទេ។ វាអាចមានកំហុសខ្លះ។ សូមអានបន្ថែមនៅក្នុងផ្នែក 'ការណែនាំ'។",
     incident: "ហេតុការណ៍",
     image: "រូបភាព",
     sector: "តំបន់",
@@ -574,16 +584,18 @@ const TRANSLATIONS = {
 
     // Guide Section
     howItWorks: "តើគេហទំព័រនេះដំណើរការយ៉ាងដូចម្តេច?",
-    scoutRole: "អ្នកស៊ើបការណ៍ (រកព័ត៌មាន)",
-    scoutDesc: "ក្រុម AI ស្វែងរកក្នុងប្រព័ន្ធផ្សព្វផ្សាយថៃ កម្ពុជា និងអន្តរជាតិ 24ម៉ោង។ គេប្រមូលទាំងអស់មិនរើសមុខ។",
-    analystRole: "អ្នកវិភាគ (ត្រួតពិនិត្យ)",
-    analystDesc: "AI ក្រុមទី2 អានអត្ថបទដើម្បីរកមើលភាពលំអៀង និងផ្ទៀងផ្ទាត់ជាមួយសារព័ត៌មានអន្តរជាតិ (Reuters, AP)។",
-    managerRole: "អ្នកគ្រប់គ្រង (សន្និដ្ឋាន)",
-    managerDesc: "AI កណ្តាល នឹងមើលរបាយការណ៍ដែលផ្ទុយគ្នា (ថៃថាម៉្យាង ខ្មែរថាម៉្យាង) ហើយរាយការណ៍ប្រាប់យើងថាខុសគ្នត្រង់ណា។",
+    curatorRole: "THE CURATOR (អ្នកប្រមូល)",
+    curatorDesc: "ក្រុម AI តាមដានគ្រប់ប្រភពព័ត៌មានទាំងនៅថៃ ខ្មែរ និងបរទេស 24 ម៉ោង។ គេប្រមូលយកទាំងអស់មិនរើសមុខ ឱ្យតែទាក់ទងនឹងរឿងព្រំដែន។",
+    verifierRole: "THE VERIFIER (អ្នកផ្ទៀងផ្ទាត់)",
+    verifierDesc: "ពេលបានព័ត៌មានហើយ AI នេះនឹងឆែកមើលថា ដំណឹងហ្នឹងពិតឬអត់ អ្នកណាជាអ្នកសរសេរ ហើយមានលំអៀងទៅខាងណា ដើម្បីកុំឱ្យយើងចាញ់បោកគេ។",
+    historianRole: "THE HISTORIAN (អ្នកកត់ត្រា)",
+    historianDesc: "AI នេះមើលរឿងរ៉ាវពីដើមដល់ចប់។ វាភ្ជាប់រឿងថ្មីទៅនឹងរឿងចាស់ ដើម្បីឱ្យដឹងថាហេតុការណ៍ហ្នឹងមានដើមទងមកពីណា។",
+    synthRole: "THE SYNTHESIZER (អ្នកសរុប)",
+    synthDesc: "AI ចុងក្រោយដូចជាអាជ្ញាកណ្តាល។ បើខាងនេះថាម៉្យាង ខាងនោះថាម៉្យាង វាជាអ្នកយកមកថ្លឹងថ្លែង រកចំណុចកណ្តាល ដើម្បីឱ្យយើងយល់សាច់រឿងពិត។",
     trustWarning: "កុំជឿនរណាម្នាក់ងងឹតងងុល",
     trustWarningDesc: "រដ្ឋាភិបាលណាក៏ចង់និយាយឱ្យខ្លួនឯងល្អ។ សារព័ត៌មានក៏ត្រូវយកចិត្តអ្នកមើល។ ប្រើតារាងនេះដើម្បីប្រៀបធៀបព័ត៌មាន មិនមែនដើម្បីបញ្ជាក់ថាខ្លួនឯងត្រូវទេ។",
-    statelessApproach: "មិនកាន់ជើងខាងណា",
-    statelessDesc: "យើងមិនជឿលើ 'ការពិតរបស់ជាតិ' ទេ។ ការពិតច្រើនតែនៅចន្លោះកណ្តាលរវាងរដ្ឋាភិបាលទាំងពីរ។",
+    statelessApproach: "មិនកាន់ជើង ហើយមិនជឿអ្នកណាទាំងអស់",
+    statelessDesc: "យើងមិនជឿសម្តីអ្នកណាទេ។ យើងមិននៅខាងថៃ ហើយក៏មិននៅខាងខ្មែរដែរ។ យើងដើរផ្លូវកណ្តាលបុកទៅរកការពិត។",
     intelReport: "របាយការណ៍ចារកម្ម",
     date: "កាលបរិច្ឆេទ",
     category: "ប្រភេទ",
@@ -2052,70 +2064,27 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Active Sector Map */}
+          {/* Automation Disclaimer - Technical "System Status" Look */}
           <div className="flex flex-col">
-            <div className="border border-riso-ink/20 p-1 flex flex-col h-[200px] relative bg-riso-ink/5">
-              {/* Map Header */}
-              <div className="absolute top-2 left-2 z-10">
-                <span className="bg-riso-ink text-riso-paper px-1 text-[10px] font-mono font-bold uppercase tracking-widest">
-                  {t.sectorMap}
-                </span>
+            <div className="relative border border-riso-ink/20 bg-riso-ink/5 p-4">
+              {/* Technical Corner Accents */}
+              <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-riso-ink"></div>
+              <div className="absolute top-0 right-0 w-1.5 h-1.5 border-t border-r border-riso-ink"></div>
+              <div className="absolute bottom-0 left-0 w-1.5 h-1.5 border-b border-l border-riso-ink"></div>
+              <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-riso-ink"></div>
+
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-riso-ink/10">
+                <Terminal size={12} className="text-riso-ink" />
+                <h4 className="font-bold font-mono text-[10px] uppercase tracking-widest text-riso-ink">
+                  {t.disclaimerTitle}
+                </h4>
               </div>
 
-              {/* The Map Visualization */}
-              <div className="flex-grow relative overflow-hidden">
-                {/* Grid Background */}
-                <div className="absolute inset-0 opacity-20"
-                  style={{ backgroundImage: 'radial-gradient(#1e3a8a 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-                </div>
-
-                <svg className="w-full h-full" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice">
-                  {/* Terrain/Border Line - Abstract jagged line */}
-                  <path
-                    d="M-10,150 Q50,140 100,180 T200,160 T350,220"
-                    fill="none"
-                    stroke="#1e3a8a"
-                    strokeWidth="3"
-                    vectorEffect="non-scaling-stroke"
-                    className="opacity-50"
-                  />
-                  {/* Disputed Zone Highlight */}
-                  <path
-                    d="M100,180 Q150,200 200,160 L220,240 L80,260 Z"
-                    fill="#ef4444"
-                    fillOpacity="0.1"
-                    stroke="#ef4444"
-                    strokeWidth="1"
-                    strokeDasharray="4 4"
-                    className="animate-pulse"
-                  />
-
-                  {/* Tactical Markers */}
-                  <g transform="translate(150, 200)">
-                    <circle r="60" fill="none" stroke="#ef4444" strokeWidth="1" opacity="0.5">
-                      <animate attributeName="r" from="0" to="80" dur="2s" repeatCount="indefinite" />
-                      <animate attributeName="opacity" from="0.8" to="0" dur="2s" repeatCount="indefinite" />
-                    </circle>
-                    <circle r="4" fill="#ef4444" />
-                    <text x="10" y="-10" fontSize="10" fontFamily="monospace" fill="#ef4444" fontWeight="bold">{t.clashDetected}</text>
-                  </g>
-
-                  {/* Friendly Units */}
-                  <rect x="50" y="250" width="8" height="8" fill="#1e3a8a" />
-                  <text x="65" y="258" fontSize="8" fontFamily="monospace" fill="#1e3a8a">{t.thBase}</text>
-
-                  {/* Enemy Units */}
-                  <rect x="220" y="120" width="8" height="8" fill="none" stroke="#1e3a8a" strokeWidth="2" />
-                  <text x="235" y="128" fontSize="8" fontFamily="monospace" fill="#1e3a8a">{t.khOutpost}</text>
-                </svg>
-              </div>
-
-              {/* Map Footer / Coords */}
-              <div className="h-8 bg-riso-ink/10 flex items-center justify-between px-2 font-mono text-[9px] text-riso-ink">
-                <span>{t.lat}: 14.39N</span>
-                <span>{t.lon}: 104.67E</span>
-                <span className="animate-pulse text-riso-accent">{t.live}</span>
-              </div>
+              {/* Body */}
+              <p className={`font-mono text-riso-ink/80 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-[13px] leading-6' : 'text-xs'}`}>
+                {t.disclaimerBody}
+              </p>
             </div>
 
             {/* Minimized System Log */}
@@ -2724,25 +2693,32 @@ export default function Home() {
                           </h4>
 
                           <div className="relative space-y-8 pl-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-riso-ink/10">
-                            {/* Step 1: Scout */}
+                            {/* Step 1: Curator */}
                             <div className="relative">
                               <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">1</div>
-                              <h5 className="font-mono font-bold uppercase mb-1">{t.scoutRole}</h5>
-                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.scoutDesc}</p>
+                              <h5 className="font-mono font-bold uppercase mb-1">{t.curatorRole}</h5>
+                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.curatorDesc}</p>
                             </div>
 
-                            {/* Step 2: Analyst */}
+                            {/* Step 2: Verifier */}
                             <div className="relative">
                               <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">2</div>
-                              <h5 className="font-mono font-bold uppercase mb-1">{t.analystRole}</h5>
-                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.analystDesc}</p>
+                              <h5 className="font-mono font-bold uppercase mb-1">{t.verifierRole}</h5>
+                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.verifierDesc}</p>
                             </div>
 
-                            {/* Step 3: Manager */}
+                            {/* Step 3: Historian */}
                             <div className="relative">
                               <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">3</div>
-                              <h5 className="font-mono font-bold uppercase mb-1">{t.managerRole}</h5>
-                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.managerDesc}</p>
+                              <h5 className="font-mono font-bold uppercase mb-1">{t.historianRole}</h5>
+                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.historianDesc}</p>
+                            </div>
+
+                            {/* Step 4: Synth */}
+                            <div className="relative">
+                              <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">4</div>
+                              <h5 className="font-mono font-bold uppercase mb-1">{t.synthRole}</h5>
+                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.synthDesc}</p>
                             </div>
                           </div>
                         </div>
@@ -2780,7 +2756,6 @@ export default function Home() {
                             <div className={`space-y-2 font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
                               <p>🏛️ {t.sourceGov}</p>
                               <p>📰 {t.sourceMedia}</p>
-                              <p>📡 {t.sourceAgency}</p>
                             </div>
                           </div>
                         </div>

@@ -2524,19 +2524,27 @@ For each article below, you MUST:
 6. DETERMINE if the article is about Thailand-Cambodia relations
 
 ⚠️ VERIFICATION CRITERIA:
-- VERIFIED: URL works AND shows article page AND summary accurately reflects the content AND it's about Thailand-Cambodia
-- NEEDS_UPDATE: URL works, article IS about Thailand-Cambodia, but our title/summary/date/URL is WRONG → provide corrections!
-- URL_DEAD: You ACTUALLY received a 404, 403, or explicit "page not found" error. NOT just "couldn't load" or "search didn't find it"
-- URL_WRONG: The URL redirects to wrong page (image, attachment, different article) → provide correctUrl!
-- OFF_TOPIC: The article is NOT about Thailand-Cambodia border/relations (different topic entirely)
-- HALLUCINATED: The URL exists but shows completely different content (e.g., we said "border clash" but page is about "cooking recipes")
-- SKIP: You could not access the URL (timeout, blocked, etc.) - DO NOT mark as dead if you just couldn't reach it!
+- VERIFIED: URL loads, content is about Thailand-Cambodia, and reasonably matches our stored info
+- NEEDS_UPDATE: URL loads, content IS about Thailand-Cambodia, but our title/summary/date has errors → provide corrections
+- URL_DEAD: You received an EXPLICIT HTTP error (404, 403, "page not found"). Not just slow/blocked
+- OFF_TOPIC: Content exists but is NOT about Thailand-Cambodia border/relations
+- HALLUCINATED: URL shows completely unrelated content (e.g., we said "border clash" but page is about cooking)
+- SKIP: Any uncertainty - couldn't load, slow, blocked, unsure, or page changed. ALWAYS prefer this when uncertain!
 
-⚠️ IMPORTANT - BE CONSERVATIVE:
-- Major news sites like Yahoo News, Reuters, AP, BBC are UNLIKELY to have dead URLs for recent articles
-- If you cannot visit a URL, use SKIP rather than URL_DEAD
-- Only use URL_DEAD when you see ACTUAL 404/403 errors, not just because you couldn't load the page
-- "Search didn't find it" is NOT the same as "URL is dead" - use SKIP in this case
+🧠 SMART VERIFICATION PRINCIPLES:
+1. ASSUME URLS ARE VALID unless you have CONCRETE proof they're broken
+2. News sites rarely delete recent articles - if you "can't find it", it's probably your access issue, not a dead link
+3. Content can be paraphrased differently - minor wording differences ≠ wrong article
+4. If the TOPIC matches (Thailand-Cambodia news), the article is probably correct
+5. NEVER "fix" a URL by finding a similar article elsewhere - that's replacing, not fixing
+6. Your job is to VERIFY, not to be paranoid. Err on the side of keeping articles.
+
+📊 CONFIDENCE DECISION FRAMEWORK:
+- 80%+ confident URL is valid and content matches → VERIFIED
+- 80%+ confident content needs correction → NEEDS_UPDATE  
+- 95%+ confident URL returns 404/403 error → URL_DEAD
+- 80%+ confident content is unrelated topic → OFF_TOPIC or HALLUCINATED
+- Anything less than these thresholds → SKIP (we'll retry later)
 
 📋 ARTICLES TO VERIFY:
 ${articlesToVerify}
@@ -2547,24 +2555,18 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
   "results": [
     {
       "articleIndex": 1,
-      "status": "VERIFIED|NEEDS_UPDATE|URL_DEAD|URL_WRONG|OFF_TOPIC|HALLUCINATED",
+      "status": "VERIFIED|NEEDS_UPDATE|URL_DEAD|OFF_TOPIC|HALLUCINATED|SKIP",
       "actualTitle": "What the page headline actually says (original language)",
       "actualSummary": "2-3 sentence summary of what the article ACTUALLY says",
-      "actualPublishedAt": "2025-12-14T10:00:00+07:00 (Use LOCAL Thai/Khmer time, NOT UTC. Both countries are UTC+7)",
+      "actualPublishedAt": "2025-12-14T10:00:00+07:00 (Use LOCAL Thai/Khmer time UTC+7)",
       "isAboutBorder": true,
       "matchScore": 85,
       "reason": "Why you made this determination",
-      "correctUrl": "https://correct-url.com/article if URL was wrong, otherwise null",
       
       "correctData": {
-        // ONLY include fields that need fixing! Omit fields that are already correct.
-        // If only date is wrong, just include: "publishedAt": "2025-12-14T16:00:00+07:00"
-        // NOTE: Our dates are stored in LOCAL time (UTC+7), not UTC!
-        // If only title is wrong, include title + translations
-        // Example - only date wrong:
-        // "correctData": { "publishedAt": "2025-12-14T16:00:00+07:00" }
-        // Example - title wrong:
-        // "correctData": { "title": "...", "titleEn": "...", "titleTh": "...", "titleKh": "..." }
+        // ONLY for NEEDS_UPDATE! Include only fields that need fixing.
+        // Example - only date wrong: { "publishedAt": "2025-12-14T16:00:00+07:00" }
+        // Example - title wrong: { "title": "...", "titleEn": "...", "titleTh": "...", "titleKh": "..." }
       }
     }
   ]
@@ -2706,45 +2708,12 @@ RULES:
                                 break;
 
                             case "URL_WRONG":
-                                // URL redirects to wrong page - try to fix if correctUrl provided
-                                if (r.correctUrl) {
-                                    // Skip if "new" URL is same as old (AI hallucinated a fix)
-                                    if (r.correctUrl === article.sourceUrl) {
-                                        console.log(`   ⚠️ AI returned same URL as "fix" - skipping`);
-                                        console.log(`      URL: ${article.sourceUrl}`);
-                                        flagged++;
-                                    } else {
-                                        try {
-                                            await ctx.runMutation(internal.api.updateArticleUrl, {
-                                                country: article.country,
-                                                oldTitle: article.title,
-                                                newUrl: r.correctUrl,
-                                            });
-                                            flagged++;
-                                            console.log(`   🔗 URL FIXED`);
-                                            console.log(`      OLD URL: ${article.sourceUrl}`);
-                                            console.log(`      NEW URL: ${r.correctUrl}`);
-                                            console.log(`      Reason: ${r.reason || "URL redirected to wrong page"}`);
-                                        } catch (e) {
-                                            console.log(`   ⚠️ Failed to update URL: "${article.title?.substring(0, 40)}..."`);
-                                            errors++;
-                                        }
-                                    }
-                                } else {
-                                    // No correct URL provided, delete it
-                                    try {
-                                        await ctx.runMutation(internal.api.deleteArticle, {
-                                            title: article.title,
-                                            country: article.country,
-                                        });
-                                        deleted++;
-                                        console.log(`   🗑️ DELETED (Wrong URL, no correction found)`);
-                                        console.log(`      URL: ${article.sourceUrl}`);
-                                        console.log(`      Reason: ${r.reason || "URL redirects to wrong content"}`);
-                                    } catch (e) {
-                                        errors++;
-                                    }
-                                }
+                                // DEPRECATED: URL_WRONG is no longer a valid status
+                                // If AI still returns it, treat as SKIP (we don't want URL replacements)
+                                console.log(`   ⏭️ SKIPPED (URL_WRONG is deprecated - treating as SKIP)`);
+                                console.log(`      URL: ${article.sourceUrl}`);
+                                console.log(`      Reason: ${r.reason || "Will retry next cycle"}`);
+                                // Don't mark as verified - will retry later
                                 break;
 
                             case "HALLUCINATED":
@@ -2971,5 +2940,219 @@ RULES:
             return { status: "ERROR", reason: error.message };
         }
     },
+});
+
+// =============================================================================
+// MANUAL BACKFILL TOOL
+// =============================================================================
+
+export const curateManualGap = internalAction({
+    args: {
+        date: v.string(), // e.g. "December 7, 2025" or "2025-12-07"
+        perspective: v.optional(v.string()) // Optional: "cambodia", "thailand", "international"
+    },
+    handler: async (ctx, args) => {
+        const targetDate = args.date;
+        console.log(`🕵️ [MANUAL BACKFILL] Starting curation for date: ${targetDate}`);
+
+        const perspectives = args.perspective
+            ? [args.perspective]
+            : ["cambodia", "thailand", "international"];
+
+        const results_summary: string[] = [];
+
+        for (const p of perspectives) {
+            const country = p as "cambodia" | "thailand" | "international";
+            console.log(`\n👉 Backfilling ${country.toUpperCase()} for ${targetDate}...`);
+
+            // Get existing URLs to avoid duplicates
+            try {
+                // We use try-catch because getExistingTitlesInternal might be internal.api or api.api depending on structure
+                // In this file, internal.api is used.
+                const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country });
+                // We map to verify we have array
+                const existingUrls = Array.isArray(existing) ? existing.map((a: any) => a.sourceUrl).join("\n") : "";
+
+                let specificInstructions = "";
+                let sourceList = "";
+
+                // 1. CAMBODIA CONFIG
+                if (country === "cambodia") {
+                    specificInstructions = `
+🇰🇭 YOUR PERSPECTIVE: You are searching for news as if you were a CAMBODIAN CITIZEN.
+Find news articles that Cambodians would see on their local TV, newspapers, and news websites.
+
+🌐 SEARCH IN MULTIPLE LANGUAGES:
+- Search in KHMER: ព្រំដែនថៃ-កម្ពុជា, ជម្លោះព្រំដែន, កងទ័ពថៃ, ទំនាក់ទំនងថៃកម្ពុជា date:${targetDate}
+- Search in ENGLISH: Thailand Cambodia border, Cambodia news date:${targetDate}
+- PRIORITIZE Khmer-language sources!`;
+
+                    sourceList = `
+📺 CAMBODIAN NEWS SOURCES (these are what Cambodians read):
+KHMER LANGUAGE (prioritize these!):
+• Fresh News ហ្វ្រេសញូស (freshnewsasia.com)
+• DAP News ដាប់ញូស (dap-news.com)
+• VOD វីអូឌី (vodkhmer.news)
+• RFA Khmer វិទ្យុអាស៊ីសេរី (rfa.org/khmer)
+• Sabay News សប្បាយញូស (sabay.com.kh)
+• Thmey Thmey ថ្មីថ្មី (thmey-thmey.com)
+• CNC ស៊ីអិនស៊ី (cnc.com.kh)
+• TVK ទូរទស្សន៍កម្ពុជា - National TV
+• BTV ប៊ីធីវី (btv.com.kh) - Bayon TV
+
+ENGLISH LANGUAGE:
+• Phnom Penh Post (phnompenhpost.com)
+• Khmer Times (khmertimeskh.com)
+• Cambodia Daily (cambodiadaily.com)
+• AKP - Agence Kampuchea Presse (akp.gov.kh)`;
+                }
+
+                // 2. THAILAND CONFIG
+                else if (country === "thailand") {
+                    specificInstructions = `
+🇹🇭 YOUR PERSPECTIVE: You are searching for news as if you were a THAI CITIZEN.
+Find news articles that Thais would see on their local TV, newspapers, and news websites.
+
+🌐 SEARCH IN MULTIPLE LANGUAGES:
+- Search in THAI: ชายแดนไทย-กัมพูชา, ข่าวชายแดน, ทหารไทย, ความสัมพันธ์ไทยกัมพูชา, ปราสาทพระวิหาร date:${targetDate}
+- Search in ENGLISH: Thailand Cambodia border, Thai news, Bangkok Post date:${targetDate}
+- PRIORITIZE Thai-language sources!`;
+
+                    sourceList = `
+📺 THAI NEWS SOURCES (these are what Thais read):
+THAI LANGUAGE (prioritize these!):
+• ไทยรัฐ Thai Rath (thairath.co.th)
+• เดลินิวส์ Daily News (dailynews.co.th)
+• มติชน Matichon (matichon.co.th)
+• ข่าวสด Khaosod (khaosod.co.th)
+• คมชัดลึก Kom Chad Luek (komchadluek.net)
+• PPTV HD 36 (pptvhd36.com)
+• ช่อง 3 Channel 3 (ch3thailand.com)
+• ช่อง 7 Channel 7 (ch7.com)
+• Thai PBS ไทยพีบีเอส (thaipbs.or.th)
+• กรุงเทพธุรกิจ (bangkokbiznews.com)
+• ผู้จัดการ Manager (mgronline.com)
+
+ENGLISH LANGUAGE:
+• Bangkok Post (bangkokpost.com)
+• The Nation Thailand (nationthailand.com)
+• Thai PBS World (thaipbsworld.com)
+• Khaosod English (khaosodenglish.com)`;
+                }
+
+                // 3. INTERNATIONAL CONFIG
+                else if (country === "international") {
+                    specificInstructions = `
+🌍 YOUR PERSPECTIVE: You are an OUTSIDE OBSERVER - not Thai, not Cambodian.
+Find news from international wire services and global news outlets.
+
+🌐 SEARCH IN ENGLISH:
+- Search: Thailand Cambodia border conflict, Thailand Cambodia tensions, Southeast Asia border dispute date:${targetDate}
+- Focus on WIRE SERVICES and GLOBAL NEWS OUTLETS`;
+
+                    sourceList = `
+📺 INTERNATIONAL SOURCES (prioritize these):
+WIRE SERVICES (highest credibility):
+• Reuters (reuters.com)
+• Associated Press / AP News (apnews.com)
+• AFP / Agence France-Presse (france24.com)
+
+GLOBAL NEWS OUTLETS:
+• BBC (bbc.com)
+• Al Jazeera (aljazeera.com)
+• CNN International (cnn.com)
+• The Guardian (theguardian.com)
+• DW Deutsche Welle (dw.com)
+• The Diplomat (thediplomat.com)
+• Nikkei Asia (asia.nikkei.com)
+• South China Morning Post (scmp.com)
+• Channel News Asia (channelnewsasia.com)
+• Voice of America (voanews.com)
+• UN News (news.un.org)`;
+                }
+
+                // CONSTRUCT PROMPT with DATE OVERRIDE
+                const prompt = `You are a HISTORICAL NEWS RESEARCHER finding articles for a SPECIFIC DATE.
+                
+Target Date: ${targetDate}
+
+${specificInstructions}
+
+⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES ⛔⛔⛔
+🚫 DO NOT FABRICATE URLS - Every URL must be real and lead to an article published on ${targetDate}
+🚫 DO NOT GUESS URLS
+🚫 DO NOT INVENT ARTICLES
+🚫 ZERO ARTICLES IS ACCEPTABLE if nothing found for this specific date
+
+🚨 DATE STRICTNESS IS CRITICAL:
+- ONLY find news articles published on ${targetDate} or events occurring on ${targetDate}
+- Verify the "Published: ..." date on the page matches ${targetDate}
+- Do NOT return articles from "Today" (unless today is ${targetDate} in the prompt)
+- Do NOT return old articles from years ago
+
+⚠️ WE VERIFY EVERY URL - If your URL returns 404 or doesn't match the date, you have failed.
+
+🔍 YOUR TASK: Search the web for verified news articles about Thailand-Cambodia relations published on ${targetDate} (${country.toUpperCase()} sources).
+
+${sourceList}
+
+⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
+${existingUrls || "(database is empty - find new articles!)"}
+
+☝️ DO NOT return any article with a URL from the list above.
+
+FOCUS:
+- What happened ON THIS SPECIFIC DAY (${targetDate})?
+- Missed events that we need to backfill
+- Official statements, clashes, or diplomatic moves on this day
+
+CREDIBILITY SCORING & SUMMARY RULES:
+(Same as standard curation - be critical, don't embellish)
+
+OUTPUT FORMAT - Wrap your JSON in <json> tags:
+<json>
+{
+  "newArticles": [
+    {
+      "title": "Headline",
+      "titleEn": "English Headline",
+      "titleTh": "Thai Headline",
+      "titleKh": "Khmer Headline",
+      "publishedAt": "${targetDate}THH:mm:ss+07:00 (Estimate time if unknown, but KEEP DATE CORRECT)",
+      "sourceUrl": "https://...",
+      "source": "Publication Name",
+      "category": "military|political|humanitarian|diplomatic",
+      "credibility": 80,
+      "summary": "Summary of event on ${targetDate}...",
+      "summaryEn": "Summary in English",
+      "summaryTh": "Summary in Thai",
+      "summaryKh": "Summary in Khmer"
+    }
+  ],
+  "flaggedTitles": []
+}
+</json>
+
+RULES:
+- INCLUDE <json> TAGS
+- DATE MUST BE ${targetDate}
+- LIST ARTICLES BEFORE JSON`;
+
+                // Call the shared processor
+                const result = await processNewsResponse(ctx, prompt, country);
+                results_summary.push(`${country}: +${result.newArticles}`);
+
+            } catch (err: any) {
+                console.error(`❌ [MANUAL BACKFILL] Error for ${country}: ${err.message}`);
+                results_summary.push(`${country}: ERROR`);
+            }
+        }
+
+        // Reset the auto-cycle timer since we just did a manual run
+        await ctx.runMutation(internal.api.setSkipNextCycle, {});
+
+        console.log(`✅ [MANUAL BACKFILL] Completed ${targetDate}: ${results_summary.join(", ")}`);
+        return `Backfill Complete for ${targetDate}: ${results_summary.join(", ")}`;
+    }
 });
 

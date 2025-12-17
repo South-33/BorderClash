@@ -831,6 +831,35 @@ export const clearSkipNextCycle = internalMutation({
     },
 });
 
+// Internal mutation to SET skipNextCycle flag (called by manual tools)
+export const setSkipNextCycle = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const existing = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        // Also update lastResearchAt so the UI timer resets
+        const now = Date.now();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, {
+                skipNextCycle: true,
+                lastResearchAt: now
+            });
+        } else {
+            await ctx.db.insert("systemStats", {
+                key: "main",
+                totalArticlesFetched: 0,
+                skipNextCycle: true,
+                lastResearchAt: now,
+                systemStatus: "online"
+            });
+        }
+        console.log("⏭️ [SYSTEM] Set skipNextCycle=true (next auto-run will be skipped)");
+    },
+});
+
 export const pauseTimer = mutation({
     args: {},
     handler: async (ctx) => {

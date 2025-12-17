@@ -53,7 +53,7 @@ graph TB
 | **DASHBOARD** | thinking | Update stats (casualties, displaced) with web verification |
 | **SYNTHESIS** | thinking | Generate multilingual narratives for frontend |
 
-### HTTP Timeout Recovery (New!)
+### HTTP Timeout Recovery (Myabe old)
 
 Koyeb has a ~120s gateway timeout. When the thinking model takes longer:
 
