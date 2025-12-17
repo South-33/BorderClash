@@ -10,7 +10,7 @@ import { internal } from "./_generated/api";
 // Use Koyeb URL for production, fallback to local for testing
 import { GHOST_API_URL } from "./config";
 
-async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetries: number = 3): Promise<string> {
+async function callGhostAPI(prompt: string, model: "thinking", maxRetries: number = 3): Promise<string> {
     console.log(`🤖 [GHOST API] Calling ${model} model...`);
 
     const RETRY_DELAY = 5000; // 5 seconds
@@ -27,13 +27,8 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
             if (!response.ok) {
                 const errorText = await response.text();
 
-                // On 503/502/504, try falling back to fast model first
+                // On 503/502/504, Retry with thinking
                 if ((response.status === 503 || response.status === 502 || response.status === 504)) {
-                    if (currentModel === "thinking" && attempt === 1) {
-                        console.warn(`⚠️ [GHOST API] ${response.status} with thinking model, falling back to fast...`);
-                        currentModel = "fast";
-                        continue;
-                    }
                     if (attempt < maxRetries) {
                         console.warn(`⚠️ [GHOST API] Error ${response.status}, retrying in ${RETRY_DELAY / 1000}s... (${attempt}/${maxRetries})`);
                         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
@@ -54,12 +49,8 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
             return data.response || "";
 
         } catch (error: any) {
-            // Handle fetch/network errors - fallback to fast if thinking fails
-            if (currentModel === "thinking" && attempt === 1) {
-                console.warn(`⚠️ [GHOST API] Network error with thinking model, falling back to fast...`);
-                currentModel = "fast";
-                continue;
-            }
+            // Handle fetch/network errors
+            // Logic removed: Error handling without downgrade.
             if (attempt < maxRetries && (error.message?.includes("503") || error.message?.includes("timeout") || error.message?.includes("ECONNREFUSED"))) {
                 console.warn(`⚠️ [GHOST API] Network error, retrying in ${RETRY_DELAY / 1000}s... (${attempt}/${maxRetries})`);
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
@@ -109,20 +100,13 @@ INSTRUCTIONS:
     };
 
     try {
-        // Attempt 1: FAST model
-        console.log("   🔧 Using FAST model for repair...");
-        const fastResponse = await callGhostAPI(repairPrompt, "fast", 1);
-        return cleanAndParse(fastResponse);
+        // Attempt 1: THINKING model
+        console.log("   🔧 Using THINKING model for repair...");
+        const response = await callGhostAPI(repairPrompt, "thinking", 1);
+        return cleanAndParse(response);
     } catch (e) {
-        console.warn("   ⚠️ FAST repair failed, trying THINKING model...", e);
-        try {
-            // Attempt 2: THINKING model
-            const thinkingResponse = await callGhostAPI(repairPrompt, "thinking", 1);
-            return cleanAndParse(thinkingResponse);
-        } catch (e2) {
-            console.warn("   ❌ [REPAIR] Both models failed to repair JSON:", e2);
-            return null;
-        }
+        console.warn("   ❌ [REPAIR] Failed to repair JSON:", e);
+        return null;
     }
 }
 
@@ -301,7 +285,7 @@ ${prompt}`;
 }
 
 // =============================================================================
-// ANALYST (fast model) - Executes the task assigned by Manager
+// ANALYST (thinking model) - Executes the task assigned by Manager
 // =============================================================================
 
 const ANALYST_SYSTEM_PROMPT = `You are a SKEPTICAL ANALYST executing tasks assigned by your Manager.
@@ -399,7 +383,7 @@ ${crossRefList || "(none available)"}
 
 Execute the Manager's task and report your findings.`;
 
-    const response = await callGhostAPI(prompt, "fast");
+    const response = await callGhostAPI(prompt, "thinking");
     return response;
 }
 
@@ -768,7 +752,7 @@ export const runValidationLoop = internalAction({
                 });
 
                 // ============================================
-                // STEP 2: ANALYST EXECUTING (fast model)
+                // STEP 2: ANALYST EXECUTING (thinking model)
                 // Does the task Manager assigned
                 // ============================================
                 console.log(`\n📝 [STEP 2] ANALYST EXECUTING - Working on ${batch.length} articles...`);

@@ -17,10 +17,10 @@ import { GHOST_API_URL } from "./config";
 /**
  * Call the Ghost API which uses browser automation to access Gemini
  * @param prompt - The prompt to send
- * @param model - "fast" (Flash equivalent) or "thinking" (Pro equivalent)
+ * @param model - "thinking" (Pro equivalent)
  * @returns The response text
  */
-async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetries: number = 3): Promise<string> {
+async function callGhostAPI(prompt: string, model: "thinking", maxRetries: number = 3): Promise<string> {
     console.log(`🤖 [GHOST API] Calling ${model} model...`);
 
     const RETRY_DELAY = 5000; // 5 seconds between retries
@@ -162,15 +162,15 @@ async function callGhostDeepResearch(message: string, extractSources: boolean = 
 
 /**
  * GENERIC SELF-HEALING HELPER
- * Handles retry logic, model fallback (Thinking -> Fast), and JSON repair
+ * Handles retry logic and JSON repair
  * Extracts JSON from <json>...</json> tags first, then falls back to regex
  */
 async function callGhostWithSelfHealing<T>(
     prompt: string,
-    initialModel: "thinking" | "fast" = "thinking",
+    initialModel: "thinking" = "thinking",
     maxRetries: number = 3,
     debugLabel: string = "GHOST",
-    modelSequence?: Array<"thinking" | "fast"> // Optional: explicit model for each attempt
+    modelSequence?: Array<"thinking"> // Optional: explicit model for each attempt
 ): Promise<T | null> {
     let currentPrompt = prompt;
     let modelToUse = initialModel;
@@ -179,10 +179,10 @@ async function callGhostWithSelfHealing<T>(
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         let rawResponse = "";
         try {
-            // Determine model: use sequence if provided, else default behavior
+            // Determine model: use sequence if provided, else keep using modelToUse (defaults to initialModel)
             const actualModel = modelSequence && modelSequence[attempt - 1]
                 ? modelSequence[attempt - 1]
-                : (attempt > 1 ? "fast" : modelToUse);
+                : modelToUse;
             console.log(`🤖 [${debugLabel}] Attempt ${attempt}/${maxRetries} (${actualModel})...`);
 
             // Add speed hint on 2nd thinking attempt
@@ -195,15 +195,9 @@ async function callGhostWithSelfHealing<T>(
             try {
                 rawResponse = await callGhostAPI(promptToSend, actualModel, 1);
             } catch (networkError: any) {
-                // Handle Network/Timeout
-                const errStr = String(networkError);
-                if ((errStr.includes("504") || errStr.includes("502") || errStr.includes("timeout")) && modelToUse === "thinking") {
-                    console.log(`⚠️ [${debugLabel}] Timeout. Downgrading to Fast model...`);
-                    modelToUse = "fast";
-                    rawResponse = await callGhostAPI(currentPrompt, "fast", 1);
-                } else {
-                    throw networkError;
-                }
+                // Handle Network/Timeout - Retry with same model, don't downgrade
+                console.log(`⚠️ [${debugLabel}] Network error/Timeout with ${actualModel}. Retrying...`);
+                throw networkError;
             }
 
             // 2. EXTRACT JSON - Try <json> tags first, then fallback to regex
@@ -1085,10 +1079,10 @@ async function processNewsResponse(
         let rawResponse = "";
 
         try {
-            console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: fast)...`);
+            console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: thinking)...`);
 
-            // 1. CALL API - Always use fast model for curation
-            rawResponse = await callGhostAPI(currentPrompt, "fast", 1);
+            // 1. CALL API - Always use thinking model for curation
+            rawResponse = await callGhostAPI(currentPrompt, "thinking", 1);
 
             // 2. EXTRACT JSON - Try <json> tags first, then fallback to regex
             let jsonStr: string | null = null;
@@ -1674,7 +1668,7 @@ RULES:
                 cambodia: any;
                 thailand: any;
                 neutral: any;
-            }>(prompt, "thinking", 3, "SYNTHESIS", ["thinking", "thinking", "fast"]);
+            }>(prompt, "thinking", 3, "SYNTHESIS", ["thinking", "thinking", "thinking"]);
 
             if (!result) {
                 console.log("❌ [SYNTHESIS] Invalid or missing JSON response");
@@ -2626,7 +2620,7 @@ RULES:
 - Articles about internal Cambodian/Thai politics (not border-related) = OFF_TOPIC`;
 
                 try {
-                    const response = await callGhostAPI(verificationPrompt, "fast", 2);
+                    const response = await callGhostAPI(verificationPrompt, "thinking", 2);
 
                     // Extract JSON
                     let jsonStr: string | null = null;
@@ -2920,7 +2914,7 @@ RULES:
 - Be honest about whether the stored summary matches the actual content`;
 
         try {
-            const response = await callGhostAPI(verificationPrompt, "fast", 2);
+            const response = await callGhostAPI(verificationPrompt, "thinking", 2);
 
             // Extract JSON
             let jsonStr: string | null = null;

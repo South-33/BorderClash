@@ -9,7 +9,7 @@ import { GHOST_API_URL } from "./config";
 // GHOST API HELPER (shared with validation.ts)
 // =============================================================================
 
-async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetries: number = 3): Promise<string> {
+async function callGhostAPI(prompt: string, model: "thinking", maxRetries: number = 3): Promise<string> {
     console.log(`🤖 [GHOST API] Calling ${model} model...`);
 
     const RETRY_DELAY = 5000;
@@ -26,11 +26,7 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
             if (!response.ok) {
                 const errorText = await response.text();
                 if ((response.status === 503 || response.status === 502 || response.status === 504)) {
-                    if (currentModel === "thinking" && attempt === 1) {
-                        console.warn(`⚠️ [GHOST API] ${response.status} with thinking model, falling back to fast...`);
-                        currentModel = "fast";
-                        continue;
-                    }
+                    // Logic removed: Retry with thinking if needed.
                     if (attempt < maxRetries) {
                         console.warn(`⚠️ [GHOST API] Error ${response.status}, retrying in ${RETRY_DELAY / 1000}s...`);
                         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
@@ -48,10 +44,7 @@ async function callGhostAPI(prompt: string, model: "fast" | "thinking", maxRetri
             console.log(`✅ [GHOST API] Got response (${data.response?.length || 0} chars)`);
             return data.response || "";
         } catch (error: unknown) {
-            if (currentModel === "thinking" && attempt === 1) {
-                currentModel = "fast";
-                continue;
-            }
+            // Logic removed: Error handling updated.
             if (attempt < maxRetries) {
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
                 continue;
@@ -310,7 +303,7 @@ ${timelineContext}
 Pick 5-10 articles to process now. Output your selection in JSON.`;
 
     console.log("🧠 [PLANNER] Analyzing all articles to pick best 5-10...");
-    const response = await callGhostAPI(prompt, "fast", 2);  // Use fast model for planning
+    const response = await callGhostAPI(prompt, "thinking", 2);  // Use thinking model for planning
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): any => {
@@ -467,7 +460,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): HistorianResult | null => {
-        // Strategy 1: Direct parse (fastest)
+        // Strategy 1: Direct parse
         try {
             return JSON.parse(jsonStr);
         } catch { /* continue */ }
@@ -535,7 +528,7 @@ Rules:
 - Fix unclosed brackets
 - Output ONLY the fixed JSON in <json>...</json> tags`;
 
-        const repairResponse = await callGhostAPI(repairPrompt, "fast", 1);
+        const repairResponse = await callGhostAPI(repairPrompt, "thinking", 1);
         const repairMatch = repairResponse.match(/<json>([\s\S]*?)<\/json>/i);
 
         if (repairMatch) {
