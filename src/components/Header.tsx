@@ -3,15 +3,29 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-    Activity,
     Clock,
     RefreshCw,
     Shield,
-    Zap,
     Radio,
     Globe
 } from "lucide-react";
-import { updateStatus, formatCountdown } from "@/lib/mockData";
+
+// Inline status data (previously from mockData)
+const updateStatus = {
+    nextUpdate: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes from now
+    sourcesChecked: 24
+};
+
+function formatCountdown(targetDate: Date): string {
+    const now = new Date();
+    const diff = targetDate.getTime() - now.getTime();
+
+    if (diff <= 0) return "Updating...";
+
+    const minutes = Math.floor(diff / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
 
 export default function Header() {
     const [countdown, setCountdown] = useState("5:00");
