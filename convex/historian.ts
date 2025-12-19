@@ -3,57 +3,9 @@
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { GHOST_API_URL } from "./config";
+import { MODELS } from "./config";
+import { callGeminiStudio } from "./ai_utils";
 
-// =============================================================================
-// GHOST API HELPER (shared with validation.ts)
-// =============================================================================
-
-async function callGhostAPI(prompt: string, model: "thinking", maxRetries: number = 3): Promise<string> {
-    console.log(`🤖 [GHOST API] Calling ${model} model...`);
-
-    const RETRY_DELAY = 5000;
-    let currentModel = model;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            const response = await fetch(`${GHOST_API_URL}/v1/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: prompt, model: currentModel }),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                if ((response.status === 503 || response.status === 502 || response.status === 504)) {
-                    // Logic removed: Retry with thinking if needed.
-                    if (attempt < maxRetries) {
-                        console.warn(`⚠️ [GHOST API] Error ${response.status}, retrying in ${RETRY_DELAY / 1000}s...`);
-                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-                        continue;
-                    }
-                }
-                throw new Error(`Ghost API error (${response.status}): ${errorText}`);
-            }
-
-            const data = await response.json();
-            if (!data.success) {
-                throw new Error(`Ghost API failed: ${data.error || "Unknown error"}`);
-            }
-
-            console.log(`✅ [GHOST API] Got response (${data.response?.length || 0} chars)`);
-            return data.response || "";
-        } catch (error: unknown) {
-            // Logic removed: Error handling updated.
-            if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-                continue;
-            }
-            throw error;
-        }
-    }
-    throw new Error("Ghost API failed after max retries");
-}
 
 // =============================================================================
 // SHARED HELPER: Format timeline events consistently for all AI prompts
@@ -87,8 +39,9 @@ You don't take sides. You take notes.
 ⚡ HOW YOU THINK:
 - VERIFY before you trust. Visit URLs. Search the web. Cross-reference.
 - QUESTION everything. "Who benefits from this story?" "What's the evidence?" "Who else is reporting this?"
-- SIMPLIFY complexity. If it takes 5 events to say what 1 event could say, consolidate.
 - ADMIT uncertainty. "Disputed" and "unverified" are valid states. Don't pretend to know what you don't.
+
+💡 TIP: You have the [google_search] tool available. Use it to verify claims, find newer updates, or cross-reference facts when the provided articles or timeline are insufficient.
 
 🎯 YOUR CORE PRINCIPLES:
 
@@ -207,6 +160,7 @@ const PLANNER_PROMPT = `You are the PLANNER for BorderClash's Timeline Historian
 Your job is to look at ALL pending articles and pick UP TO 10 MOST IMPORTANT ones to process right now.
 
 🎯 YOUR MISSION:
+You have the [google_search] tool available - use it if you need more context before planning.
 You will receive a list of ALL unprocessed news articles.
 You must select 5-10 that are MOST worth processing based on:
 
@@ -303,7 +257,7 @@ ${timelineContext}
 Pick 5-10 articles to process now. Output your selection in JSON.`;
 
     console.log("🧠 [PLANNER] Analyzing all articles to pick best 5-10...");
-    const response = await callGhostAPI(prompt, "thinking", 2);  // Use thinking model for planning
+    const response = await callGeminiStudio(prompt, MODELS.planner, 2);
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): any => {
@@ -456,7 +410,7 @@ ${timelineContext}
 
 Process each article above and decide its fate. Output your decisions in JSON.`;
 
-    const response = await callGhostAPI(prompt, "thinking", 2);
+    const response = await callGeminiStudio(prompt, "thinking", 2);
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): HistorianResult | null => {
@@ -528,7 +482,7 @@ Rules:
 - Fix unclosed brackets
 - Output ONLY the fixed JSON in <json>...</json> tags`;
 
-        const repairResponse = await callGhostAPI(repairPrompt, "thinking", 1);
+        const repairResponse = await callGeminiStudio(repairPrompt, "thinking", 1);
         const repairMatch = repairResponse.match(/<json>([\s\S]*?)<\/json>/i);
 
         if (repairMatch) {
@@ -1097,7 +1051,7 @@ ${timelineContext}
 
 Find duplicate or related events that should be merged.Output JSON with your merge actions.`;
 
-        const response = await callGhostAPI(prompt, "thinking", 2);
+        const response = await callGeminiStudio(prompt, "thinking", 2);
 
         // Extract JSON
         const jsonMatch = response.match(/```json\s * ([\s\S] *?) \s * ```/i) ||

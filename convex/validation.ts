@@ -2,66 +2,9 @@
 
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { MODELS } from "./config";
+import { callGeminiStudio } from "./ai_utils";
 
-// =============================================================================
-// GHOST API HELPER
-// =============================================================================
-
-// Use Koyeb URL for production, fallback to local for testing
-import { GHOST_API_URL } from "./config";
-
-async function callGhostAPI(prompt: string, model: "thinking", maxRetries: number = 3): Promise<string> {
-    console.log(`🤖 [GHOST API] Calling ${model} model...`);
-
-    const RETRY_DELAY = 5000; // 5 seconds
-    let currentModel = model;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            const response = await fetch(`${GHOST_API_URL}/v1/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: prompt, model: currentModel }),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-
-                // On 503/502/504, Retry with thinking
-                if ((response.status === 503 || response.status === 502 || response.status === 504)) {
-                    if (attempt < maxRetries) {
-                        console.warn(`⚠️ [GHOST API] Error ${response.status}, retrying in ${RETRY_DELAY / 1000}s... (${attempt}/${maxRetries})`);
-                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-                        continue;
-                    }
-                }
-
-                throw new Error(`Ghost API error (${response.status}): ${errorText}`);
-            }
-
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(`Ghost API failed: ${data.error || "Unknown error"}`);
-            }
-
-            console.log(`✅ [GHOST API] Got response (${data.response?.length || 0} chars) using ${currentModel} model`);
-            return data.response || "";
-
-        } catch (error: any) {
-            // Handle fetch/network errors
-            // Logic removed: Error handling without downgrade.
-            if (attempt < maxRetries && (error.message?.includes("503") || error.message?.includes("timeout") || error.message?.includes("ECONNREFUSED"))) {
-                console.warn(`⚠️ [GHOST API] Network error, retrying in ${RETRY_DELAY / 1000}s... (${attempt}/${maxRetries})`);
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-                continue;
-            }
-            throw error;
-        }
-    }
-
-    throw new Error("Ghost API failed after max retries");
-}
 
 async function repairJson(malformed: string, contextPrompt: string): Promise<any | null> {
     console.log("🔧 [REPAIR] Attempting to fix malformed JSON...");
@@ -102,7 +45,7 @@ INSTRUCTIONS:
     try {
         // Attempt 1: THINKING model
         console.log("   🔧 Using THINKING model for repair...");
-        const response = await callGhostAPI(repairPrompt, "thinking", 1);
+        const response = await callGeminiStudio(repairPrompt, "thinking", 1);
         return cleanAndParse(response);
     } catch (e) {
         console.warn("   ❌ [REPAIR] Failed to repair JSON:", e);
@@ -117,7 +60,7 @@ INSTRUCTIONS:
 
 const MANAGER_PLANNING_PROMPT = `You are the MANAGER in BorderClash, a Thailand-Cambodia border conflict monitoring system.
 
-🔍 YOU CAN SEARCH THE WEB to understand current events before deciding tasks.
+💡 TIP: Use your [google_search] tool to understand current events and broader context before deciding what the Analyst should work on.
 
 YOUR TASK: Decide what the Analyst should work on next.
 
@@ -204,7 +147,7 @@ Wrap your JSON in <json> tags like this:
 
 ${prompt}`;
 
-        const response = await callGhostAPI(currentPrompt, "thinking");
+        const response = await callGeminiStudio(currentPrompt, "thinking");
 
         // Extract JSON - first try <json> tags, then fallback to regex
         let jsonString: string | null = null;
@@ -290,13 +233,13 @@ ${prompt}`;
 
 const ANALYST_SYSTEM_PROMPT = `You are a SKEPTICAL ANALYST executing tasks assigned by your Manager.
 
-🔍 WEB SEARCH - USE IT!
-You have access to web search. USE IT to:
+🔍 [google_search] TOOL - USE IT!
+You MUST use your [google_search] tool to verify claims and find corroborated facts.
 - Verify claims in articles by searching for corroboration
 - Check if events actually happened
 - Find newer updates that might contradict old articles
 - Cross-check casualty figures from MULTIPLE independent sources
-Don't just analyze what you're given - ACTIVELY VERIFY by searching!
+Don't just analyze what you're given - ACTIVELY VERIFY by performing a google_search!
 
 🧠 SYMMETRIC CRITICAL THINKING - DON'T BE FOOLED BY ANYONE:
 - ALL parties in a conflict have incentives to exaggerate and spin
@@ -382,8 +325,7 @@ CROSS-REFERENCE ARTICLES (use these to verify claims):
 ${crossRefList || "(none available)"}
 
 Execute the Manager's task and report your findings.`;
-
-    const response = await callGhostAPI(prompt, "thinking");
+    const response = await callGeminiStudio(prompt, "thinking");
     return response;
 }
 
@@ -525,7 +467,7 @@ Wrap your JSON in <json> tags like this:
 
 ${prompt}`;
 
-        const response = await callGhostAPI(currentPrompt, "thinking");
+        const response = await callGeminiStudio(currentPrompt, "thinking");
 
         // Extract JSON - first try <json> tags, then fallback to regex
         let jsonString: string | null = null;

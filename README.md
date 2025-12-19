@@ -26,16 +26,14 @@ graph TB
         ORCH -->|step 4| SY[SYNTHESIS]
     end
     
-    subgraph "GHOST API (Koyeb)"
-        W1[Worker 1]
-        W2[Worker 2]
-        PENDING[(Pending Results)]
+    subgraph "GEMINI STUDIO API"
+        W1[Browser Worker]
+        W1 --> GW[Gemini Web]
     end
     
     S -.-> W1
-    H -.-> W2
-    SY -.-> W2
-    W1 & W2 --> PENDING
+    H -.-> W1
+    SY -.-> W1
     
     S --> DB[(Convex DB)]
     H --> DB
@@ -53,13 +51,10 @@ graph TB
 | **DASHBOARD** | thinking | Update stats (casualties, displaced) with web verification |
 | **SYNTHESIS** | thinking | Generate multilingual narratives for frontend |
 
-### HTTP Timeout Recovery (Myabe old)
+### HTTP Timeout Recovery
 
-Koyeb has a ~120s gateway timeout. When the thinking model takes longer:
-
-1. Ghost API stores completed results in `pending_results` dict
-2. Convex detects 504, waits 45s, then polls `/v1/pending/{request_id}`
-3. Result is retrieved even though original HTTP connection died
+The gemini-studio-api handles long-running generations internally with caching.
+Convex calls are simple HTTP requests with retry logic built into `ai_utils.ts`.
 
 ---
 
@@ -95,13 +90,13 @@ Koyeb has a ~120s gateway timeout. When the thinking model takes longer:
 |-------|------------|
 | Frontend | Next.js 15 + Tailwind CSS |
 | Backend | Convex |
-| AI | Ghost API (Playwright + Gemini 2.0) |
-| Hosting | Vercel (frontend) + Koyeb (Ghost API) |
+| AI | gemini-studio-api (Playwright + Gemini Web) |
+| Hosting | Vercel (frontend) + Local/Cloud (gemini-studio-api) |
 
 ### Environment Variables
 
 ```bash
-npx convex env set GHOST_API_URL "https://your-ghost-api.koyeb.app"
+npx convex env set GEMINI_STUDIO_API_URL "https://your-tunnel-url.trycloudflare.com"
 ```
 
 ---

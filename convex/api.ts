@@ -562,6 +562,7 @@ export const updateArticleContent = internalMutation({
         newSummaryEn: v.optional(v.string()),
         newSummaryTh: v.optional(v.string()),
         newSummaryKh: v.optional(v.string()),
+        newUrl: v.optional(v.string()),  // Corrected URL if wrong
         publishedAt: v.optional(v.number()),
         credibility: v.optional(v.number()),
         status: v.optional(v.union(
@@ -591,6 +592,8 @@ export const updateArticleContent = internalMutation({
                 ...(args.newSummaryEn !== undefined && { summaryEn: args.newSummaryEn }),
                 ...(args.newSummaryTh !== undefined && { summaryTh: args.newSummaryTh }),
                 ...(args.newSummaryKh !== undefined && { summaryKh: args.newSummaryKh }),
+                // URL fix
+                ...(args.newUrl !== undefined && { sourceUrl: args.newUrl }),
                 // Other fields
                 ...(args.publishedAt !== undefined && { publishedAt: args.publishedAt }),
                 ...(args.credibility !== undefined && { credibility: args.credibility }),

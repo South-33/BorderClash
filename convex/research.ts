@@ -4,106 +4,10 @@ import { internalAction } from "./_generated/server";
 import { internal, api } from "./_generated/api";
 import { v } from "convex/values";
 
-// =============================================================================
-// GHOST API HELPER (Browser automation - no rate limits!)
-// =============================================================================
+// Use gemini-studio-api helpers
+import { MODELS } from "./config";
+import { callGeminiStudio, callGeminiStudioWithSelfHealing } from "./ai_utils";
 
-// Use Koyeb URL for production, fallback to local for testing
-import { GHOST_API_URL } from "./config";
-
-// Note: We don't specify explicit dates in prompts.
-// Gemini determines "today" naturally and extracts absolute dates from articles.
-
-/**
- * Call the Ghost API which uses browser automation to access Gemini
- * @param prompt - The prompt to send
- * @param model - "thinking" (Pro equivalent)
- * @returns The response text
- */
-async function callGhostAPI(prompt: string, model: "thinking", maxRetries: number = 3): Promise<string> {
-    console.log(`🤖 [GHOST API] Calling ${model} model...`);
-
-    const RETRY_DELAY = 5000; // 5 seconds between retries
-    const POLL_INTERVAL = 10000; // 10 seconds between polls
-    const MAX_POLLS = 6; // Try polling 6 times (60s total)
-
-    // Use SAME request_id for all retries so we can find pending result
-    const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        const startTime = Date.now();
-        try {
-            const response = await fetch(`${GHOST_API_URL}/v1/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: prompt, model, request_id: requestId }),
-            });
-
-            const duration = Date.now() - startTime;
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                const safeError = errorText.substring(0, 200) + (errorText.length > 200 ? "..." : "");
-                console.warn(`⚠️ [GHOST API] Error ${response.status} after ${duration}ms`);
-
-                // On 504 Gateway Timeout - poll for pending result
-                if (response.status === 504) {
-                    console.log(`⏳ [GHOST API] HTTP timeout (504) - polling for result...`);
-
-                    // Poll for the pending result (Gemini might have finished thinking)
-                    for (let poll = 1; poll <= MAX_POLLS; poll++) {
-                        try {
-                            console.log(`🔍 [GHOST API] Poll ${poll}/${MAX_POLLS} for request ${requestId.substring(0, 8)}...`);
-                            const pendingResponse = await fetch(`${GHOST_API_URL}/v1/pending/${requestId}`);
-
-                            if (pendingResponse.ok) {
-                                const pendingData = await pendingResponse.json();
-                                if (pendingData.success && pendingData.response) {
-                                    console.log(`✅ [GHOST API] Got pending result (${pendingData.response.length} chars)!`);
-                                    return pendingData.response;
-                                }
-                            }
-                        } catch (pollError) {
-                            console.warn(`⚠️ [GHOST API] Poll error: ${pollError}`);
-                        }
-
-                        if (poll < MAX_POLLS) {
-                            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-                        }
-                    }
-
-                    console.log(`⏳ [GHOST API] No pending result found, will retry request...`);
-                    throw new Error(`Gateway timeout (504) - polling failed`);
-                }
-
-                throw new Error(`Ghost API error (${response.status}): ${safeError}`);
-            }
-
-            const data = await response.json();
-
-            if (!data.success) {
-                throw new Error(`Ghost API failed: ${data.error || "Unknown error"}`);
-            }
-
-            console.log(`✅ [GHOST API] Got response (${data.response?.length || 0} chars) in ${duration}ms`);
-            return data.response || "";
-
-        } catch (error) {
-            const duration = Date.now() - startTime;
-            console.warn(`⚠️ [GHOST API] Attempt ${attempt}/${maxRetries} failed after ${duration}ms: ${error}`);
-
-            if (attempt < maxRetries) {
-                console.log(`⏳ [GHOST API] Retrying in ${RETRY_DELAY / 1000}s...`);
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-            } else {
-                console.error(`❌ [GHOST API] All ${maxRetries} attempts failed.`);
-                throw error;
-            }
-        }
-    }
-
-    throw new Error("Ghost API failed after max retries");
-}
 
 // =============================================================================
 // SHARED HELPER: Format timeline events consistently for all AI prompts
@@ -119,359 +23,22 @@ function formatTimelineEvent(e: any, idx?: number): string {
    Sources: ${sources}`;
 }
 
-/**
- * Call the Ghost API Deep Research endpoint
- * @param message - The research query
- * @param extractSources - If true, extracts sources list instead of report content
- * @returns The response (sources JSON if extractSources=true)
- */
-async function callGhostDeepResearch(message: string, extractSources: boolean = false): Promise<string> {
-    console.log(`🔬 [DEEP RESEARCH] Starting research...`);
-    if (extractSources) {
-        console.log(`� [DEEP RESEARCH] Will extract sources list`);
-    }
-
-    const startTime = Date.now();
-    const response = await fetch(`${GHOST_API_URL}/v1/research`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            message,
-            // Magic string to trigger source extraction mode
-            follow_up_prompt: extractSources ? "__EXTRACT_SOURCES__" : undefined,
-        }),
-    });
-
-    const duration = Date.now() - startTime;
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.warn(`⚠️ [DEEP RESEARCH] Error ${response.status} after ${duration}ms`);
-        throw new Error(`Ghost API Deep Research error (${response.status}): ${errorText}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.success) {
-        throw new Error(`Ghost API Deep Research failed: ${data.error || "Unknown error"}`);
-    }
-
-    console.log(`✅ [DEEP RESEARCH] Got response (${data.response?.length || 0} chars) in ${duration}ms`);
-    return data.response || "";
-}
-
-/**
- * GENERIC SELF-HEALING HELPER
- * Handles retry logic and JSON repair
- * Extracts JSON from <json>...</json> tags first, then falls back to regex
- */
-async function callGhostWithSelfHealing<T>(
-    prompt: string,
-    initialModel: "thinking" = "thinking",
-    maxRetries: number = 3,
-    debugLabel: string = "GHOST",
-    modelSequence?: Array<"thinking"> // Optional: explicit model for each attempt
-): Promise<T | null> {
-    let currentPrompt = prompt;
-    let modelToUse = initialModel;
-    let lastError: any;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        let rawResponse = "";
-        try {
-            // Determine model: use sequence if provided, else keep using modelToUse (defaults to initialModel)
-            const actualModel = modelSequence && modelSequence[attempt - 1]
-                ? modelSequence[attempt - 1]
-                : modelToUse;
-            console.log(`🤖 [${debugLabel}] Attempt ${attempt}/${maxRetries} (${actualModel})...`);
-
-            // Add speed hint on 2nd thinking attempt
-            let promptToSend = currentPrompt;
-            if (attempt === 2 && actualModel === "thinking") {
-                promptToSend = `⏱️ SPEED NOTE: please work efficiently to avoid timeout. Maintain accuracy.\n\n${currentPrompt}`;
-            }
-
-            // 1. CALL API
-            try {
-                rawResponse = await callGhostAPI(promptToSend, actualModel, 1);
-            } catch (networkError: any) {
-                // Handle Network/Timeout - Retry with same model, don't downgrade
-                console.log(`⚠️ [${debugLabel}] Network error/Timeout with ${actualModel}. Retrying...`);
-                throw networkError;
-            }
-
-            // 2. EXTRACT JSON - Try <json> tags first, then fallback to regex
-            let jsonStr: string | null = null;
-
-            // Method 1: Look for <json>...</json> tags (preferred)
-            const tagMatch = rawResponse.match(/<json>([\s\S]*?)<\/json>/i);
-            if (tagMatch) {
-                jsonStr = tagMatch[1].trim();
-                console.log(`✅ [${debugLabel}] Extracted JSON from <json> tags`);
-            } else {
-                // Method 2: Fallback - strip markdown first, then find { to }
-                const cleanedResponse = rawResponse
-                    .replace(/```json\s*/g, "").replace(/```\s*/g, "")
-                    .trim();
-                const firstOpen = cleanedResponse.indexOf('{');
-                const lastClose = cleanedResponse.lastIndexOf('}');
-                if (firstOpen !== -1 && lastClose !== -1) {
-                    jsonStr = cleanedResponse.substring(firstOpen, lastClose + 1);
-                }
-            }
-
-            if (!jsonStr) {
-                throw new Error("No JSON object found in response");
-            }
-
-            // 3. CLEAN JSON (minimal - don't break Thai/Khmer text)
-            jsonStr = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''); // Remove control chars
-            jsonStr = jsonStr.replace(/,\s*([\]\}])/g, '$1'); // Remove trailing commas
-
-            // 4. PARSE
-            try {
-                return JSON.parse(jsonStr) as T;
-            } catch (parseError: any) {
-                console.log(`⚠️ [${debugLabel}] JSON Parse Error: ${parseError.message}`);
-
-                if (attempt < maxRetries) {
-                    console.log(`🔄 [${debugLabel}] Constructing repair prompt...`);
-                    // PREPARE REPAIR PROMPT - Ask for <json> tags
-                    currentPrompt = `Your previous response had invalid JSON. Please fix it.
-
---- ORIGINAL TASK ---
-${prompt}
---- END TASK ---
-
---- YOUR BROKEN RESPONSE ---
-${rawResponse.substring(0, 2000)}${rawResponse.length > 2000 ? '...(truncated)' : ''}
---- END RESPONSE ---
-
---- ERROR ---
-${parseError.message}
----
-
-Please output the FIXED JSON wrapped in <json> tags:
-<json>
-{ ... your corrected JSON here ... }
-</json>`;
-                    continue; // Retry loop with new prompt
-                } else {
-                    throw parseError;
-                }
-            }
-
-        } catch (e: any) {
-            lastError = e;
-            console.error(`❌ [${debugLabel}] Attempt ${attempt} failed: ${e.message}`);
-        }
-    }
-
-    return null;
-}
-
 // =============================================================================
-// GHOST API UTILS - Ping & Reset
-// =============================================================================
-
-export const pingGhostAPI = internalAction({
-    args: {},
-    handler: async (ctx): Promise<void> => {
-        try {
-            // 1. Health check ping (keeps Koyeb instance awake)
-            const response = await fetch(`${GHOST_API_URL}/health`, {
-                method: "GET",
-                headers: { "Content-Type": "application/json" },
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                console.log(`🏓 [KEEPALIVE] Ghost API ping successful: ${data.message || "healthy"}`);
-            } else {
-                console.log(`⚠️ [KEEPALIVE] Ghost API ping failed: ${response.status}`);
-            }
-
-            // 2. Check if system is busy before doing cookie refresh
-            const systemStats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
-            if (systemStats?.systemStatus === 'syncing') {
-                console.log(`⏸️ [KEEPALIVE] Skipping cookie refresh - system is syncing`);
-                return;
-            }
-
-            // 3. Cookie refresh (harvests fresh cookies and revives dead workers)
-            try {
-                const refreshResponse = await fetch(`${GHOST_API_URL}/v1/refresh`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                });
-
-                if (refreshResponse.ok) {
-                    const refreshData = await refreshResponse.json();
-                    if (refreshData.revived > 0) {
-                        console.log(`🍪 [KEEPALIVE] Cookie refresh: Revived ${refreshData.revived} workers!`);
-                    } else if (refreshData.still_dead > 0) {
-                        console.log(`🍪 [KEEPALIVE] Cookie refresh: ${refreshData.still_dead} workers still dead`);
-                    }
-                }
-            } catch (refreshError) {
-                // Non-fatal - refresh might not be implemented in older versions
-                console.log(`⚠️ [KEEPALIVE] Cookie refresh unavailable`);
-            }
-        } catch (error) {
-            console.log(`❌ [KEEPALIVE] Ghost API unreachable: ${error}`);
-        }
-    },
-});
-
-export const resetGhostAPI = internalAction({
-    args: {},
-    handler: async (): Promise<void> => {
-        console.log("🔄 [RESET] Sending reset signal to Ghost API...");
-        try {
-            const response = await fetch(`${GHOST_API_URL}/v1/reset`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-            });
-
-            if (response.ok) {
-                console.log("✅ [RESET] Ghost API successfully reset.");
-            } else {
-                console.log(`⚠️ [RESET] Reset failed: ${response.status} ${await response.text()}`);
-            }
-        } catch (error) {
-            console.log(`❌ [RESET] Could not reach Ghost API: ${error}`);
-        }
-    },
-});
-
-// =============================================================================
-// DEEP RESEARCH: Thailand News Finder (replaces curateThailand if reliable)
-// =============================================================================
-
-export const findThailandNews = internalAction({
-    args: {},
-    handler: async (ctx): Promise<{ success: boolean; sourcesFound: number; articlesInserted: number; error?: string }> => {
-        console.log("🇹🇭 [THAILAND DEEP RESEARCH] Finding credible news sources...");
-
-        // Get existing URLs to avoid duplicates
-        const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "thailand" });
-        const existingUrls = new Set(existing.map((a: { sourceUrl: string }) => a.sourceUrl?.toLowerCase()));
-
-        const researchQuery = `You are a senior intelligence analyst monitoring the Thailand-Cambodia border situation.
-
-Research and compile comprehensive news coverage about Thailand-Cambodia border tensions, military activities, and diplomatic relations.
-
-PRIORITY SOURCES (Thai perspective):
-- Bangkok Post (bangkokpost.com)
-- The Nation Thailand (nationthailand.com)
-- Thai PBS World (thaipbsworld.com)
-- Khaosod English (khaosodenglish.com)
-- Thai Ministry of Foreign Affairs (mfa.go.th)
-- Royal Thai Army official statements
-- Reuters, AP News, AFP coverage from Thai angle
-
-TOPICS TO COVER:
-• Military movements, troop deployments, border patrols
-• Government statements, ministerial comments
-• Diplomatic negotiations, bilateral talks
-• Civilian impact, refugees, humanitarian situation
-• Historical context and recent escalations
-
-Search thoroughly. Find all credible, recent articles with verifiable sources.
-ALWAYS use English numerals (0-9). NEVER use Khmer/Thai numerals.`;
-
-        try {
-            // Use extractSources=true to get the sources list from Deep Research
-            const response = await callGhostDeepResearch(researchQuery, true);
-
-            // Parse the sources array
-            let sources: Array<{ domain: string; title: string; url: string }>;
-            try {
-                sources = JSON.parse(response);
-            } catch {
-                console.log("❌ [THAILAND] Failed to parse sources JSON");
-                return { success: false, sourcesFound: 0, articlesInserted: 0, error: "Invalid sources response" };
-            }
-
-            console.log(`� [THAILAND] Deep Research found ${sources.length} sources`);
-
-            let insertedCount = 0;
-            for (const source of sources) {
-                // Skip duplicates by URL
-                if (existingUrls.has(source.url?.toLowerCase())) {
-                    console.log(`   ⏭️ Skipping duplicate URL: ${source.domain}`);
-                    continue;
-                }
-
-                // Skip if missing required fields
-                if (!source.title || !source.url) {
-                    console.log(`   ⚠️ Skipping source with missing fields`);
-                    continue;
-                }
-
-                // Determine category based on keywords
-                let category: "military" | "political" | "humanitarian" | "diplomatic" = "political";
-                const titleLower = source.title.toLowerCase();
-                if (titleLower.includes("military") || titleLower.includes("army") || titleLower.includes("troop")) {
-                    category = "military";
-                } else if (titleLower.includes("refugee") || titleLower.includes("humanitarian")) {
-                    category = "humanitarian";
-                } else if (titleLower.includes("diplomat") || titleLower.includes("bilateral")) {
-                    category = "diplomatic";
-                }
-
-                // Determine credibility based on domain
-                let credibility = 75;
-                const domain = source.domain.toLowerCase();
-                if (domain.includes("reuters") || domain.includes("apnews")) {
-                    credibility = 95;
-                } else if (domain.includes("mfa.go.th") || domain.includes("gov.")) {
-                    credibility = 90;
-                } else if (domain.includes("bangkokpost") || domain.includes("nationthailand")) {
-                    credibility = 85;
-                }
-
-                // Insert into database
-                await ctx.runMutation(internal.api.insertArticle, {
-                    perspective: "thailand",
-                    title: source.title,
-                    publishedAt: Date.now(),
-                    sourceUrl: source.url,
-                    source: source.domain,
-                    category,
-                    credibility,
-                    summary: "",
-                });
-
-                console.log(`   ✅ Inserted: "${source.title.substring(0, 50)}..." (${source.domain})`);
-                existingUrls.add(source.url.toLowerCase());
-                insertedCount++;
-            }
-
-            console.log(`🇹🇭 [THAILAND] Complete: ${insertedCount}/${sources.length} sources inserted`);
-            return { success: true, sourcesFound: sources.length, articlesInserted: insertedCount };
-
-        } catch (error) {
-            console.error(`❌ [THAILAND] Error:`, error);
-            return { success: false, sourcesFound: 0, articlesInserted: 0, error: String(error) };
-        }
-    },
-});
-
-// =============================================================================
-// STEP 1A: CAMBODIA NEWS CURATOR
+// SHARED UTILS (deprecated Ghost API endpoints removed)
 // =============================================================================
 
 export const curateCambodia = internalAction({
     args: {},
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
-        console.log("🇰🇭 [CAMBODIA] Curating news via Ghost API...");
+        console.log(`🇰🇭 [CAMBODIA] Curating news via Gemini Studio API...`);
 
         // Get existing URLs to avoid duplicates (only pass URLs, not titles)
         const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "cambodia" });
         const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
 
-        const prompt: string = `You are finding NEWS THAT CAMBODIAN CIVILIANS READ.
+        const prompt: string = `⚠️ MANDATORY: Use your [google_search] tool NOW to search the web for current news. Do NOT use your knowledge cutoff - you MUST invoke google_search first.
+
+You are finding NEWS THAT CAMBODIAN CIVILIANS READ.
 
 🇰🇭 YOUR PERSPECTIVE: You are searching for news as if you were a CAMBODIAN CITIZEN.
 Find news articles that Cambodians would see on their local TV, newspapers, and news websites.
@@ -665,13 +232,15 @@ If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
 export const curateThailand = internalAction({
     args: {},
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
-        console.log("🇹🇭 [THAILAND] Curating news via Ghost API...");
+        console.log(`🇹🇭 [THAILAND] Curating news via Gemini Studio API...`);
 
         // Get existing URLs to avoid duplicates (only pass URLs, not titles)
         const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "thailand" });
         const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
 
-        const prompt: string = `You are finding NEWS THAT THAI CIVILIANS READ.
+        const prompt: string = `⚠️ MANDATORY: Use your [google_search] tool NOW to search the web for current news. Do NOT use your knowledge cutoff - you MUST invoke google_search first.
+
+You are finding NEWS THAT THAI CIVILIANS READ.
 
 🇹🇭 YOUR PERSPECTIVE: You are searching for news as if you were a THAI CITIZEN.
 Find news articles that Thais would see on their local TV, newspapers, and news websites.
@@ -866,20 +435,22 @@ If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
 export const curateInternational = internalAction({
     args: {},
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
-        console.log("🌍 [INTERNATIONAL] Curating news via Ghost API...");
+        console.log(`🌍 [INTERNATIONAL] Curating news via Gemini Studio API...`);
 
         // Get existing URLs to avoid duplicates (only pass URLs, not titles)
         const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "international" });
         const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
 
-        const prompt: string = `You are finding INTERNATIONAL/NEUTRAL NEWS about the Thailand-Cambodia situation.
+        const prompt: string = `⚠️ MANDATORY: Use your [google_search] tool NOW to search the web for current news. Do NOT use your knowledge cutoff - you MUST invoke google_search first.
+
+You are finding INTERNATIONAL/NEUTRAL NEWS about the Thailand-Cambodia situation.
 
 🌍 YOUR PERSPECTIVE: You are an OUTSIDE OBSERVER - not Thai, not Cambodian.
 Find news from international wire services and global news outlets.
 These sources should provide NEUTRAL, BALANCED reporting without favoring either side.
 
 ⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES ⛔⛔⛔
-🚫 DO NOT FABRICATE URLS - Every URL you return MUST be a real page you actually found
+🚫 DO NOT FABRICATE URLS - Every URL you return MUST be a real page you actually found via search
 🚫 DO NOT GUESS URLS - If you found a news outlet but can't find the exact article URL, DO NOT RETURN IT
 🚫 DO NOT INVENT ARTICLES - Only return articles you can verify exist right now
 🚫 ZERO ARTICLES IS ACCEPTABLE - If you cannot find any real, verifiable articles, return an empty array
@@ -1079,10 +650,10 @@ async function processNewsResponse(
         let rawResponse = "";
 
         try {
-            console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: thinking)...`);
+            console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: curation)...`);
 
-            // 1. CALL API - Always use thinking model for curation
-            rawResponse = await callGhostAPI(currentPrompt, "thinking", 1);
+            // 1. CALL API - Using curation model mapping
+            rawResponse = await callGeminiStudio(currentPrompt, MODELS.curation, 1);
 
             // 2. EXTRACT JSON - Try <json> tags first, then fallback to regex
             let jsonStr: string | null = null;
@@ -1314,7 +885,7 @@ export const synthesizeAll = internalAction({
 
         // ==================== TIMELINE CONTEXT (PRIMARY SOURCE) ====================
         // Timeline events are the verified, structured "memory" of the conflict
-        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 50 });
+        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 100 });
         const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
 
         console.log(`📜 Timeline: ${timeline.length} events (avg importance: ${timelineStats.avgImportance})`);
@@ -1407,6 +978,8 @@ The following was the previous analysis. Use it for context, but DO NOT be shack
 `;
 
         const prompt: string = `You are a senior geopolitical analyst providing NEUTRAL but SHARP analysis. You have TWO roles:
+
+💡 TIP: You have the [google_search] tool available. If current news articles don't provide enough clarity or if you need to verify a specific claim, feel free to use it to search for the most recent context.
 
 ⏱️ TIME CONSTRAINT: Respond EFFICIENTLY. Don't over-analyze - trust your expertise and give concise, confident assessments.
 
@@ -1591,46 +1164,46 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
 <json>
 {
   "cambodia": {
-    "officialNarrative": "2-3 sentences. What Cambodian media reports.",
-    "officialNarrativeEn": "English version",
-    "officialNarrativeTh": "Thai translation (formal ภาษาราชการ)",
-    "officialNarrativeKh": "Khmer translation (formal ភាសាផ្លូវការ)",
+    "officialNarrative": "2-4 sentences. Summarize key claims and official positions from Cambodian media.",
+    "officialNarrativeEn": "English (2-4 sentences)",
+    "officialNarrativeTh": "Thai translation",
+    "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
     "militaryIntensity": 50,
     "militaryPosture": "PEACEFUL|DEFENSIVE|AGGRESSIVE",
-    "postureLabel": "Short phrase (max 4 words) of action + location",
-    "postureLabelTh": "Thai translation of postureLabel",
-    "postureLabelKh": "Khmer translation of postureLabel",
-    "postureRationale": "1-2 detailed sentences explaining specific TACTICAL reasons (e.g. mention specific weapons, units, or locations like 'BM-21 rockets' or 'Preah Vihear' if reported) (English)",
-    "postureRationaleTh": "คำอธิบายทางยุทธวิธี (Thai translation)",
-    "postureRationaleKh": "ការពន្យល់អំពីយុទ្ធសាស្ត្រ (Khmer translation)",
-    "biasNotes": "Key themes emphasized by Cambodian coverage",
+    "postureLabel": "Short phrase (max 4 words)",
+    "postureLabelTh": "Thai translation",
+    "postureLabelKh": "Khmer translation",
+    "postureRationale": "1-2 sentences. WHY this posture? Focus on actions, not sources.",
+    "postureRationaleTh": "Thai translation",
+    "postureRationaleKh": "Khmer translation",
+    "biasNotes": "Key themes emphasized",
     "confidence": 75,
-    "confidenceRationale": "Based on X corroborating sources, Y contradict"
+    "confidenceRationale": "Brief justification"
   },
   "thailand": {
-    "officialNarrative": "2-3 sentences. What Thai media reports.",
-    "officialNarrativeEn": "English version",
-    "officialNarrativeTh": "Thai translation (formal ภาษาราชการ)",
-    "officialNarrativeKh": "Khmer translation (formal ភាសាផ្លូវការ)",
+    "officialNarrative": "2-4 sentences. Summarize key claims and official positions from Thai media.",
+    "officialNarrativeEn": "English (2-4 sentences)",
+    "officialNarrativeTh": "Thai translation",
+    "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
     "militaryIntensity": 50,
     "militaryPosture": "PEACEFUL|DEFENSIVE|AGGRESSIVE",
-    "postureLabel": "Short phrase (max 4 words) of action + location",
-    "postureLabelTh": "Thai translation of postureLabel",
-    "postureLabelKh": "Khmer translation of postureLabel",
-    "postureRationale": "1-2 detailed sentences explaining specific TACTICAL reasons (e.g. mention specific weapons, units, or locations) (English)",
-    "postureRationaleTh": "คำอธิบายทางยุทธวิธี (Thai translation)",
-    "postureRationaleKh": "ការពន្យល់អំពីយុទ្ធសាស្ត្រ (Khmer translation)",
-    "biasNotes": "Key themes emphasized by Thai coverage",
+    "postureLabel": "Short phrase (max 4 words)",
+    "postureLabelTh": "Thai translation",
+    "postureLabelKh": "Khmer translation",
+    "postureRationale": "1-2 sentences. WHY this posture? Focus on actions, not sources.",
+    "postureRationaleTh": "Thai translation",
+    "postureRationaleKh": "Khmer translation",
+    "biasNotes": "Key themes emphasized",
     "confidence": 75,
-    "confidenceRationale": "Based on X corroborating sources, Y contradict"
+    "confidenceRationale": "Brief justification"
   },
   "neutral": {
-    "generalSummary": "3-4 sentences. BE A REFEREE. Use SYMMETRIC language - if you criticize one side, criticize the other equally. ATTRIBUTE all claims (per Reuters, per ICRC, etc). Call out BOTH sides' BS.",
-    "generalSummaryEn": "English version - MUST use symmetric language for both countries",
-    "generalSummaryTh": "Thai translation - keep sharp but BALANCED tone",
-    "generalSummaryKh": "Khmer translation - sharp but BALANCED, no favoritism",
+    "generalSummary": "3-5 sentences. Neutral overview - current state, humanitarian impact, key actions by both sides.",
+    "generalSummaryEn": "English (3-4 sentences)",
+    "generalSummaryTh": "Thai translation",
+    "generalSummaryKh": "Khmer translation",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
     "keyEvents": [
       "3-5 SHORT headlines, MAX 15 words each!",
@@ -1664,11 +1237,11 @@ RULES:
 
         try {
             // Use generic self-healing helper
-            const result = await callGhostWithSelfHealing<{
+            const result = await callGeminiStudioWithSelfHealing<{
                 cambodia: any;
                 thailand: any;
                 neutral: any;
-            }>(prompt, "thinking", 3, "SYNTHESIS", ["thinking", "thinking", "thinking"]);
+            }>(prompt, "thinking", 3, "SYNTHESIS");
 
             if (!result) {
                 console.log("❌ [SYNTHESIS] Invalid or missing JSON response");
@@ -1873,7 +1446,7 @@ RULES:
 
         try {
             // Use generic self-healing helper
-            const result = await callGhostWithSelfHealing<{
+            const result = await callGeminiStudioWithSelfHealing<{
                 actions: any[];
                 crossReferenceNotes?: string;
                 summary?: string;
@@ -2342,7 +1915,7 @@ RULES:
 
         try {
             // Use generic self-healing helper
-            const data = await callGhostWithSelfHealing<DashboardData>(
+            const data = await callGeminiStudioWithSelfHealing<DashboardData>(
                 prompt,
                 "thinking",
                 3,
@@ -2561,6 +2134,7 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
         // ONLY for NEEDS_UPDATE! Include only fields that need fixing.
         // Example - only date wrong: { "publishedAt": "2025-12-14T16:00:00+07:00" }
         // Example - title wrong: { "title": "...", "titleEn": "...", "titleTh": "...", "titleKh": "..." }
+        // Example - URL wrong (Google search link instead of direct article): { "sourceUrl": "https://actual-article-url.com/..." }
       }
     }
   ]
@@ -2620,7 +2194,7 @@ RULES:
 - Articles about internal Cambodian/Thai politics (not border-related) = OFF_TOPIC`;
 
                 try {
-                    const response = await callGhostAPI(verificationPrompt, "thinking", 2);
+                    const response = await callGeminiStudio(verificationPrompt, "thinking", 2);
 
                     // Extract JSON
                     let jsonStr: string | null = null;
@@ -2740,6 +2314,7 @@ RULES:
                                 const hasTitle = cd.title !== undefined;
                                 const hasSummary = cd.summary !== undefined || cd.summaryEn !== undefined;
                                 const hasDate = cd.publishedAt !== undefined || r.actualPublishedAt !== undefined;
+                                const hasUrl = cd.sourceUrl !== undefined;
 
                                 // Build update object with only changed fields
                                 const updateData: any = {
@@ -2749,7 +2324,10 @@ RULES:
                                     status: "active",
                                 };
 
-                                // Only add title fields if title needs fixing
+                                // Add URL if it needs fixing
+                                if (hasUrl) {
+                                    updateData.newUrl = cd.sourceUrl;
+                                }
                                 if (hasTitle) {
                                     updateData.newTitle = cd.title || r.actualTitle;
                                     // Use undefined checks to allow empty strings (clearing values)
@@ -2795,6 +2373,9 @@ RULES:
                                         const oldDate = article.publishedAt ? new Date(article.publishedAt).toISOString() : "(unknown)";
                                         const newDate = new Date(updateData.publishedAt).toISOString();
                                         console.log(`      Date: ${oldDate} → ${newDate}`);
+                                    }
+                                    if (hasUrl) {
+                                        console.log(`      URL Fixed: ${article.sourceUrl} → ${cd.sourceUrl}`);
                                     }
                                     console.log(`      Reason: ${r.reason || "Data didn't match actual content"}`);
                                 } catch (e) {
@@ -2914,7 +2495,7 @@ RULES:
 - Be honest about whether the stored summary matches the actual content`;
 
         try {
-            const response = await callGhostAPI(verificationPrompt, "thinking", 2);
+            const response = await callGeminiStudio(verificationPrompt, "thinking", 2);
 
             // Extract JSON
             let jsonStr: string | null = null;
@@ -3149,4 +2730,3 @@ RULES:
         return `Backfill Complete for ${targetDate}: ${results_summary.join(", ")}`;
     }
 });
-

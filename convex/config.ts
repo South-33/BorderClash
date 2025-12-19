@@ -1,10 +1,12 @@
 // =============================================================================
-// SHARED CONFIG - Change API URL here to switch between local and Koyeb
+// SHARED CONFIG - Change API URL here
 // =============================================================================
 
-// ⚡ SWITCH HERE: Comment/uncomment to toggle between local and Koyeb
-// For LOCAL development (ngrok):
-// export const GHOST_API_URL = process.env.GHOST_API_URL || "http://localhost:8080";
+// The URL for your gemini-studio-api instance (local or Cloudflare tunnel)
+export const GEMINI_STUDIO_API_URL = process.env.GEMINI_STUDIO_API_URL || "http://localhost:8001";
 
-// For KOYEB production (uncomment this and comment out the line above):
-export const GHOST_API_URL = process.env.GHOST_API_URL_KOYEB
+export const MODELS = {
+    curation: "thinking",    // All models now use thinking
+    planner: "thinking",
+    thinking: "thinking"
+};
