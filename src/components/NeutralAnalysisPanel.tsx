@@ -14,7 +14,7 @@ import {
     Sparkles
 } from "lucide-react";
 import { AIAnalysis } from "@/types";
-import { formatRelativeTime } from "@/lib/mockData";
+import { formatRelativeTime } from "@/lib/utils";
 
 interface NeutralAnalysisPanelProps {
     analysis: AIAnalysis;

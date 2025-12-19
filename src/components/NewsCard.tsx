@@ -14,7 +14,7 @@ import {
     Minus
 } from "lucide-react";
 import { NewsArticle } from "@/types";
-import { formatRelativeTime } from "@/lib/mockData";
+import { formatRelativeTime } from "@/lib/utils";
 
 interface NewsCardProps {
     article: NewsArticle;
