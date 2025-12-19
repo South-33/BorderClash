@@ -155,12 +155,12 @@ npx convex run api:clearAllData
 ```
 ┌─────────────────┐     sync      ┌─────────────────┐     serve     ┌─────────┐
 │  Convex (AI)    │ ───────────►  │  Firebase       │ ───────────►  │  Users  │
-│  ~100MB/month   │  (every 3hr)  │  10GB/month!    │               │         │
+│  ~100MB/month   │  (every 6hr)  │  10GB/month!    │               │         │
 └─────────────────┘               └─────────────────┘               └─────────┘
 ```
 
 ### Implementation Steps
-1. **Convex cron** syncs data to Firebase Firestore after each AI cycle
+1. **Convex cron** syncs data to Firebase Firestore after each AI cycle (every 6hr)
 2. **Next.js API routes** read from Firebase instead of Convex
 3. **Frontend** calls API routes (not Convex SDK directly)
 
