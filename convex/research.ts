@@ -1164,8 +1164,8 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
 <json>
 {
   "cambodia": {
-    "officialNarrative": "2-4 sentences. Summarize key claims and official positions from Cambodian media.",
-    "officialNarrativeEn": "English (2-4 sentences)",
+    "officialNarrative": "3-5 sentences. Summarize key claims and official positions from Cambodian media.",
+    "officialNarrativeEn": "English (3-5 sentences)",
     "officialNarrativeTh": "Thai translation",
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
@@ -1182,8 +1182,8 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Brief justification"
   },
   "thailand": {
-    "officialNarrative": "2-4 sentences. Summarize key claims and official positions from Thai media.",
-    "officialNarrativeEn": "English (2-4 sentences)",
+    "officialNarrative": "3-5 sentences. Summarize key claims and official positions from Thai media.",
+    "officialNarrativeEn": "English (3-5 sentences)",
     "officialNarrativeTh": "Thai translation",
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
@@ -1201,7 +1201,7 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
   },
   "neutral": {
     "generalSummary": "3-5 sentences. Neutral overview - current state, humanitarian impact, key actions by both sides.",
-    "generalSummaryEn": "English (3-4 sentences)",
+    "generalSummaryEn": "English (3-5 sentences)",
     "generalSummaryTh": "Thai translation",
     "generalSummaryKh": "Khmer translation",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
@@ -1734,6 +1734,45 @@ export const step4_synthesis = internalAction({
             console.log("═══════════════════════════════════════════════════════════════");
             await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: stepErrors.join(" | ") });
         }
+
+        // ═══ TRIGGER ISR REVALIDATION ═══
+        // Purge Vercel's cache so the next user gets fresh data
+        try {
+            const VERCEL_URL = process.env.VERCEL_URL || process.env.SITE_URL;
+            const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET;
+
+            if (VERCEL_URL) {
+                const revalidateUrl = VERCEL_URL.startsWith('http')
+                    ? `${VERCEL_URL}/api/revalidate`
+                    : `https://${VERCEL_URL}/api/revalidate`;
+
+                console.log(`🔄 [ISR] Triggering cache revalidation at ${revalidateUrl}...`);
+
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                };
+                if (REVALIDATE_SECRET) {
+                    headers['x-revalidate-secret'] = REVALIDATE_SECRET;
+                }
+
+                const response = await fetch(revalidateUrl, {
+                    method: 'POST',
+                    headers,
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log(`✅ [ISR] Cache revalidated successfully:`, result);
+                } else {
+                    console.warn(`⚠️ [ISR] Revalidation returned ${response.status}: ${await response.text()}`);
+                }
+            } else {
+                console.log("ℹ️ [ISR] No VERCEL_URL/SITE_URL set - skipping cache revalidation");
+            }
+        } catch (revalidateError) {
+            // Non-fatal - don't fail the cycle just because revalidation failed
+            console.warn("⚠️ [ISR] Cache revalidation failed (non-fatal):", revalidateError);
+        }
     },
 });
 
@@ -2032,8 +2071,8 @@ export const verifyAllSources = internalAction({
                 return { verified: 0, updated: 0, deleted: 0, errors: 0 };
             }
 
-            // Process 3 articles at a time - smaller batches for better URL verification
-            const BATCH_SIZE = 3;
+            // Process 5 articles at a time - smaller batches for better URL verification
+            const BATCH_SIZE = 5;
 
             // Time budget - stop processing before Convex timeout
             const startTime = Date.now();

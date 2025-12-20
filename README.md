@@ -144,35 +144,70 @@ npx convex run api:clearAllData
 
 ---
 
-## Scaling Plan (If This gets more users)
+## Bandwidth Optimization (ISR Implementation)
 
-### Current Limits (Convex Free Tier)
-- **1 GB bandwidth/month** → ~1,500-2,000 page loads
-- Current optimizations: `useCachedQuery` reduces live subscriptions by ~90%
+### Current Architecture: Incremental Static Regeneration (ISR)
 
-### Scale-Up Architecture: Firebase Cache
+This project uses **Next.js ISR** to reduce Convex bandwidth by ~99%:
 
 ```
-┌─────────────────┐     sync      ┌─────────────────┐     serve     ┌─────────┐
-│  Convex (AI)    │ ───────────►  │  Firebase       │ ───────────►  │  Users  │
-│  ~100MB/month   │  (every 6hr)  │  10GB/month!    │               │         │
-└─────────────────┘               └─────────────────┘               └─────────┘
+┌─────────────────┐     once per     ┌─────────────────┐     serve     ┌─────────┐
+│  Convex (AI)    │ ──────────────►  │  Vercel CDN     │ ───────────►  │  Users  │
+│  ~10MB/month!   │   3 hours        │  (Cached HTML)  │   (instant)   │         │
+└─────────────────┘                  └─────────────────┘               └─────────┘
 ```
 
-### Implementation Steps
-1. **Convex cron** syncs data to Firebase Firestore after each AI cycle (every 6hr)
-2. **Next.js API routes** read from Firebase instead of Convex
-3. **Frontend** calls API routes (not Convex SDK directly)
+### How It Works
 
-### Free Tier Comparison
+1. **Server Component** (`page.tsx`) fetches data from Convex at build/revalidation time
+2. **Vercel caches** the rendered HTML globally on its CDN
+3. **Users get cached HTML** - zero Convex calls per user
+4. **Every 3 hours** OR after research cycle - cache is revalidated
 
-| Service | Free Bandwidth | Capacity |
-|---------|---------------|----------|
-| Convex | 1 GB/month | ~2,000 users |
-| **Firebase Firestore** | **10 GB/month** | **~40,000 users** |
-| Cloudflare R2 | Unlimited egress | ∞ (object storage) |
-| Google Cloud Storage | ~30 GB/month | ~120,000 users |
+### Environment Variables (Required for Production)
 
-### When to Implement
-- If monthly page loads exceed **1,500**
-- If Convex dashboard shows bandwidth warnings
+```bash
+# In Vercel Dashboard -> Settings -> Environment Variables
+
+# For on-demand revalidation after research cycles complete
+REVALIDATE_SECRET=your-secret-key-here
+
+# Convex needs this to trigger revalidation webhook
+# Set in Convex dashboard: npx convex env set SITE_URL "https://your-domain.vercel.app"
+# Also set: npx convex env set REVALIDATE_SECRET "your-secret-key-here"
+```
+
+### Manual Cache Purge
+
+```bash
+# Via GET (for testing)
+curl "https://your-domain.vercel.app/api/revalidate?secret=your-secret"
+
+# Via POST (production)
+curl -X POST https://your-domain.vercel.app/api/revalidate \
+  -H "x-revalidate-secret: your-secret"
+```
+
+### Adjusting Revalidation Interval
+
+Edit `src/app/page.tsx`:
+```typescript
+// Revalidate every 3 hours (10800 seconds)
+export const revalidate = 10800;
+
+// For more frequent updates (1 hour):
+export const revalidate = 3600;
+```
+
+### Bandwidth Comparison
+
+| Mode | Convex Calls/User | Monthly Usage (10k users) |
+|------|-------------------|---------------------------|
+| Live Subscriptions | 1 per page load | ~500 MB |
+| useCachedQuery | 1 per page load | ~50 MB |
+| **ISR (Current)** | **0 per page load** | **~5 MB** |
+
+### On-Demand Revalidation
+
+Research cycles automatically trigger cache purge via `/api/revalidate`. This happens in `convex/research.ts` after `step4_synthesis` completes.
+
