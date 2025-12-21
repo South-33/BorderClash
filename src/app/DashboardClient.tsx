@@ -118,7 +118,7 @@ const TRANSLATIONS = {
     monitoring: "MONITORING",
     active: "ACTIVE",
     situationReport: "SITUATION REPORT",
-    autoUpdating: "Auto-updating every 3 hours",
+    autoUpdating: "Auto-updating every 6 hours",
     keyDevelopments: "Key Developments",
     sourcesTracked: "SOURCES TRACKED",
     viewMode: "VIEW MODE",
@@ -296,7 +296,7 @@ const TRANSLATIONS = {
     monitoring: "กำลังจับตา",
     active: "ใช้งานอยู่",
     situationReport: "รายงานสถานการณ์สด",
-    autoUpdating: "อัปเดตเองทุก 3 ชั่วโมง",
+    autoUpdating: "อัปเดตเองทุก 6 ชั่วโมง",
     keyDevelopments: "เหตุการณ์สำคัญ",
     sourcesTracked: "แหล่งข่าวที่ติดตาม",
     viewMode: "โหมดดูข้อมูล",
@@ -474,7 +474,7 @@ const TRANSLATIONS = {
     monitoring: "កំពុងមើល",
     active: "សកម្ម",
     situationReport: "របាយការណ៍សង្ខេប",
-    autoUpdating: "អាប់ដេតរៀងរាល់ 3 ម៉ោង",
+    autoUpdating: "អាប់ដេតរៀងរាល់ 6 ម៉ោង",
     keyDevelopments: "ព្រឹត្តិការណ៍សំខាន់ៗ",
     sourcesTracked: "ប្រភពព័ត៌មាន",
     viewMode: "មើលជា",
@@ -1802,8 +1802,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     if (!systemStats?.lastResearchAt) return;
 
     const updateCountdown = () => {
-      // 180 minutes (3 hours) in milliseconds (matches cron schedule)
-      const cycleInterval = 180 * 60 * 1000;
+      // 360 minutes (6 hours) in milliseconds (matches cron schedule)
+      const cycleInterval = 360 * 60 * 1000;
       // Calculate time since the last research finished
       const timeSinceLastUpdate = Date.now() - systemStats.lastResearchAt;
       // Calculate remaining time until next check
