@@ -9,7 +9,6 @@ Real-time intelligence dashboard tracking the Thailand-Cambodia border situation
 - ⚔️ **Multi-Perspective** - Thailand, Cambodia, and International viewpoints
 - 📅 **Interactive Timeline** - Chronological event display with swipe navigation
 - 🤖 **Hierarchical AI System** - Scout → Source Verify → Historian → Synthesis pipeline
-- 🛡️ **HTTP Timeout Recovery** - Automatic pending result polling when Koyeb times out
 - 🔎 **Web Search Integration** - AI agents verify claims via live web search
 
 ---
