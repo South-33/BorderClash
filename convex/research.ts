@@ -1160,12 +1160,16 @@ Write KEY EVENTS as SHORT headline-style bullets. MAX 20 WORDS each!
 
 Be CONCISE. Each event = 1 short line. No multi-clause sentences. Frame events NEUTRALLY - don't imply who "started it" unless clearly established.
 
+📏 LENGTH HIERARCHY (IMPORTANT!):
+- SIDE CARDS (Cambodia/Thailand): COMPACT. 3-4 sentences, max 60 words. These cards have limited space. Report key claims CONCISELY - just the essence of what their media is saying.
+- CENTER CARD (Neutral): LONGEST. 5-7 sentences, max 80 words. This card has the MOST space. You are the REFEREE here - summarize BOTH sides' actions, call out discrepancies, give the full picture. This should be the most comprehensive text.
+
 ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
 <json>
 {
   "cambodia": {
-    "officialNarrative": "3-5 sentences. Summarize key claims and official positions from Cambodian media.",
-    "officialNarrativeEn": "English (3-5 sentences)",
+    "officialNarrative": "3-4 sentences (max 60 words). Key claims from Cambodian media only.",
+    "officialNarrativeEn": "English (3-4 sentences)",
     "officialNarrativeTh": "Thai translation",
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
@@ -1182,8 +1186,8 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Brief justification"
   },
   "thailand": {
-    "officialNarrative": "3-5 sentences. Summarize key claims and official positions from Thai media.",
-    "officialNarrativeEn": "English (3-5 sentences)",
+    "officialNarrative": "3-4 sentences (max 60 words). Key claims from Thai media only.",
+    "officialNarrativeEn": "English (3-4 sentences)",
     "officialNarrativeTh": "Thai translation",
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
@@ -1200,8 +1204,8 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Brief justification"
   },
   "neutral": {
-    "generalSummary": "3-5 sentences. Neutral overview - current state, humanitarian impact, key actions by both sides.",
-    "generalSummaryEn": "English (3-5 sentences)",
+    "generalSummary": "5-7 sentences (max 80 words). Summarize BOTH sides' key actions, humanitarian impact, diplomatic developments. Compare claims. Note where sources agree/disagree. Be the impartial commentator giving the full picture.",
+    "generalSummaryEn": "English (6-8 sentences)",
     "generalSummaryTh": "Thai translation",
     "generalSummaryKh": "Khmer translation",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
