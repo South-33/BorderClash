@@ -1700,15 +1700,21 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   }, [viewMode, timelineDates.length]); // Re-run if view changes or new dates are added
 
   // Auto-scroll date picker to show selected date
+  // Needs delay on initial render since the picker may not be visible yet
   useEffect(() => {
     if (!selectedTimelineDate || !datePickerRef.current) return;
 
-    const button = datePickerRef.current.querySelector(`[data-date="${selectedTimelineDate}"]`) as HTMLElement;
-    if (button) {
-      // Scroll the button into view within the horizontal container
-      button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-  }, [selectedTimelineDate]);
+    // Small delay to ensure the date picker is rendered (especially on view switch)
+    const timer = setTimeout(() => {
+      const button = datePickerRef.current?.querySelector(`[data-date="${selectedTimelineDate}"]`) as HTMLElement;
+      if (button) {
+        // Scroll the button into view within the horizontal container
+        button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [selectedTimelineDate, viewMode]); // Also re-run when viewMode changes (picker becomes visible)
 
   // Scroll to selected date section
   const scrollToDate = (date: string) => {
@@ -2101,8 +2107,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
             </h1>
             <div className="flex items-center gap-2 mb-4">
               <div className={`w-3 h-3 rounded-full ${isPossiblyStale ? 'bg-yellow-500 animate-pulse' :
-                  isSyncing ? 'bg-riso-accent animate-ping' :
-                    'bg-green-600'
+                isSyncing ? 'bg-riso-accent animate-ping' :
+                  'bg-green-600'
                 }`}></div>
               <span className="font-mono text-xs font-bold tracking-widest">
                 {isPossiblyStale ? 'REFRESHING...' :
