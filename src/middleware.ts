@@ -25,10 +25,17 @@ export function middleware(request: NextRequest) {
         return response;
     }
 
-    // For the main page, tell browser to always check with Vercel
+    // For the main page, tell browser to NEVER cache locally
+    // 'no-store' = do NOT cache at all in browser (most aggressive)
     // 'no-cache' = you CAN cache, but MUST revalidate before using
+    // Combined with Pragma for legacy HTTP/1.0 compatibility
     // This allows Vercel's CDN (ISR) to work while preventing stale browser cache
-    response.headers.set('Cache-Control', 'no-cache, must-revalidate');
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+
+    // Debug header to track when this response was generated
+    response.headers.set('X-BorderClash-Served', new Date().toISOString());
 
     return response;
 }

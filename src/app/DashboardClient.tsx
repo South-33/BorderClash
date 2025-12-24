@@ -1398,8 +1398,24 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
   const hasServerData = initialData !== null;
 
-  // SystemStats subscription - SKIP entirely when we have server data
-  // This is the key: when hasServerData=true, Convex's "skip" sentinel prevents subscription
+  const [forceClientMode, setForceClientMode] = useState(false);
+  const [tabFocusKey, setTabFocusKey] = useState(0);
+
+  // Re-sync data when tab regains focus (handles browser cache staleness)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("👁️ [BorderClash] Tab became visible, triggering data refresh check...");
+        setTabFocusKey(prev => prev + 1);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  // SystemStats subscription - NEVER skip this!
+  // This is our "heartbeat" to detect when static ISR data becomes stale.
   const {
     data: clientSystemStats,
     isLoading: clientSysStatsLoading,
@@ -1408,12 +1424,25 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     api.api.getStats,
     {},
     "borderclash_system_stats",
-    hasServerData // skip parameter - when true, no Convex subscription is created
+    false // ALWAYS subscribe to status to detect new research cycles
   ) as any;
 
-  // Use server data if available, otherwise fall back to client data
-  const systemStats = hasServerData ? initialData.systemStats : clientSystemStats;
-  const sysStatsLoading = hasServerData ? false : clientSysStatsLoading;
+  // Use server data if available, unless fresh client stats detect a newer update
+  const systemStats = (hasServerData && !forceClientMode) ? initialData.systemStats : clientSystemStats;
+  const sysStatsLoading = (hasServerData && !forceClientMode) ? false : clientSysStatsLoading;
+
+  // Detect when new research data exists on the server compared to our static ISR load
+  useEffect(() => {
+    if (hasServerData && !forceClientMode && clientSystemStats?.lastResearchAt && initialData?.systemStats?.lastResearchAt) {
+      if (clientSystemStats.lastResearchAt > initialData.systemStats.lastResearchAt) {
+        console.log("🚀 [BorderClash] New research cycle detected via heartbeat. Switching to live mode...");
+        setForceClientMode(true);
+      }
+    }
+  }, [clientSystemStats?.lastResearchAt, hasServerData, forceClientMode, initialData?.systemStats?.lastResearchAt]);
+
+  // All other queries - skip if we have valid server data AND no newer cycle has been detected
+  const shouldSkip = hasServerData && !forceClientMode;
 
   // Update global ref so any remaining cached queries can access it
   useEffect(() => {
@@ -1434,7 +1463,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     { country: "thailand", limit: 20 },
     "borderclash_th_news_v2",
     systemStats?.lastResearchAt,
-    hasServerData // skip - when true, no Convex HTTP request is made
+    shouldSkip
   );
 
   const {
@@ -1446,7 +1475,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     { country: "cambodia", limit: 20 },
     "borderclash_kh_news_v2",
     systemStats?.lastResearchAt,
-    hasServerData
+    shouldSkip
   );
 
   const {
@@ -1458,7 +1487,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     { target: "thailand" },
     "borderclash_th_meta_v2",
     systemStats?.lastResearchAt,
-    hasServerData
+    shouldSkip
   );
 
   const {
@@ -1470,7 +1499,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     { target: "cambodia" },
     "borderclash_kh_meta_v2",
     systemStats?.lastResearchAt,
-    hasServerData
+    shouldSkip
   );
 
   const {
@@ -1482,7 +1511,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     { target: "neutral" },
     "borderclash_neutral_meta_v2",
     systemStats?.lastResearchAt,
-    hasServerData
+    shouldSkip
   );
 
   const {
@@ -1494,7 +1523,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     {},
     "borderclash_dashboard_stats_v2",
     systemStats?.lastResearchAt,
-    hasServerData
+    shouldSkip
   );
 
   const {
@@ -1505,7 +1534,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     {},
     "borderclash_article_counts_v2",
     systemStats?.lastResearchAt,
-    hasServerData
+    shouldSkip
   );
 
   const {
@@ -1517,18 +1546,18 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     {},
     "borderclash_timeline_v2",
     systemStats?.lastResearchAt,
-    hasServerData
+    shouldSkip
   );
 
-  // Final data: prefer server data, fall back to client data
-  const thailandNews = hasServerData ? initialData.thailandNews : clientThailandNews;
-  const cambodiaNews = hasServerData ? initialData.cambodiaNews : clientCambodiaNews;
-  const thailandMeta = hasServerData ? initialData.thailandAnalysis : clientThailandMeta;
-  const cambodiaMeta = hasServerData ? initialData.cambodiaAnalysis : clientCambodiaMeta;
-  const neutralMeta = hasServerData ? initialData.neutralAnalysis : clientNeutralMeta;
-  const dashboardStats = hasServerData ? initialData.dashboardStats : clientDashboardStats;
-  const articleCounts = hasServerData ? initialData.articleCounts : clientArticleCounts;
-  const timelineEvents = hasServerData ? initialData.timelineEvents : clientTimelineEvents;
+  // Final data: prefer server data (if not stale), fall back to client data
+  const thailandNews = shouldSkip ? initialData.thailandNews : clientThailandNews;
+  const cambodiaNews = shouldSkip ? initialData.cambodiaNews : clientCambodiaNews;
+  const thailandMeta = shouldSkip ? initialData.thailandAnalysis : clientThailandMeta;
+  const cambodiaMeta = shouldSkip ? initialData.cambodiaAnalysis : clientCambodiaMeta;
+  const neutralMeta = shouldSkip ? initialData.neutralAnalysis : clientNeutralMeta;
+  const dashboardStats = shouldSkip ? initialData.dashboardStats : clientDashboardStats;
+  const articleCounts = shouldSkip ? initialData.articleCounts : clientArticleCounts;
+  const timelineEvents = shouldSkip ? initialData.timelineEvents : clientTimelineEvents;
 
   // Loading states: if we have server data, we're never "loading"
   const thNewsLoading = hasServerData ? false : clientThNewsLoading;
@@ -1650,12 +1679,25 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     return { timelineDates: dates, groupedEvents: groups, dateCounts: counts };
   }, [timelineEvents]);
 
-  // Set default selected date to the first (oldest) since scroll starts at top
+  // Set default selected date to the last (newest) because users want the most recent info
   useEffect(() => {
     if (!selectedTimelineDate && timelineDates.length > 0) {
-      setSelectedTimelineDate(timelineDates[0]);
+      const latestDate = timelineDates[timelineDates.length - 1];
+      setSelectedTimelineDate(latestDate);
     }
   }, [timelineDates, selectedTimelineDate]);
+
+  // Handle auto-scroll to latest date on initial load or view switch
+  useEffect(() => {
+    if (viewMode === 'LOSSES' && timelineDates.length > 0) {
+      const latestDate = timelineDates[timelineDates.length - 1];
+      // Small delay to ensure the timeline container is rendered and height is calculated
+      const timer = setTimeout(() => {
+        scrollToDate(latestDate);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [viewMode, timelineDates.length]); // Re-run if view changes or new dates are added
 
   // Auto-scroll date picker to show selected date
   useEffect(() => {
@@ -1798,6 +1840,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   }, [viewMode]); // Re-measure for timeline view
 
   // Timer Logic for countdown display
+  // Also detect "possibly stale" state when we think the cycle should have completed
+  const [isPossiblyStale, setIsPossiblyStale] = useState(false);
+
   useEffect(() => {
     if (!systemStats?.lastResearchAt) return;
 
@@ -1809,12 +1854,20 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       // Calculate remaining time until next check
       const remaining = Math.max(0, cycleInterval - timeSinceLastUpdate);
       setNextUpdateIn(Math.floor(remaining / 1000));
+
+      // If remaining is 0 and has been for more than 60 seconds, data might be stale
+      // (the server should have updated by now)
+      if (remaining === 0 && timeSinceLastUpdate > cycleInterval + 60000) {
+        setIsPossiblyStale(true);
+      } else {
+        setIsPossiblyStale(false);
+      }
     };
 
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, [systemStats?.lastResearchAt, systemStats?.isPaused]);
+  }, [systemStats?.lastResearchAt, systemStats?.isPaused, tabFocusKey]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -2047,9 +2100,19 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               BORDER CLASH
             </h1>
             <div className="flex items-center gap-2 mb-4">
-              <div className={`w-3 h-3 rounded-full ${isSyncing ? 'bg-riso-accent animate-ping' : 'bg-green-600'}`}></div>
+              <div className={`w-3 h-3 rounded-full ${isPossiblyStale ? 'bg-yellow-500 animate-pulse' :
+                  isSyncing ? 'bg-riso-accent animate-ping' :
+                    'bg-green-600'
+                }`}></div>
               <span className="font-mono text-xs font-bold tracking-widest">
-                {isSyncing ? t.syncing : systemStats?.systemStatus === 'error' ? t.error : t.systemOnline}
+                {isPossiblyStale ? 'REFRESHING...' :
+                  isSyncing ? t.syncing :
+                    systemStats?.systemStatus === 'error' ? t.error :
+                      t.systemOnline}
+              </span>
+              {/* Data source indicator (dev helper) */}
+              <span className={`ml-auto text-[8px] font-mono px-1 rounded ${forceClientMode ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                {forceClientMode ? 'LIVE' : 'ISR'}
               </span>
             </div>
             <div className={`font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
@@ -2069,7 +2132,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     <span className="text-yellow-600">{t.paused}</span>
                   ) : isSyncing ? (
                     <span className="animate-pulse text-riso-accent">{t.running}</span>
-                  ) : (sysStatsLoading || nextUpdateIn === null) ? (
+                  ) : (sysStatsLoading || nextUpdateIn === null || isPossiblyStale) ? (
                     <HackerScramble />
                   ) : (
                     formatTime(nextUpdateIn)
