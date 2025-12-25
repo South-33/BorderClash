@@ -1350,7 +1350,32 @@ interface DashboardClientProps {
 
 export function DashboardClient({ initialData, serverError }: DashboardClientProps) {
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
+
+  // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
   const [viewMode, setViewMode] = useState<'ANALYSIS' | 'LOSSES' | 'GUIDE'>('ANALYSIS');
+  const hasInitializedFromHash = useRef(false);
+
+  // On mount, read URL hash and update viewMode (client-only, avoids hydration mismatch)
+  useEffect(() => {
+    const hash = window.location.hash.toLowerCase().replace('#', '');
+    if (hash === 'timeline' || hash === 'losses') {
+      setViewMode('LOSSES');
+    } else if (hash === 'guide') {
+      setViewMode('GUIDE');
+    }
+    hasInitializedFromHash.current = true;
+  }, []);
+
+  // Sync viewMode changes back to URL hash (skip first run to avoid clearing hash before reading)
+  useEffect(() => {
+    if (!hasInitializedFromHash.current) return; // Skip initial mount
+    const hashMap: Record<string, string> = { 'ANALYSIS': '', 'LOSSES': '#timeline', 'GUIDE': '#guide' };
+    const newHash = hashMap[viewMode] || '';
+    if (window.location.hash !== newHash) {
+      window.history.replaceState(null, '', newHash || window.location.pathname);
+    }
+  }, [viewMode]);
+
   const [lang, setLang] = useState<'en' | 'th' | 'kh'>('en');
   const t = TRANSLATIONS[lang as Lang];
 
@@ -2536,7 +2561,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
           {
             viewMode === 'LOSSES' && (
               <>
-                <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 h-[calc(100dvh-8rem)] md:h-auto" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
+                <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] md:h-auto" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
                   <Card title={`📜 ${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
 
                     {(!timelineEvents || timelineEvents.length === 0) ? (
