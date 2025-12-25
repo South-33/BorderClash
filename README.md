@@ -1,15 +1,27 @@
-# BorderClash - Thailand-Cambodia Border Conflict Monitor
+# BorderClash
 
-Real-time intelligence dashboard tracking the Thailand-Cambodia border situation with multi-perspective news and AI-powered neutral analysis.
+> Real-time intelligence dashboard tracking the Thailand-Cambodia border situation with multi-perspective news and AI-powered neutral analysis.
+
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
+[![Convex](https://img.shields.io/badge/Convex-Backend-FF6B35?logo=convex)](https://convex.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
+
+---
 
 ## Features
 
-- 🌐 **Trilingual UI** - English, Thai (ไทย), Khmer (ខ្មែរ) with casual/spoken translations
-- 🔍 **Neutral AI Analysis** - Balanced perspective summaries, credibility scoring
-- ⚔️ **Multi-Perspective** - Thailand, Cambodia, and International viewpoints
-- 📅 **Interactive Timeline** - Chronological event display with swipe navigation
-- 🤖 **Hierarchical AI System** - Scout → Source Verify → Historian → Synthesis pipeline
-- 🔎 **Web Search Integration** - AI agents verify claims via live web search
+- **Trilingual UI** — English, Thai (ไทย), Khmer (ខ្មែរ) with casual/spoken translations
+- **Neutral AI Analysis** — Balanced perspective summaries with credibility scoring
+- **Multi-Perspective Views** — Thailand, Cambodia, and International viewpoints
+- **Interactive Timeline** — Chronological event display with swipe navigation
+- **Hierarchical AI System** — Scout → Source Verify → Historian → Synthesis pipeline
+- **Web Search Integration** — AI agents verify claims via live web search
+
+---
+
+## Screenshots
+
+*Coming soon*
 
 ---
 
@@ -17,7 +29,7 @@ Real-time intelligence dashboard tracking the Thailand-Cambodia border situation
 
 ```mermaid
 graph TB
-    subgraph "RESEARCH CYCLE (manual trigger)"
+    subgraph "RESEARCH CYCLE"
         ORCH[Orchestrator]
         ORCH -->|step 1| S[SCOUTS]
         ORCH -->|step 2| V[SOURCE VERIFY]
@@ -50,10 +62,53 @@ graph TB
 | **DASHBOARD** | thinking | Update stats (casualties, displaced) with web verification |
 | **SYNTHESIS** | thinking | Generate multilingual narratives for frontend |
 
-### HTTP Timeout Recovery
+---
 
-The gemini-studio-api handles long-running generations internally with caching.
-Convex calls are simple HTTP requests with retry logic built into `ai_utils.ts`.
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 15 + Tailwind CSS |
+| Backend | Convex |
+| AI | Gemini |
+| Hosting | Vercel |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- npm or pnpm
+- Convex account
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/borderclash.git
+cd borderclash
+
+# Install dependencies
+npm install
+
+# Set up Convex
+npx convex dev
+
+# Start development server
+npm run dev
+```
+
+### Environment Variables
+
+```bash
+npx convex env set GEMINI_STUDIO_API_URL "https://your-api-url.com"
+```
+
+### AI Backend
+
+This project uses a custom Gemini integration for the live deployment. If you want to run this yourself, you'll need to replace the AI layer with the [official Gemini API](https://ai.google.dev/). The prompts in `convex/research.ts` and `convex/historian.ts` are designed to be unbiased and can be audited directly in this repository.
 
 ---
 
@@ -63,52 +118,27 @@ Convex calls are simple HTTP requests with retry logic built into `ai_utils.ts`.
 `thailandNews`, `cambodiaNews`, `internationalNews`
 - Articles with `active`, `outdated`, `unverified`, `false`, or `archived` status
 - Multilingual titles/summaries (En, Th, Kh)
-- `sourceVerifiedAt` - When AI verified the URL/content is real
-- `processedToTimeline` - Tracks if Historian has processed this article
+- `sourceVerifiedAt` — When AI verified the URL/content
+- `processedToTimeline` — Tracks if Historian has processed this article
 
 ### Timeline Events
 `timelineEvents`
 - `date`, `timeOfDay` (for same-day ordering)
 - `title`, `titleTh`, `titleKh` + descriptions
-- `importance` (0-100 - controls dot size: 6px-40px)
+- `importance` (0-100 — controls dot size)
 - `status` (confirmed/disputed/debunked)
 - `sources[]` array with credibility scores
 
 ### Dashboard Stats
 `dashboardStats`
-- **Displaced Count** with last updated timestamp
-- **Casualties** (confirmed fatalities)
-- **Civilian/Military Injured**
-- **Conflict Level** (LOW/ELEVATED/CRITICAL)
+- Displaced Count with last updated timestamp
+- Casualties (confirmed fatalities)
+- Civilian/Military Injured
+- Conflict Level (LOW/ELEVATED/CRITICAL)
 
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Frontend | Next.js 15 + Tailwind CSS |
-| Backend | Convex |
-| AI | gemini-studio-api (Playwright + Gemini Web) |
-| Hosting | Vercel (frontend) + Local/Cloud (gemini-studio-api) |
-
-### Environment Variables
-
-```bash
-npx convex env set GEMINI_STUDIO_API_URL "https://your-tunnel-url.trycloudflare.com"
-```
-
----
-
-## Quick Start
-
-```bash
-npm install
-npx convex dev
-npm run dev
-```
-
-### Administrative Commands
+## CLI Commands
 
 ```bash
 # Control automation
@@ -127,86 +157,35 @@ npx convex run api:clearAllData
 
 ---
 
-## UI Features
-
-- **Sticky Date Header** - Shows current visible date while scrolling timeline
-- **Mobile Swipe Navigation** - Swipe between event details
-- **Date Picker** - Horizontal scrollable dates with auto-sync to scroll position
-- **Damage Assessment Cards** - Displaced, Fatalities, Injuries, Threat Level
-- **Guide Section** - Fact vs Propaganda, Verification Checklist, Source Categories
-
 ## Translation Guidelines
 
-- **Thai**: ภาษาพูด (spoken Thai) - casual everyday language
-- **Khmer**: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - conversational tone
-- **Numerals**: Always use English numerals (0-9), never Thai ๑๒๓ or Khmer ១២៣
+| Language | Style |
+|----------|-------|
+| Thai | ภาษาพูด (spoken Thai) — casual everyday language |
+| Khmer | ភាសាប្រចាំថ្ងៃ (everyday Khmer) — conversational tone |
+| Numerals | Always use English numerals (0-9) |
 
 ---
 
-## Bandwidth Optimization (ISR Implementation)
+## How it Works
 
-### Current Architecture: Incremental Static Regeneration (ISR)
+The system utilizes a **Hierarchical AI Agent Pipeline** to process information from raw news to a structured intelligence dashboard:
 
-This project uses **Next.js ISR** to reduce Convex bandwidth by ~99%:
+1. **Scouts**: Multi-agent system that crawls news outlets from Thailand, Cambodia, and international sources. Each scout operates with a specific regional "bias" to capture the full spectrum of propaganda vs. journalism.
+2. **Source Verify**: Dedicated agents visit found URLs to verify content existence and score initial credibility based on language patterns and evidentiary claims.
+3. **Historian**: A "thinking" model that processes verified articles, cross-references dates, and manages the timeline database (merging duplicates, updating fatalities, etc.).
+4. **Synthesis**: The final stage where the dashboard narratives are generated in three languages, ensuring tone-perfect translations for local audiences.
 
-```
-┌─────────────────┐     once per     ┌─────────────────┐     serve     ┌─────────┐
-│  Convex (AI)    │ ──────────────►  │  Vercel CDN     │ ───────────►  │  Users  │
-│  ~10MB/month!   │   3 hours        │  (Cached HTML)  │   (instant)   │         │
-└─────────────────┘                  └─────────────────┘               └─────────┘
-```
+---
 
-### How It Works
+## License
 
-1. **Server Component** (`page.tsx`) fetches data from Convex at build/revalidation time
-2. **Vercel caches** the rendered HTML globally on its CDN
-3. **Users get cached HTML** - zero Convex calls per user
-4. **Every 3 hours** OR after research cycle - cache is revalidated
+This project is licensed under the MIT License.
 
-### Environment Variables (Required for Production)
+---
 
-```bash
-# In Vercel Dashboard -> Settings -> Environment Variables
+## Acknowledgments
 
-# For on-demand revalidation after research cycles complete
-REVALIDATE_SECRET=your-secret-key-here
-
-# Convex needs this to trigger revalidation webhook
-# Set in Convex dashboard: npx convex env set SITE_URL "https://your-domain.vercel.app"
-# Also set: npx convex env set REVALIDATE_SECRET "your-secret-key-here"
-```
-
-### Manual Cache Purge
-
-```bash
-# Via GET (for testing)
-curl "https://your-domain.vercel.app/api/revalidate?secret=your-secret"
-
-# Via POST (production)
-curl -X POST https://your-domain.vercel.app/api/revalidate \
-  -H "x-revalidate-secret: your-secret"
-```
-
-### Adjusting Revalidation Interval
-
-Edit `src/app/page.tsx`:
-```typescript
-// Revalidate every 3 hours (10800 seconds)
-export const revalidate = 10800;
-
-// For more frequent updates (1 hour):
-export const revalidate = 3600;
-```
-
-### Bandwidth Comparison
-
-| Mode | Convex Calls/User | Monthly Usage (10k users) |
-|------|-------------------|---------------------------|
-| Live Subscriptions | 1 per page load | ~500 MB |
-| useCachedQuery | 1 per page load | ~50 MB |
-| **ISR (Current)** | **0 per page load** | **~5 MB** |
-
-### On-Demand Revalidation
-
-Research cycles automatically trigger cache purge via `/api/revalidate`. This happens in `convex/research.ts` after `step4_synthesis` completes.
-
+- [Convex] for the real-time backend
+- [Vercel] for hosting
+- [Gemini] for AI capabilities
