@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } fr
 import { useQuery, useMutation, useConvex } from 'convex/react';
 import { FunctionReference } from 'convex/server';
 import { api } from '../../convex/_generated/api';
-import { Swords, Handshake, Heart, Landmark, Circle } from 'lucide-react';
+import { Swords, Handshake, Heart, Landmark, Circle, Hourglass, BarChart3, Search } from 'lucide-react';
 import type { BorderClashData } from '@/lib/convex-server';
 
 // --- Icon Components ---
@@ -506,7 +506,7 @@ const TRANSLATIONS = {
     neutralAI: "AI អាជ្ញាកណ្តាល",
     intl: "អន្តរជាតិ",
     credibility: "ភាពជឿជាក់",
-    subTitle: "តាមដានស្ថានការណ៍ព្រំដែនភ្លាមៗ វិភាគដោយ AI ដើម្បីដឹងការពិត មិនលំអៀង",
+    subTitle: "តាមដានស្ថានការណ៍ព្រំដែនភ្លាមៗ វិភាគដោយ AI ដើម្បីដឹងការពិត មិនលំអៀង។",
     fatalities: "អ្នកស្លាប់ (បញ្ជាក់ហើយ)",
     threatLevel: "កម្រិតគ្រោះថ្នាក់",
     low: "ទាប",
@@ -1354,6 +1354,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
   const [viewMode, setViewMode] = useState<'ANALYSIS' | 'LOSSES' | 'GUIDE'>('ANALYSIS');
   const hasInitializedFromHash = useRef(false);
+  const hasAutoScrolledTimeline = useRef(false);
 
   // On mount, read URL hash and update viewMode (client-only, avoids hydration mismatch)
   useEffect(() => {
@@ -1712,17 +1713,18 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     }
   }, [timelineDates, selectedTimelineDate]);
 
-  // Handle auto-scroll to latest date on initial load or view switch
+  // Handle auto-scroll to latest date on initial load or view switch (ONLY ONCE)
   useEffect(() => {
-    if (viewMode === 'LOSSES' && timelineDates.length > 0) {
+    if (viewMode === 'LOSSES' && timelineDates.length > 0 && !hasAutoScrolledTimeline.current) {
       const latestDate = timelineDates[timelineDates.length - 1];
       // Small delay to ensure the timeline container is rendered and height is calculated
       const timer = setTimeout(() => {
         scrollToDate(latestDate);
+        hasAutoScrolledTimeline.current = true;
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [viewMode, timelineDates.length]); // Re-run if view changes or new dates are added
+  }, [viewMode, timelineDates.length]); // Still track dates in case they load after view switch
 
   // Auto-scroll date picker to show selected date
   // Needs delay on initial render since the picker may not be visible yet
@@ -2125,8 +2127,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
         <div className="riso-grain"></div>
 
         {/* Left Sidebar / Header (Mobile Top) */}
-        <aside ref={sidebarRef} className="md:w-64 flex-shrink-0 flex flex-col gap-3 self-start">
-          <div className="border-4 border-riso-ink p-4 bg-riso-paper">
+        <aside ref={sidebarRef} className="md:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
+          <div className="border-4 border-riso-ink p-3 bg-riso-paper">
             <h1 className="font-display text-5xl md:text-6xl leading-none tracking-tighter text-riso-ink mb-2">
               BORDER CLASH
             </h1>
@@ -2143,7 +2145,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               </span>
 
             </div>
-            <div className={`font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+            <div className="font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 text-xs">
               <p className="leading-relaxed">
                 {t.subTitle}
               </p>
@@ -2151,8 +2153,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
           </div>
 
           {/* Control Panel */}
-          <div className="bg-riso-ink text-riso-paper p-4 rough-border-sm">
-            <div className="flex justify-between items-start mb-3">
+          <div className="bg-riso-ink text-riso-paper p-3 rough-border-sm">
+            <div className="flex justify-between items-start mb-2">
               <div>
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.nextAutoScan}</p>
                 <p className="font-mono text-3xl font-bold">
@@ -2229,81 +2231,76 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
             </div>
           </div>
 
-          {/* View Selector */}
-          <div className={`rough-border-sm p-4 bg-white/50 font-mono flex flex-col ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-            <div className="flex items-center gap-2 mb-1 uppercase font-bold border-b border-riso-ink/20 pb-1">
-              {t.viewMode}
+          {/* Language Selector */}
+          <div className="rough-border p-3 bg-white/50 font-mono flex flex-col gap-2">
+            <div className="flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest text-[10px]">
+              <div className="w-4 h-[1px] bg-riso-ink/20"></div>
+              {t.language}
+              <div className="flex-1 h-[1px] bg-riso-ink/20"></div>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-2 cursor-pointer hover:bg-riso-ink/5 p-1 transition-colors">
-                <input
-                  type="radio"
-                  name="viewMode"
-                  value="ANALYSIS"
-                  checked={viewMode === 'ANALYSIS'}
-                  onChange={(e) => setViewMode(e.target.value as any)}
-                  className="accent-riso-ink"
-                />
-                <span className="font-bold">{t.analysis}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer hover:bg-riso-ink/5 p-1 transition-colors">
-                <input
-                  type="radio"
-                  name="viewMode"
-                  value="LOSSES"
-                  checked={viewMode === 'LOSSES'}
-                  onChange={(e) => setViewMode(e.target.value as any)}
-                  className="accent-riso-ink"
-                />
-                <span className="font-bold">{t.timeline}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer hover:bg-riso-ink/5 p-1 transition-colors">
-                <input
-                  type="radio"
-                  name="viewMode"
-                  value="GUIDE"
-                  checked={viewMode === 'GUIDE'}
-                  onChange={(e) => setViewMode(e.target.value as any)}
-                  className="accent-riso-ink"
-                />
-                <span className="font-bold">{t.guide}</span>
-              </label>
+
+            <div className="flex gap-2">
+              {[
+                { id: 'kh', label: 'ខ្មែរ' },
+                { id: 'en', label: 'EN' },
+                { id: 'th', label: 'ไทย' }
+              ].map((l) => (
+                <button
+                  key={l.id}
+                  onClick={() => setLang(l.id as any)}
+                  className={`
+                    flex-1 flex items-center justify-center py-2 px-1 rounded border-2 active:scale-95
+                    ${lang === l.id
+                      ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[3px_3px_0px_rgba(30,58,138,0.3)]'
+                      : 'bg-riso-ink/5 text-riso-ink border-transparent hover:bg-riso-ink/10 hover:border-riso-ink/20'
+                    }
+                  `}
+                >
+                  <span className={`font-bold tracking-tight ${l.id === 'en' ? 'text-sm' : 'text-base'}`}>
+                    {l.label}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Language Selector */}
-          <div className="rough-border-sm p-3 bg-white/50 font-mono text-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="uppercase font-bold">{t.language}</span>
+          {/* View Selector */}
+          <div className="rough-border p-3 bg-riso-ink/5 font-mono flex flex-col gap-2 text-xs">
+            <div className="flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest text-[10px]">
+              <div className="w-4 h-[1px] bg-riso-ink/20"></div>
+              {t.viewMode}
+              <div className="flex-1 h-[1px] bg-riso-ink/20"></div>
             </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setLang('kh')}
-                className={`flex-1 py-1.5 rounded text-xs font-bold transition-colors ${lang === 'kh' ? 'bg-riso-ink text-riso-paper' : 'bg-riso-ink/10 hover:bg-riso-ink/20'
-                  }`}
-              >
-                ខ្មែរ
-              </button>
-              <button
-                onClick={() => setLang('en')}
-                className={`flex-1 py-1.5 rounded text-xs font-bold transition-colors ${lang === 'en' ? 'bg-riso-ink text-riso-paper' : 'bg-riso-ink/10 hover:bg-riso-ink/20'
-                  }`}
-              >
-                EN
-              </button>
-              <button
-                onClick={() => setLang('th')}
-                className={`flex-1 py-1.5 rounded text-xs font-bold transition-colors ${lang === 'th' ? 'bg-riso-ink text-riso-paper' : 'bg-riso-ink/10 hover:bg-riso-ink/20'
-                  }`}
-              >
-                ไทย
-              </button>
+
+            <div className="grid grid-cols-1 gap-2">
+              {[
+                { id: 'ANALYSIS', label: t.analysis, icon: Search },
+                { id: 'LOSSES', label: t.timeline, icon: Hourglass },
+                { id: 'GUIDE', label: t.guide, icon: Handshake }
+              ].map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => setViewMode(mode.id as any)}
+                  className={`
+                    flex items-center gap-3 p-2.5 border-2 active:scale-[0.98]
+                    ${viewMode === mode.id
+                      ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[4px_4px_0px_rgba(30,58,138,0.3)]'
+                      : 'bg-white/40 text-riso-ink border-transparent hover:border-riso-ink/30 hover:bg-white/60'
+                    }
+                  `}
+                >
+                  <mode.icon size={16} strokeWidth={viewMode === mode.id ? 3 : 2} />
+                  <span className="uppercase font-black tracking-wider">
+                    {mode.label}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Automation Disclaimer - Technical "System Status" Look */}
           <div className="flex flex-col">
-            <div className="relative border border-riso-ink/20 bg-riso-ink/5 p-4">
+            <div className="relative border border-riso-ink/20 bg-riso-ink/5 p-3">
               {/* Technical Corner Accents */}
               <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-riso-ink"></div>
               <div className="absolute top-0 right-0 w-1.5 h-1.5 border-t border-r border-riso-ink"></div>
@@ -2313,14 +2310,30 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               {/* Header */}
               <div className="flex items-center gap-2 mb-2 pb-2 border-b border-riso-ink/10">
                 <Terminal size={12} className="text-riso-ink" />
-                <h4 className="font-bold font-mono text-[10px] uppercase tracking-widest text-riso-ink">
+                <h4 className="font-bold font-mono text-xs uppercase tracking-widest text-riso-ink">
                   {t.disclaimerTitle}
                 </h4>
               </div>
 
               {/* Body */}
-              <p className={`font-mono text-riso-ink/80 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-[13px] leading-6' : 'text-xs'}`}>
-                {t.disclaimerBody}
+              <p className={`font-mono text-riso-ink leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-[15px] leading-6' : 'text-[13px]'}`}>
+                {t.disclaimerBody.split(`'${t.guide}'`).map((part, i, arr) => (
+                  <span key={i}>
+                    {part}
+                    {i < arr.length - 1 && (
+                      <button
+                        onClick={() => {
+                          setViewMode('GUIDE');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="text-riso-ink font-bold border-b border-riso-ink hover:bg-riso-ink hover:text-riso-paper px-0.5 transition-colors cursor-pointer"
+                        title={`Go to ${t.guide}`}
+                      >
+                        '{t.guide}'
+                      </button>
+                    )}
+                  </span>
+                ))}
               </p>
             </div>
 
@@ -2410,8 +2423,51 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               {/* Three Perspectives Grid - Equal Height Columns where Neutral AI determines the height */}
               <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
 
-                {/* Section 2: Cambodia Perspective - matches height of Neutral AI */}
-                <div className="flex flex-col gap-4" style={{ height: neutralColumnHeight }}>
+                {/* Section 3: Neutral Analysis (Center) - MASTER height - ORDER 1 ON MOBILE */}
+                <div className="flex flex-col gap-4 self-start min-h-[400px] lg:min-h-[670px] lg:order-2 order-1" id="neutral-master" ref={neutralRef}>
+                  <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
+                    <Scale size={18} /> {t.neutralAI}
+                  </div>
+                  <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
+                    <div className="flex-1 flex flex-col space-y-4 min-h-0">
+                      <div className="mb-6">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge type="outline">AI SYNTHESIS</Badge>
+                          {neutralMeta?.conflictLevel && (
+                            <Badge type="alert">{neutralMeta.conflictLevel}</Badge>
+                          )}
+                        </div>
+                        <h3 className="font-display text-3xl mt-2 leading-none py-1">
+                          {t.situationReport}
+                        </h3>
+                        <p className="font-mono text-xs opacity-50 mt-1">
+                          {t.autoUpdating}
+                        </p>
+                      </div>
+
+                      <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
+                        {getSummary(neutralMeta) || t.analyzingFeeds}
+                      </div>
+
+                      {getKeyEvents(neutralMeta).length > 0 && (
+                        <div className="mb-4">
+                          <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{t.keyDevelopments}:</p>
+                          <ul className="list-disc pl-4 space-y-1">
+                            {getKeyEvents(neutralMeta).map((event: string, i: number) => (
+                              <li key={i} className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{event}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Source Stats - Compact */}
+
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Section 2: Cambodia Perspective - matches height of Neutral AI - ORDER 2 ON MOBILE */}
+                <div className="flex flex-col gap-4 lg:order-1 order-2" style={{ height: neutralColumnHeight }}>
                   <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-xl">
                     {t.cambodia}
                   </div>
@@ -2458,51 +2514,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   </Card>
                 </div>
 
-                {/* Section 3: Neutral Analysis (Center) - MASTER height */}
-                <div className="flex flex-col gap-4 self-start min-h-[400px] lg:min-h-[670px]" id="neutral-master" ref={neutralRef}>
-                  <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
-                    <Scale size={18} /> {t.neutralAI}
-                  </div>
-                  <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                    <div className="flex-1 flex flex-col space-y-4 min-h-0">
-                      <div className="mb-6">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge type="outline">AI SYNTHESIS</Badge>
-                          {neutralMeta?.conflictLevel && (
-                            <Badge type="alert">{neutralMeta.conflictLevel}</Badge>
-                          )}
-                        </div>
-                        <h3 className="font-display text-3xl mt-2 leading-none py-1">
-                          {t.situationReport}
-                        </h3>
-                        <p className="font-mono text-xs opacity-50 mt-1">
-                          {t.autoUpdating}
-                        </p>
-                      </div>
-
-                      <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
-                        {getSummary(neutralMeta) || t.analyzingFeeds}
-                      </div>
-
-                      {getKeyEvents(neutralMeta).length > 0 && (
-                        <div className="mb-4">
-                          <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{t.keyDevelopments}:</p>
-                          <ul className="list-disc pl-4 space-y-1">
-                            {getKeyEvents(neutralMeta).map((event: string, i: number) => (
-                              <li key={i} className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{event}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Source Stats - Compact */}
-
-                    </div>
-                  </Card>
-                </div>
-
-                {/* Section 4: Thailand Perspective - matches height of Neutral AI */}
-                <div className="flex flex-col gap-4" style={{ height: neutralColumnHeight }}>
+                {/* Section 4: Thailand Perspective - matches height of Neutral AI - ORDER 3 ON MOBILE */}
+                <div className="flex flex-col gap-4 lg:order-3 order-3" style={{ height: neutralColumnHeight }}>
                   <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-xl">
                     {t.thailand}
                   </div>

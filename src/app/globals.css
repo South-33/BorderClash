@@ -16,7 +16,7 @@
 /* Subtle 10% boost for small Thai/Khmer text (complex scripts need slightly larger size) */
 .lang-th .text-xs,
 .lang-kh .text-xs {
-    font-size: 0.rem;
+    font-size: 0.825rem;
     /* ~13.2px, up from 12px (10% boost) */
 }
 
