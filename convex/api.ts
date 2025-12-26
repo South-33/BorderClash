@@ -834,6 +834,35 @@ export const clearSkipNextCycle = internalMutation({
     },
 });
 
+// Increment research cycle counter and return new value (for conditional dashboard triggering)
+export const incrementResearchCycleCount = internalMutation({
+    args: {},
+    handler: async (ctx): Promise<number> => {
+        const existing = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        // Default to 0 if undefined, then increment
+        const currentCount = existing?.researchCycleCount ?? 0;
+        const newCount = currentCount + 1;
+
+        if (existing) {
+            await ctx.db.patch(existing._id, { researchCycleCount: newCount });
+        } else {
+            await ctx.db.insert("systemStats", {
+                key: "main",
+                totalArticlesFetched: 0,
+                lastResearchAt: Date.now(),
+                systemStatus: "online",
+                researchCycleCount: newCount,
+            });
+        }
+
+        console.log(`📊 [SYSTEM] Research cycle count: ${newCount}`);
+        return newCount;
+    },
+});
+
 // Internal mutation to SET skipNextCycle flag (called by manual tools)
 export const setSkipNextCycle = internalMutation({
     args: {},

@@ -231,6 +231,7 @@ export default defineSchema({
         errorLog: v.optional(v.string()),
         isPaused: v.optional(v.boolean()),
         skipNextCycle: v.optional(v.boolean()), // Skip only the next cycle (auto-resets after skip)
+        researchCycleCount: v.optional(v.number()), // Counter for triggering dashboard every N cycles
     })
         .index("by_key", ["key"]),
 

@@ -1726,17 +1726,35 @@ export const step4_synthesis = internalAction({
         }
 
         // ═══ CYCLE COMPLETE ═══
+        // Increment cycle counter and potentially trigger dashboard
+        const cycleCount = await ctx.runMutation(internal.api.incrementResearchCycleCount, {});
+        const shouldUpdateDashboard = cycleCount % 2 === 0; // Every 2 cycles = 12 hours
+
         if (stepErrors.length === 0) {
             console.log("═══════════════════════════════════════════════════════════════");
-            console.log("✅ RESEARCH CYCLE COMPLETE (SUCCESS)");
+            console.log(`✅ RESEARCH CYCLE #${cycleCount} COMPLETE (SUCCESS)`);
             console.log("═══════════════════════════════════════════════════════════════");
             await ctx.runMutation(internal.api.setStatus, { status: "online" });
         } else {
             console.log("═══════════════════════════════════════════════════════════════");
-            console.log("⚠️ RESEARCH CYCLE COMPLETE (WITH ERRORS)");
+            console.log(`⚠️ RESEARCH CYCLE #${cycleCount} COMPLETE (WITH ERRORS)`);
             console.log("Errors encountered:", stepErrors);
             console.log("═══════════════════════════════════════════════════════════════");
             await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: stepErrors.join(" | ") });
+        }
+
+        // ═══ CONDITIONAL DASHBOARD UPDATE (every 2 cycles = 12 hours) ═══
+        if (shouldUpdateDashboard) {
+            console.log(`📊 [DASHBOARD] Triggering dashboard update (cycle #${cycleCount} is even)...`);
+            try {
+                await ctx.runAction(internal.research.updateDashboard, {});
+                console.log("✅ [DASHBOARD] Dashboard updated successfully");
+            } catch (dashboardError) {
+                // Non-fatal - don't fail the cycle just because dashboard failed
+                console.warn("⚠️ [DASHBOARD] Dashboard update failed (non-fatal):", dashboardError);
+            }
+        } else {
+            console.log(`📊 [DASHBOARD] Skipping dashboard update (cycle #${cycleCount} is odd, next update at cycle #${cycleCount + 1})`);
         }
 
         // ═══ TRIGGER ISR REVALIDATION ═══

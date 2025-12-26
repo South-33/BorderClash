@@ -2141,10 +2141,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     systemStats?.systemStatus === 'error' ? t.error :
                       t.systemOnline}
               </span>
-              {/* Data source indicator (dev helper) */}
-              <span className={`ml-auto text-[8px] font-mono px-1 rounded ${forceClientMode ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                {forceClientMode ? 'LIVE' : 'ISR'}
-              </span>
+
             </div>
             <div className={`font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
               <p className="leading-relaxed">
