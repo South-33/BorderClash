@@ -45,7 +45,7 @@ INSTRUCTIONS:
     try {
         // Attempt 1: THINKING model
         console.log("   🔧 Using THINKING model for repair...");
-        const response = await callGeminiStudio(repairPrompt, "thinking", 1);
+        const response = await callGeminiStudio(repairPrompt, MODELS.thinking, 1);
         return cleanAndParse(response);
     } catch (e) {
         console.warn("   ❌ [REPAIR] Failed to repair JSON:", e);
@@ -147,7 +147,7 @@ Wrap your JSON in <json> tags like this:
 
 ${prompt}`;
 
-        const response = await callGeminiStudio(currentPrompt, "thinking");
+        const response = await callGeminiStudio(currentPrompt, MODELS.thinking);
 
         // Extract JSON - first try <json> tags, then fallback to regex
         let jsonString: string | null = null;
@@ -325,7 +325,7 @@ CROSS-REFERENCE ARTICLES (use these to verify claims):
 ${crossRefList || "(none available)"}
 
 Execute the Manager's task and report your findings.`;
-    const response = await callGeminiStudio(prompt, "thinking");
+    const response = await callGeminiStudio(prompt, MODELS.thinking);
     return response;
 }
 
@@ -467,7 +467,7 @@ Wrap your JSON in <json> tags like this:
 
 ${prompt}`;
 
-        const response = await callGeminiStudio(currentPrompt, "thinking");
+        const response = await callGeminiStudio(currentPrompt, MODELS.thinking);
 
         // Extract JSON - first try <json> tags, then fallback to regex
         let jsonString: string | null = null;

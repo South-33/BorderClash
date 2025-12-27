@@ -1103,8 +1103,8 @@ const IntelligenceLog = ({
         lang={lang}
       />
 
-      {/* Scrollable Container - flex-1 fills remaining space, compact on mobile */}
-      <div className="flex-1 max-h-[200px] md:max-h-none overflow-y-auto border border-riso-ink/10 rounded bg-white/50 scrollbar-thin">
+      {/* Scrollable Container - fixed height shows ~3 articles, scroll for more */}
+      <div className="flex-1 max-h-[280px] overflow-y-auto border border-riso-ink/10 rounded bg-white/50 scrollbar-thin">
         {isLoading ? (
           <div className="h-full flex items-center justify-center">
             <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
@@ -1449,6 +1449,49 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
 
   // =============================================================================
+  // DYNAMIC MOBILE VIEW - Switch to mobile if neutral card text overflows
+  // =============================================================================
+  const neutralContentRef = useRef<HTMLDivElement>(null);
+  const [forceMobileView, setForceMobileView] = useState(false);
+
+  // Stable overflow check function
+  const checkOverflow = useCallback(() => {
+    // Skip on very small screens - let native CSS mobile handle it
+    if (typeof window === 'undefined' || window.innerWidth < 768) {
+      setForceMobileView(false);
+      return;
+    }
+
+    if (neutralContentRef.current) {
+      const el = neutralContentRef.current;
+      const isOverflowing = el.scrollHeight > el.clientHeight + 5;
+      setForceMobileView(isOverflowing);
+    }
+  }, []);
+
+  // Check on resize
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const handleResize = () => {
+      // Reset to desktop first to measure properly
+      setForceMobileView(false);
+      clearTimeout(timeoutId);
+      // Then check after layout settles
+      timeoutId = setTimeout(checkOverflow, 150);
+    };
+
+    // Initial check
+    timeoutId = setTimeout(checkOverflow, 300);
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timeoutId);
+    };
+  }, [checkOverflow]);
+
+  // =============================================================================
   // ISR-AWARE DATA LOADING
   // If initialData is provided (from server-side ISR), we SKIP all Convex calls.
   // This means ZERO Convex bandwidth per user - data comes from Vercel's cache!
@@ -1627,7 +1670,12 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const countsLoading = hasServerData ? false : clientCountsLoading;
   const timelineLoading = hasServerData ? false : clientTimelineLoading;
 
-
+  // Re-check overflow when content or language changes
+  useEffect(() => {
+    // Small delay to let DOM update
+    const timer = setTimeout(checkOverflow, 100);
+    return () => clearTimeout(timer);
+  }, [neutralMeta, lang, checkOverflow]);
 
   // --- Modal Navigation & Touch State ---
 
@@ -2141,15 +2189,15 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const isContentPending = viewMode !== deferredViewMode;
 
   return (
-    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass}`}>
+    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${forceMobileView ? 'force-mobile' : ''}`}>
       {/* Top spacer - flexes equally with bottom */}
       <div />
-      <div className={`relative p-4 md:p-6 lg:p-8 flex flex-col md:flex-row gap-4 lg:gap-6 max-w-[1800px] mx-auto w-full`}>
+      <div className={`dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 max-w-[1800px] mx-auto w-full`}>
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
 
         {/* Left Sidebar / Header (Mobile Top) */}
-        <aside ref={sidebarRef} className="md:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
+        <aside ref={sidebarRef} className="xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
           <div className="border-4 border-riso-ink p-3 bg-riso-paper">
             <h1 className="font-display text-5xl md:text-6xl leading-none tracking-tighter text-riso-ink mb-2">
               BORDER CLASH
@@ -2368,15 +2416,15 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
         </aside>
 
         {/* Main Content Grid */}
-        <main className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+        <main className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
 
           {/* ANALYSIS VIEW - Viewport-contained like Timeline */}
-          <div className={`md:col-span-2 lg:col-span-3 ${deferredViewMode !== 'ANALYSIS' ? 'hidden' : ''}`}>
-            <div className="flex flex-col gap-4" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
+          <div className={`xl:col-span-3 ${deferredViewMode !== 'ANALYSIS' ? 'hidden' : ''}`}>
+            <div className="flex flex-col gap-4" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
                 <Card title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="stats-grid grid grid-cols-2 md:grid-cols-4 gap-4">
                     {/* Displaced Civilians */}
                     <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between min-h-24">
                       <div>
@@ -2449,15 +2497,15 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
               {/* Three Perspectives Grid - Weighted: Side cards 1fr, Neutral 1.5fr */}
               <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_1fr] gap-4 h-full">
+                <div className="perspectives-grid grid grid-cols-1 xl:grid-cols-[1fr_1.2fr_1fr] gap-4 h-full">
 
                   {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
-                  <div className="flex flex-col gap-2 lg:order-2 order-1 min-h-0">
+                  <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0">
                     <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div className="flex-1 flex flex-col space-y-4 min-h-0">
+                      <div ref={neutralContentRef} className="flex-1 flex flex-col space-y-4 min-h-0 overflow-hidden">
                         <div className="mb-6">
                           <div className="flex items-center gap-2 mb-2">
                             <Badge type="outline" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t.aiSynthesis}</Badge>
@@ -2495,7 +2543,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   </div>
 
                   {/* Section 2: Cambodia Perspective - ORDER 2 ON MOBILE */}
-                  <div className="flex flex-col gap-2 lg:order-1 order-2 min-h-0">
+                  <div className="flex flex-col gap-2 order-2 xl:order-1 perspective-cambodia min-h-0">
                     <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.cambodia}
                     </div>
@@ -2543,7 +2591,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   </div>
 
                   {/* Section 4: Thailand Perspective - ORDER 3 ON MOBILE */}
-                  <div className="flex flex-col gap-2 lg:order-3 order-3 min-h-0">
+                  <div className="flex flex-col gap-2 order-3 xl:order-3 perspective-thailand min-h-0">
                     <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.thailand}
                     </div>
@@ -2596,8 +2644,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
           </div>
 
           {/* LOSSES VIEW */}
-          <div className={`md:col-span-2 lg:col-span-3 ${deferredViewMode !== 'LOSSES' ? 'hidden' : ''}`}>
-            <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] md:h-auto" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
+          <div className={`xl:col-span-3 ${deferredViewMode !== 'LOSSES' ? 'hidden' : ''}`}>
+            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card title={`${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
 
                 {(!timelineEvents || timelineEvents.length === 0) ? (
@@ -2908,8 +2956,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
           </div>
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
-          <div className={`md:col-span-2 lg:col-span-3 ${deferredViewMode !== 'GUIDE' ? 'hidden' : ''}`}>
-            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] md:h-auto" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
+          <div className={`xl:col-span-3 ${deferredViewMode !== 'GUIDE' ? 'hidden' : ''}`}>
+            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
                 <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{t.guideTitle}</h3>
@@ -2927,7 +2975,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               </div>
               {/* Scrollable content */}
               <div className="flex-1 overflow-y-auto p-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
 
                   {/* LEFT COLUMN: CRITICAL LITERACY */}
                   <div className="space-y-8">

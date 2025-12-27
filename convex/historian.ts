@@ -257,7 +257,7 @@ ${timelineContext}
 Pick 5-10 articles to process now. Output your selection in JSON.`;
 
     console.log("🧠 [PLANNER] Analyzing all articles to pick best 5-10...");
-    const response = await callGeminiStudio(prompt, MODELS.planner, 2);
+    const response = await callGeminiStudio(prompt, MODELS.thinking, 2);
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): any => {
@@ -410,7 +410,7 @@ ${timelineContext}
 
 Process each article above and decide its fate. Output your decisions in JSON.`;
 
-    const response = await callGeminiStudio(prompt, "thinking", 2);
+    const response = await callGeminiStudio(prompt, MODELS.thinking, 2);
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): HistorianResult | null => {
@@ -482,7 +482,7 @@ Rules:
 - Fix unclosed brackets
 - Output ONLY the fixed JSON in <json>...</json> tags`;
 
-        const repairResponse = await callGeminiStudio(repairPrompt, "thinking", 1);
+        const repairResponse = await callGeminiStudio(repairPrompt, MODELS.thinking, 1);
         const repairMatch = repairResponse.match(/<json>([\s\S]*?)<\/json>/i);
 
         if (repairMatch) {
@@ -1051,7 +1051,7 @@ ${timelineContext}
 
 Find duplicate or related events that should be merged.Output JSON with your merge actions.`;
 
-        const response = await callGeminiStudio(prompt, "thinking", 2);
+        const response = await callGeminiStudio(prompt, MODELS.thinking, 2);
 
         // Extract JSON
         const jsonMatch = response.match(/```json\s * ([\s\S] *?) \s * ```/i) ||

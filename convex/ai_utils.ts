@@ -5,13 +5,13 @@ import { GEMINI_STUDIO_API_URL, MODELS } from "./config";
 /**
  * Call the gemini-studio-api (OpenAI compatible)
  */
-export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 3): Promise<string> {
+export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
     const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
 
     console.log(`🤖 [GEMINI STUDIO] Calling ${model}...`);
-    const RETRY_DELAY = 5000;
+    const RETRY_DELAY = 8000; // 8 seconds - enough time for Cloudflare tunnel to reconnect
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const startTime = Date.now();
@@ -120,6 +120,11 @@ export async function callGeminiStudioWithSelfHealing<T>(
             }
         } catch (e: any) {
             console.error(`❌ [${debugLabel}] Failed: ${e.message}`);
+            // Add delay for network errors to give Cloudflare tunnel time to reconnect
+            if (attempt < maxRetries) {
+                console.log(`⏳ [${debugLabel}] Waiting 8s before retry...`);
+                await new Promise(resolve => setTimeout(resolve, 8000));
+            }
         }
     }
     return null;

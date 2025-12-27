@@ -653,7 +653,7 @@ async function processNewsResponse(
             console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: curation)...`);
 
             // 1. CALL API - Using curation model mapping
-            rawResponse = await callGeminiStudio(currentPrompt, MODELS.curation, 1);
+            rawResponse = await callGeminiStudio(currentPrompt, MODELS.fast, 1);
 
             // 2. EXTRACT JSON - Try <json> tags first, then fallback to regex
             let jsonStr: string | null = null;
@@ -865,8 +865,11 @@ Please output the FIXED JSON wrapped in <json> tags:
         } catch (err: any) {
             lastError = err;
             console.error(`❌ [${country.toUpperCase()}] Attempt ${attempt} failed: ${err.message}`);
-            // If it was a network error (not a JSON parse error which is handled in inner catch), we loop here.
-            // But we didn't change the prompt, so a simple retry might work if it was transient.
+            // Add delay for network errors to give Cloudflare tunnel time to reconnect
+            if (attempt < MAX_RETRIES) {
+                console.log(`⏳ [${country.toUpperCase()}] Waiting 8s before retry...`);
+                await new Promise(resolve => setTimeout(resolve, 8000));
+            }
         }
     }
 
@@ -2269,7 +2272,7 @@ RULES:
 - Articles about internal Cambodian/Thai politics (not border-related) = OFF_TOPIC`;
 
                 try {
-                    const response = await callGeminiStudio(verificationPrompt, "thinking", 2);
+                    const response = await callGeminiStudio(verificationPrompt, MODELS.thinking, 2);
 
                     // Extract JSON
                     let jsonStr: string | null = null;
@@ -2570,7 +2573,7 @@ RULES:
 - Be honest about whether the stored summary matches the actual content`;
 
         try {
-            const response = await callGeminiStudio(verificationPrompt, "thinking", 2);
+            const response = await callGeminiStudio(verificationPrompt, MODELS.thinking, 2);
 
             // Extract JSON
             let jsonStr: string | null = null;

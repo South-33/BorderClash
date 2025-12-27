@@ -1,5 +1,42 @@
 @import "tailwindcss";
 
+/* ============================================
+   FORCE MOBILE - When content overflows, force mobile layout
+   ============================================ */
+
+/* Force sidebar to stack on top (override xl:flex-row) */
+.force-mobile .dashboard-layout {
+    flex-direction: column !important;
+}
+
+/* Force sidebar to full width (override xl:w-64) */
+.force-mobile .dashboard-layout>aside {
+    width: 100% !important;
+}
+
+/* Force perspectives grid to single column (override xl:grid-cols-[...]) */
+.force-mobile .perspectives-grid {
+    grid-template-columns: 1fr !important;
+}
+
+/* Force column ordering for mobile (neutral first, then cambodia, then thailand) */
+.force-mobile .perspective-neutral {
+    order: 1 !important;
+}
+
+.force-mobile .perspective-cambodia {
+    order: 2 !important;
+}
+
+.force-mobile .perspective-thailand {
+    order: 3 !important;
+}
+
+/* Force main grid to single column */
+.force-mobile main {
+    grid-template-columns: 1fr !important;
+}
+
 @theme {
     /* Risograph Color Palette */
     --color-riso-ink: #1e3a8a;

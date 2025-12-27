@@ -21,6 +21,7 @@ const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
   display: "swap",
+  weight: ["400", "500", "700"], // Only load needed weights
 });
 
 const chakraPetch = Chakra_Petch({
