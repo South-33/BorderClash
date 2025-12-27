@@ -1022,10 +1022,11 @@ NEVER say "verified" or "confirmed" without naming WHO verified it.
 ✅ GOOD: "International monitors (ICRC, UN) report 30-50 casualties"
 If you cannot name a verifier, say "reported" not "verified".
 
-📐 RULE 3: CONFIDENCE PARITY
-Cambodia and Thailand confidence scores should be within 10 points of each other UNLESS you can justify the gap in one sentence in confidenceRationale.
-❌ BAD: Cambodia 70%, Thailand 90% with no explanation
-✅ GOOD: Cambodia 75%, Thailand 85% + "Higher Thai confidence due to more international wire coverage of their offensive operations"
+📐 RULE 3: CONFIDENCE REFLECTS SOURCE QUALITY
+Confidence scores should reflect ACTUAL source quality and information availability — do NOT force artificial parity.
+- If one side has better verified coverage (more wire services, more independent reporters), that side CAN have higher confidence
+- Large gaps (>15 points) MUST be explained in confidenceRationale
+- Hiding genuine information asymmetry IS a form of bias — report reality
 
 📐 RULE 4: PROPORTIONAL CRITICISM (NEUTRAL SECTION)
 Criticism should be proportional to actual discrepancies found, NOT forced 50/50 balance.
@@ -1105,43 +1106,50 @@ ${breakingNewsList || "(no articles)"}
 ═══════════════════════════════════════════════════════════════
 
 🎖️ MILITARY POSTURE - SCORING GUIDE:
-This gauge measures whether a country is DEFENDING ITSELF or INVADING OTHERS.
+This gauge measures whether a party is DEFENDING, ESCALATING, or ATTACKING.
 The bar position MUST match the posture category.
 
 ⚔️ POSTURE & INTENSITY (these MUST match!):
 🟢 PEACEFUL (intensity: 0-30): No military threat, normal operations, diplomacy active
-   - 0-10: Complete peace, minimal border presence
+   - 0-10: Complete peace, minimal military presence
    - 11-20: Normal patrols, routine operations
    - 21-30: Heightened awareness, but no military action
 
-🟡 DEFENSIVE (intensity: 31-55): Protecting own territory, responding to threats
-   - 31-40: Reinforcing borders, moving to defensive positions
+🟡 DEFENSIVE (intensity: 31-55): Protecting own position, responding to threats
+   - 31-40: Reinforcing positions, moving to defensive posture
    - 41-50: Active defense, fortifying against incursion
-   - 51-55: Heavy defensive action (returning fire, repelling attack) BUT staying in own territory
+   - 51-55: Heavy defensive action (returning fire, repelling attack)
 
-🔴 AGGRESSIVE (intensity: 70-100): Attacking, invading, or initiating conflict
-   - 70-80: Cross-border strikes, entering disputed territory
-   - 81-90: Active invasion, seizing territory
-   - 91-100: Full-scale offensive war
+🟠 ESCALATED (intensity: 56-69): Mobilizing, posturing, preparing for potential offensive
+   - 56-60: Troop buildups, forward deployments, ultimatums issued
+   - 61-65: Artillery/assets moved to striking positions
+   - 66-69: Imminent attack posture, provocations, cross-border probing
+
+🔴 AGGRESSIVE (intensity: 70-100): Attacking, invading, or initiating combat
+   - 70-80: Cross-border strikes, entering contested areas
+   - 81-90: Active offensive operations, seizing ground
+   - 91-100: Full-scale offensive
 
 ⚠️ CRITICAL RULES:
    - If posture is PEACEFUL → intensity must be 0-30
    - If posture is DEFENSIVE → intensity must be 31-55
+   - If posture is ESCALATED → intensity must be 56-69
    - If posture is AGGRESSIVE → intensity must be 70-100
-   - ASYMMETRY RULE: If one country is AGGRESSIVE and the other is DEFENSIVE, the gap MUST be at least 20 points
-   - BOTH-AGGRESSIVE IS ALLOWED: If BOTH countries are conducting cross-border operations, BOTH can be AGGRESSIVE. Assign intensity based on scale/severity of each side's actions.
+   - BOTH-SIDES RULE: Both parties CAN have the same posture. Assign intensity based on scale/severity of each side's actions independently.
 
 🏷️ POSTURE LABEL - MUST BE SHORT (MAX 6 WORDS):
 Examples by posture:
   PEACEFUL: "Routine Patrols", "Normal Operations", "Diplomatic Talks"
   DEFENSIVE: "Border Reinforcement", "Defensive Positions", "Repelling Attack"
-  AGGRESSIVE: "Cross-Border Strike", "Territory Seizure", "Invasion Underway"
+  ESCALATED: "Troop Mobilization", "Forces Massing", "Preparing Offensive"
+  AGGRESSIVE: "Cross-Border Strike", "Territory Seizure", "Offensive Underway"
 
-💡 TERRITORIAL ASSESSMENT:
-- Troops in UNDISPUTED own territory → DEFENSIVE
-- Troops in ENEMY'S undisputed territory → AGGRESSIVE
-- Troops in DISPUTED territory (e.g., areas both countries claim) → Use context. Note: "Defensive per [Country]'s claim" if ambiguous. The key is WHO MOVED FIRST into the disputed area this cycle.
-- Firing AT troops entering YOUR undisputed territory → DEFENSIVE
+💡 ACTION-BASED ASSESSMENT (focus on WHAT parties DO, not territorial claims):
+- WHO MOVED FORWARD this cycle? → Moving toward the other side = more aggressive
+- WHO FIRED FIRST in engagements? → Initiating fire = more aggressive
+- WHO IS STATIONARY vs ADVANCING? → Holding position = more defensive
+- SCALE OF OPERATIONS: Airstrikes/artillery > ground incursions > defensive fire
+- If both sides claim self-defense, focus on WHO INITIATED the specific engagement being analyzed
 
 🛡️ VERIFICATION & ACCURACY RULES:
 1. NO SPECIFICITY WITHOUT SOURCE: Do NOT invent specific names (e.g., specific hill numbers, bridge names, or unit IDs) unless EXPLICITLY present in the source text. Use general terms like "high ground" or "infrastructure" if unsure.
@@ -1174,7 +1182,7 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
     "militaryIntensity": 50,
-    "militaryPosture": "PEACEFUL|DEFENSIVE|AGGRESSIVE",
+    "militaryPosture": "PEACEFUL|DEFENSIVE|ESCALATED|AGGRESSIVE",
     "postureLabel": "Short phrase (max 4 words)",
     "postureLabelTh": "Thai translation",
     "postureLabelKh": "Khmer translation",
@@ -1192,7 +1200,7 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
     "militaryIntensity": 50,
-    "militaryPosture": "PEACEFUL|DEFENSIVE|AGGRESSIVE",
+    "militaryPosture": "PEACEFUL|DEFENSIVE|ESCALATED|AGGRESSIVE",
     "postureLabel": "Short phrase (max 4 words)",
     "postureLabelTh": "Thai translation",
     "postureLabelKh": "Khmer translation",
@@ -1254,13 +1262,21 @@ RULES:
 
             // Save Cambodia analysis
             if (result.cambodia) {
-                const validPostures = ["PEACEFUL", "DEFENSIVE", "AGGRESSIVE"];
+                const validPostures = ["PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"];
                 const posture = validPostures.includes(result.cambodia.militaryPosture)
                     ? result.cambodia.militaryPosture : "DEFENSIVE";
 
                 const validTerritories = ["OWN_TERRITORY", "DISPUTED_ZONE", "FOREIGN_TERRITORY", "BORDER_ZONE"];
                 const territory = validTerritories.includes(result.cambodia.territorialContext)
                     ? result.cambodia.territorialContext : undefined;
+
+                // Clamp intensity to match posture range
+                const clampIntensity = (p: string, raw: number) => {
+                    if (p === "PEACEFUL") return Math.max(0, Math.min(30, raw || 15));
+                    if (p === "DEFENSIVE") return Math.max(31, Math.min(55, raw || 45));
+                    if (p === "ESCALATED") return Math.max(56, Math.min(69, raw || 62));
+                    return Math.max(70, Math.min(100, raw || 80)); // AGGRESSIVE
+                };
 
                 await ctx.runMutation(internal.api.upsertAnalysis, {
                     target: "cambodia",
@@ -1269,12 +1285,7 @@ RULES:
                     officialNarrativeTh: result.cambodia.officialNarrativeTh,
                     officialNarrativeKh: result.cambodia.officialNarrativeKh,
                     narrativeSource: result.cambodia.narrativeSource || "Unknown",
-                    // Enforce intensity matches posture range (DEFENSIVE: 31-55, AGGRESSIVE: 70-100)
-                    militaryIntensity: posture === "PEACEFUL"
-                        ? Math.max(0, Math.min(30, result.cambodia.militaryIntensity || 15))
-                        : posture === "DEFENSIVE"
-                            ? Math.max(31, Math.min(55, result.cambodia.militaryIntensity || 45))
-                            : Math.max(70, Math.min(100, result.cambodia.militaryIntensity || 80)),
+                    militaryIntensity: clampIntensity(posture, result.cambodia.militaryIntensity),
                     militaryPosture: posture,
                     postureLabel: result.cambodia.postureLabel || result.cambodia.postureLabelEn,
                     postureLabelEn: result.cambodia.postureLabelEn || result.cambodia.postureLabel,
@@ -1291,13 +1302,21 @@ RULES:
 
             // Save Thailand analysis
             if (result.thailand) {
-                const validPostures = ["PEACEFUL", "DEFENSIVE", "AGGRESSIVE"];
+                const validPostures = ["PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"];
                 const posture = validPostures.includes(result.thailand.militaryPosture)
                     ? result.thailand.militaryPosture : "DEFENSIVE";
 
                 const validTerritories = ["OWN_TERRITORY", "DISPUTED_ZONE", "FOREIGN_TERRITORY", "BORDER_ZONE"];
                 const territory = validTerritories.includes(result.thailand.territorialContext)
                     ? result.thailand.territorialContext : undefined;
+
+                // Clamp intensity to match posture range
+                const clampIntensity = (p: string, raw: number) => {
+                    if (p === "PEACEFUL") return Math.max(0, Math.min(30, raw || 15));
+                    if (p === "DEFENSIVE") return Math.max(31, Math.min(55, raw || 45));
+                    if (p === "ESCALATED") return Math.max(56, Math.min(69, raw || 62));
+                    return Math.max(70, Math.min(100, raw || 80)); // AGGRESSIVE
+                };
 
                 await ctx.runMutation(internal.api.upsertAnalysis, {
                     target: "thailand",
@@ -1306,12 +1325,7 @@ RULES:
                     officialNarrativeTh: result.thailand.officialNarrativeTh,
                     officialNarrativeKh: result.thailand.officialNarrativeKh,
                     narrativeSource: result.thailand.narrativeSource || "Unknown",
-                    // Enforce intensity matches posture range (DEFENSIVE: 31-55, AGGRESSIVE: 70-100)
-                    militaryIntensity: posture === "PEACEFUL"
-                        ? Math.max(0, Math.min(30, result.thailand.militaryIntensity || 15))
-                        : posture === "DEFENSIVE"
-                            ? Math.max(31, Math.min(55, result.thailand.militaryIntensity || 45))
-                            : Math.max(70, Math.min(100, result.thailand.militaryIntensity || 80)),
+                    militaryIntensity: clampIntensity(posture, result.thailand.militaryIntensity),
                     militaryPosture: posture,
                     postureLabel: result.thailand.postureLabel || result.thailand.postureLabelEn,
                     postureLabelEn: result.thailand.postureLabelEn || result.thailand.postureLabel,

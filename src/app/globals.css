@@ -63,17 +63,32 @@ body {
     mix-blend-mode: multiply;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar - Risograph Style */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(30, 58, 138, 0.4) transparent;
+}
+
 ::-webkit-scrollbar {
-    width: 8px;
+    width: 10px;
+    height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #f8f5e6;
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
+    background: rgba(30, 58, 138, 0.4);
+    /* 2px border + 1px ink border for "floating" block look */
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
     background: #1e3a8a;
+    background-clip: padding-box;
 }
 
 /* Animations */

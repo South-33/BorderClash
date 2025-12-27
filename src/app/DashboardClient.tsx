@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import { useQuery, useMutation, useConvex } from 'convex/react';
 import { FunctionReference } from 'convex/server';
 import { api } from '../../convex/_generated/api';
@@ -54,10 +54,22 @@ const RefreshCw = (props: any) => (
   </IconBase>
 );
 
-const Terminal = (props: any) => (
+const Gear = (props: any) => (
   <IconBase {...props}>
-    <polyline points="4 17 10 11 4 5" />
-    <line x1="12" y1="19" x2="20" y2="19" />
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+    <circle cx="12" cy="12" r="3" />
+  </IconBase>
+);
+
+const ChevronLeft = (props: any) => (
+  <IconBase {...props}>
+    <polyline points="15 18 9 12 15 6" />
+  </IconBase>
+);
+
+const ChevronRight = (props: any) => (
+  <IconBase {...props}>
+    <polyline points="9 18 15 12 9 6" />
   </IconBase>
 );
 
@@ -103,6 +115,7 @@ const TRANSLATIONS = {
     militaryIntensity: "Military Intensity",
     peaceful: "PEACEFUL",
     defensive: "DEFENSIVE",
+    escalated: "ESCALATED",
     aggressive: "AGGRESSIVE",
     intelligenceLog: "Intelligence Log",
     items: "items",
@@ -181,7 +194,7 @@ const TRANSLATIONS = {
     propagandaWarningDesc: "Watch for: Overly emotional language. Demonization of \"the other side\". Lack of concrete evidence. Repetition without substance. Appeals to fear or patriotism over facts.",
     systemDisclaimer: "THIS SYSTEM ATTEMPTS NEUTRAL ANALYSIS BUT REMAIN CRITICAL. VERIFY EVERYTHING YOURSELF.",
     disclaimerTitle: "100% AUTOMATED SYSTEM",
-    disclaimerBody: "This entire dashboard is run by AI agents with absolutely zero human intervention. It may contain errors or hallucinations. Visit the 'GUIDE' section to learn how it works.",
+    disclaimerBody: "This entire dashboard is run by AI agents with absolutely zero human intervention. It may contain errors or hallucinations. Visit the 'GUIDE' to learn more.",
     incident: "INCIDENT",
     image: "IMAGE",
     sector: "SECTOR",
@@ -212,7 +225,7 @@ const TRANSLATIONS = {
     territoryBorder: "Border Zone",
     territoryDisputed: "Disputed Area",
     territoryForeign: "Foreign Territory",
-    postureRationale: "Analysis",
+    postureRationale: "WHY?",
     // Timeline & Map
     historicalTimeline: "OPERATIONAL TIMELINE",
     noTimelineEvents: "NO INTEL LOGGED",
@@ -255,6 +268,7 @@ const TRANSLATIONS = {
     sources: "Sources",
     paused: "PAUSED",
     aiAnalysis: "AI Analysis",
+    aiSynthesis: "AI SYNTHESIS",
     analyzingFeeds: "Analyzing global intelligence feeds... The system is monitoring news from both Thailand and Cambodia perspectives to synthesize a balanced report.",
     events: "Events",
     // New Guide Content
@@ -281,6 +295,7 @@ const TRANSLATIONS = {
     militaryIntensity: "สถานการณ์ความตึงเครียด",
     peaceful: "เหตุการณ์ปกติ",
     defensive: "เตรียมพร้อม/ตั้งรับ",
+    escalated: "ตึงเครียด",
     aggressive: "เดือด", // Matches 'Kach' (Fierce) - Short for UI
     intelligenceLog: "ข่าวกรองล่าสุด",
     items: "รายการ",
@@ -328,7 +343,7 @@ const TRANSLATIONS = {
     neutralAI: "AI ตัวกลาง",
     intl: "ตปท.",
     credibility: "ความน่าเชื่อถือ",
-    subTitle: "เกาะติดชายแดนแบบเรียลไทม์ วิเคราะห์รอบด้านด้วย AI เพื่อข้อเท็จจริง ไม่ใช่อารมณ์",
+    subTitle: "เกาะติดทุกเรื่องราวชายแดนแบบทันที โดยใช้ AI ช่วยเช็คข้อมูลจากรอบด้านมาสรุปให้เห็นภาพรวม เพื่อให้คุณได้รู้ความจริงที่ชัดเจนและไม่เข้าข้างฝ่ายใด",
     fatalities: "ผู้เสียชีวิต (ยืนยันแล้ว)",
     threatLevel: "ระดับภัยคุกคาม",
     low: "ต่ำ",
@@ -390,7 +405,7 @@ const TRANSLATIONS = {
     territoryBorder: "พื้นที่ชายแดน",
     territoryDisputed: "พื้นที่ทับซ้อน",
     territoryForeign: "ในเขตเพื่อนบ้าน",
-    postureRationale: "บทวิเคราะห์",
+    postureRationale: "ทำไม?",
     // Timeline & Map
     historicalTimeline: "ลำดับเหตุการณ์ยุทธการ", // Operational Timeline
     noTimelineEvents: "ยังไม่มีรายงานข่าวกรอง",
@@ -433,6 +448,7 @@ const TRANSLATIONS = {
     sources: "แหล่งข่าว",
     paused: "หยุดชั่วคราว",
     aiAnalysis: "วิเคราะห์โดย AI",
+    aiSynthesis: "สรุปโดย AI",
     analyzingFeeds: "กำลังวิเคราะห์ข้อมูลข่าวกรองทั่วโลก... ระบบกำลังติดตามข่าวสารจากทั้งฝั่งไทยและกัมพูชาเพื่อสรุปรายงานที่สมดุล",
     events: "เหตุการณ์",
     // New Guide Content (Thai Spoken/Casual)
@@ -459,6 +475,7 @@ const TRANSLATIONS = {
     militaryIntensity: "ស្ថានភាពនៅព្រំដែន", // Situation at border - natural
     peaceful: "ធម្មតា", // Normal
     defensive: "ការពារ", // Defend
+    escalated: "តានតឹង", // Tense
     aggressive: "កាច", // Tense - kept short as requested
     intelligenceLog: "ព័ត៌មានថ្មីៗ", // Recent news
     items: "អត្ថបទ",
@@ -506,12 +523,12 @@ const TRANSLATIONS = {
     neutralAI: "AI អាជ្ញាកណ្តាល",
     intl: "អន្តរជាតិ",
     credibility: "ភាពជឿជាក់",
-    subTitle: "តាមដានស្ថានការណ៍ព្រំដែនភ្លាមៗ វិភាគដោយ AI ដើម្បីដឹងការពិត មិនលំអៀង។",
+    subTitle: "តាមដានរឿងរ៉ាវនៅព្រំដែនភ្លាមៗ ដោយប្រើ AI ជួយផ្ទៀងផ្ទាត់ព័ត៌មានពីគ្រប់ភាគី ដើម្បីឱ្យយើងដឹងការពិតបានច្បាស់ និងមិនលំអៀង។",
     fatalities: "អ្នកស្លាប់ (បញ្ជាក់ហើយ)",
     threatLevel: "កម្រិតគ្រោះថ្នាក់",
     low: "ទាប",
     elevated: "ខ្ពស់",
-    critical: "ខ្លាំង",
+    critical: "គ្រោះថ្នាក់",
     injured: "អ្នករបួស",
     civilian: "ពលរដ្ឋ",
     military: "ទាហាន",
@@ -568,7 +585,7 @@ const TRANSLATIONS = {
     territoryBorder: "តំបន់ព្រំដែន",
     territoryDisputed: "តំបន់ជម្លោះ",
     territoryForeign: "ទឹកដីគេ",
-    postureRationale: "ការវិភាគ",
+    postureRationale: "ហេតុអ្វី?",
     // Timeline & Map
     historicalTimeline: "កាលប្បវត្តិប្រតិបត្តិការ", // Operational Timeline
     noTimelineEvents: "មិនទាន់មានរបាយការណ៍ចារកម្ម",
@@ -597,6 +614,8 @@ const TRANSLATIONS = {
     trustWarningDesc: "រដ្ឋាភិបាលណាក៏ចង់និយាយឱ្យខ្លួនឯងល្អ។ សារព័ត៌មានក៏ត្រូវយកចិត្តអ្នកមើល។ ប្រើតារាងនេះដើម្បីប្រៀបធៀបព័ត៌មាន មិនមែនដើម្បីបញ្ជាក់ថាខ្លួនឯងត្រូវទេ។",
     statelessApproach: "មិនកាន់ជើង ហើយមិនជឿអ្នកណាទាំងអស់",
     statelessDesc: "យើងមិនជឿសម្តីអ្នកណាទេ។ យើងមិននៅខាងថៃ ហើយក៏មិននៅខាងខ្មែរដែរ។ យើងដើរផ្លូវកណ្តាលបុកទៅរកការពិត។",
+    aiAnalysis: "ការវិភាគដោយ AI",
+    aiSynthesis: "ការសង្ខេបដោយ AI",
     intelReport: "របាយការណ៍ចារកម្ម",
     date: "កាលបរិច្ឆេទ",
     category: "ប្រភេទ",
@@ -610,7 +629,6 @@ const TRANSLATIONS = {
     reports: "របាយការណ៍",
     sources: "ប្រភព",
     paused: "ផ្អាក",
-    aiAnalysis: "ការវិភាគដោយ AI",
     analyzingFeeds: "កំពុងវិភាគទិន្នន័យចារកម្មសកល... ប្រព័ន្ធកំពុងតាមដានព័ត៌មានពីទាំងភាគីថៃនិងកម្ពុជាដើម្បីសង្ខេបរបាយការណ៍ដែលមានតុល្យភាព។",
     events: "ព្រឹត្តិការណ៍",
     // New Guide Content (Khmer Casual/Spoken)
@@ -848,14 +866,14 @@ const Card = ({ children, className = "", title, icon: Icon, loading = false, re
   );
 };
 
-const Badge = ({ children, type = "neutral" }: any) => {
+const Badge = ({ children, type = "neutral", className = "" }: any) => {
   const styles: any = {
     neutral: "bg-riso-ink text-riso-paper",
     alert: "bg-riso-accent text-white",
     outline: "border border-riso-ink text-riso-ink"
   };
   return (
-    <span className={`px-2 py-0.5 text-xs font-mono font-bold uppercase tracking-wider ${styles[type]}`}>
+    <span className={`px-2 py-0.5 text-xs font-mono font-bold uppercase tracking-wider ${styles[type]} ${className}`}>
       {children}
     </span>
   );
@@ -1085,8 +1103,8 @@ const IntelligenceLog = ({
         lang={lang}
       />
 
-      {/* Scrollable Container - flex-1 fills remaining space, max-h on mobile */}
-      <div className="flex-1 min-h-[150px] max-h-[350px] md:max-h-none overflow-y-auto border border-riso-ink/10 rounded bg-white/50 scrollbar-thin">
+      {/* Scrollable Container - flex-1 fills remaining space, compact on mobile */}
+      <div className="flex-1 max-h-[200px] md:max-h-none overflow-y-auto border border-riso-ink/10 rounded bg-white/50 scrollbar-thin">
         {isLoading ? (
           <div className="h-full flex items-center justify-center">
             <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
@@ -1151,7 +1169,7 @@ const AutoScrollLabel = ({ text, className = "", fontSizeClass = "text-[10px]" }
   return (
     <div
       ref={containerRef}
-      className={`flex-1 min-w-0 overflow-hidden relative h-6 flex items-center ${className}`}
+      className={`flex-1 min-w-0 overflow-hidden relative h-8 flex items-center ${className}`}
       title={text}
     >
       {/* Ghost element for precise measurement - hidden but functionally identical in styling */}
@@ -1202,7 +1220,7 @@ const MilitaryIntensityGauge = ({
   lang = 'en'
 }: {
   intensity: number;
-  posture: "PEACEFUL" | "DEFENSIVE" | "AGGRESSIVE" | undefined;
+  posture: "PEACEFUL" | "DEFENSIVE" | "ESCALATED" | "AGGRESSIVE" | undefined;
   postureLabel?: string;
   postureLabelTh?: string;
   postureLabelKh?: string;
@@ -1230,48 +1248,55 @@ const MilitaryIntensityGauge = ({
   const postureColors: Record<string, string> = {
     PEACEFUL: 'text-green-600',
     DEFENSIVE: 'text-yellow-600',
+    ESCALATED: 'text-orange-600',
     AGGRESSIVE: 'text-red-600',
   };
 
   const postureBgColors: Record<string, string> = {
     PEACEFUL: 'bg-green-600/10 border-green-600/30',
     DEFENSIVE: 'bg-yellow-500/10 border-yellow-500/30',
+    ESCALATED: 'bg-orange-500/10 border-orange-500/30',
     AGGRESSIVE: 'bg-red-500/10 border-red-500/30',
   };
 
-  const labelFontSize = (lang === 'th' || lang === 'kh') ? 'text-[13px]' : 'text-[10px]';
+  const labelFontSize = (lang === 'th' || lang === 'kh') ? 'text-[14px]' : 'text-[11px]';
 
   return (
     <div className="mb-4">
       {/* Title and Intensity Number Row */}
       <div className="flex items-center justify-between mb-2">
         <h4 className={`font-mono font-bold uppercase opacity-60 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.postureGaugeTitle || t.militaryIntensity}</h4>
-        <span className="text-[10px] font-mono opacity-50">{displayIntensity}/100</span>
+        <span className="text-[10px] font-mono opacity-80 font-bold">{displayIntensity}/100</span>
       </div>
 
       {/* Gradient Gauge Bar */}
-      <div className="relative h-8 bg-gradient-to-r from-green-400 via-yellow-400 to-red-500 rounded overflow-hidden">
+      <div
+        className="relative h-8 rounded overflow-hidden isolate"
+        style={{ background: 'linear-gradient(to right, #4ade80 0%, #facc15 33%, #fb923c 66%, #ef4444 100%)' }}
+      >
         {/* Indicator needle */}
         <div
           className="absolute top-0 bottom-0 w-1 bg-riso-ink shadow-lg transition-all duration-700"
           style={{ left: `calc(${displayIntensity}% - 2px)` }}
         />
         {/* Scale markers */}
-        <div className={`absolute inset-0 flex justify-between px-2 items-center font-mono font-bold text-white/80 ${lang === 'kh' || lang === 'th' ? 'text-[12px]' : 'text-[8px]'}`}>
-          <span className="posture-label">{t.peaceful}</span>
-          <span className="posture-label">{t.defensive}</span>
-          <span className="posture-label">{t.aggressive}</span>
+        <div
+          className={`absolute inset-0 flex justify-between px-2 items-center font-mono tracking-widest ${lang === 'kh' || lang === 'th' ? `${labelFontSize} font-normal` : 'text-[9px] font-bold'} text-white`}
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
+        >
+          <span>{t.peaceful}</span>
+          <span>{t.defensive}</span>
+          <span>{t.escalated}</span>
+          <span>{t.aggressive}</span>
         </div>
       </div>
 
-      {/* Posture Readout Row */}
       <div className="flex items-center gap-2 mt-2">
         {/* Main Posture Label */}
-        <span className={`text-xs font-mono font-bold flex-shrink-0 ${postureColors[displayPosture]}`}>
-          {displayPosture === 'PEACEFUL' ? t.peaceful : displayPosture === 'AGGRESSIVE' ? t.aggressive : t.defensive}
+        <span className={`${labelFontSize} font-mono font-bold flex-shrink-0 ${postureColors[displayPosture]}`}>
+          {displayPosture === 'PEACEFUL' ? t.peaceful : displayPosture === 'AGGRESSIVE' ? t.aggressive : displayPosture === 'ESCALATED' ? t.escalated : t.defensive}
         </span>
 
-        {/* Unified Label - Dynamic Width (Fills available space) */}
         {/* Unified Label - Dynamic Width with Auto-Scroll if Overflowing */}
         {displayLabel && (
           <AutoScrollLabel
@@ -1281,21 +1306,29 @@ const MilitaryIntensityGauge = ({
           />
         )}
 
-        {/* Dropdown arrow for Analysis */}
+        {/* Dedicated Analysis Toggle Button */}
         {displayRationale && (
           <button
             onClick={() => setShowAnalysis(!showAnalysis)}
-            className="flex-shrink-0 ml-auto flex items-center justify-center w-6 h-6 rounded hover:bg-black/5 transition-colors"
-            aria-label="Toggle analysis"
+            className={`
+              ml-auto flex-shrink-0 h-8 flex items-center gap-1.5 px-4 rounded border 
+              font-mono uppercase transition-all duration-200
+              ${labelFontSize}
+              ${showAnalysis
+                ? 'bg-riso-ink text-riso-paper border-riso-ink'
+                : 'bg-riso-ink/5 text-riso-ink border-riso-ink/30 hover:border-riso-ink/50 hover:bg-riso-ink/10'}
+            `}
           >
-            <span style={{
-              display: 'inline-block',
-              fontSize: '18px',
-              lineHeight: '1',
-              opacity: 0.6,
-              transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: showAnalysis ? 'rotate(90deg)' : 'rotate(180deg)'
-            }}>›</span>
+            <span>{t.postureRationale}</span>
+            <span
+              className="transition-transform duration-200"
+              style={{
+                display: 'inline-block',
+                fontSize: lang === 'kh' || lang === 'th' ? '14px' : '16px',
+                lineHeight: '1',
+                transform: showAnalysis ? 'rotate(90deg)' : 'rotate(180deg)'
+              }}
+            >›</span>
           </button>
         )}
       </div>
@@ -1313,7 +1346,7 @@ const MilitaryIntensityGauge = ({
         {displayRationale && (
           <div className="p-2 bg-riso-ink/5 border border-riso-ink/10 rounded">
             <p className={`font-mono italic opacity-70 ${labelFontSize}`}>
-              <span className="font-bold not-italic opacity-50">{t.postureRationale || 'Analysis'}:</span> {displayRationale}
+              {displayRationale}
             </p>
           </div>
         )}
@@ -1353,6 +1386,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
   const [viewMode, setViewMode] = useState<'ANALYSIS' | 'LOSSES' | 'GUIDE'>('ANALYSIS');
+  const deferredViewMode = useDeferredValue(viewMode); // Deferred for heavy renders
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
 
@@ -1408,9 +1442,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
 
 
-  // Logic for height synchronization
-  const neutralRef = useRef<HTMLDivElement>(null);
-  const [neutralColumnHeight, setNeutralColumnHeight] = useState<number | undefined>(undefined);
+  // Sidebar height sync for all cards
 
   // Sidebar height sync for timeline view
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -1752,6 +1784,16 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     }
   };
 
+  const scrollDatePicker = (direction: 'left' | 'right') => {
+    if (datePickerRef.current) {
+      const scrollAmount = 300;
+      datePickerRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   // Sync date selector when user scrolls (debounced for smooth mobile)
   useEffect(() => {
     if (!timelineScrollRef.current || timelineDates.length === 0) return;
@@ -1820,32 +1862,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   }, [timelineDates, lang]); // Re-initialize when language changes (date headers re-render)
 
 
-  // Measure Neutral Card Height to set siblings
-  useLayoutEffect(() => {
-    const measureHeight = () => {
-      // Only sync height on large screens (lg breakpoint is 1024px)
-      if (window.innerWidth >= 1024 && neutralRef.current) {
-        setNeutralColumnHeight(neutralRef.current.offsetHeight);
-      } else {
-        setNeutralColumnHeight(undefined);
-      }
-    };
-
-    // Measure initially and when content might change
-    measureHeight();
-
-    const resizeObserver = new ResizeObserver(measureHeight);
-    if (neutralRef.current) {
-      resizeObserver.observe(neutralRef.current);
-    }
-
-    window.addEventListener('resize', measureHeight);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', measureHeight);
-    };
-  }, [neutralMeta, isLoading, lang, viewMode]); // Re-measure if data, language, or VIEW MODE changes
+  // No longer measuring Neutral Card height as Sidebar is now the master height
 
   // Measure sidebar height for timeline view sync
   useLayoutEffect(() => {
@@ -1870,7 +1887,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       resizeObserver.disconnect();
       window.removeEventListener('resize', measureSidebarHeight);
     };
-  }, [viewMode]); // Re-measure for timeline view
+  }, [viewMode, lang, isLoading]); // Re-measure for timeline view and when lang/loading changes
 
   // Timer Logic for countdown display
   // Also detect "possibly stale" state when we think the cycle should have completed
@@ -2120,9 +2137,14 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     );
   }
 
+  // Detect if we're in a pending view transition state
+  const isContentPending = viewMode !== deferredViewMode;
+
   return (
-    <div className={`min-h-screen flex flex-col justify-center ${langClass}`}>
-      <div className="relative p-4 md:p-8 flex flex-col md:flex-row gap-6 max-w-[1600px] mx-auto w-full">
+    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass}`}>
+      {/* Top spacer - flexes equally with bottom */}
+      <div />
+      <div className={`relative p-4 md:p-6 lg:p-8 flex flex-col md:flex-row gap-4 lg:gap-6 max-w-[1800px] mx-auto w-full`}>
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
 
@@ -2145,7 +2167,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               </span>
 
             </div>
-            <div className="font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 text-xs">
+            <div className={`font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
               <p className="leading-relaxed">
                 {t.subTitle}
               </p>
@@ -2214,7 +2236,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               </div>
 
               {/* Legend with counts & labels */}
-              <div className="flex justify-between text-[10px] font-mono font-bold pt-1.5">
+              <div className={`flex justify-between font-mono font-bold pt-1.5 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[10px]'}`}>
                 <span className="flex items-center gap-1.5 text-[#032EA1]">
                   <span className="w-2 h-2 bg-[#032EA1] rounded-full"></span>
                   {t.labelKH} {articleCounts?.cambodia || 0}
@@ -2250,6 +2272,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   onClick={() => setLang(l.id as any)}
                   className={`
                     flex-1 flex items-center justify-center py-2 px-1 rounded border-2 active:scale-95
+                    transition-all duration-100 ease-out
                     ${lang === l.id
                       ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[3px_3px_0px_rgba(30,58,138,0.3)]'
                       : 'bg-riso-ink/5 text-riso-ink border-transparent hover:bg-riso-ink/10 hover:border-riso-ink/20'
@@ -2283,6 +2306,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   onClick={() => setViewMode(mode.id as any)}
                   className={`
                     flex items-center gap-3 p-2.5 border-2 active:scale-[0.98]
+                    transition-all duration-100 ease-out
                     ${viewMode === mode.id
                       ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[4px_4px_0px_rgba(30,58,138,0.3)]'
                       : 'bg-white/40 text-riso-ink border-transparent hover:border-riso-ink/30 hover:bg-white/60'
@@ -2309,7 +2333,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
               {/* Header */}
               <div className="flex items-center gap-2 mb-2 pb-2 border-b border-riso-ink/10">
-                <Terminal size={12} className="text-riso-ink" />
+                <Gear size={11} className="text-riso-ink animate-[spin_30s_linear_infinite]" />
                 <h4 className="font-bold font-mono text-xs uppercase tracking-widest text-riso-ink">
                   {t.disclaimerTitle}
                 </h4>
@@ -2346,16 +2370,18 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
         {/* Main Content Grid */}
         <main className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
 
-          {viewMode === 'ANALYSIS' && (
-            <>
-              <div className="md:col-span-2 lg:col-span-3">
+          {/* ANALYSIS VIEW - Viewport-contained like Timeline */}
+          <div className={`md:col-span-2 lg:col-span-3 ${deferredViewMode !== 'ANALYSIS' ? 'hidden' : ''}`}>
+            <div className="flex flex-col gap-4" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
+              {/* Stats Row - Fixed Height */}
+              <div className="flex-none">
                 <Card title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {/* Displaced Civilians */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between h-32">
+                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between min-h-24">
                       <div>
                         <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.displacedCivilians}</h4>
-                        <span className="font-display text-5xl md:text-6xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString()}</span>
+                        <span className="font-display text-4xl md:text-5xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString()}</span>
                       </div>
                       {/* Trend Indicator - Show last updated instead */}
                       <div className={`font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-xs' : 'text-[10px]'}`}>
@@ -2374,16 +2400,16 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     </div>
 
                     {/* Fatalities (Replaces old Injuries box position) */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between h-32">
+                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between min-h-24">
                       <div>
                         <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.fatalities}</h4>
-                        <span className="font-display text-5xl md:text-6xl text-riso-ink leading-none">{dashboardStats?.casualtyCount || 0}</span>
+                        <span className="font-display text-4xl md:text-5xl text-riso-ink leading-none">{dashboardStats?.casualtyCount || 0}</span>
                       </div>
                       <div className="text-[10px] font-mono text-riso-accent font-bold uppercase tracking-wider">{t.confirmedOnly}</div>
                     </div>
 
                     {/* Injuries - Split into Civilian / Military */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between h-32">
+                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between min-h-24">
                       {/* Top: Title + Numbers */}
                       <div>
                         <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.injured}</h4>
@@ -2405,7 +2431,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     </div>
 
                     {/* Status / Threat Level - Uses dashboardStats for conflict level */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col h-32">
+                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.threatLevel}</h4>
                       <div className="flex-1 flex items-center">
                         <span className={`font-display text-4xl md:text-5xl leading-none uppercase ${(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
@@ -2420,626 +2446,646 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   </div>
                 </Card>
               </div>
-              {/* Three Perspectives Grid - Equal Height Columns where Neutral AI determines the height */}
-              <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
 
-                {/* Section 3: Neutral Analysis (Center) - MASTER height - ORDER 1 ON MOBILE */}
-                <div className="flex flex-col gap-4 self-start min-h-[400px] lg:min-h-[670px] lg:order-2 order-1" id="neutral-master" ref={neutralRef}>
-                  <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
-                    <Scale size={18} /> {t.neutralAI}
+              {/* Three Perspectives Grid - Weighted: Side cards 1fr, Neutral 1.5fr */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_1fr] gap-4 h-full">
+
+                  {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
+                  <div className="flex flex-col gap-2 lg:order-2 order-1 min-h-0">
+                    <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
+                      <Scale size={18} /> {t.neutralAI}
+                    </div>
+                    <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
+                      <div className="flex-1 flex flex-col space-y-4 min-h-0">
+                        <div className="mb-6">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge type="outline" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t.aiSynthesis}</Badge>
+                            {neutralMeta?.conflictLevel && (
+                              <Badge type="alert" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t[neutralMeta.conflictLevel.toLowerCase() as keyof typeof t] || neutralMeta.conflictLevel}</Badge>
+                            )}
+                          </div>
+                          <h3 className="font-display text-3xl mt-2 leading-none py-1">
+                            {t.situationReport}
+                          </h3>
+                          <p className="font-mono text-xs opacity-50 mt-1">
+                            {t.autoUpdating}
+                          </p>
+                        </div>
+
+                        <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
+                          {getSummary(neutralMeta) || t.analyzingFeeds}
+                        </div>
+
+                        {getKeyEvents(neutralMeta).length > 0 && (
+                          <div className="mb-4">
+                            <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.keyDevelopments}:</p>
+                            <ul className="list-disc pl-4 space-y-1">
+                              {getKeyEvents(neutralMeta).map((event: string, i: number) => (
+                                <li key={i} className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-[13.5px]'}`}>{event}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Source Stats - Compact */}
+
+                      </div>
+                    </Card>
                   </div>
-                  <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                    <div className="flex-1 flex flex-col space-y-4 min-h-0">
-                      <div className="mb-6">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge type="outline">AI SYNTHESIS</Badge>
-                          {neutralMeta?.conflictLevel && (
-                            <Badge type="alert">{neutralMeta.conflictLevel}</Badge>
+
+                  {/* Section 2: Cambodia Perspective - ORDER 2 ON MOBILE */}
+                  <div className="flex flex-col gap-2 lg:order-1 order-2 min-h-0">
+                    <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
+                      {t.cambodia}
+                    </div>
+                    <Card className="flex-1 flex flex-col overflow-hidden" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
+                      <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
+                        {/* Official Narrative */}
+                        <div>
+                          <h4 className={`font-mono font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.officialNarrative}</h4>
+                          {getNarrative(cambodiaMeta) ? (
+                            <>
+                              <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[17px] font-mono leading-relaxed' : lang === 'th' ? 'text-[17px] font-mono' : 'text-base font-serif'}`}>
+                                "{getNarrative(cambodiaMeta)}"
+                              </p>
+                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta.narrativeSource || t.aiAnalysis}</p>
+                            </>
+                          ) : (
+                            <p className="font-mono text-xs opacity-50">{t.awaitingAnalysis}</p>
                           )}
                         </div>
-                        <h3 className="font-display text-3xl mt-2 leading-none py-1">
-                          {t.situationReport}
-                        </h3>
-                        <p className="font-mono text-xs opacity-50 mt-1">
-                          {t.autoUpdating}
-                        </p>
-                      </div>
 
-                      <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
-                        {getSummary(neutralMeta) || t.analyzingFeeds}
-                      </div>
+                        {/* Military Intensity */}
+                        <MilitaryIntensityGauge
+                          intensity={cambodiaMeta?.militaryIntensity ?? 50}
+                          posture={cambodiaMeta?.militaryPosture}
+                          postureLabel={cambodiaMeta?.postureLabel}
+                          postureLabelTh={cambodiaMeta?.postureLabelTh}
+                          postureLabelKh={cambodiaMeta?.postureLabelKh}
+                          postureRationale={cambodiaMeta?.postureRationale}
+                          postureRationaleTh={cambodiaMeta?.postureRationaleTh}
+                          postureRationaleKh={cambodiaMeta?.postureRationaleKh}
+                          territorialContext={cambodiaMeta?.territorialContext}
+                          perspective="cambodia"
+                          lang={lang}
+                        />
 
-                      {getKeyEvents(neutralMeta).length > 0 && (
-                        <div className="mb-4">
-                          <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{t.keyDevelopments}:</p>
-                          <ul className="list-disc pl-4 space-y-1">
-                            {getKeyEvents(neutralMeta).map((event: string, i: number) => (
-                              <li key={i} className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{event}</li>
-                            ))}
-                          </ul>
+                        {/* Intelligence Log - Scrollable & Filterable */}
+                        <IntelligenceLog
+                          articles={cambodiaNews}
+                          perspective="cambodia"
+                          lang={lang}
+                          isLoading={cambodiaNews === undefined}
+                        />
+                      </div>
+                    </Card>
+                  </div>
+
+                  {/* Section 4: Thailand Perspective - ORDER 3 ON MOBILE */}
+                  <div className="flex flex-col gap-2 lg:order-3 order-3 min-h-0">
+                    <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
+                      {t.thailand}
+                    </div>
+                    <Card className="flex-1 flex flex-col overflow-hidden" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
+                      <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
+                        {/* Official Narrative */}
+                        <div>
+                          <h4 className={`font-mono font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.officialNarrative}</h4>
+                          {getNarrative(thailandMeta) ? (
+                            <>
+                              <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[17px] font-mono leading-relaxed' : lang === 'th' ? 'text-[17px] font-mono' : 'text-base font-serif'}`}>
+                                "{getNarrative(thailandMeta)}"
+                              </p>
+                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta.narrativeSource || t.aiAnalysis}</p>
+                            </>
+                          ) : (
+                            <p className="font-mono text-xs opacity-50">{t.awaitingAnalysis}</p>
+                          )}
                         </div>
-                      )}
 
-                      {/* Source Stats - Compact */}
+                        {/* Military Intensity */}
+                        <MilitaryIntensityGauge
+                          intensity={thailandMeta?.militaryIntensity ?? 50}
+                          posture={thailandMeta?.militaryPosture}
+                          postureLabel={thailandMeta?.postureLabel}
+                          postureLabelTh={thailandMeta?.postureLabelTh}
+                          postureLabelKh={thailandMeta?.postureLabelKh}
+                          postureRationale={thailandMeta?.postureRationale}
+                          postureRationaleTh={thailandMeta?.postureRationaleTh}
+                          postureRationaleKh={thailandMeta?.postureRationaleKh}
+                          territorialContext={thailandMeta?.territorialContext}
+                          perspective="thailand"
+                          lang={lang}
+                        />
 
-                    </div>
-                  </Card>
-                </div>
-
-                {/* Section 2: Cambodia Perspective - matches height of Neutral AI - ORDER 2 ON MOBILE */}
-                <div className="flex flex-col gap-4 lg:order-1 order-2" style={{ height: neutralColumnHeight }}>
-                  <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-xl">
-                    {t.cambodia}
+                        {/* Intelligence Log - Scrollable & Filterable */}
+                        <IntelligenceLog
+                          articles={thailandNews}
+                          perspective="thailand"
+                          lang={lang}
+                          isLoading={thailandNews === undefined}
+                        />
+                      </div>
+                    </Card>
                   </div>
-                  <Card className="flex-1 h-full flex flex-col" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
-                    <div className="flex-1 flex flex-col space-y-4 min-h-0">
-                      {/* Official Narrative */}
-                      <div>
-                        <h4 className="font-mono text-[12px] font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1">{t.officialNarrative}</h4>
-                        {getNarrative(cambodiaMeta) ? (
-                          <>
-                            <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[17px] font-mono leading-relaxed' : lang === 'th' ? 'text-[17px] font-mono' : 'text-base font-serif'}`}>
-                              "{getNarrative(cambodiaMeta)}"
-                            </p>
-                            <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta.narrativeSource || t.aiAnalysis}</p>
-                          </>
-                        ) : (
-                          <p className="font-mono text-xs opacity-50">{t.awaitingAnalysis}</p>
-                        )}
-                      </div>
 
-                      {/* Military Intensity */}
-                      <MilitaryIntensityGauge
-                        intensity={cambodiaMeta?.militaryIntensity ?? 50}
-                        posture={cambodiaMeta?.militaryPosture}
-                        postureLabel={cambodiaMeta?.postureLabel}
-                        postureLabelTh={cambodiaMeta?.postureLabelTh}
-                        postureLabelKh={cambodiaMeta?.postureLabelKh}
-                        postureRationale={cambodiaMeta?.postureRationale}
-                        postureRationaleTh={cambodiaMeta?.postureRationaleTh}
-                        postureRationaleKh={cambodiaMeta?.postureRationaleKh}
-                        territorialContext={cambodiaMeta?.territorialContext}
-                        perspective="cambodia"
-                        lang={lang}
-                      />
+                </div> {/* End of Three Perspectives Grid */}
+              </div> {/* End of perspectives container */}
+            </div> {/* End of main flex container */}
+          </div>
 
-                      {/* Intelligence Log - Scrollable & Filterable */}
-                      <IntelligenceLog
-                        articles={cambodiaNews}
-                        perspective="cambodia"
-                        lang={lang}
-                        isLoading={cambodiaNews === undefined}
-                      />
-                    </div>
-                  </Card>
-                </div>
+          {/* LOSSES VIEW */}
+          <div className={`md:col-span-2 lg:col-span-3 ${deferredViewMode !== 'LOSSES' ? 'hidden' : ''}`}>
+            <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] md:h-auto" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
+              <Card title={`${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
 
-                {/* Section 4: Thailand Perspective - matches height of Neutral AI - ORDER 3 ON MOBILE */}
-                <div className="flex flex-col gap-4 lg:order-3 order-3" style={{ height: neutralColumnHeight }}>
-                  <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-xl">
-                    {t.thailand}
+                {(!timelineEvents || timelineEvents.length === 0) ? (
+                  <div className="text-center py-12 flex-1 flex flex-col justify-center items-center">
+                    <p className="font-mono text-sm opacity-60">{t.noTimelineEvents}</p>
+                    <p className="font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
                   </div>
-                  <Card className="flex-1 h-full flex flex-col" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
-                    <div className="flex-1 flex flex-col space-y-4 min-h-0">
-                      {/* Official Narrative */}
-                      <div>
-                        <h4 className="font-mono text-xs font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1">{t.officialNarrative}</h4>
-                        {getNarrative(thailandMeta) ? (
-                          <>
-                            <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[17px] font-mono leading-relaxed' : lang === 'th' ? 'text-[17px] font-mono' : 'text-base font-serif'}`}>
-                              "{getNarrative(thailandMeta)}"
-                            </p>
-                            <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta.narrativeSource || t.aiAnalysis}</p>
-                          </>
-                        ) : (
-                          <p className="font-mono text-xs opacity-50">{t.awaitingAnalysis}</p>
-                        )}
-                      </div>
+                ) : (
+                  <div className="flex flex-col h-full min-h-0">
+                    {/* --- DATE SELECTOR BAR --- */}
+                    <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5 relative group/nav overflow-hidden">
+                      {/* Left Nav Button */}
+                      <button
+                        onClick={() => scrollDatePicker('left')}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-full px-1 bg-gradient-to-r from-riso-paper/90 to-transparent flex items-center justify-center opacity-0 group-hover/nav:opacity-100 transition-opacity"
+                        aria-label="Scroll left"
+                      >
+                        <ChevronLeft size={24} className="text-riso-ink/40 hover:text-riso-ink transition-colors" />
+                      </button>
 
-                      {/* Military Intensity */}
-                      <MilitaryIntensityGauge
-                        intensity={thailandMeta?.militaryIntensity ?? 50}
-                        posture={thailandMeta?.militaryPosture}
-                        postureLabel={thailandMeta?.postureLabel}
-                        postureLabelTh={thailandMeta?.postureLabelTh}
-                        postureLabelKh={thailandMeta?.postureLabelKh}
-                        postureRationale={thailandMeta?.postureRationale}
-                        postureRationaleTh={thailandMeta?.postureRationaleTh}
-                        postureRationaleKh={thailandMeta?.postureRationaleKh}
-                        territorialContext={thailandMeta?.territorialContext}
-                        perspective="thailand"
-                        lang={lang}
-                      />
-
-                      {/* Intelligence Log - Scrollable & Filterable */}
-                      <IntelligenceLog
-                        articles={thailandNews}
-                        perspective="thailand"
-                        lang={lang}
-                        isLoading={thailandNews === undefined}
-                      />
-                    </div>
-                  </Card>
-                </div>
-
-              </div> {/* End of Three Perspectives Grid */}
-
-            </>
-          )
-          }
-
-          {
-            viewMode === 'LOSSES' && (
-              <>
-                <div className="md:col-span-2 lg:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] md:h-auto" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
-                  <Card title={`📜 ${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
-
-                    {(!timelineEvents || timelineEvents.length === 0) ? (
-                      <div className="text-center py-12 flex-1 flex flex-col justify-center items-center">
-                        <p className="font-mono text-sm opacity-60">{t.noTimelineEvents}</p>
-                        <p className="font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col h-full min-h-0">
-                        {/* --- DATE SELECTOR BAR --- */}
-                        <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5">
-                          <div ref={datePickerRef} className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2" style={{ scrollbarWidth: 'none' }}>
-                            {timelineDates.map((date) => {
-                              const isSelected = selectedTimelineDate === date;
-                              const count = dateCounts[date] || 0;
-                              return (
-                                <button
-                                  key={date}
-                                  data-date={date}
-                                  onClick={() => scrollToDate(date)}
-                                  className={`
+                      <div ref={datePickerRef} className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2" style={{ scrollbarWidth: 'none' }}>
+                        {timelineDates.map((date) => {
+                          const isSelected = selectedTimelineDate === date;
+                          const count = dateCounts[date] || 0;
+                          return (
+                            <button
+                              key={date}
+                              data-date={date}
+                              onClick={() => scrollToDate(date)}
+                              className={`
                                      flex flex-col items-center justify-center
                                      min-w-[80px] px-3 ${lang === 'kh' || lang === 'th' ? 'py-3' : 'py-2'} rounded-sm border-2 transition-colors duration-150 flex-shrink-0
                                      ${isSelected
-                                      ? 'bg-riso-ink border-riso-ink text-riso-paper'
-                                      : 'bg-riso-paper border-riso-ink/20 text-riso-ink hover:border-riso-ink/50 hover:bg-white'}
+                                  ? 'bg-riso-ink border-riso-ink text-riso-paper'
+                                  : 'bg-riso-paper border-riso-ink/20 text-riso-ink hover:border-riso-ink/50 hover:bg-white'}
                                    `}
-                                >
-                                  <span className={`font-mono text-[10px] uppercase tracking-wider mb-1 ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
-                                    {new Date(date).getFullYear()}
-                                  </span>
-                                  <span className={`font-display text-xl uppercase ${lang === 'kh' || lang === 'th' ? 'leading-relaxed py-0.5' : 'leading-none'}`}>
-                                    {formatDate(date, 'short')}
-                                  </span>
-                                  <span className={`text-[9px] font-mono mt-1 px-1.5 rounded-full ${isSelected ? 'bg-riso-paper text-riso-ink' : 'bg-riso-ink/10 text-riso-ink'}`}>
-                                    {count} {t.events}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* --- CONTINUOUS SCROLL TIMELINE --- */}
-                        <div ref={timelineScrollRef} className="flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] overscroll-contain">
-                          <div className="relative pb-12">
-                            {/* Center Line - spans full content height, z-0 so headers cover it */}
-                            <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2 z-0"></div>
-                            {timelineContent}
-
-                            {timelineDates.length === 0 && (
-                              <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                                <div className="w-16 h-16 border-2 border-dashed border-riso-ink rounded-full flex items-center justify-center mb-4">
-                                  <span className="text-2xl">?</span>
-                                </div>
-                                <p className="font-mono text-sm">No confirmed reports.</p>
-                              </div>
-                            )}
-
-                          </div>
-                        </div>
-
-                        {/* Legend - Fixed at bottom */}
-                      </div>
-                    )}
-                  </Card>
-
-                  {/* --- MODAL (Kept outside loop but assumes selectedEvent is global in this scope) --- */}
-                  {/* Event Details Modal - Bottom Sheet with Swipe logic preserved */}
-                  {selectedEvent && (() => {
-                    const getEventTitle = (event: any) => {
-                      if (lang === 'th' && event.titleTh) return event.titleTh;
-                      if (lang === 'kh' && event.titleKh) return event.titleKh;
-                      return event.title;
-                    };
-                    const getEventDescription = (event: any) => {
-                      if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
-                      if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
-                      return event.description;
-                    };
-                    const categoryColors: Record<string, string> = {
-                      military: 'bg-red-500',
-                      diplomatic: 'bg-blue-500',
-                      humanitarian: 'bg-yellow-500',
-                      political: 'bg-purple-500',
-                    };
-
-                    const renderInnerContent = (evt: any, isGhost: boolean) => {
-                      if (!evt) return null;
-                      const evtIndex = sortedEvents.indexOf(evt);
-                      const evtHasNext = evtIndex !== -1 && evtIndex < sortedEvents.length - 1;
-                      const evtHasPrev = evtIndex > 0;
-
-                      return (
-                        <div
-                          className={`flex flex-col h-full w-full overflow-hidden ${isGhost ? 'absolute inset-0 z-20 bg-[#F2F2E9]' : 'relative z-10'}`}
-                          style={isGhost ? { animation: 'borderClashFadeOut 200ms ease-out forwards', pointerEvents: 'none' } : {}}
-                        >
-                          {/* Header with Navigation */}
-                          <div className="bg-riso-ink text-riso-paper p-4 flex justify-between items-start flex-shrink-0">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] font-mono tracking-[0.2em] uppercase opacity-70">{t.intelReport}</span>
-                                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                                <span className="text-[10px] font-mono opacity-50 ml-auto">
-                                  {evtIndex + 1} / {sortedEvents.length}
-                                </span>
-                              </div>
-                              <h3 className={`font-display text-xl md:text-2xl leading-tight ${lang === 'th' ? 'font-bold' : ''}`}>
-                                {getEventTitle(evt)}
-                              </h3>
-                            </div>
-                            <button
-                              onClick={closeModal}
-                              className="p-2 hover:bg-white/10 rounded-full transition-colors ml-4"
-                              aria-label="Close modal"
                             >
-                              <XIcon className="w-6 h-6" />
-                            </button>
-                          </div>
-
-                          {/* Scrollable Body */}
-                          <div className={`p-4 md:p-6 space-y-6 flex-1 ${isGhost ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-                            {/* Meta Info */}
-                            <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
-                              <div>
-                                <p className="opacity-50 uppercase tracking-wider mb-1">{t.date}</p>
-                                <p className="font-bold">{formatDate(evt.date, 'long')}</p>
-                                {evt.timeOfDay && (
-                                  <p className="text-[10px] opacity-60 mt-0.5">{evt.timeOfDay}</p>
-                                )}
-                              </div>
-                              <div>
-                                <p className="opacity-50 uppercase tracking-wider mb-1">{t.impact}</p>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold">{evt.importance}/100</span>
-                                </div>
-                              </div>
-                              <div>
-                                <p className="opacity-50 uppercase tracking-wider mb-1">{t.category}</p>
-                                <span className={`inline-block px-2 rounded text-white font-bold ${categoryColors[evt.category?.toLowerCase()] || 'bg-gray-500'} ${lang === 'kh' ? 'text-[13px] font-semibold leading-relaxed py-1' : lang === 'th' ? 'text-[13px] font-semibold py-0.5' : 'text-[10px] uppercase py-0.5'}`}>
-                                  {t[`cat_${evt.category?.toLowerCase()}` as keyof typeof t] || evt.category}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Description */}
-                            <p className={`text-base leading-relaxed text-gray-800 ${lang === 'kh' ? 'font-mono leading-relaxed' : lang === 'th' ? 'font-mono' : 'font-serif'}`}>
-                              {getEventDescription(evt)}
-                            </p>
-
-                            {/* Sources */}
-                            {evt.sources?.length > 0 && (() => {
-                              // Sort by credibility (highest first)
-                              const sortedSources = [...evt.sources].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
-                              const topSources = sortedSources.slice(0, 3);
-                              const remainingSources = sortedSources.slice(3);
-
-                              return (
-                                <div className="space-y-3">
-                                  <p className="font-mono text-[10px] uppercase opacity-50">{t.topSources} ({evt.sources.length} {t.total})</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {topSources.map((s: any, idx: number) => (
-                                      s.url ? (
-                                        <a
-                                          key={idx}
-                                          href={s.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer"
-                                        >
-                                          {s.name} ({s.credibility}%)
-                                          <span className="opacity-50">↗</span>
-                                        </a>
-                                      ) : (
-                                        <span key={idx} className="inline-block px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono">
-                                          {s.name} ({s.credibility}%)
-                                        </span>
-                                      )
-                                    ))}
-                                  </div>
-
-                                  {/* Expandable remaining sources */}
-                                  {remainingSources.length > 0 && (
-                                    <div>
-                                      <button
-                                        onClick={() => setShowAllSources(!showAllSources)}
-                                        className="text-xs font-mono text-blue-600 hover:text-blue-800 underline"
-                                      >
-                                        {showAllSources ? `↑ ${t.hide}` : `↓ ${t.show} ${remainingSources.length} ${t.moreSources}`}
-                                      </button>
-
-                                      {showAllSources && (
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                          {remainingSources.map((s: any, idx: number) => (
-                                            s.url ? (
-                                              <a
-                                                key={idx + 3}
-                                                href={s.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer"
-                                              >
-                                                {s.name} ({s.credibility}%)
-                                                <span className="opacity-50">↗</span>
-                                              </a>
-                                            ) : (
-                                              <span key={idx + 3} className="inline-block px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-mono">
-                                                {s.name} ({s.credibility}%)
-                                              </span>
-                                            )
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Navigation Footer */}
-                          <div className="bg-riso-ink/5 border-t border-riso-ink/20 p-3 flex-shrink-0">
-                            <div className="flex items-center justify-between gap-4">
-                              <button
-                                onClick={goToPrev}
-                                disabled={!evtHasPrev}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasPrev ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                              >
-                                <span>←</span>
-                                <span className="hidden sm:inline">{t.prev}</span>
-                              </button>
-
-                              <span className="font-mono text-xs opacity-50">
-                                {t.navHint}
+                              <span className={`font-mono text-[10px] uppercase tracking-wider mb-1 ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
+                                {new Date(date).getFullYear()}
                               </span>
+                              <span className={`font-display text-xl uppercase ${lang === 'kh' || lang === 'th' ? 'leading-relaxed py-0.5' : 'leading-none'}`}>
+                                {formatDate(date, 'short')}
+                              </span>
+                              <span className={`text-[9px] font-mono mt-1 px-1.5 rounded-full ${isSelected ? 'bg-riso-paper text-riso-ink' : 'bg-riso-ink/10 text-riso-ink'}`}>
+                                {count} {t.events}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                              <button
-                                onClick={goToNext}
-                                disabled={!evtHasNext}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasNext ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                              >
-                                <span className="hidden sm:inline">{t.next}</span>
-                                <span>→</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    };
-
-                    return (
-                      <div
-                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
-                        onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
-                        onKeyDown={handleKeyDown}
-                        tabIndex={0}
-                        ref={(el) => el?.focus()}
-                        style={{
-                          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                          animation: isModalClosing
-                            ? 'borderClashFadeOut 250ms ease-out forwards'
-                            : 'borderClashFadeIn 250ms ease-out forwards',
-                        }}
+                      {/* Right Nav Button */}
+                      <button
+                        onClick={() => scrollDatePicker('right')}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-full px-1 bg-gradient-to-l from-riso-paper/90 to-transparent flex items-center justify-center opacity-0 group-hover/nav:opacity-100 transition-opacity"
+                        aria-label="Scroll right"
                       >
-                        {/* Full-screen Card Modal */}
-                        <div
-                          className="relative bg-[#F2F2E9] w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-xl border-4 border-riso-ink shadow-2xl flex flex-col"
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            // Only handle Open/Close animations on the container
-                            animation: isModalClosing
-                              ? 'borderClashCardOut 250ms ease-out forwards'
-                              : 'borderClashCardIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
-                          }}
-                        >
-                          {/* Main Card (always visible underneath) */}
-                          {renderInnerContent(selectedEvent, false)}
+                        <ChevronRight size={24} className="text-riso-ink/40 hover:text-riso-ink transition-colors" />
+                      </button>
+                    </div>
 
-                          {/* Ghost Card (fades out on top) */}
-                          {isNavigating && previousEvent && renderInnerContent(previousEvent, true)}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </>
-            )
-          }
+                    {/* --- CONTINUOUS SCROLL TIMELINE --- */}
+                    <div
+                      ref={timelineScrollRef}
+                      className="flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] overscroll-contain"
+                    >
+                      <div className="relative pb-12">
+                        {/* Center Line - spans full content height, z-0 so headers cover it */}
+                        <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2 z-0"></div>
+                        {timelineContent}
 
-          {
-            viewMode === 'GUIDE' && (
-              <>
-                <div className="md:col-span-2 lg:col-span-3">
-                  <Card title={t.guideTitle}>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-                      {/* LEFT COLUMN: CRITICAL LITERACY */}
-                      <div className="space-y-8">
-                        {/* Trust No One Warning */}
-                        <div className="border-2 border-riso-ink p-6 relative overflow-hidden bg-riso-ink/5">
-                          <div className="absolute top-0 left-0 w-16 h-16 bg-riso-ink -translate-x-8 -translate-y-8 rotate-45"></div>
-                          <div className="relative z-10">
-                            <h3 className="font-display text-2xl uppercase tracking-wide mb-3 flex items-center gap-3">
-                              <span className="text-3xl">👁️</span> {t.trustWarning}
-                            </h3>
-                            <p className={`font-mono leading-relaxed opacity-90 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                              {t.trustWarningDesc}
-                            </p>
+                        {timelineDates.length === 0 && (
+                          <div className="flex flex-col items-center justify-center py-20 opacity-50">
+                            <div className="w-16 h-16 border-2 border-dashed border-riso-ink rounded-full flex items-center justify-center mb-4">
+                              <span className="text-2xl">?</span>
+                            </div>
+                            <p className="font-mono text-sm">No confirmed reports.</p>
                           </div>
-                        </div>
-
-                        {/* Anti-Propaganda Checklist */}
-                        <div>
-                          <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink/20 pb-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.verificationChecklist}</h4>
-                          <ul className="space-y-2 font-mono text-xs">
-                            {[
-                              { icon: "🕵️", text: t.checkSources },
-                              { icon: "📸", text: t.lookForEvidence },
-                              { icon: "🧠", text: t.considerBias },
-                              { icon: "📅", text: t.checkDates },
-                              { icon: "🎭", text: t.emotionalManipulation }
-                            ].map((item, i) => (
-                              <li key={i} className="flex items-start gap-4 p-2 bg-white/50 border border-transparent hover:border-riso-ink/20 transition-all rounded group">
-                                <span className="text-xl filter sepia-[1] hue-rotate-[60deg] saturate-[1] opacity-70 group-hover:filter-none group-hover:opacity-100 transition-all duration-300">{item.icon}</span>
-                                <span className={`opacity-80 mt-1 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{item.text}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        {/* Deepfake Warning */}
-                        <div className="border-l-4 border-riso-accent pl-4 py-2 bg-riso-accent/5">
-                          <h5 className="font-display text-lg text-riso-accent mb-1">{t.aiWarning}</h5>
-                          <p className={`font-mono opacity-70 mb-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-[10px]'}`}>{t.aiWarningDesc}</p>
-                          <div className="flex gap-2 text-xs font-mono font-bold text-riso-accent">
-                            <span>{t.dfTip1}</span>
-                          </div>
-                        </div>
-
-
-                        {/* FACT VS PROPAGANDA */}
-                        <div className="space-y-4">
-                          <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink/20 pb-2 flex items-center gap-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
-                            <span className="text-xl">⚖️</span> {t.factVsPropaganda}
-                          </h4>
-                          <div className="grid grid-cols-1 gap-3">
-                            {/* Comparison 1 */}
-                            <div className={`bg-white/50 p-3 rounded border border-riso-ink/10 font-mono space-y-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                              <p className="text-green-700 flex gap-2"><span className="font-bold">✓</span> {t.fact1}</p>
-                              <p className="text-red-700 flex gap-2"><span className="font-bold">✗</span> {t.propaganda1}</p>
-                            </div>
-                            {/* Comparison 2 */}
-                            <div className={`bg-white/50 p-3 rounded border border-riso-ink/10 font-mono space-y-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                              <p className="text-green-700 flex gap-2"><span className="font-bold">✓</span> {t.fact2}</p>
-                              <p className="text-red-700 flex gap-2"><span className="font-bold">✗</span> {t.propaganda2}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Open Source Link */}
-                        <div className="pt-0">
-                          <a
-                            href="https://github.com/South-33/BorderClash"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 font-mono text-xs opacity-60 hover:opacity-100 transition-opacity"
-                          >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                            </svg>
-                            <span>View Source Code on GitHub</span>
-                          </a>
-                        </div>
-
-                      </div>
-
-                      {/* RIGHT COLUMN: HOW IT WORKS */}
-                      <div className="space-y-8">
-                        <div>
-                          <h4 className="font-display text-xl uppercase mb-6 flex items-center gap-2">
-                            <span className="w-2 h-2 bg-riso-ink rounded-full"></span>
-                            {t.howItWorks}
-                          </h4>
-
-                          <div className="relative space-y-8 pl-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-riso-ink/10">
-                            {/* Step 1: Curator */}
-                            <div className="relative">
-                              <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">1</div>
-                              <h5 className="font-mono font-bold uppercase mb-1">{t.curatorRole}</h5>
-                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.curatorDesc}</p>
-                            </div>
-
-                            {/* Step 2: Verifier */}
-                            <div className="relative">
-                              <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">2</div>
-                              <h5 className="font-mono font-bold uppercase mb-1">{t.verifierRole}</h5>
-                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.verifierDesc}</p>
-                            </div>
-
-                            {/* Step 3: Historian */}
-                            <div className="relative">
-                              <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">3</div>
-                              <h5 className="font-mono font-bold uppercase mb-1">{t.historianRole}</h5>
-                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.historianDesc}</p>
-                            </div>
-
-                            {/* Step 4: Synth */}
-                            <div className="relative">
-                              <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">4</div>
-                              <h5 className="font-mono font-bold uppercase mb-1">{t.synthRole}</h5>
-                              <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.synthDesc}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Stateless Approach Badge */}
-                        <div className="mt-8 bg-riso-ink text-riso-paper p-6 text-center transform rotate-1 hover:rotate-0 transition-transform cursor-crosshair">
-                          <h3 className="font-display text-2xl uppercase mb-2">{t.statelessApproach}</h3>
-                          <p className={`font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.statelessDesc}</p>
-                        </div>
-
-                        {/* DATA EXPLAINER */}
-                        <div className="space-y-6 pt-4 border-t border-riso-ink/10">
-                          {/* Scores */}
-                          <div>
-                            <h4 className={`font-mono font-bold uppercase mb-3 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.understandingScores}</h4>
-                            <div className={`space-y-2 font-mono ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                              <div className="flex items-center gap-3">
-                                <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                                <p>{t.scoreHigh}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                                <p>{t.scoreMid}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                                <p>{t.scoreLow}</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Sources */}
-                          <div>
-                            <h4 className={`font-mono font-bold uppercase mb-3 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.whoIsTalking}</h4>
-                            <div className={`space-y-2 font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                              <p>🏛️ {t.sourceGov}</p>
-                              <p>📰 {t.sourceMedia}</p>
-                            </div>
-                          </div>
-                        </div>
+                        )}
 
                       </div>
                     </div>
-                  </Card>
-                </div>
-              </>
-            )
-          }
-        </main >
+
+                    {/* Legend - Fixed at bottom */}
+                  </div>
+                )}
+              </Card>
+
+              {/* --- MODAL (Kept outside loop but assumes selectedEvent is global in this scope) --- */}
+              {/* Event Details Modal - Bottom Sheet with Swipe logic preserved */}
+              {selectedEvent && (() => {
+                const getEventTitle = (event: any) => {
+                  if (lang === 'th' && event.titleTh) return event.titleTh;
+                  if (lang === 'kh' && event.titleKh) return event.titleKh;
+                  return event.title;
+                };
+                const getEventDescription = (event: any) => {
+                  if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
+                  if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
+                  return event.description;
+                };
+                const categoryColors: Record<string, string> = {
+                  military: 'bg-red-500',
+                  diplomatic: 'bg-blue-500',
+                  humanitarian: 'bg-yellow-500',
+                  political: 'bg-purple-500',
+                };
+
+                const renderInnerContent = (evt: any, isGhost: boolean) => {
+                  if (!evt) return null;
+                  const evtIndex = sortedEvents.indexOf(evt);
+                  const evtHasNext = evtIndex !== -1 && evtIndex < sortedEvents.length - 1;
+                  const evtHasPrev = evtIndex > 0;
+
+                  return (
+                    <div
+                      className={`flex flex-col h-full w-full overflow-hidden ${isGhost ? 'absolute inset-0 z-20 bg-[#F2F2E9]' : 'relative z-10'}`}
+                      style={isGhost ? { animation: 'borderClashFadeOut 200ms ease-out forwards', pointerEvents: 'none' } : {}}
+                    >
+                      {/* Header with Navigation */}
+                      <div className="bg-riso-ink text-riso-paper p-4 flex justify-between items-start flex-shrink-0">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-mono tracking-[0.2em] uppercase opacity-70">{t.intelReport}</span>
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                            <span className="text-[10px] font-mono opacity-50 ml-auto">
+                              {evtIndex + 1} / {sortedEvents.length}
+                            </span>
+                          </div>
+                          <h3 className={`font-display text-xl md:text-2xl leading-tight ${lang === 'th' ? 'font-bold' : ''}`}>
+                            {getEventTitle(evt)}
+                          </h3>
+                        </div>
+                        <button
+                          onClick={closeModal}
+                          className="p-2 hover:bg-white/10 rounded-full transition-colors ml-4"
+                          aria-label="Close modal"
+                        >
+                          <XIcon className="w-6 h-6" />
+                        </button>
+                      </div>
+
+                      {/* Scrollable Body */}
+                      <div className={`p-4 md:p-6 space-y-6 flex-1 ${isGhost ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+                        {/* Meta Info */}
+                        <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
+                          <div>
+                            <p className="opacity-50 uppercase tracking-wider mb-1">{t.date}</p>
+                            <p className="font-bold">{formatDate(evt.date, 'long')}</p>
+                            {evt.timeOfDay && (
+                              <p className="text-[10px] opacity-60 mt-0.5">{evt.timeOfDay}</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="opacity-50 uppercase tracking-wider mb-1">{t.impact}</p>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold">{evt.importance}/100</span>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="opacity-50 uppercase tracking-wider mb-1">{t.category}</p>
+                            <span className={`inline-block px-2 rounded text-white font-bold ${categoryColors[evt.category?.toLowerCase()] || 'bg-gray-500'} ${lang === 'kh' ? 'text-[13px] font-semibold leading-relaxed py-1' : lang === 'th' ? 'text-[13px] font-semibold py-0.5' : 'text-[10px] uppercase py-0.5'}`}>
+                              {t[`cat_${evt.category?.toLowerCase()}` as keyof typeof t] || evt.category}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Description */}
+                        <p className={`text-base leading-relaxed text-gray-800 ${lang === 'kh' ? 'font-mono leading-relaxed' : lang === 'th' ? 'font-mono' : 'font-serif'}`}>
+                          {getEventDescription(evt)}
+                        </p>
+
+                        {/* Sources */}
+                        {evt.sources?.length > 0 && (() => {
+                          // Sort by credibility (highest first)
+                          const sortedSources = [...evt.sources].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
+                          const topSources = sortedSources.slice(0, 3);
+                          const remainingSources = sortedSources.slice(3);
+
+                          return (
+                            <div className="space-y-3">
+                              <p className="font-mono text-[10px] uppercase opacity-50">{t.topSources} ({evt.sources.length} {t.total})</p>
+                              <div className="flex flex-wrap gap-2">
+                                {topSources.map((s: any, idx: number) => (
+                                  s.url ? (
+                                    <a
+                                      key={idx}
+                                      href={s.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer"
+                                    >
+                                      {s.name} ({s.credibility}%)
+                                      <span className="opacity-50">↗</span>
+                                    </a>
+                                  ) : (
+                                    <span key={idx} className="inline-block px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono">
+                                      {s.name} ({s.credibility}%)
+                                    </span>
+                                  )
+                                ))}
+                              </div>
+
+                              {/* Expandable remaining sources */}
+                              {remainingSources.length > 0 && (
+                                <div>
+                                  <button
+                                    onClick={() => setShowAllSources(!showAllSources)}
+                                    className="text-xs font-mono text-blue-600 hover:text-blue-800 underline"
+                                  >
+                                    {showAllSources ? `↑ ${t.hide}` : `↓ ${t.show} ${remainingSources.length} ${t.moreSources}`}
+                                  </button>
+
+                                  {showAllSources && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {remainingSources.map((s: any, idx: number) => (
+                                        s.url ? (
+                                          <a
+                                            key={idx + 3}
+                                            href={s.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer"
+                                          >
+                                            {s.name} ({s.credibility}%)
+                                            <span className="opacity-50">↗</span>
+                                          </a>
+                                        ) : (
+                                          <span key={idx + 3} className="inline-block px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-mono">
+                                            {s.name} ({s.credibility}%)
+                                          </span>
+                                        )
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Navigation Footer */}
+                      <div className="bg-riso-ink/5 border-t border-riso-ink/20 p-3 flex-shrink-0">
+                        <div className="flex items-center justify-between gap-4">
+                          <button
+                            onClick={goToPrev}
+                            disabled={!evtHasPrev}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasPrev ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                          >
+                            <span>←</span>
+                            <span className="hidden sm:inline">{t.prev}</span>
+                          </button>
+
+                          <span className="font-mono text-xs opacity-50">
+                            {t.navHint}
+                          </span>
+
+                          <button
+                            onClick={goToNext}
+                            disabled={!evtHasNext}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasNext ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                          >
+                            <span className="hidden sm:inline">{t.next}</span>
+                            <span>→</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                };
+
+                return (
+                  <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
+                    onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+                    onKeyDown={handleKeyDown}
+                    tabIndex={0}
+                    ref={(el) => el?.focus()}
+                    style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                      animation: isModalClosing
+                        ? 'borderClashFadeOut 250ms ease-out forwards'
+                        : 'borderClashFadeIn 250ms ease-out forwards',
+                    }}
+                  >
+                    {/* Full-screen Card Modal */}
+                    <div
+                      className="relative bg-[#F2F2E9] w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-xl border-4 border-riso-ink shadow-2xl flex flex-col"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        // Only handle Open/Close animations on the container
+                        animation: isModalClosing
+                          ? 'borderClashCardOut 250ms ease-out forwards'
+                          : 'borderClashCardIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                      }}
+                    >
+                      {/* Main Card (always visible underneath) */}
+                      {renderInnerContent(selectedEvent, false)}
+
+                      {/* Ghost Card (fades out on top) */}
+                      {isNavigating && previousEvent && renderInnerContent(previousEvent, true)}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* GUIDE VIEW - Viewport-contained like other views */}
+          <div className={`md:col-span-2 lg:col-span-3 ${deferredViewMode !== 'GUIDE' ? 'hidden' : ''}`}>
+            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] md:h-auto" style={{ height: typeof sidebarHeight !== 'undefined' ? sidebarHeight : undefined }}>
+              {/* Fixed header with GitHub link */}
+              <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
+                <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{t.guideTitle}</h3>
+                <a
+                  href="https://github.com/South-33/BorderClash"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 font-mono text-xs opacity-60 hover:opacity-100 transition-opacity"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                  </svg>
+                  <span className="hidden sm:inline">GitHub</span>
+                </a>
+              </div>
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+                  {/* LEFT COLUMN: CRITICAL LITERACY */}
+                  <div className="space-y-8">
+                    {/* Trust No One Warning */}
+                    <div className="border-2 border-riso-ink p-6 relative overflow-hidden bg-riso-ink/5">
+                      <div className="absolute top-0 left-0 w-16 h-16 bg-riso-ink -translate-x-8 -translate-y-8 rotate-45"></div>
+                      <div className="relative z-10">
+                        <h3 className="font-display text-2xl uppercase tracking-wide mb-3 flex items-center gap-3">
+                          <span className="text-3xl">👁️</span> {t.trustWarning}
+                        </h3>
+                        <p className={`font-mono leading-relaxed opacity-90 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                          {t.trustWarningDesc}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Anti-Propaganda Checklist */}
+                    <div>
+                      <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink/20 pb-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.verificationChecklist}</h4>
+                      <ul className="space-y-2 font-mono text-xs">
+                        {[
+                          { icon: "🕵️", text: t.checkSources },
+                          { icon: "📸", text: t.lookForEvidence },
+                          { icon: "🧠", text: t.considerBias },
+                          { icon: "📅", text: t.checkDates },
+                          { icon: "🎭", text: t.emotionalManipulation }
+                        ].map((item, i) => (
+                          <li key={i} className="flex items-start gap-4 p-2 bg-white/50 border border-transparent hover:border-riso-ink/20 transition-all rounded group">
+                            <span className="text-xl filter sepia-[1] hue-rotate-[60deg] saturate-[1] opacity-70 group-hover:filter-none group-hover:opacity-100 transition-all duration-300">{item.icon}</span>
+                            <span className={`opacity-80 mt-1 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{item.text}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Deepfake Warning */}
+                    <div className="border-l-4 border-riso-accent pl-4 py-2 bg-riso-accent/5">
+                      <h5 className="font-display text-lg text-riso-accent mb-1">{t.aiWarning}</h5>
+                      <p className={`font-mono opacity-70 mb-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-[10px]'}`}>{t.aiWarningDesc}</p>
+                      <div className="flex gap-2 text-xs font-mono font-bold text-riso-accent">
+                        <span>{t.dfTip1}</span>
+                      </div>
+                    </div>
+
+
+                    {/* FACT VS PROPAGANDA */}
+                    <div className="space-y-4">
+                      <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink/20 pb-2 flex items-center gap-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                        <span className="text-xl">⚖️</span> {t.factVsPropaganda}
+                      </h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        {/* Comparison 1 */}
+                        <div className={`bg-white/50 p-3 rounded border border-riso-ink/10 font-mono space-y-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                          <p className="text-green-700 flex gap-2"><span className="font-bold">✓</span> {t.fact1}</p>
+                          <p className="text-red-700 flex gap-2"><span className="font-bold">✗</span> {t.propaganda1}</p>
+                        </div>
+                        {/* Comparison 2 */}
+                        <div className={`bg-white/50 p-3 rounded border border-riso-ink/10 font-mono space-y-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                          <p className="text-green-700 flex gap-2"><span className="font-bold">✓</span> {t.fact2}</p>
+                          <p className="text-red-700 flex gap-2"><span className="font-bold">✗</span> {t.propaganda2}</p>
+                        </div>
+                      </div>
+                    </div>
+
+
+                  </div>
+
+                  {/* RIGHT COLUMN: HOW IT WORKS */}
+                  <div className="space-y-8">
+                    <div>
+                      <h4 className="font-display text-xl uppercase mb-6 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-riso-ink rounded-full"></span>
+                        {t.howItWorks}
+                      </h4>
+
+                      <div className="relative space-y-8 pl-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-riso-ink/10">
+                        {/* Step 1: Curator */}
+                        <div className="relative">
+                          <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">1</div>
+                          <h5 className="font-mono font-bold uppercase mb-1">{t.curatorRole}</h5>
+                          <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.curatorDesc}</p>
+                        </div>
+
+                        {/* Step 2: Verifier */}
+                        <div className="relative">
+                          <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">2</div>
+                          <h5 className="font-mono font-bold uppercase mb-1">{t.verifierRole}</h5>
+                          <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.verifierDesc}</p>
+                        </div>
+
+                        {/* Step 3: Historian */}
+                        <div className="relative">
+                          <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">3</div>
+                          <h5 className="font-mono font-bold uppercase mb-1">{t.historianRole}</h5>
+                          <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.historianDesc}</p>
+                        </div>
+
+                        {/* Step 4: Synth */}
+                        <div className="relative">
+                          <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">4</div>
+                          <h5 className="font-mono font-bold uppercase mb-1">{t.synthRole}</h5>
+                          <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.synthDesc}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stateless Approach Badge */}
+                    <div className="mt-8 bg-riso-ink text-riso-paper p-6 text-center transform rotate-1 hover:rotate-0 transition-transform cursor-crosshair">
+                      <h3 className="font-display text-2xl uppercase mb-2">{t.statelessApproach}</h3>
+                      <p className={`font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.statelessDesc}</p>
+                    </div>
+
+                    {/* DATA EXPLAINER */}
+                    <div className="space-y-6 pt-4 border-t border-riso-ink/10">
+                      {/* Scores */}
+                      <div>
+                        <h4 className={`font-mono font-bold uppercase mb-3 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.understandingScores}</h4>
+                        <div className={`space-y-2 font-mono ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                            <p>{t.scoreHigh}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <p>{t.scoreMid}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                            <p>{t.scoreLow}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Sources */}
+                      <div>
+                        <h4 className={`font-mono font-bold uppercase mb-3 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.whoIsTalking}</h4>
+                        <div className={`space-y-2 font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                          <p>🏛️ {t.sourceGov}</p>
+                          <p>📰 {t.sourceMedia}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div> {/* End of right column */}
+                </div> {/* End of grid */}
+              </div> {/* End of scrollable content */}
+            </div> {/* End of inner flex container */}
+          </div> {/* End of GUIDE outer container */}
+        </main>
         {/* Decorative footer elements */}
-        < div className="fixed bottom-4 right-4 hidden lg:block" >
+        <div className="fixed bottom-4 right-4 hidden lg:block">
           <div className="vertical-text font-display text-6xl text-riso-ink opacity-10 pointer-events-none select-none">
             {t.peaceWar}
           </div>
-        </div >
-      </div >
-    </div >
+        </div>
+      </div>
+      {/* Bottom spacer - flexes equally with top */}
+      <div />
+    </div>
   );
 }
