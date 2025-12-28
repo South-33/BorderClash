@@ -121,8 +121,8 @@ const TRANSLATIONS = {
     items: "items",
     noArticles: "No articles yet",
     noArticlesFiltered: "No articles in this category",
-    damageAssessment: "ESTIMATED DAMAGE",
-    displacedCivilians: "Displaced Civilians",
+    damageAssessment: "ESTIMATED LOSS",
+    displacedCivilians: "Displaced",
     civilianInjuries: "Civilian Injuries",
     propertyDamaged: "Property Damaged",
     status: "Status",
@@ -165,7 +165,7 @@ const TRANSLATIONS = {
     intl: "International",
     credibility: "Credibility",
     subTitle: "Real-time monitoring of border tensions through multi-perspective analysis and AI-verified intelligence.",
-    fatalities: "Confirmed Fatalities",
+    fatalities: "Fatalities",
     threatLevel: "Threat Level",
     low: "LOW",
     elevated: "ELEVATED",
@@ -174,7 +174,7 @@ const TRANSLATIONS = {
     civilian: "CIVILIAN",
     military: "MILITARY",
     fromLastWeek: "FROM LAST WEEK",
-    lastUpdated: "Last updated",
+    lastUpdated: "Updated",
     estimated: "ESTIMATED",
     noChange: "NO CHANGE",
     visualDamageAssessment: "VISUAL DAMAGE ASSESSMENT",
@@ -295,15 +295,15 @@ const TRANSLATIONS = {
     officialNarrative: "มุมมองจากทางการ",
     militaryIntensity: "สถานการณ์ความตึงเครียด",
     peaceful: "เหตุการณ์ปกติ",
-    defensive: "เตรียมพร้อม/ตั้งรับ",
+    defensive: "ตั้งรับ",
     escalated: "ตึงเครียด",
     aggressive: "เดือด", // Matches 'Kach' (Fierce) - Short for UI
     intelligenceLog: "ข่าวกรองล่าสุด",
     items: "รายการ",
     noArticles: "ยังไม่มีข้อมูล",
     noArticlesFiltered: "ไม่พบบทความในหมวดนี้",
-    damageAssessment: "สรุปความเสียหาย", // Simplified
-    displacedCivilians: "ชาวบ้านพลัดถิ่น", // Matches 'Relocated citizens' nuance
+    damageAssessment: "สรุปความสูญเสีย",
+    displacedCivilians: "ผู้พลัดถิ่น",
     civilianInjuries: "ชาวบ้านบาดเจ็บ",
     propertyDamaged: "ทรัพย์สินเสียหาย",
     status: "สถานะ",
@@ -346,16 +346,16 @@ const TRANSLATIONS = {
     intl: "ตปท.",
     credibility: "ความน่าเชื่อถือ",
     subTitle: "เกาะติดทุกเรื่องราวชายแดนแบบทันที โดยใช้ AI ช่วยเช็คข้อมูลจากรอบด้านมาสรุปให้เห็นภาพรวม เพื่อให้คุณได้รู้ความจริงที่ชัดเจนและไม่เข้าข้างฝ่ายใด",
-    fatalities: "ผู้เสียชีวิต (ยืนยันแล้ว)",
-    threatLevel: "ระดับภัยคุกคาม",
+    fatalities: "ผู้เสียชีวิต",
+    threatLevel: "ระดับภัย",
     low: "ต่ำ",
-    elevated: "สูง",
+    elevated: "เฝ้าระวัง",
     critical: "วิกฤต",
     injured: "ผู้บาดเจ็บ",
     civilian: "พลเรือน",
     military: "ทหาร",
     fromLastWeek: "จากสัปดาห์ก่อน",
-    lastUpdated: "อัปเดตล่าสุด",
+    lastUpdated: "อัปเดต",
     estimated: "ประมาณ",
     noChange: "เท่าเดิม",
     visualDamageAssessment: "ภาพความเสียหาย",
@@ -483,12 +483,12 @@ const TRANSLATIONS = {
     items: "អត្ថបទ",
     noArticles: "មិនទាន់មានព័ត៌មាន",
     noArticlesFiltered: "មិនមានអត្ថបទក្នុងផ្នែកនេះទេ",
-    damageAssessment: "ការខូចខាតសរុប", // Total damage - Simplified
-    displacedCivilians: "ពលរដ្ឋដែលបានផ្លាស់​ទីលំនៅ", // Citizen relocation
+    damageAssessment: "ការខូចខាតសរុប",
+    displacedCivilians: "ជនភៀសខ្លួន",
     civilianInjuries: "ពលរដ្ឋរងរបួស",
     propertyDamaged: "ទ្រព្យសម្បត្តិខូចខាត",
     status: "ស្ថានភាព",
-    confirmedOnly: "បានបញ្ជាក់",
+    confirmedOnly: "បញ្ជាក់ហើយ",
     structures: "សំណង់",
     monitoring: "កំពុងមើល",
     active: "សកម្ម",
@@ -527,7 +527,7 @@ const TRANSLATIONS = {
     intl: "អន្តរជាតិ",
     credibility: "ភាពជឿជាក់",
     subTitle: "តាមដានរឿងរ៉ាវនៅព្រំដែនភ្លាមៗ ដោយប្រើ AI ជួយផ្ទៀងផ្ទាត់ព័ត៌មានពីគ្រប់ភាគី ដើម្បីឱ្យយើងដឹងការពិតបានច្បាស់ និងមិនលំអៀង។",
-    fatalities: "អ្នកស្លាប់ (បញ្ជាក់ហើយ)",
+    fatalities: "ចំនួនស្លាប់",
     threatLevel: "កម្រិតគ្រោះថ្នាក់",
     low: "ទាប",
     elevated: "ខ្ពស់",
@@ -536,7 +536,7 @@ const TRANSLATIONS = {
     civilian: "ពលរដ្ឋ",
     military: "ទាហាន",
     fromLastWeek: "ពីសប្តាហ៍មុន",
-    lastUpdated: "អាប់ដេតចុងក្រោយ ",
+    lastUpdated: "អាប់ដេត",
     estimated: "ប៉ាន់ស្មាន",
     noChange: "នៅដដែល",
     visualDamageAssessment: "រូបភាពការខូចខាត",
@@ -963,138 +963,109 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
 
   return (
     <li
-      className={`text-sm font-medium border-l-2 ${borderColor} pl-3 pr-3 py-2 ${hoverBg} transition-all cursor-pointer`}
+      className="group relative border-b border-riso-ink/15 hover:bg-riso-ink/[0.02] transition-colors cursor-pointer last:border-0"
       onClick={() => article.sourceUrl && window.open(article.sourceUrl, '_blank')}
     >
-      {/* Header Row */}
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <div className="flex items-center gap-2">
-          <span className="text-xs">{categoryIcons[article.category] || '📰'}</span>
-          {article.isVerified && <CheckCircle className="w-3 h-3 text-green-600" />}
-          <span className="text-[10px] font-mono opacity-60">{article.source}</span>
-        </div>
-        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap" suppressHydrationWarning>{formatRelativeTime(article.publishedAt, article.fetchedAt)}</span>
-      </div>
+      <div className="flex">
+        {/* Subtle Accent Bar - Always on, but light */}
+        <div className={`w-[2px] self-stretch ${borderColor} opacity-30 group-hover:opacity-100 transition-opacity`}></div>
 
-      {/* Title - use language-specific title if available */}
-      <p className={`font-semibold ${lang === 'kh' ? 'font-mono leading-relaxed' : lang === 'th' ? 'font-mono leading-snug' : 'leading-snug'}`}>
-        {lang === 'th' && article.titleTh ? article.titleTh :
-          lang === 'kh' && article.titleKh ? article.titleKh :
-            article.titleEn || article.title}
-      </p>
-
-      {/* Credibility Bar (always visible) */}
-      <div className="flex items-center gap-2 mt-2">
-        <span className={`font-mono font-bold opacity-40 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[12px]' : 'text-[9px]'}`}>{t.credibility}</span>
-        <div className="flex-1 h-1.5 bg-riso-ink/10">
-          <div
-            className={`h-full ${(article.credibility ?? 50) >= 70 ? 'bg-green-600' : (article.credibility ?? 50) >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`}
-            style={{ width: `${article.credibility ?? 50}%` }}
-          />
-        </div>
-        <span className="text-[9px] font-mono opacity-60 min-w-[3ch] text-right">{article.credibility ?? 50}%</span>
-      </div>
-
-      {/* Expanded Details */}
-      {isExpanded && (
-        <div className="mt-3 pt-3 border-t border-riso-ink/10 space-y-3">
-          {/* Summary */}
-          <p className={`text-xs opacity-80 ${lang === 'kh' ? 'leading-relaxed' : lang === 'th' ? 'leading-relaxed' : 'leading-relaxed'}`}>
-            {lang === 'th' && article.summaryTh ? article.summaryTh :
-              lang === 'kh' && article.summaryKh ? article.summaryKh :
-                article.summaryEn || article.summary}
-          </p>
-
-          {/* Key Points */}
-          {article.keyPoints && article.keyPoints.length > 0 && (
-            <div>
-              <p className="text-[10px] font-mono font-bold uppercase opacity-60 mb-1">{t.keyPoints}</p>
-              <ul className="space-y-1">
-                {article.keyPoints.map((point: string, i: number) => (
-                  <li key={i} className="text-[11px] flex items-start gap-1.5">
-                    <span className="text-green-600 mt-0.5">▸</span>
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
+        <div className="flex-1 py-2.5 px-4">
+          {/* Metadata Row - Condensed */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-riso-ink/50">
+                {article.source}
+              </span>
+              {article.isVerified && <CheckCircle className="w-2.5 h-2.5 text-riso-ink/20" />}
             </div>
-          )}
-
-          {/* Entities */}
-          {article.entities && article.entities.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {article.entities.map((entity: string, i: number) => (
-                <span key={i} className="text-[9px] font-mono bg-riso-ink/10 px-1.5 py-0.5 rounded">
-                  {entity}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Source Type Badge */}
-          <div className="flex items-center justify-between">
-            <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded ${article.sourceType === 'government' ? 'bg-blue-100 text-blue-700' :
-              article.sourceType === 'media' ? 'bg-purple-100 text-purple-700' :
-                article.sourceType === 'agency' ? 'bg-orange-100 text-orange-700' :
-                  'bg-gray-100 text-gray-700'
-              }`}>
-              {t[article.sourceType as keyof typeof t] || article.sourceType}
-            </span>
-            <span className={`text-[9px] font-mono ${article.sentiment === 'positive' ? 'text-green-600' :
-              article.sentiment === 'negative' ? 'text-red-600' :
-                'text-gray-600'
-              }`}>
-              {article.sentiment === 'positive' ? `↑ ${t.positive}` :
-                article.sentiment === 'negative' ? `↓ ${t.negative}` :
-                  `→ ${t.neutral}`}
+            <span className="text-[9px] font-mono text-riso-ink/30 uppercase" suppressHydrationWarning>
+              {formatRelativeTime(article.publishedAt, article.fetchedAt)}
             </span>
           </div>
+
+          {/* Headline - Standard Sentence Case, Slightly smaller */}
+          <h5 className={`font-bold text-[15px] leading-tight text-riso-ink tracking-tight transition-colors ${lang === 'kh' ? 'font-mono' : lang === 'th' ? 'font-mono' : ''}`}>
+            {lang === 'th' && article.titleTh ? article.titleTh :
+              lang === 'kh' && article.titleKh ? article.titleKh :
+                article.titleEn || article.title}
+          </h5>
+
+          {/* Minimal Stats Row - Always Visible */}
+          <div className="flex items-center gap-3 mt-1.5 transition-opacity">
+            <div className="flex items-center gap-2 flex-1">
+              <span className="text-[9px] font-mono font-bold uppercase tracking-widest opacity-25">{t.credibility}</span>
+              <div className="flex-1 h-[2px] bg-riso-ink/5">
+                <div
+                  className={`h-full ${(article.credibility ?? 50) >= 70 ? 'bg-green-600' : (article.credibility ?? 50) >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  style={{ width: `${article.credibility ?? 50}%` }}
+                />
+              </div>
+            </div>
+            <span className="text-[10px] font-mono text-riso-ink/30">{article.credibility ?? 50}%</span>
+          </div>
+
+          {/* Detail Section */}
+          {isExpanded && (
+            <div className="mt-3 pt-3 border-t border-dashed border-riso-ink/20 space-y-3">
+              <p className={`text-[13px] text-riso-ink/70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'font-mono' : 'font-serif'}`}>
+                {lang === 'th' && article.summaryTh ? article.summaryTh :
+                  lang === 'kh' && article.summaryKh ? article.summaryKh :
+                    article.summaryEn || article.summary}
+              </p>
+            </div>
+          )}
         </div>
-      )
-      }
-    </li >
+      </div>
+    </li>
+
   );
 };
 
-// Category Filter Pills
+// Category Filter Editorial Tabs
 const CategoryFilter = ({
   selected,
   onChange,
   perspective,
+  itemCount,
   lang = 'en'
 }: {
   selected: string | null;
   onChange: (cat: string | null) => void;
   perspective: 'thailand' | 'cambodia';
+  itemCount: number;
   lang?: 'en' | 'th' | 'kh';
 }) => {
   const categories = [
     { key: null, label: TRANSLATIONS[lang as Lang].all },
-    { key: 'military', label: '🎖️' },
-    { key: 'political', label: '🏛️' },
-    { key: 'humanitarian', label: '❤️' },
-    { key: 'diplomatic', label: '🤝' },
+    { key: 'military', label: 'Military' }, // Standardize to text for magazine feel
+    { key: 'political', label: 'Political' },
+    { key: 'humanitarian', label: 'Aid' },
+    { key: 'diplomatic', label: 'Diplomacy' },
   ];
 
-  const activeColor = perspective === 'thailand' ? 'bg-[#241D4F] text-white' : 'bg-[#032EA1] text-white';
-
   return (
-    <div className="flex gap-1 mb-2">
-      {categories.map(cat => (
-        <button
-          key={cat.key || 'all'}
-          onClick={() => onChange(cat.key)}
-          className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${selected === cat.key ? activeColor : 'bg-riso-ink/10 hover:bg-riso-ink/20'
-            }`}
-        >
-          {cat.label}
-        </button>
-      ))}
+    <div className="flex items-center justify-between px-4 pt-1 border-b border-riso-ink/10">
+      <div className="flex gap-3">
+        {categories.map(cat => (
+          <button
+            key={cat.key || 'all'}
+            onClick={() => onChange(cat.key)}
+            className={`pb-1.5 text-[10px] font-mono font-bold uppercase tracking-widest transition-all ${selected === cat.key
+              ? `text-riso-ink border-b-2 border-riso-ink`
+              : 'text-riso-ink/65 hover:text-riso-ink border-b-2 border-transparent'
+              }`}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+      <span className="font-mono text-[9px] opacity-30 uppercase pb-1.5">{itemCount} UPDATES</span>
     </div>
   );
 };
 
-// Intelligence Log Component - Scrollable feed with filters
+// Intelligence Log Component - Editorial Feed
 const IntelligenceLog = ({
   articles,
   perspective,
@@ -1110,59 +1081,56 @@ const IntelligenceLog = ({
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Filter articles by category and sort by most recent
   const filteredArticles = (articles?.filter(a =>
     categoryFilter ? a.category === categoryFilter : true
   ) || []).sort((a, b) => {
     const timeA = a.publishedAt || a.fetchedAt;
     const timeB = b.publishedAt || b.fetchedAt;
-    return timeB - timeA; // Descending (newest first)
+    return timeB - timeA;
   });
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="font-mono text-xs font-bold uppercase">{TRANSLATIONS[lang as Lang].intelligenceLog}</h4>
-        <span className={`font-mono opacity-50 ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[9px]'}`}>{filteredArticles.length} {TRANSLATIONS[lang as Lang].items}</span>
-      </div>
+    <div className="flex flex-col flex-1 min-h-0 border border-riso-ink/20">
+      <div className="flex flex-col flex-1 min-h-0">
+        <CategoryFilter
+          selected={categoryFilter}
+          onChange={setCategoryFilter}
+          perspective={perspective}
+          itemCount={filteredArticles.length}
+          lang={lang}
+        />
 
-      <CategoryFilter
-        selected={categoryFilter}
-        onChange={setCategoryFilter}
-        perspective={perspective}
-        lang={lang}
-      />
-
-      {/* Scrollable Container - fixed height shows ~3 articles, scroll for more */}
-      <div className="flex-1 max-h-[280px] overflow-y-auto border border-riso-ink/10 rounded bg-white/50 scrollbar-thin">
-        {isLoading ? (
-          <div className="h-full flex items-center justify-center">
-            <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
-          </div>
-        ) : filteredArticles.length > 0 ? (
-          <ul className="divide-y divide-riso-ink/5">
-            {filteredArticles.map((article) => (
-              <NewsItem
-                key={article._id}
-                article={article}
-                perspective={perspective}
-                lang={lang}
-                isExpanded={expandedId === article._id}
-                onToggle={() => setExpandedId(expandedId === article._id ? null : article._id)}
-              />
-            ))}
-          </ul>
-        ) : (
-          <div className="h-full flex items-center justify-center">
-            <p className="text-xs font-mono opacity-40">
-              {categoryFilter ? (
-                <>
-                  {t.noArticlesFiltered} <span className="opacity-50">({categoryFilter})</span>
-                </>
-              ) : t.noArticles}
-            </p>
-          </div>
-        )}
+        {/* Scrollable Feed */}
+        <div className="flex-1 max-h-[350px] overflow-y-auto scrollbar-thin">
+          {isLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
+            </div>
+          ) : filteredArticles.length > 0 ? (
+            <ul className="pr-1">
+              {filteredArticles.map((article) => (
+                <NewsItem
+                  key={article._id}
+                  article={article}
+                  perspective={perspective}
+                  lang={lang}
+                  isExpanded={expandedId === article._id}
+                  onToggle={() => setExpandedId(expandedId === article._id ? null : article._id)}
+                />
+              ))}
+            </ul>
+          ) : (
+            <div className="h-full flex items-center justify-center opacity-40 text-center py-8">
+              <p className="text-[11px] font-mono tracking-widest uppercase">
+                {categoryFilter ? (
+                  <>
+                    {t.noArticlesFiltered} <span className="opacity-50">[{categoryFilter}]</span>
+                  </>
+                ) : t.noArticles}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1289,14 +1257,14 @@ const MilitaryIntensityGauge = ({
     AGGRESSIVE: 'bg-red-500/10 border-red-500/30',
   };
 
-  const labelFontSize = (lang === 'th' || lang === 'kh') ? 'text-[14px]' : 'text-[11px]';
+  const labelFontSize = (lang === 'th' || lang === 'kh') ? 'text-[15px]' : 'text-[12px]';
 
   return (
     <div className="mb-4">
       {/* Title and Intensity Number Row */}
       <div className="flex items-center justify-between mb-2">
-        <h4 className={`font-mono font-bold uppercase opacity-60 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.postureGaugeTitle || t.militaryIntensity}</h4>
-        <span className="text-[10px] font-mono opacity-80 font-bold">{displayIntensity}/100</span>
+        <h4 className={`font-mono font-bold uppercase opacity-60 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.postureGaugeTitle || t.militaryIntensity}</h4>
+        <span className={`font-mono opacity-80 font-bold ${lang === 'kh' || lang === 'th' ? 'text-[12px]' : 'text-[10px]'}`}>{displayIntensity}/100</span>
       </div>
 
       {/* Gradient Gauge Bar */}
@@ -2500,23 +2468,24 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
                 <Card title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
-                  <div className="stats-grid grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                  <div className="stats-grid grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                     {/* Displaced Civilians */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between min-h-24">
-                      <div>
-                        <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.displacedCivilians}</h4>
-                        <span className="font-display text-4xl md:text-5xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString()}</span>
-                      </div>
+                    <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.displacedCivilians}</h4>
+                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString()}</span>
                       {/* Trend Indicator - Show last updated instead */}
-                      <div className={`font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-xs' : 'text-[10px]'}`}>
+                      <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} leading-tight`}>
                         {dashboardStats?.lastUpdatedAt ? (
-                          <span>{t.lastUpdated}: {(() => {
-                            const d = new Date(dashboardStats.lastUpdatedAt);
-                            const day = d.getDate();
-                            const month = lang === 'kh' ? KH_MONTHS[d.getMonth()] : lang === 'th' ? TH_MONTHS_SHORT[d.getMonth()] : d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-                            const time = d.toLocaleTimeString(lang === 'th' ? 'th-TH' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-                            return `${month} ${day}, ${time}`;
-                          })()}</span>
+                          <span className="block" title={`${t.lastUpdated}: ${new Date(dashboardStats.lastUpdatedAt).toLocaleString()}`}>
+                            {t.lastUpdated} {(() => {
+                              const d = new Date(dashboardStats.lastUpdatedAt);
+                              const day = d.getDate();
+                              const month = lang === 'kh' ? KH_MONTHS[d.getMonth()] : lang === 'th' ? TH_MONTHS_SHORT[d.getMonth()] : d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+                              const time = d.toLocaleTimeString(lang === 'th' || lang === 'kh' ? 'en-GB' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: lang === 'en' });
+                              return <>{month} {day} <span className="hidden md:inline ml-1">{time}</span></>;
+                            })()}
+                          </span>
                         ) : (
                           <span>{t.estimated}</span>
                         )}
@@ -2524,48 +2493,41 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     </div>
 
                     {/* Fatalities (Replaces old Injuries box position) */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between min-h-24">
-                      <div>
-                        <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.fatalities}</h4>
-                        <span className="font-display text-4xl md:text-5xl text-riso-ink leading-none">{dashboardStats?.casualtyCount || 0}</span>
-                      </div>
-                      <div className="text-[10px] font-mono text-riso-accent font-bold uppercase tracking-wider">{t.confirmedOnly}</div>
+                    <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.fatalities}</h4>
+                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{dashboardStats?.casualtyCount || 0}</span>
+                      <div className={`mt-3 font-mono text-riso-accent font-bold uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.confirmedOnly}</div>
                     </div>
 
                     {/* Injuries - Split into Civilian / Military */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col justify-between min-h-24">
+                    <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       {/* Top: Title + Numbers */}
-                      <div>
-                        <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.injured}</h4>
-                        <div className="flex items-center gap-4">
-                          {/* Civilian */}
-                          <span className="font-display text-4xl md:text-6xl text-riso-ink leading-none">{dashboardStats?.civilianInjuredCount || 0}</span>
-                          {/* Divider */}
-                          <div className="w-px h-10 bg-riso-ink/20"></div>
-                          {/* Military */}
-                          <span className="font-display text-4xl md:text-6xl text-riso-ink leading-none">{dashboardStats?.militaryInjuredCount || 0}</span>
+                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.injured}</h4>
+                      <div className="flex items-start gap-6">
+                        {/* Civilian */}
+                        <div className="text-left">
+                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{dashboardStats?.civilianInjuredCount || 0}</span>
+                          <span className={`mt-2 font-mono opacity-50 uppercase tracking-tighter md:tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.civilian}</span>
                         </div>
-                      </div>
-                      {/* Bottom: Labels */}
-                      <div className="flex items-center gap-4">
-                        <span className={`font-mono opacity-50 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[9px]'}`}>{t.civilian}</span>
-                        <div className="w-px h-3 bg-transparent"></div>
-                        <span className={`font-mono opacity-50 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[9px]'}`}>{t.military}</span>
+                        {/* Military */}
+                        <div className="text-left">
+                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{dashboardStats?.militaryInjuredCount || 0}</span>
+                          <span className={`mt-2 font-mono opacity-50 uppercase tracking-tighter md:tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.military}</span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Status / Threat Level - Uses dashboardStats for conflict level */}
-                    <div className="bg-riso-ink/5 p-4 border border-riso-ink/10 flex flex-col min-h-24">
-                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]'}`}>{t.threatLevel}</h4>
-                      <div className="flex-1 flex items-center">
-                        <span className={`font-display text-4xl md:text-5xl leading-none uppercase ${(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
-                          (dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'
-                          }`}>
-                          {(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? t.critical :
-                            (dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'ELEVATED' ? t.elevated :
-                              t.low}
-                        </span>
-                      </div>
+                    <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.threatLevel}</h4>
+                      <span className={`font-display text-3xl md:text-5xl leading-none uppercase ${(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
+                        (dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'
+                        }`}>
+                        {(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? t.critical :
+                          (dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'ELEVATED' ? t.elevated :
+                            t.low}
+                      </span>
+                      <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.estimated}</div>
                     </div>
                   </div>
                 </Card>
@@ -2586,26 +2548,26 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
                       <div ref={neutralTextRef} className="flex-1 flex flex-col space-y-2 min-h-0 overflow-visible">
                         <div className="mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
-                          <h3 className={`font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-2xl leading-normal' : lang === 'kh' ? 'text-2xl leading-normal' : 'text-3xl leading-none'}`}>
+                          <h3 className={`font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
                             {t.situationReport}
                           </h3>
                           <div className="px-3 py-1.5 border border-dashed border-riso-ink/40 bg-riso-ink/[0.03] flex items-center justify-center">
-                            <span className={`font-mono font-black uppercase tracking-[0.2em] leading-none text-riso-ink/70 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                            <span className={`font-mono font-black uppercase tracking-[0.2em] leading-none text-riso-ink/70 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>
                               {t.aiSynthesis}
                             </span>
                           </div>
                         </div>
 
-                        <div className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
+                        <div className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
                           {getSummary(neutralMeta) || t.analyzingFeeds}
                         </div>
 
                         {getKeyEvents(neutralMeta).length > 0 && (
                           <div className="mt-auto pt-2 border-t border-riso-ink/10">
-                            <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.keyDevelopments}:</p>
+                            <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{t.keyDevelopments}:</p>
                             <ul className="list-disc pl-4 space-y-1">
                               {getKeyEvents(neutralMeta).map((event: string, i: number) => (
-                                <li key={i} className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-[13.5px]'}`}>{event}</li>
+                                <li key={i} className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{event}</li>
                               ))}
                             </ul>
                           </div>
@@ -2629,7 +2591,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                           <h4 className={`font-mono font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.officialNarrative}</h4>
                           {getNarrative(cambodiaMeta) ? (
                             <>
-                              <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[17px] font-mono leading-relaxed' : lang === 'th' ? 'text-[17px] font-mono' : 'text-base font-serif'}`}>
+                              <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
                                 "{getNarrative(cambodiaMeta)}"
                               </p>
                               <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta.narrativeSource || t.aiAnalysis}</p>
@@ -2677,7 +2639,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                           <h4 className={`font-mono font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.officialNarrative}</h4>
                           {getNarrative(thailandMeta) ? (
                             <>
-                              <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[17px] font-mono leading-relaxed' : lang === 'th' ? 'text-[17px] font-mono' : 'text-base font-serif'}`}>
+                              <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
                                 "{getNarrative(thailandMeta)}"
                               </p>
                               <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta.narrativeSource || t.aiAnalysis}</p>
