@@ -660,29 +660,39 @@ type Lang = 'en' | 'th' | 'kh';
 const usePersistentQuery = (query: any, args: any, storageKey: string, skip: boolean = false) => {
   // When skip is true, we use Convex's "skip" sentinel to prevent subscription
   const convexData = useQuery(query, skip ? "skip" : args);
-  const [localData, setLocalData] = useState<any>(null);
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    // Skip all localStorage operations when skipped
-    if (skip) {
-      setIsHydrated(true);
-      return;
-    }
-
-    // Hydrate from local storage on mount
+  // Synchronous hydration attempt (for instant render on refresh)
+  // This avoids the "flash of loading" by reading localStorage immediately if available.
+  const [localData, setLocalData] = useState<any>(() => {
+    if (skip) return null;
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(storageKey);
       if (cached) {
         try {
-          setLocalData(JSON.parse(cached));
+          return JSON.parse(cached);
         } catch (e) {
           console.error("Failed to parse cache for", storageKey, e);
         }
       }
+    }
+    return null;
+  });
+
+  const [isHydrated, setIsHydrated] = useState(!!localData || skip);
+
+  // Fallback hydration effect (for SSR mismatch safety)
+  useEffect(() => {
+    if (skip || isHydrated) return; // Already hydrated synchronously
+
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(storageKey);
+      if (cached && !localData) {
+        try {
+          setLocalData(JSON.parse(cached));
+        } catch (e) { }
+      }
       setIsHydrated(true);
     }
-  }, [storageKey, skip]);
+  }, [storageKey, skip, isHydrated]);
 
   useEffect(() => {
     // Skip localStorage writes when skipped
@@ -734,34 +744,51 @@ const useCachedQuery = <T,>(
 
   // When skip is true, return immediately without any operations
   // This hook still needs to be called (React rules), but it does nothing
-  const [data, setData] = useState<T | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(!skip);
+  // Synchronous hydration (instant load)
+  // Initializes state directly from localStorage if available, skipping the initial blank render
+  const [data, setData] = useState<T | undefined>(() => {
+    if (skip) return undefined;
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          // Also optimistically set the ref so fetching logic knows we have data
+          // Note: refs set during render are safe here as they don't trigger re-renders
+          return parsed.data;
+        } catch (e) {
+          console.error("Failed to parse cache for", storageKey, e);
+        }
+      }
+    }
+    return undefined;
+  });
+
+  const [isLoading, setIsLoading] = useState(!skip && data === undefined);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(skip);
+  const [isHydrated, setIsHydrated] = useState(data !== undefined || skip);
   const lastFetchedAt = useRef<number | null>(null);
   const hasDoneInitialFetch = useRef(skip);
 
   // Use passed prop if available, otherwise fall back to global ref
   const effectiveLastResearchAt = lastResearchAt ?? globalLastResearchAt.current;
 
-  // Hydrate from localStorage on mount (skip if ISR provides data)
+  // Fallback hydration (for SSR safety) - only runs if sync hydration failed/was skipped
   useEffect(() => {
-    if (skip) return;
+    if (skip || isHydrated) return;
 
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(storageKey);
-      if (cached) {
+      if (cached && data === undefined) {
         try {
           const parsed = JSON.parse(cached);
           setData(parsed.data);
           lastFetchedAt.current = parsed.fetchedAt || 0;
-        } catch (e) {
-          console.error("Failed to parse cache for", storageKey, e);
-        }
+        } catch (e) { }
       }
       setIsHydrated(true);
     }
-  }, [storageKey, skip]);
+  }, [storageKey, skip, isHydrated]);
 
   // Fetch data function (skip if ISR provides data)
   const fetchData = useCallback(async () => {
@@ -2143,12 +2170,150 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   // Detect if we're in a pending view transition state
   const isContentPending = viewMode !== deferredViewMode;
 
+  // --- CASCADE LAYOUT LOGIC (The "Squeeze" Algorithm) ---
+  const layoutContainerRef = useRef<HTMLDivElement>(null);
+  const neutralTextRef = useRef<HTMLDivElement>(null);
+
+  // Track the last "signature" of the content we sized for.
+  const lastContentSignature = useRef<string>('');
+  const isFirstRun = useRef(true);
+  const [isLayoutReady, setIsLayoutReady] = useState(false);
+
+
+
+  // Derived values for deps & signature
+  const currentSummary = getSummary(neutralMeta);
+  const keyEventsString = getKeyEvents(neutralMeta).join('|');
+
+  useLayoutEffect(() => {
+    const container = layoutContainerRef.current;
+    const textEl = neutralTextRef.current;
+
+    // Guard: Only run in Analysis mode and if elements exist
+    if (!container || !textEl || !isDesktop || viewMode !== 'ANALYSIS') return;
+
+    // Generate a signature for current content
+    const contentSignature = `${lang}-${currentSummary?.length || 0}-${keyEventsString}-${neutralMetaLoading}`;
+
+    const adjustLayout = (forceReset: boolean) => {
+      // 0. DISABLE TRANSITION
+      const originalTransition = container.style.transition;
+      container.style.transition = 'none';
+
+      // 1. DETERMINE START WIDTH
+      // Strategy: Try to restore from cache first to prevent "flash of small width".
+      // If content changed (forceReset), we must start small (1600) to find new snug fit.
+      let currentWidth = 1600;
+      const cacheKey = `bc_layout_width_${lang}`;
+
+      if (!forceReset) {
+        // Priority 1: Current DOM state (if valid)
+        if (container.style.maxWidth) {
+          const parsed = parseInt(container.style.maxWidth);
+          if (!isNaN(parsed) && parsed >= 1600) currentWidth = parsed;
+        }
+        // Priority 2: Cache (for fresh reloads)
+        else {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = parseInt(cached);
+            if (!isNaN(parsed) && parsed >= 1600) currentWidth = parsed;
+          }
+        }
+      } else {
+        // Explicit reset logic for new content
+        container.style.maxWidth = '1600px';
+        currentWidth = 1600;
+      }
+
+      // Ensure starting state is applied before measuring
+      container.style.maxWidth = `${currentWidth}px`;
+
+      // 2. MEASURE & GROW (Loop)
+      const checkOverflow = () => textEl.scrollHeight > textEl.clientHeight + 1;
+      let iterations = 0;
+      const MAX_ITERATIONS = 50;
+
+      while (checkOverflow() && currentWidth < 2000 && iterations < MAX_ITERATIONS) {
+        currentWidth += 10;
+        container.style.maxWidth = `${currentWidth}px`;
+        iterations++;
+      }
+
+      // Save final width to cache
+      localStorage.setItem(cacheKey, currentWidth.toString());
+
+      // 3. RESTORE TRANSITION
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // Strictly remove the inline override so CSS classes take over
+          container.style.removeProperty('transition');
+
+          // Trigger visibility AFTER transition is definitely restored
+          setTimeout(() => {
+            setIsLayoutReady(true);
+          }, 100);
+        });
+      });
+    };
+
+    // LOGIC:
+    // If the content signature has changed since last time, we MUST reset to 1600px.
+    // EXCEPTION: On the very first run, we prefer the CACHE over a hard reset to prevent layout jumping.
+    let hasContentChanged = contentSignature !== lastContentSignature.current;
+
+    if (isFirstRun.current) {
+      hasContentChanged = false; // Force usage of cache on first load
+      isFirstRun.current = false;
+    }
+
+    // Run Synchronously
+    adjustLayout(hasContentChanged);
+
+    // Reveal IMMEDIATELY after calculation. 
+    // We do NOT wait for 100ms here because the transition was just re-enabled in the RAF chain above.
+    // The previous lag was likely waiting for safety timers.
+    if (!isLayoutReady) {
+      // Using a minimal timeout just to exit the current call stack and let the browser paint the "opacity-0" frame
+      setTimeout(() => setIsLayoutReady(true), 30);
+    }
+
+    // Update signature *after* the run
+    lastContentSignature.current = contentSignature;
+
+    // Async Re-checks (Fonts, etc) - NEVER reset, only expand if needed
+    const reCheck = () => adjustLayout(false);
+
+    document.fonts.ready.then(reCheck);
+    const timer = setTimeout(reCheck, 200);
+
+    return () => clearTimeout(timer);
+
+  }, [
+    // Trigger on content changes (Primitives only for stability)
+    keyEventsString, // Track list changes
+    neutralMetaLoading,
+    neutralMetaRefreshing,
+    currentSummary,
+    t.analyzingFeeds,
+    lang,
+    viewMode,
+    isDesktop
+  ]);
+
   return (
     <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass}`}>
       {/* Top spacer - flexes equally with bottom */}
       <div />
       <div
-        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full transition-[max-width] duration-300 ease-out max-w-[1800px]"
+        ref={layoutContainerRef}
+        suppressHydrationWarning={true}
+        className={`dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full transition-all duration-300 ease-out ${isLayoutReady ? 'opacity-100' : 'opacity-0'}`}
+        style={{
+          maxWidth: typeof window !== 'undefined'
+            ? (localStorage.getItem(`bc_layout_width_${lang}`) ? `${localStorage.getItem(`bc_layout_width_${lang}`)}px` : '1600px')
+            : '1600px'
+        }}
       >
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
@@ -2461,8 +2626,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div className="flex-1 flex flex-col space-y-4 min-h-0 overflow-visible">
-                        <div className="mb-4 flex items-center justify-between">
+                      <div ref={neutralTextRef} className="flex-1 flex flex-col space-y-4 min-h-0 overflow-hidden">
+                        <div className="mb-2 flex items-center justify-between">
                           <h3 className="font-display text-3xl leading-normal overflow-visible">
                             {t.situationReport}
                           </h3>
