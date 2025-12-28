@@ -293,7 +293,8 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
     // Extract JSON
     const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
     if (!tagMatch) {
-        console.log("❌ [PLANNER] No JSON found");
+        console.log("❌ [PLANNER] No JSON found in API response");
+        console.log("ℹ️ [PLANNER] Will fall back to default article selection");
         return null;
     }
 
@@ -305,6 +306,7 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
     }
 
     console.log("❌ [PLANNER] Invalid result structure or parse failed");
+    console.log("ℹ️ [PLANNER] Will fall back to default article selection");
     return null;
 }
 
@@ -498,6 +500,7 @@ Rules:
     }
 
     console.log("❌ [HISTORIAN] All JSON parse attempts failed");
+    console.log("ℹ️ [HISTORIAN] No timeline changes will be made - existing events preserved");
     return null;
 }
 
@@ -651,6 +654,7 @@ export const runHistorianCycle = internalAction({
 
         if (!historianResult || !historianResult.actions) {
             console.log("❌ [HISTORIAN] No valid result from AI");
+            console.log("ℹ️ [HISTORIAN] No timeline changes will be made - existing events preserved");
             return { processed: 0, eventsCreated: 0, eventsUpdated: 0, sourcesMerged: 0, archived: 0, discarded: 0 };
         }
 
@@ -1061,7 +1065,8 @@ Find duplicate or related events that should be merged.Output JSON with your mer
             response.match(/\{[\s\S]*"mergeActions"[\s\S]*\}/);
 
         if (!jsonMatch) {
-            console.log("❌ [CLEANUP] No JSON found in response");
+            console.log("❌ [CLEANUP] No JSON found in API response");
+            console.log("ℹ️ [CLEANUP] No changes will be made - existing timeline preserved");
             return { eventsUpdated: 0, eventsDeleted: 0, summary: "AI returned no actions" };
         }
 
@@ -1071,6 +1076,7 @@ Find duplicate or related events that should be merged.Output JSON with your mer
             result = JSON.parse(jsonStr.trim());
         } catch (e) {
             console.log(`❌[CLEANUP] JSON parse error: ${e} `);
+            console.log("ℹ️ [CLEANUP] No changes will be made - existing timeline preserved");
             return { eventsUpdated: 0, eventsDeleted: 0, summary: "Failed to parse AI response" };
         }
 

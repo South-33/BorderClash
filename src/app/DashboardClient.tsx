@@ -153,6 +153,7 @@ const TRANSLATIONS = {
     systemOnline: "SYSTEM ONLINE",
     error: "ERROR",
     awaitingAnalysis: "Awaiting analysis...",
+    analysisPending: "Analysis pending — data will appear after next sync cycle.",
     keyPoints: "Key Points",
     positive: "Positive",
     negative: "Negative",
@@ -333,6 +334,7 @@ const TRANSLATIONS = {
     systemOnline: "ระบบพร้อมใช้งาน",
     error: "ขัดข้อง",
     awaitingAnalysis: "รอผลวิเคราะห์...",
+    analysisPending: "กำลังรอการวิเคราะห์ — ข้อมูลจะแสดงหลังรอบซิงค์ถัดไป",
     keyPoints: "ประเด็นที่น่าสนใจ",
     positive: "ทางบวก",
     negative: "ทางลบ",
@@ -513,6 +515,7 @@ const TRANSLATIONS = {
     systemOnline: "ដំណើរការធម្មតា",
     error: "មានបញ្ហា",
     awaitingAnalysis: "កំពុងរង់ចាំការវិភាគ...",
+    analysisPending: "កំពុងរង់ចាំការវិភាគ — ទិន្នន័យនឹងបង្ហាញបន្ទាប់ពីវដ្តសមកាលកម្មបន្ទាប់។",
     keyPoints: "ចំណុចសំខាន់ៗ",
     positive: "វិជ្ជមាន", // Positive
     negative: "អវិជ្ជមាន", // Negative
@@ -615,7 +618,7 @@ const TRANSLATIONS = {
     statelessApproach: "មិនកាន់ជើង ហើយមិនជឿអ្នកណាទាំងអស់",
     statelessDesc: "យើងមិនជឿសម្តីអ្នកណាទេ។ យើងមិននៅខាងថៃ ហើយក៏មិននៅខាងខ្មែរដែរ។ យើងដើរផ្លូវកណ្តាលបុកទៅរកការពិត។",
     aiAnalysis: "ការវិភាគដោយ AI",
-    aiSynthesis: "ការសង្ខេបដោយ AI",
+    aiSynthesis: "សង្ខេបដោយ AI",
     intelReport: "របាយការណ៍ចារកម្ម",
     date: "កាលបរិច្ឆេទ",
     category: "ប្រភេទ",
@@ -660,29 +663,39 @@ type Lang = 'en' | 'th' | 'kh';
 const usePersistentQuery = (query: any, args: any, storageKey: string, skip: boolean = false) => {
   // When skip is true, we use Convex's "skip" sentinel to prevent subscription
   const convexData = useQuery(query, skip ? "skip" : args);
-  const [localData, setLocalData] = useState<any>(null);
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    // Skip all localStorage operations when skipped
-    if (skip) {
-      setIsHydrated(true);
-      return;
-    }
-
-    // Hydrate from local storage on mount
+  // Synchronous hydration attempt (for instant render on refresh)
+  // This avoids the "flash of loading" by reading localStorage immediately if available.
+  const [localData, setLocalData] = useState<any>(() => {
+    if (skip) return null;
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(storageKey);
       if (cached) {
         try {
-          setLocalData(JSON.parse(cached));
+          return JSON.parse(cached);
         } catch (e) {
           console.error("Failed to parse cache for", storageKey, e);
         }
       }
+    }
+    return null;
+  });
+
+  const [isHydrated, setIsHydrated] = useState(!!localData || skip);
+
+  // Fallback hydration effect (for SSR mismatch safety)
+  useEffect(() => {
+    if (skip || isHydrated) return; // Already hydrated synchronously
+
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(storageKey);
+      if (cached && !localData) {
+        try {
+          setLocalData(JSON.parse(cached));
+        } catch (e) { }
+      }
       setIsHydrated(true);
     }
-  }, [storageKey, skip]);
+  }, [storageKey, skip, isHydrated]);
 
   useEffect(() => {
     // Skip localStorage writes when skipped
@@ -734,34 +747,51 @@ const useCachedQuery = <T,>(
 
   // When skip is true, return immediately without any operations
   // This hook still needs to be called (React rules), but it does nothing
-  const [data, setData] = useState<T | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(!skip);
+  // Synchronous hydration (instant load)
+  // Initializes state directly from localStorage if available, skipping the initial blank render
+  const [data, setData] = useState<T | undefined>(() => {
+    if (skip) return undefined;
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          // Also optimistically set the ref so fetching logic knows we have data
+          // Note: refs set during render are safe here as they don't trigger re-renders
+          return parsed.data;
+        } catch (e) {
+          console.error("Failed to parse cache for", storageKey, e);
+        }
+      }
+    }
+    return undefined;
+  });
+
+  const [isLoading, setIsLoading] = useState(!skip && data === undefined);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(skip);
+  const [isHydrated, setIsHydrated] = useState(data !== undefined || skip);
   const lastFetchedAt = useRef<number | null>(null);
   const hasDoneInitialFetch = useRef(skip);
 
   // Use passed prop if available, otherwise fall back to global ref
   const effectiveLastResearchAt = lastResearchAt ?? globalLastResearchAt.current;
 
-  // Hydrate from localStorage on mount (skip if ISR provides data)
+  // Fallback hydration (for SSR safety) - only runs if sync hydration failed/was skipped
   useEffect(() => {
-    if (skip) return;
+    if (skip || isHydrated) return;
 
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(storageKey);
-      if (cached) {
+      if (cached && data === undefined) {
         try {
           const parsed = JSON.parse(cached);
           setData(parsed.data);
           lastFetchedAt.current = parsed.fetchedAt || 0;
-        } catch (e) {
-          console.error("Failed to parse cache for", storageKey, e);
-        }
+        } catch (e) { }
       }
       setIsHydrated(true);
     }
-  }, [storageKey, skip]);
+  }, [storageKey, skip, isHydrated]);
 
   // Fetch data function (skip if ISR provides data)
   const fetchData = useCallback(async () => {
@@ -943,7 +973,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
           {article.isVerified && <CheckCircle className="w-3 h-3 text-green-600" />}
           <span className="text-[10px] font-mono opacity-60">{article.source}</span>
         </div>
-        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap">{formatRelativeTime(article.publishedAt, article.fetchedAt)}</span>
+        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap" suppressHydrationWarning>{formatRelativeTime(article.publishedAt, article.fetchedAt)}</span>
       </div>
 
       {/* Title - use language-specific title if available */}
@@ -1449,95 +1479,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
 
   // =============================================================================
-  // DYNAMIC MOBILE VIEW - Switch to mobile if neutral card text overflows
-  // =============================================================================
-  const neutralContentRef = useRef<HTMLDivElement>(null);
-  const [forceMobileView, setForceMobileView] = useState(false);
-
-  // Dynamic max-width: adjusts based on neutral card content density
-  // Less content = narrower layout (less empty space), more content = wider layout
-  const [dynamicMaxWidth, setDynamicMaxWidth] = useState(1700); // Default middle ground
-  const MIN_WIDTH = 1400;
-  const MAX_WIDTH = 1925;
-
-  // Stable overflow check function - also calculates optimal container width
-  const checkOverflow = useCallback(() => {
-    // Skip on very small screens - let native CSS mobile handle it
-    if (typeof window === 'undefined' || window.innerWidth < 768) {
-      setForceMobileView(false);
-      return;
-    }
-
-    // GUARD: Only apply dynamic layout logic on sufficiently wide screens
-    // Below 1280px (xl breakpoint), the layout is already adapting via CSS
-    if (window.innerWidth < 1280) {
-      setForceMobileView(false);
-      return;
-    }
-
-    if (neutralContentRef.current) {
-      const el = neutralContentRef.current;
-      const contentHeight = el.scrollHeight;
-      const containerHeight = el.clientHeight;
-
-      // Calculate fill ratio: how much of the container the content uses
-      const fillRatio = contentHeight / containerHeight;
-
-      // Check for overflow (content exceeds container)
-      const isOverflowing = contentHeight > containerHeight + 20;
-      setForceMobileView(isOverflowing);
-
-      // Dynamic width calculation based on fill ratio
-      // fillRatio < 0.7 = lots of empty space → shrink width
-      // fillRatio 0.8-1.0 = good fit → optimal width
-      // fillRatio > 1.0 = overflow → expand width (before triggering mobile)
-
-      let optimalWidth: number;
-      if (fillRatio > 1.0) {
-        // Overflow - expand to max to try fitting content
-        optimalWidth = MAX_WIDTH;
-      } else if (fillRatio > 0.85) {
-        // Good fit - keep current or slightly expand
-        optimalWidth = Math.min(MAX_WIDTH, dynamicMaxWidth + 50);
-      } else if (fillRatio > 0.7) {
-        // Some empty space - keep stable
-        optimalWidth = dynamicMaxWidth;
-      } else {
-        // Lots of empty space - shrink to make content fill better
-        // The less content, the narrower we go
-        const shrinkFactor = fillRatio / 0.7; // 0.5 → 0.71, 0.7 → 1.0
-        optimalWidth = Math.max(MIN_WIDTH, dynamicMaxWidth * shrinkFactor);
-      }
-
-      // Only update if change is significant (>50px) to avoid jitter
-      if (Math.abs(optimalWidth - dynamicMaxWidth) > 50) {
-        setDynamicMaxWidth(Math.round(optimalWidth));
-      }
-    }
-  }, [dynamicMaxWidth]);
-
-  // Check on resize
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
-    const handleResize = () => {
-      clearTimeout(timeoutId);
-      // Check after layout settles (no reset needed - checkOverflow handles state)
-      timeoutId = setTimeout(checkOverflow, 150);
-    };
-
-    // Initial check
-    timeoutId = setTimeout(checkOverflow, 300);
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timeoutId);
-    };
-  }, [checkOverflow]);
-
-
-  // =============================================================================
   // ISR-AWARE DATA LOADING
   // If initialData is provided (from server-side ISR), we SKIP all Convex calls.
   // This means ZERO Convex bandwidth per user - data comes from Vercel's cache!
@@ -1696,15 +1637,16 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     shouldSkip
   );
 
-  // Final data: prefer server data (if not stale), fall back to client data
-  const thailandNews = shouldSkip ? initialData.thailandNews : clientThailandNews;
-  const cambodiaNews = shouldSkip ? initialData.cambodiaNews : clientCambodiaNews;
-  const thailandMeta = shouldSkip ? initialData.thailandAnalysis : clientThailandMeta;
-  const cambodiaMeta = shouldSkip ? initialData.cambodiaAnalysis : clientCambodiaMeta;
-  const neutralMeta = shouldSkip ? initialData.neutralAnalysis : clientNeutralMeta;
-  const dashboardStats = shouldSkip ? initialData.dashboardStats : clientDashboardStats;
-  const articleCounts = shouldSkip ? initialData.articleCounts : clientArticleCounts;
-  const timelineEvents = shouldSkip ? initialData.timelineEvents : clientTimelineEvents;
+  // Final data: prefer server data if skipping, otherwise use client data WITH fallback to server
+  // This ensures we never show empty/placeholder states when valid cached data exists
+  const thailandNews = shouldSkip ? initialData.thailandNews : (clientThailandNews ?? initialData?.thailandNews ?? []);
+  const cambodiaNews = shouldSkip ? initialData.cambodiaNews : (clientCambodiaNews ?? initialData?.cambodiaNews ?? []);
+  const thailandMeta = shouldSkip ? initialData.thailandAnalysis : (clientThailandMeta ?? initialData?.thailandAnalysis);
+  const cambodiaMeta = shouldSkip ? initialData.cambodiaAnalysis : (clientCambodiaMeta ?? initialData?.cambodiaAnalysis);
+  const neutralMeta = shouldSkip ? initialData.neutralAnalysis : (clientNeutralMeta ?? initialData?.neutralAnalysis);
+  const dashboardStats = shouldSkip ? initialData.dashboardStats : (clientDashboardStats ?? initialData?.dashboardStats);
+  const articleCounts = shouldSkip ? initialData.articleCounts : (clientArticleCounts ?? initialData?.articleCounts);
+  const timelineEvents = shouldSkip ? initialData.timelineEvents : (clientTimelineEvents ?? initialData?.timelineEvents ?? []);
 
   // Loading states: if we have server data, we're never "loading"
   const thNewsLoading = hasServerData ? false : clientThNewsLoading;
@@ -1716,36 +1658,14 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const countsLoading = hasServerData ? false : clientCountsLoading;
   const timelineLoading = hasServerData ? false : clientTimelineLoading;
 
-  // Re-check overflow when content or language changes - smart check to avoid flash
-  // NOTE: We deliberately do NOT include forceMobileView in deps to prevent infinite loop
-  // (overflow → mobile → no overflow → desktop → overflow → ...)
+  // Track if we're on desktop (xl+ breakpoint) for conditional CSS
+  const [isDesktop, setIsDesktop] = useState(true);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Skip on very small screens
-      if (typeof window === 'undefined' || window.innerWidth < 768) {
-        setForceMobileView(false);
-        return;
-      }
-
-      // GUARD: Only apply dynamic mobile view on wide screens (same as main check)
-      if (window.innerWidth < 1280) {
-        setForceMobileView(false);
-        return;
-      }
-
-      // Check overflow state without changing view first
-      if (neutralContentRef.current) {
-        const el = neutralContentRef.current;
-        // Use same improved 20px buffer as main overflow check
-        const isOverflowing = el.scrollHeight > el.clientHeight + 20;
-
-        // Only update if state actually needs to change (prevents flash)
-        setForceMobileView(isOverflowing);
-      }
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [neutralMeta, lang]); // Deliberately excluding forceMobileView to prevent feedback loop
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 1280);
+    checkDesktop();
+    window.addEventListener('resize', checkDesktop);
+    return () => window.removeEventListener('resize', checkDesktop);
+  }, []);
 
   // --- Modal Navigation & Touch State ---
 
@@ -1979,13 +1899,10 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     };
   }, [timelineDates, lang]); // Re-initialize when language changes (date headers re-render)
 
-
-  // No longer measuring Neutral Card height as Sidebar is now the master height
-
-  // Measure sidebar height for timeline view sync
+  // Measure sidebar height for layout synchronization
   useLayoutEffect(() => {
     const measureSidebarHeight = () => {
-      if (window.innerWidth >= 768 && sidebarRef.current) {
+      if (window.innerWidth >= 1280 && sidebarRef.current) {
         setSidebarHeight(sidebarRef.current.offsetHeight);
       } else {
         setSidebarHeight(undefined);
@@ -2000,12 +1917,11 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     }
 
     window.addEventListener('resize', measureSidebarHeight);
-
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', measureSidebarHeight);
     };
-  }, [viewMode, lang, isLoading]); // Re-measure for timeline view and when lang/loading changes
+  }, [viewMode, lang, sysStatsLoading]);
 
   // Timer Logic for countdown display
   // Also detect "possibly stale" state when we think the cycle should have completed
@@ -2193,7 +2109,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                         </span>
                       </div>
 
-                      <h4 className={`font-bold leading-tight mb-1 group-hover:text-blue-700 transition-colors ${lang === 'kh' ? 'text-base font-mono leading-relaxed' : lang === 'th' ? 'text-base font-mono' : 'text-sm font-display uppercase tracking-wide'}`}>
+                      <h4 className={`leading-tight mb-1 group-hover:text-blue-700 transition-colors ${lang === 'kh' ? 'font-bold text-base font-mono leading-relaxed' : lang === 'th' ? 'font-bold text-base font-mono' : 'font-semibold text-[15px] font-display uppercase tracking-wide'}`}>
                         {(() => {
                           if (lang === 'th' && event.titleTh) return event.titleTh;
                           if (lang === 'kh' && event.titleKh) return event.titleKh;
@@ -2258,19 +2174,111 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   // Detect if we're in a pending view transition state
   const isContentPending = viewMode !== deferredViewMode;
 
+  // --- SIMPLE SNUG-FIT LAYOUT ---
+  // Calculate optimal width on page load. Recalculates fresh on each refresh
+  // but skips when switching view modes (to prevent bad measurements).
+  const layoutContainerRef = useRef<HTMLDivElement>(null);
+  const neutralTextRef = useRef<HTMLDivElement>(null);
+  const hasCalculated = useRef(false);
+  const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
+  const [isLayoutReady, setIsLayoutReady] = useState(false);
+
+  useLayoutEffect(() => {
+    // Skip if already calculated this session
+    if (hasCalculated.current) {
+      return;
+    }
+
+    const container = layoutContainerRef.current;
+    const textEl = neutralTextRef.current;
+
+    // Only calculate on desktop in Analysis mode when elements exist
+    if (!container || !textEl) return;
+
+    // On mobile or non-Analysis, just show immediately (no snug-fit needed)
+    if (!isDesktop || viewMode !== 'ANALYSIS') {
+      setIsLayoutReady(true);
+      hasCalculated.current = true;
+      return;
+    }
+
+    if (neutralMetaLoading) return;
+
+    const calculateSnugWidth = () => {
+      // STRATEGY: Start BIG, shrink until overflow, then step back + buffer
+      // This ensures all content is rendered before we measure
+      // Dynamic bounds based on viewport (keeps ~1.18 ratio like the original 2000/1700)
+      const viewportWidth = window.innerWidth;
+      const maxWidth = Math.min(viewportWidth * 0.95, 2000); // 95% of viewport, capped at 2000
+      const minWidth = Math.min(viewportWidth * 0.80, 1700); // 80% of viewport, capped at 1700
+      let width = maxWidth;
+
+      container.style.transition = 'none';
+      container.style.maxWidth = `${maxWidth}px`;
+
+      // Force reflow at max size to ensure all content renders
+      void textEl.offsetHeight;
+
+      const checkOverflow = () => {
+        void textEl.offsetHeight; // Force reflow before checking
+        return textEl.scrollHeight > textEl.clientHeight + 2;
+      };
+
+      // Shrink until we find overflow
+      let lastGoodWidth = maxWidth;
+      while (width > minWidth) {
+        container.style.maxWidth = `${width}px`;
+        void textEl.offsetHeight; // Force reflow
+
+        if (checkOverflow()) {
+          // Found overflow - use the last good width
+          break;
+        }
+        lastGoodWidth = width;
+        width -= 25;
+      }
+
+      // Use the last width that didn't overflow, plus 2.5% buffer for other languages
+      const snugWidth = checkOverflow() ? lastGoodWidth : width;
+      const finalWidth = Math.min(Math.round(snugWidth * 1.025), maxWidth);
+
+      // Apply final width
+      container.style.maxWidth = `${finalWidth}px`;
+
+      setLayoutWidth(finalWidth);
+      hasCalculated.current = true;
+
+      // Fade in after a tiny delay to ensure DOM is updated
+      requestAnimationFrame(() => {
+        setIsLayoutReady(true);
+      });
+
+      // Restore transitions
+      requestAnimationFrame(() => {
+        container.style.removeProperty('transition');
+      });
+    };
+
+    // Run after fonts are ready
+    document.fonts.ready.then(() => {
+      requestAnimationFrame(calculateSnugWidth);
+    });
+  }, [isDesktop, viewMode, neutralMetaLoading]);
+
   return (
-    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${forceMobileView ? 'force-mobile' : ''}`}>
+    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass}`}>
       {/* Top spacer - flexes equally with bottom */}
       <div />
       <div
-        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full transition-[max-width] duration-300 ease-out"
-        style={{ maxWidth: `${dynamicMaxWidth}px` }}
+        ref={layoutContainerRef}
+        className={`dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full transition-opacity duration-200 ${isLayoutReady ? 'opacity-100' : 'opacity-0'}`}
+        style={{ maxWidth: layoutWidth ? `${layoutWidth}px` : '1600px' }}
       >
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
 
         {/* Left Sidebar / Header (Mobile Top) */}
-        <aside ref={sidebarRef} className="xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
+        <aside ref={sidebarRef} className="w-full xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
           <div className="border-4 border-riso-ink p-3 bg-riso-paper">
             <h1 className="font-display text-5xl md:text-6xl leading-none tracking-tighter text-riso-ink mb-2">
               BORDER CLASH
@@ -2376,7 +2384,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
           {/* Language Selector */}
           <div className="rough-border p-3 bg-white/50 font-mono flex flex-col gap-2">
-            <div className="flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest text-[10px]">
+            <div className={`flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[10px]'}`}>
               <div className="w-4 h-[1px] bg-riso-ink/20"></div>
               {t.language}
               <div className="flex-1 h-[1px] bg-riso-ink/20"></div>
@@ -2410,13 +2418,12 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
           {/* View Selector */}
           <div className="rough-border p-3 bg-riso-ink/5 font-mono flex flex-col gap-2 text-xs">
-            <div className="flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest text-[10px]">
+            <div className={`flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[10px]'}`}>
               <div className="w-4 h-[1px] bg-riso-ink/20"></div>
               {t.viewMode}
               <div className="flex-1 h-[1px] bg-riso-ink/20"></div>
             </div>
-
-            <div className="grid grid-cols-1 gap-2">
+            <div className={`grid grid-cols-1 gap-2 ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[12px]'}`}>
               {[
                 { id: 'ANALYSIS', label: t.analysis, icon: Search },
                 { id: 'LOSSES', label: t.timeline, icon: Hourglass },
@@ -2481,10 +2488,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 ))}
               </p>
             </div>
-
-            {/* Minimized System Log */}
-            <div className="mt-2 border-t border-dashed border-riso-ink/30 pt-3">
-            </div>
           </div>
         </aside>
 
@@ -2493,7 +2496,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
           {/* ANALYSIS VIEW - Viewport-contained like Timeline */}
           <div className={`xl:col-span-3 ${deferredViewMode !== 'ANALYSIS' ? 'hidden' : ''}`}>
-            <div className="flex flex-col gap-4" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
                 <Card title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
@@ -2568,38 +2571,37 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 </Card>
               </div>
 
-              {/* Three Perspectives Grid - Weighted: Side cards 1fr, Neutral 1.5fr */}
+              {/* Three Perspectives Grid - Equal 1fr columns */}
               <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="perspectives-grid grid grid-cols-1 xl:grid-cols-[1fr_1.20fr_1fr] gap-4 h-full">
+                <div
+                  className={`perspectives-grid grid gap-4 h-full ${isDesktop ? 'grid-cols-3' : 'grid-cols-1'}`}
+                  suppressHydrationWarning
+                >
 
                   {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
                   <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0">
-                    <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
+                    <div className="bg-riso-ink text-riso-paper py-2 px-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2 overflow-visible">
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div ref={neutralContentRef} className="flex-1 flex flex-col space-y-4 min-h-0 overflow-hidden">
-                        <div className="mb-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge type="outline" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t.aiSynthesis}</Badge>
-                            {neutralMeta?.conflictLevel && (
-                              <Badge type="alert" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t[neutralMeta.conflictLevel.toLowerCase() as keyof typeof t] || neutralMeta.conflictLevel}</Badge>
-                            )}
-                          </div>
-                          <h3 className="font-display text-3xl mt-2 leading-none py-1">
+                      <div ref={neutralTextRef} className="flex-1 flex flex-col space-y-2 min-h-0 overflow-visible">
+                        <div className="mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
+                          <h3 className={`font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-2xl leading-normal' : lang === 'kh' ? 'text-2xl leading-normal' : 'text-3xl leading-none'}`}>
                             {t.situationReport}
                           </h3>
-                          <p className="font-mono text-xs opacity-50 mt-1">
-                            {t.autoUpdating}
-                          </p>
+                          <div className="px-3 py-1.5 border border-dashed border-riso-ink/40 bg-riso-ink/[0.03] flex items-center justify-center">
+                            <span className={`font-mono font-black uppercase tracking-[0.2em] leading-none text-riso-ink/70 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                              {t.aiSynthesis}
+                            </span>
+                          </div>
                         </div>
 
-                        <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
+                        <div className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
                           {getSummary(neutralMeta) || t.analyzingFeeds}
                         </div>
 
                         {getKeyEvents(neutralMeta).length > 0 && (
-                          <div className="mb-4">
+                          <div className="mt-auto pt-2 border-t border-riso-ink/10">
                             <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.keyDevelopments}:</p>
                             <ul className="list-disc pl-4 space-y-1">
                               {getKeyEvents(neutralMeta).map((event: string, i: number) => (
@@ -2620,7 +2622,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.cambodia}
                     </div>
-                    <Card className="flex-1 flex flex-col overflow-hidden" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
+                    <Card className="flex-1 flex flex-col overflow-hidden !pb-2" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
                       <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         {/* Official Narrative */}
                         <div>
@@ -2633,7 +2635,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                               <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
-                            <p className="font-mono text-xs opacity-50">{t.awaitingAnalysis}</p>
+                            <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
                           )}
                         </div>
 
@@ -2668,7 +2670,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.thailand}
                     </div>
-                    <Card className="flex-1 flex flex-col overflow-hidden" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
+                    <Card className="flex-1 flex flex-col overflow-hidden !pb-2" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
                       <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         {/* Official Narrative */}
                         <div>
@@ -2681,7 +2683,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                               <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
-                            <p className="font-mono text-xs opacity-50">{t.awaitingAnalysis}</p>
+                            <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
                           )}
                         </div>
 
@@ -2718,7 +2720,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
           {/* LOSSES VIEW */}
           <div className={`xl:col-span-3 ${deferredViewMode !== 'LOSSES' ? 'hidden' : ''}`}>
-            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card title={`${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
 
                 {(!timelineEvents || timelineEvents.length === 0) ? (
@@ -2848,7 +2850,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                               {evtIndex + 1} / {sortedEvents.length}
                             </span>
                           </div>
-                          <h3 className={`font-display text-xl md:text-2xl leading-tight ${lang === 'th' ? 'font-bold' : ''}`}>
+                          <h3 className={`font-display text-xl md:text-2xl leading-snug ${lang === 'th' ? 'font-bold' : ''} ${lang === 'en' ? 'text-3xl' : ''}`}>
                             {getEventTitle(evt)}
                           </h3>
                         </div>
@@ -2901,6 +2903,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                           return (
                             <div className="space-y-3">
                               <p className="font-mono text-[10px] uppercase opacity-50">{t.topSources} ({evt.sources.length} {t.total})</p>
+
                               <div className="flex flex-wrap gap-2">
                                 {topSources.map((s: any, idx: number) => (
                                   s.url ? (
@@ -2909,51 +2912,63 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                                       href={s.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer"
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 cursor-pointer group"
                                     >
-                                      {s.name} ({s.credibility}%)
-                                      <span className="opacity-50">↗</span>
+                                      <span className="text-gray-900">{s.name}</span>
+                                      <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
+                                      <span className="opacity-30 group-hover:opacity-60 transition-opacity">↗</span>
                                     </a>
                                   ) : (
-                                    <span key={idx} className="inline-block px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono">
-                                      {s.name} ({s.credibility}%)
+                                    <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono">
+                                      <span className="text-gray-900">{s.name}</span>
+                                      <span className="opacity-40 font-bold">{s.credibility}%</span>
                                     </span>
                                   )
                                 ))}
+
+                                {/* Integrated Toggle Button */}
+                                {remainingSources.length > 0 && !showAllSources && (
+                                  <button
+                                    onClick={() => setShowAllSources(true)}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 border border-gray-200 rounded shadow-sm text-xs font-mono hover:bg-gray-200 transition-all duration-200 text-gray-600 hover:text-gray-900"
+                                  >
+                                    + {remainingSources.length} {t.moreSources}
+                                  </button>
+                                )}
                               </div>
 
-                              {/* Expandable remaining sources */}
-                              {remainingSources.length > 0 && (
-                                <div>
-                                  <button
-                                    onClick={() => setShowAllSources(!showAllSources)}
-                                    className="text-xs font-mono text-blue-600 hover:text-blue-800 underline"
-                                  >
-                                    {showAllSources ? `↑ ${t.hide}` : `↓ ${t.show} ${remainingSources.length} ${t.moreSources}`}
-                                  </button>
+                              {/* Expanded remaining sources */}
+                              {remainingSources.length > 0 && showAllSources && (
+                                <div className="space-y-3 pt-1">
+                                  <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                                    {remainingSources.map((s: any, idx: number) => (
+                                      s.url ? (
+                                        <a
+                                          key={idx + 3}
+                                          href={s.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 cursor-pointer group"
+                                        >
+                                          <span className="text-gray-800">{s.name}</span>
+                                          <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
+                                          <span className="opacity-30 group-hover:opacity-60 transition-opacity">↗</span>
+                                        </a>
+                                      ) : (
+                                        <span key={idx + 3} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono text-gray-700">
+                                          <span>{s.name}</span>
+                                          <span className="opacity-40 font-bold">{s.credibility}%</span>
+                                        </span>
+                                      )
+                                    ))}
+                                  </div>
 
-                                  {showAllSources && (
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                      {remainingSources.map((s: any, idx: number) => (
-                                        s.url ? (
-                                          <a
-                                            key={idx + 3}
-                                            href={s.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer"
-                                          >
-                                            {s.name} ({s.credibility}%)
-                                            <span className="opacity-50">↗</span>
-                                          </a>
-                                        ) : (
-                                          <span key={idx + 3} className="inline-block px-2 py-1 bg-gray-50 border border-gray-200 rounded text-xs font-mono">
-                                            {s.name} ({s.credibility}%)
-                                          </span>
-                                        )
-                                      ))}
-                                    </div>
-                                  )}
+                                  <button
+                                    onClick={() => setShowAllSources(false)}
+                                    className="flex items-center gap-1 text-[10px] font-mono text-gray-400 hover:text-gray-600 transition-colors uppercase tracking-wider"
+                                  >
+                                    ↑ {t.hide}
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -3030,7 +3045,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
           <div className={`xl:col-span-3 ${deferredViewMode !== 'GUIDE' ? 'hidden' : ''}`}>
-            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
                 <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{t.guideTitle}</h3>
@@ -3201,9 +3216,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
         {/* Decorative footer elements */}
         <div className="fixed bottom-4 right-4 hidden lg:block">
         </div>
-      </div>
+      </div >
       {/* Bottom spacer - flexes equally with top */}
-      <div />
-    </div>
+      < div />
+    </div >
   );
 }

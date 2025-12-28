@@ -1281,7 +1281,10 @@ RULES:
             }>(prompt, "thinking", 3, "SYNTHESIS");
 
             if (!result) {
-                console.log("❌ [SYNTHESIS] Invalid or missing JSON response");
+                console.log("❌ [SYNTHESIS] Invalid or missing JSON response from API");
+                console.log("ℹ️ [SYNTHESIS] Existing analysis data preserved - no updates will be made this cycle");
+                // Return null to indicate failure, but existing analysis tables remain untouched
+                // This is intentional: we never overwrite good data with nothing
                 return null;
             }
 
@@ -1496,7 +1499,8 @@ RULES:
             }>(prompt, "thinking", 3, "MANAGER");
 
             if (!result) {
-                console.log("❌ [MANAGER] Invalid or missing JSON response");
+                console.log("❌ [MANAGER] Invalid or missing JSON response from API");
+                console.log("ℹ️ [MANAGER] No changes will be made this cycle - all articles preserved");
                 return { reviewed: allArticles.length, updated: 0, archived: 0 };
             }
 
@@ -2023,6 +2027,23 @@ RULES:
             );
 
             if (!data) {
+                console.log("❌ [DASHBOARD] Invalid or missing JSON response from API");
+                console.log("ℹ️ [DASHBOARD] Existing dashboard stats preserved - no updates will be made this cycle");
+                // Return without updating - existing dashboardStats table remains untouched
+                // This is intentional: we never overwrite good data with nothing
+                return;
+            }
+
+            // Safety check: If we have no previous stats AND no valid new data, don't write zeros
+            const hasValidNewData = data.stats && (
+                data.stats.displaced !== undefined ||
+                data.stats.fatalities !== undefined ||
+                data.stats.civilianInjured !== undefined ||
+                data.stats.militaryInjured !== undefined
+            );
+
+            if (!prevStats && !hasValidNewData) {
+                console.log("⚠️ [DASHBOARD] No previous stats and no valid new data - skipping update to avoid writing zeros");
                 return;
             }
 
@@ -2048,6 +2069,7 @@ RULES:
 
         } catch (error) {
             console.error("❌ [DASHBOARD] Update failed:", error);
+            console.log("ℹ️ [DASHBOARD] Existing dashboard stats preserved due to error");
         }
     }
 });

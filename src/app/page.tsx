@@ -12,13 +12,6 @@
 
 import { fetchBorderClashData, type BorderClashData } from '@/lib/convex-server';
 import { DashboardClient } from './DashboardClient';
-import { DashboardClient as DashboardClientTest } from './DashboardClientTest';
-
-// ============================================================================
-// DEVELOPMENT TOGGLE: Set to true to use the new cascade layout logic
-// Set to false to use the original dashboard
-// ============================================================================
-const USE_TEST_DASHBOARD = true;
 
 // ISR Configuration: Revalidate every 3 hours (10800 seconds)
 // Change this value to adjust how often the cache refreshes
@@ -39,10 +32,5 @@ export default async function DashboardPage() {
   }
 
   // Pass server-fetched data to client component
-  // Use test dashboard when USE_TEST_DASHBOARD is true
-  if (USE_TEST_DASHBOARD) {
-    return <DashboardClientTest initialData={initialData} serverError={error} />;
-  }
-
   return <DashboardClient initialData={initialData} serverError={error} />;
 }
