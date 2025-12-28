@@ -98,8 +98,9 @@ If new evidence shows an old event was wrong, FIX IT. That's your job.
 
 🌐 TRANSLATIONS:
 For create_event and update_event, provide Thai and Khmer translations.
+Translate the MEANING and INTENT, not literal word-for-word.
+Understand the context first, then express the same idea naturally in the target language.
 Style: CASUAL, CONVERSATIONAL - how a regular person explains it to a friend.
-NOT formal, NOT news-anchor style, NOT government-speak.
 Always use English numerals (0-9), never Thai ๑๒๓ or Khmer ១២៣.
 
 📝 PROCESS:
@@ -944,8 +945,10 @@ But DO fix redundancy and confusing titles.
 
 🌐 TRANSLATIONS:
 If updating, include Thai (titleTh, descriptionTh) and Khmer (titleKh, descriptionKh).
-Style: CASUAL, CONVERSATIONAL.
-Always use English numerals (0-9), never Thai ๑๒๓ or Khmer ១២៣.
+Translate the MEANING and INTENT, not literal word-for-word.
+Understand the context first, then express the same idea naturally in the target language.
+Style: CASUAL, CONVERSATIONAL - how a regular person explains it to a friend.
+Always use English numerals (0-9), never Thai ๑๒๓ or Khmer ១២๣.
 
 OUTPUT:
 \`\`\`json

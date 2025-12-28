@@ -139,12 +139,12 @@ SCORING GUIDE:
 - If unsure, keep summary SHORTER and more conservative
 
 TRANSLATION REQUIREMENTS:
-- Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
-- Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
-- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language like how a Cambodian would explain to family
-- NOT formal/government language - use words regular people actually use
+- Translate the MEANING and INTENT, not literal word-for-word
+- Understand the context first, then express the same idea naturally in the target language
+- Thai: natural, conversational everyday language - how a regular Thai person would explain to a friend
+- Khmer: natural, conversational everyday language - how a Cambodian would explain to family
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
-- If unsure about translation quality, leave field empty
+- Prioritize clear communication over literal accuracy
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
@@ -342,12 +342,12 @@ Don't just score based on source name. Analyze the CONTENT:
 - If unsure, keep summary SHORTER and more conservative
 
 TRANSLATION REQUIREMENTS:
-- Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
-- Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
-- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language like how a Cambodian would explain to family
-- NOT formal/government language - use words regular people actually use
+- Translate the MEANING and INTENT, not literal word-for-word
+- Understand the context first, then express the same idea naturally in the target language
+- Thai: natural, conversational everyday language - how a regular Thai person would explain to a friend
+- Khmer: natural, conversational everyday language - how a Cambodian would explain to family
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
-- If unsure about translation quality, leave field empty
+- Prioritize clear communication over literal accuracy
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
@@ -550,11 +550,12 @@ SCORING GUIDE:
 - If unsure, keep summary SHORTER and more conservative
 
 TRANSLATION REQUIREMENTS:
-- Provide NATURAL, CONVERSATIONAL translations (not machine-translated)
-- Thai: ภาษาพูด (spoken Thai) - casual everyday language
-- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language
+- Translate the MEANING and INTENT, not literal word-for-word
+- Understand the context first, then express the same idea naturally in the target language
+- Thai: natural, conversational everyday language - how a regular Thai person would explain to a friend
+- Khmer: natural, conversational everyday language - how a Cambodian would explain to family
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
-- If unsure about translation quality, leave field empty
+- Prioritize clear communication over literal accuracy
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
@@ -969,10 +970,22 @@ This is the structured memory of key conflict events. Use this as your PRIMARY s
 ${timelineContext}
 
 📜 PREVIOUS ANALYSIS (CONTINUITY CONTEXT):
-The following was the previous analysis. Use it for context, but DO NOT be shackled by it.
-- If the situation is unchanged, maintain the narrative (don't force a "new story" just for the sake of it).
-- If new info contradicts the past or signals a shift, UPDATE BOLDLY.
-- Your goal: ACCURACY first. Continuity second.
+The following was the previous analysis. Think of this as your last report - you're updating it, not starting from scratch.
+
+⚠️ CRITICAL: DON'T BLINDLY FOLLOW THE OLD ANALYSIS!
+The previous synthesis might be outdated, flawed, or based on limited information. YOU MUST:
+- **Evaluate independently**: Look at the CURRENT timeline and articles. What do THEY tell you?
+- **Challenge the old narrative**: Does it still match the evidence? Or was it based on a bias/misreading?
+- **Don't auto-continue storylines**: Just because the previous analysis said "escalating tension" doesn't mean you should keep saying that if current evidence shows otherwise.
+- **Think for yourself**: The previous analysis is ONE data point. The timeline and articles are your PRIMARY evidence.
+
+🔄 ITERATION GUIDANCE:
+- **If the situation is essentially unchanged**: Keep the core narrative and make only minor refinements (update phrasing, add nuance, adjust intensity slightly). You don't need to manufacture a new story every cycle.
+- **If there's genuinely new information**: Incorporate it smoothly. Evolve the narrative rather than replacing it entirely.
+- **If major developments contradict previous analysis**: Update boldly and explain the shift.
+- **Think evolution, not revolution**: Most cycles involve gradual adjustments, not complete rewrites.
+
+Your job is to maintain an accurate, **evolving** narrative - not to create drama where none exists, and not to perpetuate errors from previous cycles.
 
 [PREVIOUS CAMBODIA NARRATIVE]: ${prevCambodia?.officialNarrative || "None"}
 [PREVIOUS THAILAND NARRATIVE]: ${prevThailand?.officialNarrative || "None"}
@@ -1085,11 +1098,12 @@ Each article has a credibility score. Weight your analysis accordingly:
 If high-cred and low-cred articles conflict, TRUST THE HIGH-CRED SOURCE.
 
 🌐 TRANSLATION QUALITY:
-- Thai translations: ภาษาพูด (spoken Thai) - natural, conversational, like how a regular Thai person would explain to a friend. NOT formal news anchor language.
-- Khmer translations: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - natural, conversational, like how a Cambodian would explain to family. NOT formal government language.
+- Translate the MEANING and INTENT, not literal word-for-word
+- Understand the context first, then express the same idea naturally in the target language
+- Thai translations: natural, conversational everyday language - how a regular Thai person would explain to a friend
+- Khmer translations: natural, conversational everyday language - how a Cambodian would explain to family
 - ALWAYS use English numerals (0-9) in translations - NEVER Thai ๑๒๓ or Khmer ១២៣
-- Prioritize being understood by average citizens over being technically "correct"
-- If unsure, leave blank rather than guess wrong
+- Prioritize clear communication over literal accuracy
 
 ═══════════════════════════════════════════════════════════════
 🔶 LOW-CREDIBILITY / UNVERIFIED ARTICLES (analyze for spin & framing):
@@ -1160,27 +1174,34 @@ Examples by posture:
 3. PLATFORM VERIFICATION: Do not specify weapon platforms (e.g., "Naval shelling", "F-16s") unless high-credibility sources confirm them. Use "airstrikes" or "shelling" if the specific platform is unconfirmed.
 4. POLICY VS REALITY: Distinguish between official policy (e.g., "border closed by decree") and tactical reality (e.g., "crossing impassable due to fighting").
 
-📰 KEY EVENTS STYLE GUIDE (3-5 events MAX, KEEP EACH SHORT!):
-Write KEY EVENTS as SHORT headline-style bullets. MAX 20 WORDS each!
+📰 KEY EVENTS STYLE GUIDE - SMART SPACE MANAGEMENT:
+Write KEY EVENTS as SHORT headline-style bullets. MAX 12 WORDS each!
+
+⚖️ BALANCE SUMMARY LENGTH vs. NUMBER OF POINTS:
+The neutral card has LIMITED TOTAL SPACE. You must balance these two elements:
+- **If your summary is LONG (70+ words)**: Use FEWER key events (2-3 points max)
+- **If your summary is SHORT (50-60 words)**: You can use MORE key events (4-5 points)
+- **Think total card density**: Long text + many bullets = overload. Keep it scannable!
+
 ❌ TOO LONG: "Country A announces 'Ceasefire', but fighting intensifies hours later as Country B rejects the truce"
 ❌ TOO LONG: "Humanitarian Crisis: 330,000+ civilians displaced as borders close"
 ✅ GOOD: "Ceasefire collapses hours after announcement"
-✅ GOOD: "Airstrikes hit key bridge; other side responds with rockets"
+✅ GOOD: "Airstrikes hit key bridge; rockets fired in response"
 ✅ GOOD: "330,000+ civilians displaced; borders closed"
-✅ GOOD: "Both sides invoke self-defense claims at UN"
+✅ GOOD: "Both sides claim self-defense at UN"
 
 Be CONCISE. Each event = 1 short line. No multi-clause sentences. Frame events NEUTRALLY - don't imply who "started it" unless clearly established.
 
 📏 LENGTH HIERARCHY (IMPORTANT!):
-- SIDE CARDS (Cambodia/Thailand): COMPACT. 3-4 sentences, max 60 words. These cards have limited space. Report key claims CONCISELY - just the essence of what their media is saying.
-- CENTER CARD (Neutral): LONGEST. 5-7 sentences, max 80 words. This card has the MOST space. You are the REFEREE here - summarize BOTH sides' actions, call out discrepancies, give the full picture. This should be the most comprehensive text.
+- SIDE CARDS (Cambodia/Thailand): COMPACT. 2-3 sentences, max 50 words. These cards have limited space. Report key claims CONCISELY - just the essence of what their media is saying.
+- CENTER CARD (Neutral): LONGEST but BOUNDED. 3-5 sentences, 50-80 words for summary. You are the REFEREE here - summarize BOTH sides' actions, call out discrepancies, give the full picture. Remember to balance with key events!
 
 ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
 <json>
 {
   "cambodia": {
-    "officialNarrative": "3-4 sentences (max 60 words). Key claims from Cambodian media only.",
-    "officialNarrativeEn": "English (3-4 sentences)",
+    "officialNarrative": "2-3 sentences (max 50 words). Key claims from Cambodian media only.",
+    "officialNarrativeEn": "English (2-3 sentences)",
     "officialNarrativeTh": "Thai translation",
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
@@ -1197,8 +1218,8 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Brief justification"
   },
   "thailand": {
-    "officialNarrative": "3-4 sentences (max 60 words). Key claims from Thai media only.",
-    "officialNarrativeEn": "English (3-4 sentences)",
+    "officialNarrative": "2-3 sentences (max 50 words). Key claims from Thai media only.",
+    "officialNarrativeEn": "English (2-3 sentences)",
     "officialNarrativeTh": "Thai translation",
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
@@ -1215,19 +1236,20 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Brief justification"
   },
   "neutral": {
-    "generalSummary": "5-7 sentences (max 80 words). Summarize BOTH sides' key actions, humanitarian impact, diplomatic developments. Compare claims. Note where sources agree/disagree. Be the impartial commentator giving the full picture.",
-    "generalSummaryEn": "English (6-8 sentences)",
+    "generalSummary": "3-5 sentences (50-80 words). Summarize BOTH sides' key actions, humanitarian impact, diplomatic developments. Compare claims. Note where sources agree/disagree. Be the impartial commentator giving the full picture.",
+    "generalSummaryEn": "English (3-5 sentences)",
     "generalSummaryTh": "Thai translation",
     "generalSummaryKh": "Khmer translation",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
     "keyEvents": [
-      "3-5 SHORT headlines, MAX 15 words each!",
-      "Use NEUTRAL framing - no loaded words",
-      "Include events from BOTH sides fairly"
+      "2-5 SHORT headlines (adjust based on summary length!)",
+      "MAX 12 words each - use NEUTRAL framing",
+      "If summary is 70+ words, use only 2-3 events",
+      "If summary is 50-60 words, can use 4-5 events"
     ],
-    "keyEventsEn": ["Short headlines in English - max 15 words each"],
-    "keyEventsTh": ["หัวข้อสั้นๆ ไม่เกิน 15 คำ"],
-    "keyEventsKh": ["ចំណងជើងខ្លី មិនលើស 15 ពាក្យ"],
+    "keyEventsEn": ["Short headlines in English - max 12 words each"],
+    "keyEventsTh": ["หัวข้อสั้นๆ ไม่เกิน 12 คำ"],
+    "keyEventsKh": ["ចំណងជើងខ្លី មិនលើស 12 ពាក្យ"],
     "discrepancies": "List SPECIFIC contradictions. Use SYMMETRIC language: 'Country A claims X, Country B claims Y, international sources suggest Z'. ATTRIBUTE the 'believable' version to a NAMED source (Reuters, ICRC, etc), don't just pick one.",
     "confidence": 75,
     "confidenceRationale": "Must justify if Cambodia/Thailand confidence differs by >10 points. What's verified? What's propaganda from EACH side?"
@@ -2220,11 +2242,12 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
 </json>
 
 🌐 TRANSLATION RULES (for correctData):
-- Thai: ภาษาพูด (spoken Thai) - casual everyday language like how a regular Thai person would say it to a friend
-- Khmer: ភាសាប្រចាំថ្ងៃ (everyday Khmer) - casual conversational language like how a Cambodian would explain to family
-- NOT formal/government language - use words regular people actually use
+- Translate the MEANING and INTENT, not literal word-for-word
+- Understand the context first, then express the same idea naturally in the target language
+- Thai: natural, conversational everyday language - how a regular Thai person would explain to a friend
+- Khmer: natural, conversational everyday language - how a Cambodian would explain to family
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
-- If unsure about translation quality, leave that translation field as empty string ""
+- Prioritize clear communication over literal accuracy
 
 📝 IMPORTANT - ANALYZE ARTICLES IN ORDER BEFORE JSON:
 Before outputting your JSON, you MUST first list each article with your findings.

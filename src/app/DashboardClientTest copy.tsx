@@ -615,7 +615,7 @@ const TRANSLATIONS = {
     statelessApproach: "មិនកាន់ជើង ហើយមិនជឿអ្នកណាទាំងអស់",
     statelessDesc: "យើងមិនជឿសម្តីអ្នកណាទេ។ យើងមិននៅខាងថៃ ហើយក៏មិននៅខាងខ្មែរដែរ។ យើងដើរផ្លូវកណ្តាលបុកទៅរកការពិត។",
     aiAnalysis: "ការវិភាគដោយ AI",
-    aiSynthesis: "ការសង្ខេបដោយ AI",
+    aiSynthesis: "សង្ខេបដោយ AI",
     intelReport: "របាយការណ៍ចារកម្ម",
     date: "កាលបរិច្ឆេទ",
     category: "ប្រភេទ",
@@ -943,7 +943,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
           {article.isVerified && <CheckCircle className="w-3 h-3 text-green-600" />}
           <span className="text-[10px] font-mono opacity-60">{article.source}</span>
         </div>
-        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap">{formatRelativeTime(article.publishedAt, article.fetchedAt)}</span>
+        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap" suppressHydrationWarning>{formatRelativeTime(article.publishedAt, article.fetchedAt)}</span>
       </div>
 
       {/* Title - use language-specific title if available */}
@@ -1449,19 +1449,61 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
 
   // =============================================================================
-  // DYNAMIC MOBILE VIEW - Switch to mobile if neutral card text overflows
+  // NEW CASCADE FALLBACK SYSTEM (TEST VERSION)
+  // Priority: 1) Expand container width → 2) Expand neutral ratio → 3) Mobile
+  // Goal: Keep cards visually equal for as long as possible
   // =============================================================================
   const neutralContentRef = useRef<HTMLDivElement>(null);
   const [forceMobileView, setForceMobileView] = useState(false);
 
-  // Dynamic max-width: adjusts based on neutral card content density
-  // Less content = narrower layout (less empty space), more content = wider layout
-  const [dynamicMaxWidth, setDynamicMaxWidth] = useState(1700); // Default middle ground
+  // Dynamic container max-width: try expanding this FIRST before touching ratio
+  // Start with mid-range to minimize initial flash (cascade will fine-tune)
+  const [dynamicMaxWidth, setDynamicMaxWidth] = useState(1700);
   const MIN_WIDTH = 1400;
   const MAX_WIDTH = 1925;
 
-  // Stable overflow check function - also calculates optimal container width
-  const checkOverflow = useCallback(() => {
+  // Dynamic neutral card ratio: only expand this AFTER container is maxed out
+  // This keeps cards looking equal for longer
+  const [neutralRatio, setNeutralRatio] = useState(1.0); // Start at 1:1:1
+  const MIN_RATIO = 1.0;
+  const MAX_RATIO = 1.4;
+  const RATIO_STEP = 0.05;
+
+  // Debug state to track cascade level
+  const [cascadeLevel, setCascadeLevel] = useState(0);
+  // 0 = no adjustment needed (content fits)
+  // 1-5 = expanding container width (1400 → 1925 in steps)
+  // 6-10 = expanding neutral ratio (1.0 → 1.4 in steps)
+  // 11 = mobile view (last resort)
+
+  // Track if we just tried shrinking width - prevents oscillation
+  // If shrinking caused overflow, we don't want to shrink again
+  const lastWidthShrinkAttempt = useRef<number | null>(null);
+  const lastRatioShrinkAttempt = useRef<number | null>(null);
+
+  // Track previous width to detect scrollbar toggles vs actual resizing
+  const prevWidth = useRef(typeof window !== 'undefined' ? window.innerWidth : 0);
+
+  // Flag to ignore resize events triggered by programmatic layout changes (e.g. scrollbar appearance)
+  const ignoreNextResize = useRef(false);
+
+
+
+
+
+  // Track if we're on desktop (xl+ breakpoint) for conditional CSS
+  // Default to TRUE for SSR to prevent stacked layout flash on initial load
+  // Mobile users will see brief 3-column before switching, which is less jarring
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 1280);
+    checkDesktop();
+    window.addEventListener('resize', checkDesktop);
+    return () => window.removeEventListener('resize', checkDesktop);
+  }, []);
+
+  // Main cascade logic: determines optimal layout without overflow
+  const runCascade = useCallback(() => {
     // Skip on very small screens - let native CSS mobile handle it
     if (typeof window === 'undefined' || window.innerWidth < 768) {
       setForceMobileView(false);
@@ -1472,69 +1514,321 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     // Below 1280px (xl breakpoint), the layout is already adapting via CSS
     if (window.innerWidth < 1280) {
       setForceMobileView(false);
+      setDynamicMaxWidth(MIN_WIDTH);
+      setNeutralRatio(MIN_RATIO);
+      setCascadeLevel(0);
       return;
     }
 
-    if (neutralContentRef.current) {
-      const el = neutralContentRef.current;
-      const contentHeight = el.scrollHeight;
-      const containerHeight = el.clientHeight;
 
-      // Calculate fill ratio: how much of the container the content uses
-      const fillRatio = contentHeight / containerHeight;
 
-      // Check for overflow (content exceeds container)
-      const isOverflowing = contentHeight > containerHeight + 20;
-      setForceMobileView(isOverflowing);
+    if (!neutralContentRef.current) return;
 
-      // Dynamic width calculation based on fill ratio
-      // fillRatio < 0.7 = lots of empty space → shrink width
-      // fillRatio 0.8-1.0 = good fit → optimal width
-      // fillRatio > 1.0 = overflow → expand width (before triggering mobile)
+    const el = neutralContentRef.current;
 
-      let optimalWidth: number;
-      if (fillRatio > 1.0) {
-        // Overflow - expand to max to try fitting content
-        optimalWidth = MAX_WIDTH;
-      } else if (fillRatio > 0.85) {
-        // Good fit - keep current or slightly expand
-        optimalWidth = Math.min(MAX_WIDTH, dynamicMaxWidth + 50);
-      } else if (fillRatio > 0.7) {
-        // Some empty space - keep stable
-        optimalWidth = dynamicMaxWidth;
-      } else {
-        // Lots of empty space - shrink to make content fill better
-        // The less content, the narrower we go
-        const shrinkFactor = fillRatio / 0.7; // 0.5 → 0.71, 0.7 → 1.0
-        optimalWidth = Math.max(MIN_WIDTH, dynamicMaxWidth * shrinkFactor);
-      }
+    // Measure actual content height by temporarily disabling flex-1 stretching
+    // The summary div with flex-1 expands to fill space, which skews our measurement
+    // We need the NATURAL content height to accurately detect empty space
 
-      // Only update if change is significant (>50px) to avoid jitter
-      if (Math.abs(optimalWidth - dynamicMaxWidth) > 50) {
-        setDynamicMaxWidth(Math.round(optimalWidth));
+    // Find and temporarily unshrink flex-1 children
+    const flexChildren: { element: HTMLElement; originalFlex: string }[] = [];
+    for (const child of el.children) {
+      const htmlChild = child as HTMLElement;
+      const computedStyle = window.getComputedStyle(htmlChild);
+      if (computedStyle.flex.includes('1')) {
+        flexChildren.push({ element: htmlChild, originalFlex: htmlChild.style.flex });
+        htmlChild.style.flex = '0 0 auto';
       }
     }
-  }, [dynamicMaxWidth]);
 
-  // Check on resize
+    // Force reflow to get natural heights
+    void el.offsetHeight;
+
+    // Now measure actual content
+    let actualContentHeight = 0;
+    for (const child of el.children) {
+      actualContentHeight += (child as HTMLElement).offsetHeight;
+    }
+    // Add gap spacing (space-y-4 = 16px gaps between children)
+    const gapCount = Math.max(0, el.children.length - 1);
+    actualContentHeight += gapCount * 16;
+
+    // Restore flex-1 children
+    for (const { element, originalFlex } of flexChildren) {
+      element.style.flex = originalFlex;
+    }
+
+    const containerHeight = el.clientHeight;
+    const isOverflowing = actualContentHeight > containerHeight + 20;
+    const fillRatio = actualContentHeight / containerHeight;
+
+    console.log('[Cascade] Measuring:', {
+      actualContentHeight,
+      containerHeight,
+      isOverflowing,
+      fillRatio: fillRatio.toFixed(2),
+      currentWidth: dynamicMaxWidth,
+      currentRatio: neutralRatio
+    });
+
+    // If no overflow at all, try to shrink back towards minimum values
+    // This ensures the layout "relaxes" when more space becomes available
+    if (!isOverflowing) {
+      // Content fits! Try to shrink if we're above minimum values
+      // Priority: shrink ratio first (back to 1:1), then shrink width
+
+      if (neutralRatio > MIN_RATIO) {
+        // Ratio is expanded - try shrinking it
+        // Only shrink if we have SIGNIFICANT buffer (fillRatio < 0.75 means 25% empty space)
+        // This threshold MUST be lower than the overflow checks to function as hysteresis
+
+        // Check for oscillation loop: did we just try to shrink from this value?
+        if (lastRatioShrinkAttempt.current !== null && neutralRatio >= lastRatioShrinkAttempt.current) {
+          console.log('[Cascade] Ratio shrink failed previously (caused overflow), stabilizing at', neutralRatio);
+          // Don't try shrinking ratio again, fall through to width check
+        } else if (fillRatio < 0.75) {
+          console.log('[Cascade] Shrinking ratio from', neutralRatio, 'to', Math.max(MIN_RATIO, neutralRatio - RATIO_STEP));
+          lastRatioShrinkAttempt.current = neutralRatio; // Track where we started
+          setNeutralRatio(prev => Math.max(MIN_RATIO, prev - RATIO_STEP));
+          setCascadeLevel(prev => Math.max(0, prev - 1));
+          return; // Re-run cascade after shrinking to check if we can shrink more
+        }
+      }
+
+      // SMART WIDTH SHRINKING: Try once, track the attempt
+      // If shrinking caused overflow (we'll detect expansion on next run), don't try again
+      if (neutralRatio <= MIN_RATIO && dynamicMaxWidth > MIN_WIDTH) {
+        // Check if we just tried shrinking and it failed (caused overflow/expansion)
+        if (lastWidthShrinkAttempt.current !== null && dynamicMaxWidth >= lastWidthShrinkAttempt.current) {
+          // We tried shrinking but width expanded back → shrinking failed, stop trying
+          console.log('[Cascade] Width shrink failed (caused overflow), stabilizing at', dynamicMaxWidth);
+          lastWidthShrinkAttempt.current = null; // Reset for future resize events
+        } else if (fillRatio < 0.85) {
+          // Safe to try shrinking - content has some room
+          const shrinkAmount = Math.round((MAX_WIDTH - MIN_WIDTH) / 5);
+          const targetWidth = Math.max(MIN_WIDTH, dynamicMaxWidth - shrinkAmount);
+          console.log('[Cascade] Attempting width shrink from', dynamicMaxWidth, 'to', targetWidth);
+          lastWidthShrinkAttempt.current = dynamicMaxWidth; // Remember current width before shrinking
+          setDynamicMaxWidth(targetWidth);
+          setCascadeLevel(prev => Math.max(0, prev - 1));
+          return; // Re-run cascade to check if shrink worked
+        }
+      } else {
+        // Reset shrink tracker when conditions change
+        lastWidthShrinkAttempt.current = null;
+      }
+
+      setCascadeLevel(0);
+      return;
+    }
+
+    // Content is overflowing! Calculate optimal layout in ONE pass.
+    // Instead of incrementally expanding and re-measuring, we estimate 
+    // how much space we need based on the overflow ratio.
+
+    const overflowRatio = actualContentHeight / containerHeight; // e.g., 1.23 means 23% overflow
+    console.log('[Cascade] Overflow detected, ratio:', overflowRatio.toFixed(2));
+
+
+
+    // STEP 1: Try expanding container width first (keep cards equal)
+    // Each width step gives roughly proportional space increase
+    if (dynamicMaxWidth < MAX_WIDTH) {
+      // Estimate how much width we need based on overflow
+      // More overflow = jump closer to MAX_WIDTH
+      const widthRange = MAX_WIDTH - MIN_WIDTH; // 525px
+      const neededExpansion = Math.min(1, (overflowRatio - 1) * 3); // Scale factor
+      const targetWidth = Math.min(MAX_WIDTH, MIN_WIDTH + widthRange * neededExpansion);
+      const newWidth = Math.max(dynamicMaxWidth + 105, targetWidth); // At least one step
+
+      console.log('[Cascade] STEP 1: Expanding width to', Math.min(MAX_WIDTH, newWidth));
+      setDynamicMaxWidth(Math.min(MAX_WIDTH, Math.round(newWidth)));
+      setCascadeLevel(Math.ceil((newWidth - MIN_WIDTH) / 105));
+      setForceMobileView(false);
+      return;
+    }
+
+    // STEP 2: Width is maxed. Try expanding neutral ratio.
+    // Use tolerance for floating point comparison (1.3999... should be considered as 1.4)
+    if (neutralRatio < MAX_RATIO - 0.01) {
+      // Estimate how much ratio we need based on remaining overflow
+      const ratioRange = MAX_RATIO - MIN_RATIO; // 0.4
+      const neededRatioExpansion = Math.min(1, (overflowRatio - 1) * 2);
+      const targetRatio = Math.min(MAX_RATIO, MIN_RATIO + ratioRange * neededRatioExpansion);
+      const newRatio = Math.max(neutralRatio + RATIO_STEP, targetRatio);
+
+      console.log('[Cascade] STEP 2: Expanding ratio to', Math.min(MAX_RATIO, newRatio).toFixed(2));
+      setNeutralRatio(Math.min(MAX_RATIO, newRatio));
+      setCascadeLevel(5 + Math.ceil((newRatio - MIN_RATIO) / RATIO_STEP));
+      setForceMobileView(false);
+      return;
+    }
+
+    // STEP 3: LAST RESORT - All cascade levels exhausted
+    // Container at max width (1925px) AND ratio at max (1.4)
+    // Content still overflows → mobile view is the only option
+    console.log('[Cascade] All levels exhausted (width:', dynamicMaxWidth, ', ratio:', neutralRatio, '), forcing mobile view');
+
+
+    // Set flag to ignore the resize event that will happen when scrollbar appears
+    console.log('[Cascade] Forcing mobile view (ignoring next resize)');
+    ignoreNextResize.current = true;
+
+    // SAFETY: Auto-reset the flag after 500ms.
+    // If the scrollbar doesn't trigger a resize (e.g. overlay scrollbars), we don't want this flag
+    // to sit here and block the NEXT legitimate resize event (like closing console).
+    setTimeout(() => {
+      ignoreNextResize.current = false;
+    }, 500);
+
+    setForceMobileView(true);
+    setCascadeLevel(11);
+  }, [dynamicMaxWidth, neutralRatio, lang]);
+
+  // CONTINUATION EFFECT: Re-run cascade after state updates during expansion
+  // When width/ratio changes but we're still calculating (not settled), continue the cascade
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    // Skip if settled (level 0) or in forced mobile view
+    // Don't check cascadeLevel >= 11 because STEP 2 can set high levels (13+)
+    if (cascadeLevel === 0 || forceMobileView) return;
+
+    // Continue cascade after state update to check if more expansion needed
+    const timer = setTimeout(() => {
+      console.log('[Cascade] Continuing after state update, level:', cascadeLevel);
+      runCascade();
+    }, 100);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dynamicMaxWidth, neutralRatio, cascadeLevel, forceMobileView]); // Add cascadeLevel and forceMobileView
+
+  // Debounced cascade runner - LONGER delay to let layout settle
+  const cascadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasInitialized = useRef(false);
+  const wasMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 1280);
+
+  const debouncedCascade = useCallback(() => {
+    if (cascadeTimeoutRef.current) {
+      clearTimeout(cascadeTimeoutRef.current);
+    }
+    // 300ms delay gives React time to re-render and layout to settle
+    cascadeTimeoutRef.current = setTimeout(runCascade, 300);
+  }, [runCascade]);
+
+  useEffect(() => {
+    let resizeTimeout: NodeJS.Timeout;
+    let isFirstRun = true;
+
+    // Update ref on mount
+    if (typeof window !== 'undefined') {
+      wasMobileRef.current = window.innerWidth < 1280;
+    }
 
     const handleResize = () => {
-      clearTimeout(timeoutId);
-      // Check after layout settles (no reset needed - checkOverflow handles state)
-      timeoutId = setTimeout(checkOverflow, 150);
+      clearTimeout(resizeTimeout);
+
+      // GUARD: Check explicit ignore flag first
+      if (ignoreNextResize.current) {
+        console.log('[Resize] Ignored (programmatic trigger)');
+        ignoreNextResize.current = false;
+        return;
+      }
+
+      const currentWidth = window.innerWidth;
+      const widthDelta = Math.abs(currentWidth - prevWidth.current);
+      prevWidth.current = currentWidth;
+
+      // GUARD: Ignore small width changes that are likely scrollbar appearance/disappearance
+      // Especially if we are in forceMobileView, a scrollbar appearance (~17px) should NOT reset us
+      if (widthDelta < 25) {
+        console.log('[Resize] Ignoring small width change (likely scrollbar):', widthDelta, 'px');
+        return;
+      }
+
+      // DON'T reset values on resize - just re-run cascade from current state
+      // This prevents the "shrink then expand" flash
+      // The cascade logic already handles both expanding AND shrinking
+
+      const nowDesktop = window.innerWidth >= 1280;
+
+      // Detect mobile-to-desktop transition
+      if (nowDesktop && wasMobileRef.current) {
+        console.log('[Resize] Mobile → Desktop transition, resetting to baseline');
+        // Reset to baseline behavior (No Cache)
+        const viewportWidth = window.innerWidth;
+        const initialWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, viewportWidth - 300));
+        console.log('[Resize] Resetting to viewport baseline:', viewportWidth, '→', initialWidth);
+        setDynamicMaxWidth(initialWidth);
+        setNeutralRatio(MIN_RATIO);
+
+        setCascadeLevel(0);
+        lastWidthShrinkAttempt.current = null; // Reset shrink tracker
+        lastRatioShrinkAttempt.current = null;
+        wasMobileRef.current = false;
+
+        // Longer delay for layout transition
+        resizeTimeout = setTimeout(() => {
+          // IMPORTANT: If we are currently in forced mobile view, we MUST switch out of it
+          // and let the useEffect trigger the cascade (to allow DOM repaint).
+          // If we runCascade immediately while DOM is still mobile, it will fail.
+          setForceMobileView(prev => {
+            if (prev) return false; // This triggers useEffect -> runCascade
+
+            // If we weren't in mobile view, trigger cascade manually
+            runCascade();
+            return false;
+          });
+        }, 400);
+        return;
+      }
+
+      wasMobileRef.current = !nowDesktop;
+
+      resizeTimeout = setTimeout(() => {
+        console.log('[Resize] Triggering cascade recalculation');
+        // Clear mobile view flag
+        setForceMobileView(prev => {
+          if (prev) {
+            // State change will trigger useEffect -> runCascade
+            return false;
+          }
+          // No state change, trigger manually
+          runCascade();
+          return false;
+        });
+      }, 200);
     };
 
-    // Initial check
-    timeoutId = setTimeout(checkOverflow, 300);
+    // INITIAL LOAD: Use smarter defaults based on viewport
+    // Instead of starting at MIN and visibly expanding, start mid-range
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+
+      // Calculate initial values based on viewport
+      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+
+      if (viewportWidth >= 1600) {
+        // Large screen: start with larger container, equal ratio
+        setDynamicMaxWidth(Math.min(MAX_WIDTH, viewportWidth - 300));
+        setNeutralRatio(1.0);
+      } else if (viewportWidth >= 1280) {
+        // Medium-large: use viewport-proportional width
+        setDynamicMaxWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, viewportWidth - 200)));
+        setNeutralRatio(1.0);
+      }
+      // Below 1280px, the CSS handles mobile layout
+
+      // Run cascade after initial render to fine-tune
+      resizeTimeout = setTimeout(debouncedCascade, 500);
+    }
 
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
-      clearTimeout(timeoutId);
+      clearTimeout(resizeTimeout);
+      if (cascadeTimeoutRef.current) clearTimeout(cascadeTimeoutRef.current);
     };
-  }, [checkOverflow]);
+  }, [debouncedCascade, runCascade]);
 
 
   // =============================================================================
@@ -1716,36 +2010,24 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const countsLoading = hasServerData ? false : clientCountsLoading;
   const timelineLoading = hasServerData ? false : clientTimelineLoading;
 
-  // Re-check overflow when content or language changes - smart check to avoid flash
-  // NOTE: We deliberately do NOT include forceMobileView in deps to prevent infinite loop
-  // (overflow → mobile → no overflow → desktop → overflow → ...)
+  // Re-run cascade when content changes (new AI synthesis text)
+  // Language changes are handled by per-language cache keys now
+  // Track previous neutralMeta to detect actual content changes
+  const prevNeutralMetaRef = useRef(neutralMeta);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Skip on very small screens
-      if (typeof window === 'undefined' || window.innerWidth < 768) {
-        setForceMobileView(false);
-        return;
-      }
+    // SKIP if in forced mobile view - mobile layout handles everything
+    // This prevents chaos when switching languages in mobile view
+    if (forceMobileView) {
+      console.log('[Cascade] Skipping cascade - in mobile view');
+      return;
+    }
 
-      // GUARD: Only apply dynamic mobile view on wide screens (same as main check)
-      if (window.innerWidth < 1280) {
-        setForceMobileView(false);
-        return;
-      }
-
-      // Check overflow state without changing view first
-      if (neutralContentRef.current) {
-        const el = neutralContentRef.current;
-        // Use same improved 20px buffer as main overflow check
-        const isOverflowing = el.scrollHeight > el.clientHeight + 20;
-
-        // Only update if state actually needs to change (prevents flash)
-        setForceMobileView(isOverflowing);
-      }
-    }, 100);
-
+    // Small delay to let content render before measuring
+    const timer = setTimeout(() => runCascade(), 150);
     return () => clearTimeout(timer);
-  }, [neutralMeta, lang]); // Deliberately excluding forceMobileView to prevent feedback loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [neutralMeta, lang, forceMobileView]); // Add forceMobileView to dependencies
 
   // --- Modal Navigation & Touch State ---
 
@@ -2568,38 +2850,36 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 </Card>
               </div>
 
-              {/* Three Perspectives Grid - Weighted: Side cards 1fr, Neutral 1.5fr */}
+              {/* Three Perspectives Grid - Dynamic: Side cards 1fr, Neutral uses cascade-controlled ratio */}
               <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="perspectives-grid grid grid-cols-1 xl:grid-cols-[1fr_1.20fr_1fr] gap-4 h-full">
+                <div
+                  className={`perspectives-grid grid gap-4 h-full ${isDesktop ? '' : 'grid-cols-1'}`}
+                  style={isDesktop ? { gridTemplateColumns: `1fr ${neutralRatio}fr 1fr` } : undefined}
+                  suppressHydrationWarning
+                >
 
                   {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
                   <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0">
-                    <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
+                    <div className="bg-riso-ink text-riso-paper py-2 px-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2 overflow-visible">
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div ref={neutralContentRef} className="flex-1 flex flex-col space-y-4 min-h-0 overflow-hidden">
-                        <div className="mb-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge type="outline" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t.aiSynthesis}</Badge>
-                            {neutralMeta?.conflictLevel && (
-                              <Badge type="alert" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t[neutralMeta.conflictLevel.toLowerCase() as keyof typeof t] || neutralMeta.conflictLevel}</Badge>
-                            )}
-                          </div>
-                          <h3 className="font-display text-3xl mt-2 leading-none py-1">
+                      <div ref={neutralContentRef} className="flex-1 flex flex-col space-y-4 min-h-0 overflow-visible">
+                        <div className="mb-4 flex items-center justify-between">
+                          <h3 className="font-display text-3xl leading-normal overflow-visible">
                             {t.situationReport}
                           </h3>
-                          <p className="font-mono text-xs opacity-50 mt-1">
-                            {t.autoUpdating}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <Badge type="outline" className={lang === 'kh' || lang === 'th' ? 'text-[12px] px-2' : 'text-xs'}>{t.aiSynthesis}</Badge>
+                          </div>
                         </div>
 
-                        <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
+                        <div className={`flex-1 font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
                           {getSummary(neutralMeta) || t.analyzingFeeds}
                         </div>
 
                         {getKeyEvents(neutralMeta).length > 0 && (
-                          <div className="mb-4">
+                          <div className="pt-4 pb-2 border-t border-riso-ink/10">
                             <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.keyDevelopments}:</p>
                             <ul className="list-disc pl-4 space-y-1">
                               {getKeyEvents(neutralMeta).map((event: string, i: number) => (
@@ -2620,7 +2900,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.cambodia}
                     </div>
-                    <Card className="flex-1 flex flex-col overflow-hidden" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
+                    <Card className="flex-1 flex flex-col overflow-hidden !pb-2" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
                       <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         {/* Official Narrative */}
                         <div>
@@ -2668,7 +2948,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.thailand}
                     </div>
-                    <Card className="flex-1 flex flex-col overflow-hidden" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
+                    <Card className="flex-1 flex flex-col overflow-hidden !pb-2" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
                       <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         {/* Official Narrative */}
                         <div>

@@ -615,7 +615,7 @@ const TRANSLATIONS = {
     statelessApproach: "មិនកាន់ជើង ហើយមិនជឿអ្នកណាទាំងអស់",
     statelessDesc: "យើងមិនជឿសម្តីអ្នកណាទេ។ យើងមិននៅខាងថៃ ហើយក៏មិននៅខាងខ្មែរដែរ។ យើងដើរផ្លូវកណ្តាលបុកទៅរកការពិត។",
     aiAnalysis: "ការវិភាគដោយ AI",
-    aiSynthesis: "ការសង្ខេបដោយ AI",
+    aiSynthesis: "សង្ខេបដោយ AI",
     intelReport: "របាយការណ៍ចារកម្ម",
     date: "កាលបរិច្ឆេទ",
     category: "ប្រភេទ",
@@ -943,7 +943,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
           {article.isVerified && <CheckCircle className="w-3 h-3 text-green-600" />}
           <span className="text-[10px] font-mono opacity-60">{article.source}</span>
         </div>
-        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap">{formatRelativeTime(article.publishedAt, article.fetchedAt)}</span>
+        <span className="text-[9px] font-mono opacity-40 whitespace-nowrap" suppressHydrationWarning>{formatRelativeTime(article.publishedAt, article.fetchedAt)}</span>
       </div>
 
       {/* Title - use language-specific title if available */}
@@ -1449,95 +1449,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
 
   // =============================================================================
-  // DYNAMIC MOBILE VIEW - Switch to mobile if neutral card text overflows
-  // =============================================================================
-  const neutralContentRef = useRef<HTMLDivElement>(null);
-  const [forceMobileView, setForceMobileView] = useState(false);
-
-  // Dynamic max-width: adjusts based on neutral card content density
-  // Less content = narrower layout (less empty space), more content = wider layout
-  const [dynamicMaxWidth, setDynamicMaxWidth] = useState(1700); // Default middle ground
-  const MIN_WIDTH = 1400;
-  const MAX_WIDTH = 1925;
-
-  // Stable overflow check function - also calculates optimal container width
-  const checkOverflow = useCallback(() => {
-    // Skip on very small screens - let native CSS mobile handle it
-    if (typeof window === 'undefined' || window.innerWidth < 768) {
-      setForceMobileView(false);
-      return;
-    }
-
-    // GUARD: Only apply dynamic layout logic on sufficiently wide screens
-    // Below 1280px (xl breakpoint), the layout is already adapting via CSS
-    if (window.innerWidth < 1280) {
-      setForceMobileView(false);
-      return;
-    }
-
-    if (neutralContentRef.current) {
-      const el = neutralContentRef.current;
-      const contentHeight = el.scrollHeight;
-      const containerHeight = el.clientHeight;
-
-      // Calculate fill ratio: how much of the container the content uses
-      const fillRatio = contentHeight / containerHeight;
-
-      // Check for overflow (content exceeds container)
-      const isOverflowing = contentHeight > containerHeight + 20;
-      setForceMobileView(isOverflowing);
-
-      // Dynamic width calculation based on fill ratio
-      // fillRatio < 0.7 = lots of empty space → shrink width
-      // fillRatio 0.8-1.0 = good fit → optimal width
-      // fillRatio > 1.0 = overflow → expand width (before triggering mobile)
-
-      let optimalWidth: number;
-      if (fillRatio > 1.0) {
-        // Overflow - expand to max to try fitting content
-        optimalWidth = MAX_WIDTH;
-      } else if (fillRatio > 0.85) {
-        // Good fit - keep current or slightly expand
-        optimalWidth = Math.min(MAX_WIDTH, dynamicMaxWidth + 50);
-      } else if (fillRatio > 0.7) {
-        // Some empty space - keep stable
-        optimalWidth = dynamicMaxWidth;
-      } else {
-        // Lots of empty space - shrink to make content fill better
-        // The less content, the narrower we go
-        const shrinkFactor = fillRatio / 0.7; // 0.5 → 0.71, 0.7 → 1.0
-        optimalWidth = Math.max(MIN_WIDTH, dynamicMaxWidth * shrinkFactor);
-      }
-
-      // Only update if change is significant (>50px) to avoid jitter
-      if (Math.abs(optimalWidth - dynamicMaxWidth) > 50) {
-        setDynamicMaxWidth(Math.round(optimalWidth));
-      }
-    }
-  }, [dynamicMaxWidth]);
-
-  // Check on resize
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
-    const handleResize = () => {
-      clearTimeout(timeoutId);
-      // Check after layout settles (no reset needed - checkOverflow handles state)
-      timeoutId = setTimeout(checkOverflow, 150);
-    };
-
-    // Initial check
-    timeoutId = setTimeout(checkOverflow, 300);
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      clearTimeout(timeoutId);
-    };
-  }, [checkOverflow]);
-
-
-  // =============================================================================
   // ISR-AWARE DATA LOADING
   // If initialData is provided (from server-side ISR), we SKIP all Convex calls.
   // This means ZERO Convex bandwidth per user - data comes from Vercel's cache!
@@ -1716,36 +1627,14 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const countsLoading = hasServerData ? false : clientCountsLoading;
   const timelineLoading = hasServerData ? false : clientTimelineLoading;
 
-  // Re-check overflow when content or language changes - smart check to avoid flash
-  // NOTE: We deliberately do NOT include forceMobileView in deps to prevent infinite loop
-  // (overflow → mobile → no overflow → desktop → overflow → ...)
+  // Track if we're on desktop (xl+ breakpoint) for conditional CSS
+  const [isDesktop, setIsDesktop] = useState(true);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Skip on very small screens
-      if (typeof window === 'undefined' || window.innerWidth < 768) {
-        setForceMobileView(false);
-        return;
-      }
-
-      // GUARD: Only apply dynamic mobile view on wide screens (same as main check)
-      if (window.innerWidth < 1280) {
-        setForceMobileView(false);
-        return;
-      }
-
-      // Check overflow state without changing view first
-      if (neutralContentRef.current) {
-        const el = neutralContentRef.current;
-        // Use same improved 20px buffer as main overflow check
-        const isOverflowing = el.scrollHeight > el.clientHeight + 20;
-
-        // Only update if state actually needs to change (prevents flash)
-        setForceMobileView(isOverflowing);
-      }
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [neutralMeta, lang]); // Deliberately excluding forceMobileView to prevent feedback loop
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 1280);
+    checkDesktop();
+    window.addEventListener('resize', checkDesktop);
+    return () => window.removeEventListener('resize', checkDesktop);
+  }, []);
 
   // --- Modal Navigation & Touch State ---
 
@@ -1979,13 +1868,10 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     };
   }, [timelineDates, lang]); // Re-initialize when language changes (date headers re-render)
 
-
-  // No longer measuring Neutral Card height as Sidebar is now the master height
-
-  // Measure sidebar height for timeline view sync
+  // Measure sidebar height for layout synchronization
   useLayoutEffect(() => {
     const measureSidebarHeight = () => {
-      if (window.innerWidth >= 768 && sidebarRef.current) {
+      if (window.innerWidth >= 1280 && sidebarRef.current) {
         setSidebarHeight(sidebarRef.current.offsetHeight);
       } else {
         setSidebarHeight(undefined);
@@ -2000,12 +1886,11 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     }
 
     window.addEventListener('resize', measureSidebarHeight);
-
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', measureSidebarHeight);
     };
-  }, [viewMode, lang, isLoading]); // Re-measure for timeline view and when lang/loading changes
+  }, [viewMode, lang, sysStatsLoading]);
 
   // Timer Logic for countdown display
   // Also detect "possibly stale" state when we think the cycle should have completed
@@ -2259,12 +2144,11 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const isContentPending = viewMode !== deferredViewMode;
 
   return (
-    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${forceMobileView ? 'force-mobile' : ''}`}>
+    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass}`}>
       {/* Top spacer - flexes equally with bottom */}
       <div />
       <div
-        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full transition-[max-width] duration-300 ease-out"
-        style={{ maxWidth: `${dynamicMaxWidth}px` }}
+        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full transition-[max-width] duration-300 ease-out max-w-[1800px]"
       >
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
@@ -2481,10 +2365,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 ))}
               </p>
             </div>
-
-            {/* Minimized System Log */}
-            <div className="mt-2 border-t border-dashed border-riso-ink/30 pt-3">
-            </div>
           </div>
         </aside>
 
@@ -2493,7 +2373,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
           {/* ANALYSIS VIEW - Viewport-contained like Timeline */}
           <div className={`xl:col-span-3 ${deferredViewMode !== 'ANALYSIS' ? 'hidden' : ''}`}>
-            <div className="flex flex-col gap-4" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
                 <Card title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
@@ -2568,38 +2448,35 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 </Card>
               </div>
 
-              {/* Three Perspectives Grid - Weighted: Side cards 1fr, Neutral 1.5fr */}
+              {/* Three Perspectives Grid - Equal 1fr columns */}
               <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="perspectives-grid grid grid-cols-1 xl:grid-cols-[1fr_1.20fr_1fr] gap-4 h-full">
+                <div
+                  className={`perspectives-grid grid gap-4 h-full ${isDesktop ? 'grid-cols-3' : 'grid-cols-1'}`}
+                  suppressHydrationWarning
+                >
 
                   {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
                   <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0">
-                    <div className="bg-riso-ink text-riso-paper p-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
+                    <div className="bg-riso-ink text-riso-paper py-2 px-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2 overflow-visible">
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div ref={neutralContentRef} className="flex-1 flex flex-col space-y-4 min-h-0 overflow-hidden">
-                        <div className="mb-6">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge type="outline" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t.aiSynthesis}</Badge>
-                            {neutralMeta?.conflictLevel && (
-                              <Badge type="alert" className={lang === 'kh' || lang === 'th' ? 'text-[14px] px-3' : ''}>{t[neutralMeta.conflictLevel.toLowerCase() as keyof typeof t] || neutralMeta.conflictLevel}</Badge>
-                            )}
-                          </div>
-                          <h3 className="font-display text-3xl mt-2 leading-none py-1">
+                      <div className="flex-1 flex flex-col space-y-4 min-h-0 overflow-visible">
+                        <div className="mb-4 flex items-center justify-between">
+                          <h3 className="font-display text-3xl leading-normal overflow-visible">
                             {t.situationReport}
                           </h3>
-                          <p className="font-mono text-xs opacity-50 mt-1">
-                            {t.autoUpdating}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <Badge type="outline" className={lang === 'kh' || lang === 'th' ? 'text-[12px] px-2' : 'text-xs'}>{t.aiSynthesis}</Badge>
+                          </div>
                         </div>
 
-                        <div className={`flex-1 font-mono leading-relaxed text-justify mb-6 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
+                        <div className={`flex-1 font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[17px]' : 'text-[15px]'}`}>
                           {getSummary(neutralMeta) || t.analyzingFeeds}
                         </div>
 
                         {getKeyEvents(neutralMeta).length > 0 && (
-                          <div className="mb-4">
+                          <div className="pt-4 pb-2 border-t border-riso-ink/10">
                             <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.keyDevelopments}:</p>
                             <ul className="list-disc pl-4 space-y-1">
                               {getKeyEvents(neutralMeta).map((event: string, i: number) => (
@@ -2620,7 +2497,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.cambodia}
                     </div>
-                    <Card className="flex-1 flex flex-col overflow-hidden" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
+                    <Card className="flex-1 flex flex-col overflow-hidden !pb-2" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
                       <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         {/* Official Narrative */}
                         <div>
@@ -2668,7 +2545,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.thailand}
                     </div>
-                    <Card className="flex-1 flex flex-col overflow-hidden" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
+                    <Card className="flex-1 flex flex-col overflow-hidden !pb-2" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
                       <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         {/* Official Narrative */}
                         <div>
@@ -2718,7 +2595,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
           {/* LOSSES VIEW */}
           <div className={`xl:col-span-3 ${deferredViewMode !== 'LOSSES' ? 'hidden' : ''}`}>
-            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card title={`${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
 
                 {(!timelineEvents || timelineEvents.length === 0) ? (
@@ -3030,7 +2907,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
           <div className={`xl:col-span-3 ${deferredViewMode !== 'GUIDE' ? 'hidden' : ''}`}>
-            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (!forceMobileView && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
                 <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{t.guideTitle}</h3>
