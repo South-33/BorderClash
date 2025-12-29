@@ -384,14 +384,14 @@ const TRANSLATIONS = {
     situationReport: "รายงานสถานการณ์สด",
     autoUpdating: "อัปเดตเองทุก 6 ชั่วโมง",
     keyDevelopments: "เหตุการณ์สำคัญ",
-    sourcesTracked: "แหล่งข่าวที่ติดตาม",
+    sourcesTracked: "แหล่งข่าว",
     viewMode: "โหมดดูข้อมูล",
     analysis: "วิเคราะห์",
     timeline: "ไทม์ไลน์",
     losses: "ความสูญเสีย",
     guide: "คู่มือ",
     language: "ภาษา",
-    nextAutoScan: "สแกนรอบถัดไป",
+    nextAutoScan: "สแกน",
     articles: "บทความ",
     articlesRead: "อ่านแล้ว",
     articlesFetched: "ดึงข้อมูลแล้ว",
@@ -573,7 +573,7 @@ const TRANSLATIONS = {
     losses: "ការខូចខាត",
     guide: "ការណែនាំ",
     language: "ភាសា",
-    nextAutoScan: "ស្កេនម្តងទៀតក្នុង",
+    nextAutoScan: "ស្កេន", // Translated "AUTO-SCAN"
     articles: "អត្ថបទ",
     articlesRead: "អានបាន",
     articlesFetched: "ប្រមូលបាន",
@@ -1110,10 +1110,10 @@ const CategoryFilter = ({
 }) => {
   const categories = [
     { key: null, label: TRANSLATIONS[lang as Lang].all },
-    { key: 'military', label: 'Military' }, // Standardize to text for magazine feel
-    { key: 'political', label: 'Political' },
-    { key: 'humanitarian', label: 'Aid' },
-    { key: 'diplomatic', label: 'Diplomacy' },
+    { key: 'military', label: TRANSLATIONS[lang as Lang].cat_military },
+    { key: 'political', label: TRANSLATIONS[lang as Lang].cat_political },
+    { key: 'humanitarian', label: TRANSLATIONS[lang as Lang].cat_humanitarian },
+    { key: 'diplomatic', label: TRANSLATIONS[lang as Lang].cat_diplomatic },
   ];
 
   return (
@@ -1123,9 +1123,10 @@ const CategoryFilter = ({
           <button
             key={cat.key || 'all'}
             onClick={() => onChange(cat.key)}
-            className={`pb-1.5 text-[10px] font-mono font-bold uppercase tracking-widest transition-all ${selected === cat.key
-              ? `text-riso-ink border-b-2 border-riso-ink`
-              : 'text-riso-ink/65 hover:text-riso-ink border-b-2 border-transparent'
+            className={`pb-1.5 transition-colors uppercase tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[12px] font-medium font-mono' : 'text-[10px] font-bold font-mono'
+              } ${selected === cat.key
+                ? `text-riso-ink border-b-2 border-riso-ink`
+                : 'text-riso-ink/65 hover:text-riso-ink border-b-2 border-transparent'
               }`}
           >
             {cat.label}
@@ -1346,21 +1347,22 @@ const MilitaryIntensityGauge = ({
           const threshold = (i + 1) * 5;
           const isActive = displayIntensity >= threshold;
 
-          // Revert to distinct 4-color blocks (Green/Yellow/Orange/Red)
-          let baseColor = '';
-          if (threshold <= 30) baseColor = 'bg-[#188d45]';
-          else if (threshold <= 55) baseColor = 'bg-yellow-500';
-          else if (threshold < 70) baseColor = 'bg-orange-600';
-          else baseColor = 'bg-red-600';
-
-          // Active = full opacity (no texture variation)
-          // Inactive = 20% opacity (faded track)
-          const colorClass = isActive ? baseColor : `${baseColor}/20`;
+          // Use inline styles to avoid Tailwind purging issues in production
+          // Color hex values: Green #188d45, Yellow #eab308, Orange #ea580c, Red #dc2626
+          let color = '';
+          if (threshold <= 30) color = '#188d45';      // Green
+          else if (threshold <= 55) color = '#eab308'; // Yellow
+          else if (threshold < 70) color = '#ea580c';  // Orange
+          else color = '#dc2626';                       // Red
 
           return (
             <div
               key={i}
-              className={`flex-1 transition-colors duration-300 ${colorClass} opacity-100`}
+              className="flex-1 transition-all duration-300"
+              style={{
+                backgroundColor: color,
+                opacity: isActive ? 1 : 0.2
+              }}
             />
           );
         })}
@@ -2417,7 +2419,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
             <div className="flex justify-between items-start mb-2">
               <div>
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.nextAutoScan}</p>
-                <p className="font-mono text-3xl font-bold">
+                <p className="font-mono text-3xl font-bold" suppressHydrationWarning>
                   {systemStats?.isPaused ? (
                     <span className="text-yellow-600">{t.paused}</span>
                   ) : isSyncing ? (
@@ -2430,7 +2432,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 </p>
               </div>
               <div className="text-right">
-                <p className="font-mono text-[10px] opacity-70 mb-1">{t.sourcesTracked}</p>
+                <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.sourcesTracked}</p>
                 <p className="font-mono text-xl">
                   {sysStatsLoading || countsLoading ? (
                     <HackerScramble />
