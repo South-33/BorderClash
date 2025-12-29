@@ -4,8 +4,9 @@ import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback, use
 import { useQuery, useMutation, useConvex } from 'convex/react';
 import { FunctionReference } from 'convex/server';
 import { api } from '../../convex/_generated/api';
-import { Swords, Handshake, Heart, Landmark, Circle, Hourglass, BarChart3, Search } from 'lucide-react';
+import { Swords, Handshake, Heart, Landmark, Circle, Hourglass, BarChart3, Search, Eye, Globe, Camera, Calendar, AlertTriangle, Radar, History, BookOpen, Clock } from 'lucide-react';
 import type { BorderClashData } from '@/lib/convex-server';
+import Lenis from 'lenis';
 
 // --- Icon Components ---
 const IconBase = ({ children, className = "", ...props }: any) => (
@@ -88,6 +89,74 @@ const CheckCircle = (props: any) => (
     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
     <polyline points="22 4 12 14.01 9 11.01" />
   </IconBase>
+);
+
+const ScanEye = (props: any) => (
+  <IconBase {...props}>
+    <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+    <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+    <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+    <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+    <circle cx="12" cy="12" r="1" />
+    <path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0" />
+  </IconBase>
+);
+
+// Custom Timeline Icon (Hourglass)
+const TimelineIcon = ({ size = 24, strokeWidth = 2, className = "", ...props }: any) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={strokeWidth}
+    strokeLinecap="square"
+    strokeLinejoin="miter"
+    className={className}
+    {...props}
+  >
+    <path d="M12 12L7.72711 8.43926C7.09226 7.91022 6.77484 7.6457 6.54664 7.32144C6.34444 7.03413 6.19429 6.71354 6.10301 6.37428C6 5.99139 6 5.57819 6 4.7518V2M12 12L16.2729 8.43926C16.9077 7.91022 17.2252 7.6457 17.4534 7.32144C17.6556 7.03413 17.8057 6.71354 17.897 6.37428C18 5.99139 18 5.57819 18 4.7518V2M12 12L7.72711 15.5607C7.09226 16.0898 6.77484 16.3543 6.54664 16.6786C6.34444 16.9659 6.19429 17.2865 6.10301 17.6257C6 18.0086 6 18.4218 6 19.2482V22M12 12L16.2729 15.5607C16.9077 16.0898 17.2252 16.3543 17.4534 16.6786C17.6556 16.9659 17.8057 17.2865 17.897 17.6257C18 18.0086 18 18.4218 18 19.2482V22M4 2H20M4 22H20" />
+  </svg>
+);
+
+// Custom Report/Analysis Icon (Newspaper)
+const ReportIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: any) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <path d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6v-3Z" />
+  </svg>
+);
+
+// Custom Guide Icon (Open Book)
+const GuideIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: any) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    {...props}
+  >
+    <path d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
+  </svg>
 );
 
 // --- Category Icons ---
@@ -204,7 +273,7 @@ const TRANSLATIONS = {
     media: "MEDIA",
     agency: "AGENCY",
     other: "OTHER",
-    guideTitle: "USER GUIDE & CRITICAL LITERACY",
+    guideTitle: "USER GUIDE / CRITICAL LITERACY",
     dashboardGuide: "USING THIS DASHBOARD",
     dashboardGuideDesc: "This tool aggregates conflict data from Thai, Cambodian, and International sources. The 'Neutral AI' synthesizes these perspectives to find common ground.",
     aiWarning: "WARNING: AI & DEEPFAKES",
@@ -252,9 +321,10 @@ const TRANSLATIONS = {
     synthRole: "THE SYNTHESIZER (Synthesis)",
     synthDesc: "The final 'Neutral AI' compares conflicting narratives. If one side says 'Attack' and the other says 'Defense', it analyzes the discrepancies and produces a balanced Situation Report.",
     trustWarning: "TRUST NO ONE BLINDLY",
+    trustWarningLabel: "WARNING: SUBJECTIVE REALITY",
     trustWarningDesc: "Every government has an incentive to lie during conflict. Every news outlet has an audience to please. This dashboard is a tool, not a truth machine. Use it to compare narratives, not to validate your biases.",
     statelessApproach: "WE TAKE NO SIDES. WE TRUST NO ONE.",
-    statelessDesc: "We don't believe the governments. We don't believe the media. We don't care about 'national pride'. We only care about the hard facts on the ground.",
+    statelessDesc: "We don't believe the governments. We don't believe the media. We look past national narratives. We only care about the hard facts on the ground.",
     intelReport: "INTEL REPORT",
     date: "Date",
     category: "Category",
@@ -385,7 +455,7 @@ const TRANSLATIONS = {
     media: "สื่อ",
     agency: "สำนักข่าว",
     other: "อื่นๆ",
-    guideTitle: "คู่มือใช้งาน & รู้ทันสื่อ",
+    guideTitle: "คู่มือใช้งาน / รู้ทันสื่อ",
     dashboardGuide: "วิธีใช้แดชบอร์ดนี้",
     dashboardGuideDesc: "เรารวมข่าวจากทั้งฝั่งไทย เขมร และสื่อโลก แล้วให้ AI ตัวกลางช่วยสรุปให้เห็นภาพรวมที่ไม่อิงฝ่ายใดฝ่ายหนึ่ง",
     aiWarning: "เตือนภัย: ระวัง AI และ Deepfakes",
@@ -433,6 +503,7 @@ const TRANSLATIONS = {
     synthRole: "THE SYNTHESIZER (คนสรุป)",
     synthDesc: "AI ตัวสุดท้ายจะเป็นกรรมการกลาง เอาข้อมูลที่ขัดแย้งกันมาเทียบดู ถ้าฝั่งนึงบอกบุก อีกฝั่งบอกกัน ตัวนี้จะสรุปให้ว่าจริงๆ แล้วมันน่าจะเป็นยังไงกันแน่",
     trustWarning: "อย่าเชื่อใจใครง่ายๆ",
+    trustWarningLabel: "คำเตือน: ความจริงมีหลายด้าน",
     trustWarningDesc: "เวลารบกัน รัฐบาลไหนก็อยากพูดให้ตัวเองดูดี สื่อก็ต้องเอาใจคนดู แดชบอร์ดนี้มีไว้ให้คุณเทียบข้อมูลจากหลายๆ ฝั่ง ไม่ใช่เครื่องบอกความจริงสากล",
     statelessApproach: "ไม่เข้าข้างใคร และไม่เชื่อใครทั้งนั้น",
     statelessDesc: "เราไม่สนว่าใครเป็นใคร ไม่ได้อยู่ฝั่งไทย ไม่ได้อยู่ฝั่งเขมร เราสนแค่ความจริงที่เกิดขึ้นตรงหน้าเท่านั้น",
@@ -614,6 +685,7 @@ const TRANSLATIONS = {
     synthRole: "THE SYNTHESIZER (អ្នកសរុប)",
     synthDesc: "AI ចុងក្រោយដូចជាអាជ្ញាកណ្តាល។ បើខាងនេះថាម៉្យាង ខាងនោះថាម៉្យាង វាជាអ្នកយកមកថ្លឹងថ្លែង រកចំណុចកណ្តាល ដើម្បីឱ្យយើងយល់សាច់រឿងពិត។",
     trustWarning: "កុំជឿនរណាម្នាក់ងងឹតងងុល",
+    trustWarningLabel: "ការព្រមាន៖ ការពិតមានច្រើនជ្រុង",
     trustWarningDesc: "រដ្ឋាភិបាលណាក៏ចង់និយាយឱ្យខ្លួនឯងល្អ។ សារព័ត៌មានក៏ត្រូវយកចិត្តអ្នកមើល។ ប្រើតារាងនេះដើម្បីប្រៀបធៀបព័ត៌មាន មិនមែនដើម្បីបញ្ជាក់ថាខ្លួនឯងត្រូវទេ។",
     statelessApproach: "មិនកាន់ជើង ហើយមិនជឿអ្នកណាទាំងអស់",
     statelessDesc: "យើងមិនជឿសម្តីអ្នកណាទេ។ យើងមិននៅខាងថៃ ហើយក៏មិននៅខាងខ្មែរដែរ។ យើងដើរផ្លូវកណ្តាលបុកទៅរកការពិត។",
@@ -970,7 +1042,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
         {/* Subtle Accent Bar - Always on, but light */}
         <div className={`w-[2px] self-stretch ${borderColor} opacity-30 group-hover:opacity-100 transition-opacity`}></div>
 
-        <div className="flex-1 py-2.5 px-4">
+        <div className="flex-1 py-2 px-3 xl:py-2.5 xl:px-4">
           {/* Metadata Row - Condensed */}
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
@@ -985,7 +1057,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
           </div>
 
           {/* Headline - Standard Sentence Case, Slightly smaller */}
-          <h5 className={`font-bold text-[15px] leading-tight text-riso-ink tracking-tight transition-colors ${lang === 'kh' ? 'font-mono' : lang === 'th' ? 'font-mono' : ''}`}>
+          <h5 className={`font-bold text-[13px] xl:text-[15px] leading-tight text-riso-ink tracking-tight transition-colors ${lang === 'kh' ? 'font-mono' : lang === 'th' ? 'font-mono' : ''}`}>
             {lang === 'th' && article.titleTh ? article.titleTh :
               lang === 'kh' && article.titleKh ? article.titleKh :
                 article.titleEn || article.title}
@@ -1060,7 +1132,6 @@ const CategoryFilter = ({
           </button>
         ))}
       </div>
-      <span className="font-mono text-[9px] opacity-30 uppercase pb-1.5">{itemCount} UPDATES</span>
     </div>
   );
 };
@@ -1101,7 +1172,7 @@ const IntelligenceLog = ({
         />
 
         {/* Scrollable Feed */}
-        <div className="flex-1 max-h-[350px] overflow-y-auto scrollbar-thin">
+        <div className="flex-1 max-h-[220px] xl:max-h-[350px] overflow-y-auto scrollbar-thin">
           {isLoading ? (
             <div className="h-full flex items-center justify-center">
               <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
@@ -1268,38 +1339,50 @@ const MilitaryIntensityGauge = ({
       </div>
 
       {/* Gradient Gauge Bar */}
-      <div
-        className="relative h-8 rounded overflow-hidden isolate"
-        style={{ background: 'linear-gradient(to right, #4ade80 0%, #facc15 33%, #fb923c 66%, #ef4444 100%)' }}
-      >
-        {/* Indicator needle */}
-        <div
-          className="absolute top-0 bottom-0 w-1 bg-riso-ink shadow-lg transition-all duration-700"
-          style={{ left: `calc(${displayIntensity}% - 2px)` }}
-        />
-        {/* Scale markers */}
-        <div
-          className={`absolute inset-0 flex justify-between px-2 items-center font-mono tracking-widest ${lang === 'kh' || lang === 'th' ? `${labelFontSize} font-normal` : 'text-[9px] font-bold'} text-white`}
-          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
-        >
-          <span>{t.peaceful}</span>
-          <span>{t.defensive}</span>
-          <span>{t.escalated}</span>
-          <span>{t.aggressive}</span>
-        </div>
+      {/* Segmented LCD-style Gauge Bar */}
+      <div className="relative h-8 bg-riso-ink/5 border border-riso-ink/20 flex gap-[2px] p-[2px]">
+        {/* 20 Segments (5% each for even split) */}
+        {Array.from({ length: 20 }).map((_, i) => {
+          const threshold = (i + 1) * 5;
+          const isActive = displayIntensity >= threshold;
+
+          // Revert to distinct 4-color blocks (Green/Yellow/Orange/Red)
+          let baseColor = '';
+          if (threshold <= 30) baseColor = 'bg-[#188d45]';
+          else if (threshold <= 55) baseColor = 'bg-yellow-500';
+          else if (threshold < 70) baseColor = 'bg-orange-600';
+          else baseColor = 'bg-red-600';
+
+          // Active = full opacity (no texture variation)
+          // Inactive = 20% opacity (faded track)
+          const colorClass = isActive ? baseColor : `${baseColor}/20`;
+
+          return (
+            <div
+              key={i}
+              className={`flex-1 transition-colors duration-300 ${colorClass} opacity-100`}
+            />
+          );
+        })}
+
+
       </div>
 
       <div className="flex items-center gap-2 mt-2">
-        {/* Main Posture Label */}
-        <span className={`${labelFontSize} font-mono font-bold flex-shrink-0 ${postureColors[displayPosture]}`}>
+        {/* Low Key Tactical Label */}
+        <div className={`flex-shrink-0 h-8 flex items-center justify-center px-3 border ${labelFontSize} font-mono font-bold uppercase tracking-widest transition-colors duration-300 ${displayPosture === 'PEACEFUL' ? 'text-[#188d45] border-[#188d45]/30' :
+          displayPosture === 'DEFENSIVE' ? 'text-[#ca8a04] border-[#ca8a04]/30' :
+            displayPosture === 'ESCALATED' ? 'text-[#ea580c] border-[#ea580c]/30' :
+              'text-[#b91c1c] border-[#b91c1c]/30'
+          }`}>
           {displayPosture === 'PEACEFUL' ? t.peaceful : displayPosture === 'AGGRESSIVE' ? t.aggressive : displayPosture === 'ESCALATED' ? t.escalated : t.defensive}
-        </span>
+        </div>
 
         {/* Unified Label - Dynamic Width with Auto-Scroll if Overflowing */}
         {displayLabel && (
           <AutoScrollLabel
             text={displayLabel}
-            className={`border rounded ${postureBgColors[displayPosture]}`}
+            className={`border ${postureBgColors[displayPosture]}`}
             fontSizeClass={labelFontSize}
           />
         )}
@@ -1309,17 +1392,17 @@ const MilitaryIntensityGauge = ({
           <button
             onClick={() => setShowAnalysis(!showAnalysis)}
             className={`
-              ml-auto flex-shrink-0 h-8 flex items-center gap-1.5 px-4 rounded border 
-              font-mono uppercase transition-all duration-200
+              ml-auto flex-shrink-0 h-8 flex items-center gap-1.5 px-4 border 
+              font-mono uppercase transition-all duration-100 ease-out active:translate-y-px
               ${labelFontSize}
               ${showAnalysis
                 ? 'bg-riso-ink text-riso-paper border-riso-ink'
-                : 'bg-riso-ink/5 text-riso-ink border-riso-ink/30 hover:border-riso-ink/50 hover:bg-riso-ink/10'}
+                : 'bg-riso-ink/5 text-riso-ink border-riso-ink/30 hover:border-riso-ink/100 hover:bg-riso-ink/10'}
             `}
           >
-            <span>{t.postureRationale}</span>
+            <span className="font-bold tracking-wider">{t.postureRationale}</span>
             <span
-              className="transition-transform duration-200"
+              className="transition-transform duration-300"
               style={{
                 display: 'inline-block',
                 fontSize: lang === 'kh' || lang === 'th' ? '14px' : '16px',
@@ -1333,21 +1416,18 @@ const MilitaryIntensityGauge = ({
 
       {/* AI Rationale (collapsible with smooth animation) */}
       <div
-        className="overflow-hidden"
-        style={{
-          maxHeight: showAnalysis && displayRationale ? '500px' : '0',
-          opacity: showAnalysis && displayRationale ? 1 : 0,
-          marginTop: showAnalysis && displayRationale ? '8px' : '0',
-          transition: 'all 0.2s ease'
-        }}
+        className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${showAnalysis ? 'grid-rows-[1fr] mt-0' : 'grid-rows-[0fr] mt-0'}`}
       >
-        {displayRationale && (
-          <div className="p-2 bg-riso-ink/5 border border-riso-ink/10 rounded">
-            <p className={`font-mono italic opacity-70 ${labelFontSize}`}>
-              {displayRationale}
-            </p>
-          </div>
-        )}
+        <div className="overflow-hidden">
+          {displayRationale && (
+            <div className="mt-2 p-3 bg-riso-ink/5 border-l-4 border-l-riso-ink border-y border-r border-y-riso-ink/10 border-r-riso-ink/10">
+              <p className={`font-mono text-justify leading-relaxed ${labelFontSize}`}>
+                <span className="mr-2 uppercase tracking-wider opacity-70">[{t.analysis}]:</span>
+                {displayRationale}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1781,12 +1861,61 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     return () => clearTimeout(timer);
   }, [selectedTimelineDate, viewMode]); // Also re-run when viewMode changes (picker becomes visible)
 
+  // Initialize Lenis for smooth timeline scrolling
+  useEffect(() => {
+    if (viewMode !== 'LOSSES' || !timelineScrollRef.current) return;
+
+    // Use a small delay to ensure the container is fully rendered and has height
+    const timer = setTimeout(() => {
+      if (!timelineScrollRef.current) return;
+
+      const lenis = new Lenis({
+        wrapper: timelineScrollRef.current,
+        // Optional: specify content if wrapper scrolling logic is tricky, 
+        // but typically wrapper is enough if it has overflow: auto
+        duration: 0.8,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // standard easeOutExpo
+        orientation: 'vertical',
+        gestureOrientation: 'vertical',
+        smoothWheel: true,
+        wheelMultiplier: 1,
+      });
+
+      let rafId: number;
+      function raf(time: number) {
+        lenis.raf(time);
+        rafId = requestAnimationFrame(raf);
+      }
+      rafId = requestAnimationFrame(raf);
+
+      // Store lenis instance on the ref element for access if needed (optional)
+      (timelineScrollRef.current as any).lenis = lenis;
+
+      // Cleanup
+      return () => {
+        lenis.destroy();
+        cancelAnimationFrame(rafId);
+        if (timelineScrollRef.current) {
+          delete (timelineScrollRef.current as any).lenis;
+        }
+      };
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [viewMode]); // Re-run when view mode changes
+
   // Scroll to selected date section
   const scrollToDate = (date: string) => {
     setSelectedTimelineDate(date);
     const element = document.getElementById(`timeline-date-${date}`);
     if (element && timelineScrollRef.current) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const lenis = (timelineScrollRef.current as any).lenis;
+      if (lenis) {
+        // Use Lenis for smooth programmatic scroll if available
+        lenis.scrollTo(element, { offset: 0, duration: 1.0 });
+      } else {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   };
 
@@ -1811,10 +1940,12 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       const container = timelineScrollRef.current;
       if (!container) return null;
 
-      let nearestDate = timelineDates[0];
-      let nearestDistance = Infinity;
+      // Trigger switch when the date header is within the top 20% of the container
+      // This matches the user's request for it to change "when it's all the way at the top"
+      const threshold = container.clientHeight * 0.2;
 
-      // Find the date section closest to the top of the container
+      let activeDate = timelineDates[0];
+
       for (const date of timelineDates) {
         const element = document.getElementById(`timeline-date-${date}`);
         if (element) {
@@ -1822,16 +1953,18 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
           const containerRect = container.getBoundingClientRect();
           const distanceFromTop = rect.top - containerRect.top;
 
-          // Find section closest to top (within reasonable range)
-          if (Math.abs(distanceFromTop) < Math.abs(nearestDistance)) {
-            nearestDistance = distanceFromTop;
-            nearestDate = date;
+          // If this date is above (or just crossing) the threshold line, it becomes the current active candidate.
+          // Since dates are ordered top-to-bottom, the last one we find that satisfies this 
+          // is the one currently occupying the top of the view.
+          if (distanceFromTop <= threshold) {
+            activeDate = date;
+          } else {
+            // Found a date below the threshold, so the previous one (activeDate) is the winner.
+            break;
           }
-          // If this section is below viewport, previous was our target
-          if (distanceFromTop > container.clientHeight * 0.3) break;
         }
       }
-      return nearestDate;
+      return activeDate;
     };
 
     const handleScroll = () => {
@@ -2011,7 +2144,15 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       };
 
       return (
-        <div key={date} id={`timeline-date-${date}`}>
+        <div
+          key={date}
+          id={`timeline-date-${date}`}
+          className="content-visibility-auto"
+          style={{
+            contentVisibility: 'auto',
+            containIntrinsicSize: `auto ${80 + events.length * 180}px`
+          }}
+        >
           {/* Date Header - pins flush to top */}
           <div className="sticky top-0 z-30 transform-gpu">
             <div className="bg-riso-paper border-b border-riso-ink/10 py-3 px-4 md:px-8 shadow-sm">
@@ -2290,7 +2431,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               </div>
               <div className="text-right">
                 <p className="font-mono text-[10px] opacity-70 mb-1">{t.sourcesTracked}</p>
-                <p className="font-mono text-xl font-bold">
+                <p className="font-mono text-xl">
                   {sysStatsLoading || countsLoading ? (
                     <HackerScramble />
                   ) : (
@@ -2301,10 +2442,10 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
             </div>
 
             {/* Sources Tracked - Visual Bar */}
-            <div className="bg-riso-paper text-riso-ink p-2 rounded rough-border-sm">
+            <div className="bg-riso-paper text-riso-ink p-2 rough-border-sm">
 
               {/* Proportional Bar */}
-              <div className="flex h-3 rounded-sm overflow-hidden bg-black/5 border border-black/10">
+              <div className="flex h-3 overflow-hidden bg-black/5 border border-black/10">
                 {(() => {
                   const kh = articleCounts?.cambodia || 0;
                   const intl = articleCounts?.international || 0;
@@ -2333,17 +2474,17 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               </div>
 
               {/* Legend with counts & labels */}
-              <div className={`flex justify-between font-mono font-bold pt-1.5 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[10px]'}`}>
+              <div className={`flex justify-between font-mono pt-1.5 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[10px] font-bold'}`}>
                 <span className="flex items-center gap-1.5 text-[#032EA1]">
-                  <span className="w-2 h-2 bg-[#032EA1] rounded-full"></span>
+                  <span className="w-2 h-2 bg-[#032EA1]"></span>
                   {t.labelKH} {articleCounts?.cambodia || 0}
                 </span>
                 <span className="flex items-center gap-1.5 text-gray-600">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                  <span className="w-2 h-2 bg-gray-400"></span>
                   {t.labelINTL} {articleCounts?.international || 0}
                 </span>
                 <span className="flex items-center gap-1.5 text-[#241D4F]">
-                  <span className="w-2 h-2 bg-[#241D4F] rounded-full"></span>
+                  <span className="w-2 h-2 bg-[#241D4F]"></span>
                   {t.labelTH} {articleCounts?.thailand || 0}
                 </span>
               </div>
@@ -2368,7 +2509,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   key={l.id}
                   onClick={() => setLang(l.id as any)}
                   className={`
-                    flex-1 flex items-center justify-center py-2 px-1 rounded border-2 active:scale-95
+                    flex-1 flex items-center justify-center py-2 px-1 border-2 active:scale-95
                     transition-all duration-100 ease-out
                     ${lang === l.id
                       ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[3px_3px_0px_rgba(30,58,138,0.3)]'
@@ -2393,9 +2534,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
             </div>
             <div className={`grid grid-cols-1 gap-2 ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[12px]'}`}>
               {[
-                { id: 'ANALYSIS', label: t.analysis, icon: Search },
-                { id: 'LOSSES', label: t.timeline, icon: Hourglass },
-                { id: 'GUIDE', label: t.guide, icon: Handshake }
+                { id: 'ANALYSIS', label: t.analysis, icon: ReportIcon, size: 22 },
+                { id: 'LOSSES', label: t.timeline, icon: TimelineIcon, size: 20 },
+                { id: 'GUIDE', label: t.guide, icon: GuideIcon, size: 20 }
               ].map((mode) => (
                 <button
                   key={mode.id}
@@ -2409,7 +2550,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     }
                   `}
                 >
-                  <mode.icon size={16} strokeWidth={viewMode === mode.id ? 3 : 2} />
+                  <mode.icon size={mode.size} strokeWidth={viewMode === mode.id ? 2.5 : 1.5} />
                   <span className="uppercase font-black tracking-wider">
                     {mode.label}
                   </span>
@@ -2442,10 +2583,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     {part}
                     {i < arr.length - 1 && (
                       <button
-                        onClick={() => {
-                          setViewMode('GUIDE');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
+                        onClick={() => setViewMode('GUIDE')}
                         className="text-riso-ink font-bold border-b border-riso-ink hover:bg-riso-ink hover:text-riso-paper px-0.5 transition-colors cursor-pointer"
                         title={`Go to ${t.guide}`}
                       >
@@ -2534,7 +2672,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
               </div>
 
               {/* Three Perspectives Grid - Equal 1fr columns */}
-              <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-visible">
                 <div
                   className={`perspectives-grid grid gap-4 h-full ${isDesktop ? 'grid-cols-3' : 'grid-cols-1'}`}
                   suppressHydrationWarning
@@ -2693,17 +2831,54 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 ) : (
                   <div className="flex flex-col h-full min-h-0">
                     {/* --- DATE SELECTOR BAR --- */}
-                    <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5 relative group/nav overflow-hidden">
-                      {/* Left Nav Button */}
-                      <button
-                        onClick={() => scrollDatePicker('left')}
-                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-full px-1 bg-gradient-to-r from-riso-paper/90 to-transparent flex items-center justify-center opacity-0 group-hover/nav:opacity-100 transition-opacity"
-                        aria-label="Scroll left"
-                      >
-                        <ChevronLeft size={24} className="text-riso-ink/40 hover:text-riso-ink transition-colors" />
-                      </button>
+                    <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5 relative overflow-hidden">
 
-                      <div ref={datePickerRef} className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2" style={{ scrollbarWidth: 'none' }}>
+
+                      <div
+                        ref={datePickerRef}
+                        className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 cursor-grab active:cursor-grabbing select-none snap-x snap-mandatory scroll-smooth"
+                        style={{ scrollbarWidth: 'none' }}
+                        onWheel={(e) => {
+                          if (datePickerRef.current) {
+                            // Scroll horizontally based on vertical scroll
+                            datePickerRef.current.scrollLeft += e.deltaY;
+                          }
+                        }}
+                        onMouseDown={(e) => {
+                          const slider = datePickerRef.current;
+                          if (!slider) return;
+                          let isDown = true;
+                          let startX = e.pageX - slider.offsetLeft;
+                          let scrollLeft = slider.scrollLeft;
+
+                          const onMouseLeave = () => {
+                            isDown = false;
+                            slider.classList.remove('active');
+                          };
+
+                          const onMouseUp = () => {
+                            isDown = false;
+                            slider.classList.remove('active');
+                            document.removeEventListener('mouseup', onMouseUp);
+                            document.removeEventListener('mousemove', onMouseMove);
+                          };
+
+                          const onMouseMove = (e: MouseEvent) => {
+                            if (!isDown) return;
+                            e.preventDefault();
+                            const x = e.pageX - slider.offsetLeft;
+                            const walk = (x - startX) * 2; // scroll-fast
+                            slider.scrollLeft = scrollLeft - walk;
+                          };
+
+                          slider.classList.add('active');
+
+                          // Attach to document to handle drag outside container
+                          document.addEventListener('mouseup', onMouseUp);
+                          document.addEventListener('mousemove', onMouseMove);
+                          slider.addEventListener('mouseleave', onMouseLeave);
+                        }}
+                      >
                         {timelineDates.map((date) => {
                           const isSelected = selectedTimelineDate === date;
                           const count = dateCounts[date] || 0;
@@ -2713,7 +2888,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                               data-date={date}
                               onClick={() => scrollToDate(date)}
                               className={`
-                                     flex flex-col items-center justify-center
+                                     flex flex-col items-center justify-center snap-center
                                      min-w-[80px] px-3 ${lang === 'kh' || lang === 'th' ? 'py-3' : 'py-2'} rounded-sm border-2 transition-colors duration-150 flex-shrink-0
                                      ${isSelected
                                   ? 'bg-riso-ink border-riso-ink text-riso-paper'
@@ -2733,15 +2908,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                           );
                         })}
                       </div>
-
-                      {/* Right Nav Button */}
-                      <button
-                        onClick={() => scrollDatePicker('right')}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-full px-1 bg-gradient-to-l from-riso-paper/90 to-transparent flex items-center justify-center opacity-0 group-hover/nav:opacity-100 transition-opacity"
-                        aria-label="Scroll right"
-                      >
-                        <ChevronRight size={24} className="text-riso-ink/40 hover:text-riso-ink transition-colors" />
-                      </button>
                     </div>
 
                     {/* --- CONTINUOUS SCROLL TIMELINE --- */}
@@ -3010,7 +3176,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
             <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
-                <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{t.guideTitle}</h3>
+                <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">
+                  {t.guideTitle}
+                </h3>
                 <a
                   href="https://github.com/South-33/BorderClash"
                   target="_blank"
@@ -3030,13 +3198,12 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   {/* LEFT COLUMN: CRITICAL LITERACY */}
                   <div className="space-y-8">
                     {/* Trust No One Warning */}
-                    <div className="border-2 border-riso-ink p-6 relative overflow-hidden bg-riso-ink/5">
-                      <div className="absolute top-0 left-0 w-16 h-16 bg-riso-ink -translate-x-8 -translate-y-8 rotate-45"></div>
-                      <div className="relative z-10">
-                        <h3 className="font-display text-2xl uppercase tracking-wide mb-3 flex items-center gap-3">
-                          <span className="text-3xl">👁️</span> {t.trustWarning}
+                    <div className="border-4 border-double border-riso-ink relative overflow-hidden bg-riso-ink/5">
+                      <div className="p-6 relative z-10">
+                        <h3 className="font-display text-3xl uppercase tracking-tighter mb-4 flex items-center gap-3">
+                          <ScanEye className="w-10 h-10 text-riso-ink" strokeWidth={1.5} /> {t.trustWarning}
                         </h3>
-                        <p className={`font-mono leading-relaxed opacity-90 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                        <p className={`font-mono leading-relaxed font-medium ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
                           {t.trustWarningDesc}
                         </p>
                       </div>
@@ -3044,18 +3211,22 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
                     {/* Anti-Propaganda Checklist */}
                     <div>
-                      <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink/20 pb-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.verificationChecklist}</h4>
-                      <ul className="space-y-2 font-mono text-xs">
+                      <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.verificationChecklist}</h4>
+                      <ul className="grid grid-cols-1 gap-2 font-mono text-xs">
                         {[
-                          { icon: "🕵️", text: t.checkSources },
-                          { icon: "📸", text: t.lookForEvidence },
-                          { icon: "🧠", text: t.considerBias },
-                          { icon: "📅", text: t.checkDates },
-                          { icon: "🎭", text: t.emotionalManipulation }
+                          { icon: Globe, text: t.checkSources },
+                          { icon: Camera, text: t.lookForEvidence },
+                          { icon: Scale, text: t.considerBias },
+                          { icon: Calendar, text: t.checkDates },
+                          { icon: AlertTriangle, text: t.emotionalManipulation }
                         ].map((item, i) => (
-                          <li key={i} className="flex items-start gap-4 p-2 bg-white/50 border border-transparent hover:border-riso-ink/20 transition-all rounded group">
-                            <span className="text-xl filter sepia-[1] hue-rotate-[60deg] saturate-[1] opacity-70 group-hover:filter-none group-hover:opacity-100 transition-all duration-300">{item.icon}</span>
-                            <span className={`opacity-80 mt-1 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-xs'}`}>{item.text}</span>
+                          <li key={i} className="flex items-center gap-3 p-3 bg-white/40 border border-riso-ink/20 hover:border-riso-ink transition-all cursor-crosshair group">
+                            <div className="w-8 h-8 border border-riso-ink flex items-center justify-center bg-white group-hover:bg-riso-ink group-hover:text-white transition-colors flex-shrink-0">
+                              <item.icon className="w-4 h-4" strokeWidth={2} />
+                            </div>
+                            <span className={`font-medium ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm tracking-tight'}`}>
+                              {item.text}
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -3071,24 +3242,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     </div>
 
 
-                    {/* FACT VS PROPAGANDA */}
-                    <div className="space-y-4">
-                      <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink/20 pb-2 flex items-center gap-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
-                        <span className="text-xl">⚖️</span> {t.factVsPropaganda}
-                      </h4>
-                      <div className="grid grid-cols-1 gap-3">
-                        {/* Comparison 1 */}
-                        <div className={`bg-white/50 p-3 rounded border border-riso-ink/10 font-mono space-y-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                          <p className="text-green-700 flex gap-2"><span className="font-bold">✓</span> {t.fact1}</p>
-                          <p className="text-red-700 flex gap-2"><span className="font-bold">✗</span> {t.propaganda1}</p>
-                        </div>
-                        {/* Comparison 2 */}
-                        <div className={`bg-white/50 p-3 rounded border border-riso-ink/10 font-mono space-y-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                          <p className="text-green-700 flex gap-2"><span className="font-bold">✓</span> {t.fact2}</p>
-                          <p className="text-red-700 flex gap-2"><span className="font-bold">✗</span> {t.propaganda2}</p>
-                        </div>
-                      </div>
-                    </div>
+
+
+
 
 
                   </div>
@@ -3101,33 +3257,33 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                         {t.howItWorks}
                       </h4>
 
-                      <div className="relative space-y-8 pl-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-riso-ink/10">
+                      <div className="relative space-y-12 pl-8 before:absolute before:left-[14px] before:top-2 before:bottom-2 before:w-[2px] before:bg-riso-ink/20 before:border-l before:border-r before:border-riso-ink/10">
                         {/* Step 1: Curator */}
                         <div className="relative">
-                          <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">1</div>
-                          <h5 className="font-mono font-bold uppercase mb-1">{t.curatorRole}</h5>
-                          <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.curatorDesc}</p>
+                          <div className="absolute -left-[34px] top-0 bg-riso-paper border-2 border-riso-ink text-riso-ink font-bold font-mono text-xs px-1 py-0.5">01</div>
+                          <h5 className="font-mono font-black uppercase mb-2 tracking-widest text-[#032EA1]">{t.curatorRole}</h5>
+                          <p className={`font-mono opacity-80 leading-relaxed max-w-prose ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.curatorDesc}</p>
                         </div>
 
                         {/* Step 2: Verifier */}
                         <div className="relative">
-                          <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">2</div>
-                          <h5 className="font-mono font-bold uppercase mb-1">{t.verifierRole}</h5>
-                          <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.verifierDesc}</p>
+                          <div className="absolute -left-[34px] top-0 bg-riso-paper border-2 border-riso-ink text-riso-ink font-bold font-mono text-xs px-1 py-0.5">02</div>
+                          <h5 className="font-mono font-black uppercase mb-2 tracking-widest text-[#032EA1]">{t.verifierRole}</h5>
+                          <p className={`font-mono opacity-80 leading-relaxed max-w-prose ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.verifierDesc}</p>
                         </div>
 
                         {/* Step 3: Historian */}
                         <div className="relative">
-                          <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">3</div>
-                          <h5 className="font-mono font-bold uppercase mb-1">{t.historianRole}</h5>
-                          <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.historianDesc}</p>
+                          <div className="absolute -left-[34px] top-0 bg-riso-paper border-2 border-riso-ink text-riso-ink font-bold font-mono text-xs px-1 py-0.5">03</div>
+                          <h5 className="font-mono font-black uppercase mb-2 tracking-widest text-[#032EA1]">{t.historianRole}</h5>
+                          <p className={`font-mono opacity-80 leading-relaxed max-w-prose ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.historianDesc}</p>
                         </div>
 
                         {/* Step 4: Synth */}
                         <div className="relative">
-                          <div className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-riso-ink text-white flex items-center justify-center font-bold font-mono text-xs">4</div>
-                          <h5 className="font-mono font-bold uppercase mb-1">{t.synthRole}</h5>
-                          <p className={`font-mono opacity-70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.synthDesc}</p>
+                          <div className="absolute -left-[34px] top-0 bg-riso-paper border-2 border-riso-ink text-riso-ink font-bold font-mono text-xs px-1 py-0.5">04</div>
+                          <h5 className="font-mono font-black uppercase mb-2 tracking-widest text-[#032EA1]">{t.synthRole}</h5>
+                          <p className={`font-mono opacity-80 leading-relaxed max-w-prose ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.synthDesc}</p>
                         </div>
                       </div>
                     </div>
@@ -3138,39 +3294,53 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                       <p className={`font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.statelessDesc}</p>
                     </div>
 
-                    {/* DATA EXPLAINER */}
-                    <div className="space-y-6 pt-4 border-t border-riso-ink/10">
-                      {/* Scores */}
-                      <div>
-                        <h4 className={`font-mono font-bold uppercase mb-3 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.understandingScores}</h4>
-                        <div className={`space-y-2 font-mono ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                            <p>{t.scoreHigh}</p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                            <p>{t.scoreMid}</p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                            <p>{t.scoreLow}</p>
-                          </div>
-                        </div>
-                      </div>
 
-                      {/* Sources */}
-                      <div>
-                        <h4 className={`font-mono font-bold uppercase mb-3 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.whoIsTalking}</h4>
-                        <div className={`space-y-2 font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
-                          <p>🏛️ {t.sourceGov}</p>
-                          <p>📰 {t.sourceMedia}</p>
-                        </div>
-                      </div>
-                    </div>
+
+
 
                   </div> {/* End of right column */}
                 </div> {/* End of grid */}
+
+                {/* BOTTOM ROW: SIDE-BY-SIDE EQUAL HEIGHT */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mt-8">
+                  {/* Left: Fact vs Propaganda */}
+                  <div className="space-y-4">
+                    <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4 flex items-center gap-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                      {t.factVsPropaganda}
+                    </h4>
+                    <div className="grid grid-cols-1 gap-0 border-2 border-riso-ink/10 bg-white/30 h-[calc(100%-3rem)] content-start">
+                      {/* Comparison 1 */}
+                      <div className={`p-4 font-mono space-y-2 border-b-2 border-dashed border-riso-ink/10 hover:bg-white transition-colors ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                        <p className="text-[#188d45] flex gap-3 font-bold"><span className="opacity-50">[FACT]</span> {t.fact1}</p>
+                        <p className="text-[#b91c1c] flex gap-3 font-bold opacity-80"><span className="opacity-50">[SPIN]</span> {t.propaganda1}</p>
+                      </div>
+                      {/* Comparison 2 */}
+                      <div className={`p-4 font-mono space-y-2 hover:bg-white transition-colors flex-1 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                        <p className="text-[#188d45] flex gap-3 font-bold"><span className="opacity-50">[FACT]</span> {t.fact2}</p>
+                        <p className="text-[#b91c1c] flex gap-3 font-bold opacity-80"><span className="opacity-50">[SPIN]</span> {t.propaganda2}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Scores Meaning */}
+                  <div className="space-y-4">
+                    <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4 flex items-center gap-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                      {t.understandingScores}
+                    </h4>
+                    <div className="grid grid-cols-1 gap-0 border-2 border-riso-ink/10 bg-white/30 h-[calc(100%-3rem)] content-start">
+                      {[
+                        { color: "bg-green-500", text: t.scoreHigh },
+                        { color: "bg-yellow-500", text: t.scoreMid },
+                        { color: "bg-red-500", text: t.scoreLow }
+                      ].map((score, i) => (
+                        <div key={i} className={`p-4 font-mono flex items-center gap-3 hover:bg-white transition-colors ${i !== 2 ? 'border-b-2 border-dashed border-riso-ink/10' : ''} ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                          <div className={`w-3 h-3 rounded-full ${score.color} flex-shrink-0`}></div>
+                          <p className="font-bold opacity-80">{score.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div> {/* End of scrollable content */}
             </div> {/* End of inner flex container */}
           </div> {/* End of GUIDE outer container */}

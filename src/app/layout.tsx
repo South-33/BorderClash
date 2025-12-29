@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import { type Metadata } from "next";
 import { Anton, JetBrains_Mono, Inter, Chakra_Petch, IBM_Plex_Sans_Thai, Moul, Kantumruy_Pro } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "./ConvexClientProvider";
@@ -53,11 +53,11 @@ const kantumruy = Kantumruy_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "BORDER CONFLICT MONITOR // 2025",
+  title: "BORDER CLASH MONITOR",
   description: "Real-time intelligence monitoring of the Thailand-Cambodia border situation. Multi-perspective news aggregation with AI-powered neutral analysis.",
   keywords: ["Thailand", "Cambodia", "border", "conflict", "monitor", "intelligence", "news"],
   openGraph: {
-    title: "BORDER CONFLICT MONITOR // 2025",
+    title: "BORDER CLASH MONITOR",
     description: "Real-time intelligence monitoring of the Thailand-Cambodia border situation",
     type: "website",
   },
