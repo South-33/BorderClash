@@ -141,13 +141,16 @@ export const getTimeline = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const limit = Math.min(args.limit ?? 200, 500);
-        const events = await ctx.db
+        const query = ctx.db
             .query("timelineEvents")
             .withIndex("by_date")
-            .order("desc")
-            .take(limit);
-        return events;
+            .order("desc");
+
+        if (args.limit) {
+            return await query.take(args.limit);
+        }
+
+        return await query.collect();
     },
 });
 

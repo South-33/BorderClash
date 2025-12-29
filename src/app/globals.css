@@ -130,6 +130,18 @@ body {
     background-clip: padding-box;
 }
 
+/* Utility to hide scrollbar but keep functionality */
+.no-scrollbar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
 /* Animations */
 @keyframes scanline {
     0% {

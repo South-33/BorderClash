@@ -287,7 +287,7 @@ const TRANSLATIONS = {
     // Categories
     cat_military: "MILITARY",
     cat_diplomatic: "DIPLOMATIC",
-    cat_humanitarian: "HUMANITARIAN",
+    cat_humanitarian: "AID",
     cat_political: "POLITICAL",
     // Military Posture Context
     postureGaugeTitle: "MILITARY POSTURE",
@@ -1906,6 +1906,45 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     return () => clearTimeout(timer);
   }, [viewMode]); // Re-run when view mode changes
 
+  // Initialize Lenis for horizontal date picker
+  useEffect(() => {
+    if (viewMode !== 'LOSSES' || !datePickerRef.current) return;
+
+    // Small delay to ensure render
+    const timer = setTimeout(() => {
+      if (!datePickerRef.current) return;
+
+      const lenis = new Lenis({
+        wrapper: datePickerRef.current,
+        orientation: 'horizontal',
+        gestureOrientation: 'both', // Allows vertical trackpad swipe to scroll horizontally if desired, or 'horizontal'
+        smoothWheel: true,
+        wheelMultiplier: 1,
+        // Optional: adjusting Lerp for different feel, default is 0.1
+        // lerp: 0.1 
+      });
+
+      let rafId: number;
+      function raf(time: number) {
+        lenis.raf(time);
+        rafId = requestAnimationFrame(raf);
+      }
+      rafId = requestAnimationFrame(raf);
+
+      (datePickerRef.current as any).lenis = lenis;
+
+      return () => {
+        lenis.destroy();
+        cancelAnimationFrame(rafId);
+        if (datePickerRef.current) {
+          delete (datePickerRef.current as any).lenis;
+        }
+      };
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [viewMode]);
+
   // Scroll to selected date section
   const scrollToDate = (date: string) => {
     setSelectedTimelineDate(date);
@@ -2093,7 +2132,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
 
   // Helper to format dates correctly for all languages (fixing Chrome/Khmer issues)
-  const formatDate = (dateInput: string | number | Date, formatStr: 'short' | 'long' | 'weekday' = 'long') => {
+  const formatDate = (dateInput: string | number | Date, formatStr: 'short' | 'long' | 'weekday' | 'weekday-short' = 'long') => {
     const d = new Date(dateInput);
 
     if (lang === 'kh') {
@@ -2102,13 +2141,17 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       const year = d.getFullYear();
 
       if (formatStr === 'short') return `${day} ${month}`;
-      if (formatStr === 'weekday') return `${day} ${month}`; // Simplified for header if needed
+      if (formatStr === 'weekday' || formatStr === 'weekday-short') return `${day} ${month}`; // Simplified for header if needed
       return `${day} ${month} ${year}`; // Default long
     }
 
-    if (lang === 'th' && formatStr === 'short') {
+    if (lang === 'th' && (formatStr === 'short' || formatStr === 'weekday-short')) {
       const day = d.getDate();
       const month = TH_MONTHS_SHORT[d.getMonth()];
+      if (formatStr === 'weekday-short') {
+        const weekday = d.toLocaleDateString('th-TH', { weekday: 'short' });
+        return `${weekday} ${day} ${month}`;
+      }
       return `${day} ${month}`;
     }
 
@@ -2120,6 +2163,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     }
     if (formatStr === 'weekday') {
       return d.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+    if (formatStr === 'weekday-short') {
+      return d.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric' });
     }
     return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
   };
@@ -2157,15 +2203,16 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
         >
           {/* Date Header - pins flush to top */}
           <div className="sticky top-0 z-30 transform-gpu">
-            <div className="bg-riso-paper border-b border-riso-ink/10 py-3 px-4 md:px-8 shadow-sm">
+            <div className="bg-riso-paper border-t border-b border-riso-ink/10 py-3 px-4 md:px-8 shadow-sm">
               <div className="flex items-center justify-between max-w-2xl mx-auto">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
                   <h3 className="font-display text-xl uppercase tracking-wide">
-                    {formatDate(date, 'weekday')}
+                    <span className="md:hidden">{formatDate(date, 'weekday-short')}</span>
+                    <span className="hidden md:inline">{formatDate(date, 'weekday')}</span>
                   </h3>
                 </div>
-                <span className="font-mono text-xs opacity-50">{events.length} {t.reports}</span>
+                <span className="font-mono text-xm opacity-100">{events.length} {t.reports}</span>
               </div>
             </div>
           </div>
@@ -2833,53 +2880,26 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 ) : (
                   <div className="flex flex-col h-full min-h-0">
                     {/* --- DATE SELECTOR BAR --- */}
-                    <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5 relative overflow-hidden">
+                    <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5 relative group">
 
+                      {/* Date Range Header */}
+                      <div className="flex justify-between items-center mb-2 px-1">
+                        <span className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} font-bold uppercase tracking-widest text-riso-ink/40`}>
+                          {timelineDates.length > 0 ? formatDate(timelineDates[0], 'short') : '-'}
+                        </span>
+                        <div className="h-px flex-1 bg-riso-ink/10 mx-4"></div>
+                        <span className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} font-bold uppercase tracking-widest text-riso-ink/40`}>
+                          {timelineDates.length > 0 ? formatDate(timelineDates[timelineDates.length - 1], 'short') : '-'}
+                        </span>
+                      </div>
+
+                      {/* Left/Right Scroll Indicators (Visual Masks) */}
+                      <div className="absolute left-0 top-10 bottom-0 w-8 bg-gradient-to-r from-riso-paper/40 to-transparent z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <div className="absolute right-0 top-10 bottom-0 w-8 bg-gradient-to-l from-riso-paper/40 to-transparent z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
                       <div
                         ref={datePickerRef}
-                        className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 cursor-grab active:cursor-grabbing select-none snap-x snap-mandatory scroll-smooth"
-                        style={{ scrollbarWidth: 'none' }}
-                        onWheel={(e) => {
-                          if (datePickerRef.current) {
-                            // Scroll horizontally based on vertical scroll
-                            datePickerRef.current.scrollLeft += e.deltaY;
-                          }
-                        }}
-                        onMouseDown={(e) => {
-                          const slider = datePickerRef.current;
-                          if (!slider) return;
-                          let isDown = true;
-                          let startX = e.pageX - slider.offsetLeft;
-                          let scrollLeft = slider.scrollLeft;
-
-                          const onMouseLeave = () => {
-                            isDown = false;
-                            slider.classList.remove('active');
-                          };
-
-                          const onMouseUp = () => {
-                            isDown = false;
-                            slider.classList.remove('active');
-                            document.removeEventListener('mouseup', onMouseUp);
-                            document.removeEventListener('mousemove', onMouseMove);
-                          };
-
-                          const onMouseMove = (e: MouseEvent) => {
-                            if (!isDown) return;
-                            e.preventDefault();
-                            const x = e.pageX - slider.offsetLeft;
-                            const walk = (x - startX) * 2; // scroll-fast
-                            slider.scrollLeft = scrollLeft - walk;
-                          };
-
-                          slider.classList.add('active');
-
-                          // Attach to document to handle drag outside container
-                          document.addEventListener('mouseup', onMouseUp);
-                          document.addEventListener('mousemove', onMouseMove);
-                          slider.addEventListener('mouseleave', onMouseLeave);
-                        }}
+                        className="flex items-center gap-2 overflow-x-auto pb-2 scroll-auto overscroll-x-contain no-scrollbar"
                       >
                         {timelineDates.map((date) => {
                           const isSelected = selectedTimelineDate === date;
@@ -2894,7 +2914,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                                      min-w-[80px] px-3 ${lang === 'kh' || lang === 'th' ? 'py-3' : 'py-2'} rounded-sm border-2 transition-colors duration-150 flex-shrink-0
                                      ${isSelected
                                   ? 'bg-riso-ink border-riso-ink text-riso-paper'
-                                  : 'bg-riso-paper border-riso-ink/20 text-riso-ink hover:border-riso-ink/50 hover:bg-white'}
+                                  : 'bg-riso-paper border-riso-ink/20 text-riso-ink hover:border-riso-ink/50 hover:bg-black/5'}
                                    `}
                             >
                               <span className={`font-mono text-[10px] uppercase tracking-wider mb-1 ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
@@ -2919,7 +2939,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     >
                       <div className="relative pb-12">
                         {/* Center Line - spans full content height, z-0 so headers cover it */}
-                        <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2 z-0"></div>
+                        <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2"></div>
                         {timelineContent}
 
                         {timelineDates.length === 0 && (
