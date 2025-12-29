@@ -7,6 +7,7 @@ import { api } from '../../convex/_generated/api';
 import { Swords, Handshake, Heart, Landmark, Circle, Hourglass, BarChart3, Search, Eye, Globe, Camera, Calendar, AlertTriangle, Radar, History, BookOpen, Clock } from 'lucide-react';
 import type { BorderClashData } from '@/lib/convex-server';
 import Lenis from 'lenis';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 // --- Icon Components ---
 const IconBase = ({ children, className = "", ...props }: any) => (
@@ -939,7 +940,7 @@ const Card = ({ children, className = "", title, icon: Icon, loading = false, re
   return (
     <div className={`bg-riso-paper rough-border p-4 relative overflow-hidden ${isFlexLayout ? 'flex flex-col' : ''} ${className}`}>
       {loading && (
-        <div className="absolute inset-0 bg-riso-ink/5 z-10 flex items-center justify-center backdrop-blur-[1px]">
+        <div className="absolute inset-0 bg-riso-ink/5 z-10 flex items-center justify-center">
           <div className="flex flex-col items-center">
             <RefreshCw className="w-8 h-8 text-riso-ink animate-spin mb-2" />
             <span className="font-mono text-xs uppercase tracking-widest">Updating Data Stream...</span>
@@ -1461,6 +1462,9 @@ interface DashboardClientProps {
   serverError?: string | null;
 }
 
+// LazySection removed to eliminate layout shift jitter.
+// Relying on CSS containment and optimized transitions for performance instead.
+
 export function DashboardClient({ initialData, serverError }: DashboardClientProps) {
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
 
@@ -1863,48 +1867,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     return () => clearTimeout(timer);
   }, [selectedTimelineDate, viewMode]); // Also re-run when viewMode changes (picker becomes visible)
 
-  // Initialize Lenis for smooth timeline scrolling
-  useEffect(() => {
-    if (viewMode !== 'LOSSES' || !timelineScrollRef.current) return;
-
-    // Use a small delay to ensure the container is fully rendered and has height
-    const timer = setTimeout(() => {
-      if (!timelineScrollRef.current) return;
-
-      const lenis = new Lenis({
-        wrapper: timelineScrollRef.current,
-        // Optional: specify content if wrapper scrolling logic is tricky, 
-        // but typically wrapper is enough if it has overflow: auto
-        duration: 0.8,
-        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // standard easeOutExpo
-        orientation: 'vertical',
-        gestureOrientation: 'vertical',
-        smoothWheel: true,
-        wheelMultiplier: 1,
-      });
-
-      let rafId: number;
-      function raf(time: number) {
-        lenis.raf(time);
-        rafId = requestAnimationFrame(raf);
-      }
-      rafId = requestAnimationFrame(raf);
-
-      // Store lenis instance on the ref element for access if needed (optional)
-      (timelineScrollRef.current as any).lenis = lenis;
-
-      // Cleanup
-      return () => {
-        lenis.destroy();
-        cancelAnimationFrame(rafId);
-        if (timelineScrollRef.current) {
-          delete (timelineScrollRef.current as any).lenis;
-        }
-      };
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [viewMode]); // Re-run when view mode changes
+  // NOTE: Lenis removed from timeline - it conflicts with virtualization.
+  // Native scrolling + virtualization = optimal performance.
 
   // Initialize Lenis for horizontal date picker
   useEffect(() => {
@@ -1945,18 +1909,12 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     return () => clearTimeout(timer);
   }, [viewMode]);
 
-  // Scroll to selected date section
+  // Scroll to selected date section (uses virtualizer for smooth navigation)
   const scrollToDate = (date: string) => {
     setSelectedTimelineDate(date);
-    const element = document.getElementById(`timeline-date-${date}`);
-    if (element && timelineScrollRef.current) {
-      const lenis = (timelineScrollRef.current as any).lenis;
-      if (lenis) {
-        // Use Lenis for smooth programmatic scroll if available
-        lenis.scrollTo(element, { offset: 0, duration: 1.0 });
-      } else {
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+    const index = dateToVirtualIndex[date];
+    if (index !== undefined) {
+      rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' });
     }
   };
 
@@ -2180,131 +2138,46 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   // Language class for font-size boost (Thai/Khmer need larger text)
   const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
 
-  // Memoize the timeline list to prevent re-renders on scroll (Date Picker updates)
-  const timelineContent = useMemo(() => {
-    return timelineDates.map((date) => {
+  // Build flat list for virtualization: [header, event, event, ..., header, event, ...]
+  // Each item has { type: 'header' | 'event', date: string, event?: any, eventIndex?: number }
+  const virtualItems = useMemo(() => {
+    const items: Array<{ type: 'header' | 'event'; date: string; event?: any; eventIndex?: number; eventsInDate?: number }> = [];
+    timelineDates.forEach(date => {
       const events = groupedEvents[date] || [];
-      const categoryColors: Record<string, string> = {
-        military: 'bg-red-500',
-        diplomatic: 'bg-blue-500',
-        humanitarian: 'bg-yellow-500',
-        political: 'bg-purple-500',
-      };
-
-      return (
-        <div
-          key={date}
-          id={`timeline-date-${date}`}
-          className="content-visibility-auto"
-          style={{
-            contentVisibility: 'auto',
-            containIntrinsicSize: `auto ${80 + events.length * 180}px`
-          }}
-        >
-          {/* Date Header - pins flush to top */}
-          <div className="sticky top-0 z-30 transform-gpu">
-            <div className="bg-riso-paper border-t border-b border-riso-ink/10 py-3 px-4 md:px-8 shadow-sm">
-              <div className="flex items-center justify-between max-w-2xl mx-auto">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
-                  <h3 className="font-display text-xl uppercase tracking-wide">
-                    <span className="md:hidden">{formatDate(date, 'weekday-short')}</span>
-                    <span className="hidden md:inline">{formatDate(date, 'weekday')}</span>
-                  </h3>
-                </div>
-                <span className="font-mono text-xm opacity-100">{events.length} {t.reports}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Events for this date */}
-          <div className="space-y-6 px-4 md:px-8 py-6">
-            {events.map((event: any, index: number) => {
-              const isRight = index % 2 === 0;
-              const isImportant = (event.importance || 0) > 75;
-
-              return (
-                <div key={event._id} className={`relative flex md:items-center ${isRight ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row ml-6 md:ml-0`}>
-                  <div className="hidden md:block flex-1"></div>
-
-                  {/* Center Node - Vertically centered on mobile */}
-                  <div className="absolute left-[-2.25rem] md:left-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 md:w-8 md:h-8 md:-translate-x-1/2 z-10">
-                    <div
-                      className={`rounded-full border-2 border-riso-paper shadow-sm transition-all hover:scale-125 cursor-pointer
-                        ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}
-                        ${isImportant ? 'animate-pulse ring-2 ring-offset-1 md:ring-offset-2 ring-riso-accent' : ''}
-                        w-6 h-6 md:w-8 md:h-8 flex items-center justify-center`}
-                      onClick={() => setSelectedEvent(event)}
-                    >
-                      {(() => {
-                        const cat = event.category?.toLowerCase();
-                        const IconClass = "w-3 h-3 md:w-4 md:h-4 text-white drop-shadow-sm";
-                        if (cat === 'military') return <Swords className={IconClass} />;
-                        if (cat === 'diplomatic') return <Handshake className={IconClass} />;
-                        if (cat === 'humanitarian') return <Heart className={IconClass} />;
-                        if (cat === 'political') return <Landmark className={IconClass} />;
-                        return null;
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Connector Line */}
-                  <div className={`hidden md:block absolute top-1/2 h-px bg-riso-ink/20 w-8 md:w-16 ${isRight ? 'left-8 md:left-[calc(50%+1rem)]' : 'right-8 md:right-[calc(50%+1rem)]'}`}></div>
-
-                  {/* Event Card */}
-                  <div className={`flex-1 ${isRight ? 'md:pl-12' : 'md:pr-12'}`}>
-                    <div
-                      className={`relative bg-riso-paper p-3 rounded-sm border hover:shadow-lg transition-all cursor-pointer group
-                        ${isImportant ? 'border-riso-accent border-2' : 'border-riso-ink/20 dashed-border-sm'}`}
-                      onClick={() => setSelectedEvent(event)}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <span className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[13px] font-semibold' : 'text-[10px] font-bold uppercase'} ${lang === 'kh' ? 'leading-relaxed py-1' : 'py-0.5'} px-1.5 rounded text-white ${categoryColors[event.category?.toLowerCase()] || 'bg-gray-500'}`}>
-                          {t[`cat_${event.category?.toLowerCase()}` as keyof typeof t] || event.category}
-                        </span>
-                        <span className="font-mono text-[10px] opacity-50">
-                          {event.timeOfDay || 'All Day'}
-                        </span>
-                      </div>
-
-                      <h4 className={`leading-tight mb-1 group-hover:text-blue-700 transition-colors ${lang === 'kh' ? 'font-bold text-base font-mono leading-relaxed' : lang === 'th' ? 'font-bold text-base font-mono' : 'font-semibold text-[15px] font-display uppercase tracking-wide'}`}>
-                        {(() => {
-                          if (lang === 'th' && event.titleTh) return event.titleTh;
-                          if (lang === 'kh' && event.titleKh) return event.titleKh;
-                          return event.title;
-                        })()}
-                      </h4>
-
-                      <p className={`line-clamp-2 opacity-70 ${lang === 'kh' ? 'text-sm leading-relaxed' : lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
-                        {(() => {
-                          if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
-                          if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
-                          return event.description;
-                        })()}
-                      </p>
-
-                      {event.sources && event.sources.length > 0 && (
-                        <div className="mt-2 flex items-center gap-1">
-                          <div className="flex -space-x-1">
-                            {[...Array(Math.min(3, event.sources.length))].map((_, i) => (
-                              <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-mono">📄</div>
-                            ))}
-                          </div>
-                          <span className="text-[9px] font-mono opacity-50">+{event.sources.length} {t.sources}</span>
-                        </div>
-                      )}
-
-                      <div className={`absolute top-1/2 w-2 h-2 bg-riso-ink rounded-full ${isRight ? '-left-1' : '-right-1'} transform -translate-y-1/2 hidden md:block opacity-20`}></div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
+      items.push({ type: 'header', date, eventsInDate: events.length });
+      events.forEach((event, idx) => {
+        items.push({ type: 'event', date, event, eventIndex: idx });
+      });
     });
-  }, [timelineDates, groupedEvents, lang]);
+    return items;
+  }, [timelineDates, groupedEvents]);
+
+  // Date-to-index mapping for scrollToDate
+  const dateToVirtualIndex = useMemo(() => {
+    const map: Record<string, number> = {};
+    virtualItems.forEach((item, idx) => {
+      if (item.type === 'header' && !map[item.date]) {
+        map[item.date] = idx;
+      }
+    });
+    return map;
+  }, [virtualItems]);
+
+  // Virtualizer setup
+  const rowVirtualizer = useVirtualizer({
+    count: virtualItems.length,
+    getScrollElement: () => timelineScrollRef.current,
+    estimateSize: (index) => virtualItems[index]?.type === 'header' ? 60 : 160,
+    overscan: 10, // Render 10 extra items above/below viewport for smooth scroll
+  });
+
+  // Category colors for event rendering
+  const categoryColors: Record<string, string> = {
+    military: 'bg-red-500',
+    diplomatic: 'bg-blue-500',
+    humanitarian: 'bg-yellow-500',
+    political: 'bg-purple-500',
+  };
 
   // Show error state if server-side fetching failed and we have no fallback data
   if (serverError && !hasServerData) {
@@ -2932,17 +2805,146 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                       </div>
                     </div>
 
-                    {/* --- CONTINUOUS SCROLL TIMELINE --- */}
+                    {/* --- VIRTUALIZED TIMELINE --- */}
                     <div
                       ref={timelineScrollRef}
-                      className="flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] overscroll-contain"
+                      className="flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px]"
+                      style={{ overflowAnchor: 'none', transform: 'translate3d(0,0,0)' }}
                     >
-                      <div className="relative pb-12">
-                        {/* Center Line - spans full content height, z-0 so headers cover it */}
-                        <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2"></div>
-                        {timelineContent}
+                      {/* Virtual container with total height */}
+                      <div
+                        className="relative w-full"
+                        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                      >
+                        {/* Center Line */}
+                        <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2 z-0"></div>
 
-                        {timelineDates.length === 0 && (
+                        {/* Virtualized items */}
+                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                          const item = virtualItems[virtualRow.index];
+                          if (!item) return null;
+
+                          if (item.type === 'header') {
+                            // Date Header
+                            return (
+                              <div
+                                key={`header-${item.date}`}
+                                id={`timeline-date-${item.date}`}
+                                data-index={virtualRow.index}
+                                ref={rowVirtualizer.measureElement}
+                                className="absolute top-0 left-0 w-full z-20"
+                                style={{ transform: `translateY(${virtualRow.start}px)` }}
+                              >
+                                <div className="bg-riso-paper border-t border-b border-riso-ink/10 py-3 px-4 md:px-8 shadow-sm">
+                                  <div className="flex items-center justify-between max-w-2xl mx-auto">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
+                                      <h3 className="font-display text-xl uppercase tracking-wide">
+                                        <span className="md:hidden">{formatDate(item.date, 'weekday-short')}</span>
+                                        <span className="hidden md:inline">{formatDate(item.date, 'weekday')}</span>
+                                      </h3>
+                                    </div>
+                                    <span className="font-mono text-sm opacity-100">{item.eventsInDate} {t.reports}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            // Event Card
+                            const event = item.event;
+                            const isRight = (item.eventIndex || 0) % 2 === 0;
+                            const isImportant = (event?.importance || 0) > 75;
+
+                            return (
+                              <div
+                                key={event?._id || `event-${virtualRow.index}`}
+                                data-index={virtualRow.index}
+                                ref={rowVirtualizer.measureElement}
+                                className="absolute top-0 left-0 w-full px-4 md:px-8 py-3"
+                                style={{ transform: `translateY(${virtualRow.start}px)` }}
+                              >
+                                <div
+                                  className={`relative flex md:items-center ${isRight ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row ml-6 md:ml-0`}
+                                >
+                                  <div className="hidden md:block flex-1"></div>
+
+                                  {/* Center Node */}
+                                  <div className="absolute left-[-2.25rem] md:left-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 md:w-8 md:h-8 md:-translate-x-1/2 z-10">
+                                    <div
+                                      className={`rounded-full border-2 border-riso-paper shadow-sm cursor-pointer
+                                        ${categoryColors[event?.category?.toLowerCase()] || 'bg-gray-500'}
+                                        ${isImportant ? 'animate-pulse ring-2 ring-offset-1 md:ring-offset-2 ring-riso-accent' : ''}
+                                        w-6 h-6 md:w-8 md:h-8 flex items-center justify-center`}
+                                      onClick={() => setSelectedEvent(event)}
+                                    >
+                                      {(() => {
+                                        const cat = event?.category?.toLowerCase();
+                                        const IconClass = "w-3 h-3 md:w-4 md:h-4 text-white drop-shadow-sm";
+                                        if (cat === 'military') return <Swords className={IconClass} />;
+                                        if (cat === 'diplomatic') return <Handshake className={IconClass} />;
+                                        if (cat === 'humanitarian') return <Heart className={IconClass} />;
+                                        if (cat === 'political') return <Landmark className={IconClass} />;
+                                        return null;
+                                      })()}
+                                    </div>
+                                  </div>
+
+                                  {/* Connector Line */}
+                                  <div className={`hidden md:block absolute top-1/2 h-px bg-riso-ink/20 w-8 md:w-16 ${isRight ? 'left-8 md:left-[calc(50%+1rem)]' : 'right-8 md:right-[calc(50%+1rem)]'}`}></div>
+
+                                  {/* Event Card */}
+                                  <div className={`flex-1 ${isRight ? 'md:pl-12' : 'md:pr-12'}`}>
+                                    <div
+                                      className={`relative bg-riso-paper p-3 rounded-sm border cursor-pointer group
+                                        ${isImportant ? 'border-riso-accent border-2' : 'border-riso-ink/20 dashed-border-sm'}`}
+                                      onClick={() => setSelectedEvent(event)}
+                                    >
+                                      <div className="flex justify-between items-start mb-1">
+                                        <span className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[13px] font-semibold' : 'text-[10px] font-bold uppercase'} ${lang === 'kh' ? 'leading-relaxed py-1' : 'py-0.5'} px-1.5 rounded text-white ${categoryColors[event?.category?.toLowerCase()] || 'bg-gray-500'}`}>
+                                          {t[`cat_${event?.category?.toLowerCase()}` as keyof typeof t] || event?.category}
+                                        </span>
+                                        <span className="font-mono text-[10px] opacity-50">
+                                          {event?.timeOfDay || 'All Day'}
+                                        </span>
+                                      </div>
+
+                                      <h4 className={`leading-tight mb-1 ${lang === 'kh' ? 'font-bold text-base font-mono leading-relaxed' : lang === 'th' ? 'font-bold text-base font-mono' : 'font-semibold text-[15px] font-display uppercase tracking-wide'}`}>
+                                        {(() => {
+                                          if (lang === 'th' && event?.titleTh) return event.titleTh;
+                                          if (lang === 'kh' && event?.titleKh) return event.titleKh;
+                                          return event?.title;
+                                        })()}
+                                      </h4>
+
+                                      <p className={`line-clamp-2 opacity-70 ${lang === 'kh' ? 'text-sm leading-relaxed' : lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
+                                        {(() => {
+                                          if (lang === 'th' && event?.descriptionTh) return event.descriptionTh;
+                                          if (lang === 'kh' && event?.descriptionKh) return event.descriptionKh;
+                                          return event?.description;
+                                        })()}
+                                      </p>
+
+                                      {event?.sources && event.sources.length > 0 && (
+                                        <div className="mt-2 flex items-center gap-1">
+                                          <div className="flex -space-x-1">
+                                            {[...Array(Math.min(3, event.sources.length))].map((_, i) => (
+                                              <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-mono">📄</div>
+                                            ))}
+                                          </div>
+                                          <span className="text-[9px] font-mono opacity-50">+{event.sources.length} {t.sources}</span>
+                                        </div>
+                                      )}
+
+                                      <div className={`absolute top-1/2 w-2 h-2 bg-riso-ink rounded-full ${isRight ? '-left-1' : '-right-1'} transform -translate-y-1/2 hidden md:block opacity-20`}></div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                        })}
+
+                        {virtualItems.length === 0 && (
                           <div className="flex flex-col items-center justify-center py-20 opacity-50">
                             <div className="w-16 h-16 border-2 border-dashed border-riso-ink rounded-full flex items-center justify-center mb-4">
                               <span className="text-2xl">?</span>
@@ -2950,7 +2952,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                             <p className="font-mono text-sm">No confirmed reports.</p>
                           </div>
                         )}
-
                       </div>
                     </div>
 
@@ -3158,7 +3159,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
                 return (
                   <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4"
                     onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
                     onKeyDown={handleKeyDown}
                     tabIndex={0}
