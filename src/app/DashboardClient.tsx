@@ -1843,7 +1843,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       const latestDate = timelineDates[timelineDates.length - 1];
       // Small delay to ensure the timeline container is rendered and height is calculated
       const timer = setTimeout(() => {
-        scrollToDate(latestDate);
+        scrollToDate(latestDate, 'auto');
         hasAutoScrolledTimeline.current = true;
       }, 150);
       return () => clearTimeout(timer);
@@ -1909,15 +1909,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     return () => clearTimeout(timer);
   }, [viewMode]);
 
-  // Scroll to selected date section (uses virtualizer for smooth navigation)
-  const scrollToDate = (date: string) => {
-    setSelectedTimelineDate(date);
-    const index = dateToVirtualIndex[date];
-    if (index !== undefined) {
-      rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' });
-    }
-  };
-
   const scrollDatePicker = (direction: 'left' | 'right') => {
     if (datePickerRef.current) {
       const scrollAmount = 300;
@@ -1927,77 +1918,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       });
     }
   };
-
-  // Sync date selector when user scrolls (debounced for smooth mobile)
-  useEffect(() => {
-    if (!timelineScrollRef.current || timelineDates.length === 0) return;
-
-    let debounceTimer: NodeJS.Timeout | null = null;
-    const lastSelectedDateRef = { current: selectedTimelineDate };
-
-    const findNearestDate = () => {
-      const container = timelineScrollRef.current;
-      if (!container) return null;
-
-      // Trigger switch when the date header is within the top 20% of the container
-      // This matches the user's request for it to change "when it's all the way at the top"
-      const threshold = container.clientHeight * 0.2;
-
-      let activeDate = timelineDates[0];
-
-      for (const date of timelineDates) {
-        const element = document.getElementById(`timeline-date-${date}`);
-        if (element) {
-          const rect = element.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
-          const distanceFromTop = rect.top - containerRect.top;
-
-          // If this date is above (or just crossing) the threshold line, it becomes the current active candidate.
-          // Since dates are ordered top-to-bottom, the last one we find that satisfies this 
-          // is the one currently occupying the top of the view.
-          if (distanceFromTop <= threshold) {
-            activeDate = date;
-          } else {
-            // Found a date below the threshold, so the previous one (activeDate) is the winner.
-            break;
-          }
-        }
-      }
-      return activeDate;
-    };
-
-    const handleScroll = () => {
-      // Clear previous debounce
-      if (debounceTimer) clearTimeout(debounceTimer);
-
-      // Debounce: wait 80ms after scroll stops to update
-      debounceTimer = setTimeout(() => {
-        const nearestDate = findNearestDate();
-        if (nearestDate && nearestDate !== lastSelectedDateRef.current) {
-          lastSelectedDateRef.current = nearestDate;
-          setSelectedTimelineDate(nearestDate);
-        }
-      }, 80);
-    };
-
-    const container = timelineScrollRef.current;
-    container.addEventListener('scroll', handleScroll, { passive: true });
-
-    // Run initial check after a short delay to ensure DOM is ready
-    const initialCheck = setTimeout(() => {
-      const nearestDate = findNearestDate();
-      if (nearestDate) {
-        lastSelectedDateRef.current = nearestDate;
-        setSelectedTimelineDate(nearestDate);
-      }
-    }, 100);
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      if (debounceTimer) clearTimeout(debounceTimer);
-      clearTimeout(initialCheck);
-    };
-  }, [timelineDates, lang]); // Re-initialize when language changes (date headers re-render)
 
   // Measure sidebar height for layout synchronization
   useLayoutEffect(() => {
@@ -2170,6 +2090,84 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     estimateSize: (index) => virtualItems[index]?.type === 'header' ? 60 : 160,
     overscan: 10, // Render 10 extra items above/below viewport for smooth scroll
   });
+
+  // Scroll to selected date section (uses virtualizer for smooth navigation)
+  const scrollToDate = (date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
+    setSelectedTimelineDate(date);
+    const index = dateToVirtualIndex[date];
+    if (index !== undefined) {
+      rowVirtualizer.scrollToIndex(index, { align: 'start', behavior });
+    }
+  };
+
+  // Sync date selector when user scrolls (optimized with refs to avoid re-binding)
+  const virtualizerRef = useRef(rowVirtualizer);
+  const virtualItemsRef = useRef(virtualItems);
+
+  useEffect(() => {
+    virtualizerRef.current = rowVirtualizer;
+    virtualItemsRef.current = virtualItems;
+  });
+
+  useEffect(() => {
+    if (!timelineScrollRef.current || timelineDates.length === 0) return;
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const lastSelectedDateRef = { current: selectedTimelineDate };
+
+    const handleScroll = () => {
+      const container = timelineScrollRef.current;
+      if (!container) return;
+
+      // 1. Check if we are at the very bottom (to fix the "Dec 28 vs 29" issue)
+      // If we're within 50px of the bottom, force select the latest date
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+      if (isAtBottom && timelineDates.length > 0) {
+        const latestDate = timelineDates[timelineDates.length - 1];
+        if (latestDate !== lastSelectedDateRef.current) {
+          lastSelectedDateRef.current = latestDate;
+          setSelectedTimelineDate(latestDate);
+        }
+        return;
+      }
+
+      // 2. Clear previous debounce
+      if (debounceTimer) clearTimeout(debounceTimer);
+
+      // 3. Debounce the precise calculation
+      debounceTimer = setTimeout(() => {
+        // Calculate threshold line (20% from top of view)
+        const threshold = container.scrollTop + (container.clientHeight * 0.2);
+
+        // Get currently rendered virtual items
+        const currentVirtualItems = virtualizerRef.current.getVirtualItems();
+
+        // Find the item that overlaps the threshold line
+        // Since list is sorted by index, we find the first one that ends after the threshold
+        const match = currentVirtualItems.find(item => item.end >= threshold);
+
+        if (match) {
+          const allItems = virtualItemsRef.current;
+          // Safety check
+          if (allItems && allItems[match.index]) {
+            const date = allItems[match.index].date;
+            if (date && date !== lastSelectedDateRef.current) {
+              lastSelectedDateRef.current = date;
+              setSelectedTimelineDate(date);
+            }
+          }
+        }
+      }, 50); // Faster debounce for responsiveness
+    };
+
+    const container = timelineScrollRef.current;
+    container.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
+  }, [timelineDates, lang]); // keep simple dependencies
 
   // Category colors for event rendering
   const categoryColors: Record<string, string> = {
