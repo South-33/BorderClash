@@ -2601,7 +2601,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                       {/* Trend Indicator - Show last updated instead */}
                       <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} leading-tight`}>
                         {dashboardStats?.lastUpdatedAt ? (
-                          <span className="block" title={`${t.lastUpdated}: ${new Date(dashboardStats.lastUpdatedAt).toLocaleString()}`}>
+                          <span className="block" title={`${t.lastUpdated}: ${new Date(dashboardStats.lastUpdatedAt).toLocaleString()}`} suppressHydrationWarning>
                             {t.lastUpdated} {(() => {
                               const d = new Date(dashboardStats.lastUpdatedAt);
                               const day = d.getDate();
