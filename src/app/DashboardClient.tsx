@@ -1560,7 +1560,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     api.api.getStats,
     {},
     "borderclash_system_stats",
-    true // EMERG: Skip heartbeat to avoid Client Error on limit reached
+    true // TODO: REVERT TO 'false' WHEN CONVEX LIMIT RESETS (Enable Heartbeat)
   ) as any;
 
   // Use server data if available, unless fresh client stats detect a newer update
@@ -2408,7 +2408,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   ) : isSyncing ? (
                     <span className="animate-pulse text-riso-accent">{t.running}</span>
                   ) : (sysStatsLoading || nextUpdateIn === null || isPossiblyStale) ? (
-                    <HackerScramble />
+                    // TODO: REVERT TO <HackerScramble /> WHEN CONVEX LIMIT RESETS
+                    <span className="text-yellow-600">{t.paused}</span>
+                    /* <HackerScramble /> */
                   ) : (
                     formatTime(nextUpdateIn)
                   )}
@@ -2418,7 +2420,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.sourcesTracked}</p>
                 <p className="font-mono text-xl">
                   {sysStatsLoading || countsLoading ? (
-                    <HackerScramble />
+                    // TODO: REVERT TO <HackerScramble /> WHEN CONVEX LIMIT RESETS
+                    <span>---</span>
+                    /* <HackerScramble /> */
                   ) : (
                     (articleCounts?.cambodia || 0) + (articleCounts?.international || 0) + (articleCounts?.thailand || 0)
                   )}
