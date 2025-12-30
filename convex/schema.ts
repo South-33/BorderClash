@@ -40,7 +40,10 @@ export default defineSchema({
         .index("by_status", ["status"])
         .index("by_title", ["title"])
         .index("by_unreviewed", ["status", "lastReviewedAt"])
-        .index("by_url", ["sourceUrl"]),
+        .index("by_url", ["sourceUrl"])
+        // Phase 2 bandwidth optimization: compound indexes for synthesis queries
+        .index("by_status_credibility", ["status", "credibility"])
+        .index("by_status_publishedAt", ["status", "publishedAt"]),
 
     cambodiaNews: defineTable({
         title: v.string(),
@@ -76,7 +79,10 @@ export default defineSchema({
         .index("by_status", ["status"])
         .index("by_title", ["title"])
         .index("by_unreviewed", ["status", "lastReviewedAt"])
-        .index("by_url", ["sourceUrl"]),
+        .index("by_url", ["sourceUrl"])
+        // Phase 2 bandwidth optimization: compound indexes for synthesis queries
+        .index("by_status_credibility", ["status", "credibility"])
+        .index("by_status_publishedAt", ["status", "publishedAt"]),
 
     // International/3rd party news (Reuters, AFP, BBC, Al Jazeera, etc.)
     internationalNews: defineTable({
@@ -113,7 +119,10 @@ export default defineSchema({
         .index("by_status", ["status"])
         .index("by_title", ["title"])
         .index("by_unreviewed", ["status", "lastReviewedAt"])
-        .index("by_url", ["sourceUrl"]),
+        .index("by_url", ["sourceUrl"])
+        // Phase 2 bandwidth optimization: compound indexes for synthesis queries
+        .index("by_status_credibility", ["status", "credibility"])
+        .index("by_status_publishedAt", ["status", "publishedAt"]),
 
     // ==================== ANALYSIS TABLES ====================
     // Managed by Flash (Synthesizer) - Frontend display tables

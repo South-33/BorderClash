@@ -906,12 +906,18 @@ export const synthesizeAll = internalAction({
         // 2. BREAKING NEWS (most recent) - to catch current developments
         // This keeps context bounded even as DB grows to 1000s of articles.
 
-        // Fetch more articles than we need, then filter
-        const cambodiaAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "cambodia", limit: 100 });
-        const thailandAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "thailand", limit: 100 });
-        const internationalAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "international", limit: 100 });
+        // PHASE 2 OPTIMIZATION: Use specialized indexed queries instead of fetching 300 articles
+        // This reduces bandwidth by ~75-80% by fetching exactly what we need
 
-        if (cambodiaAll.length === 0 && thailandAll.length === 0 && internationalAll.length === 0 && timeline.length === 0) {
+        // ==================== LOW CREDIBILITY / PROPAGANDA (15 per country) ====================
+        // Use new indexed query that sorts by credibility at database level
+        const [cambodiaLowCred, thailandLowCred, internationalLowCred] = await Promise.all([
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "cambodia", limit: 15 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "thailand", limit: 15 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "international", limit: 15 }),
+        ]);
+
+        if (cambodiaLowCred.length === 0 && thailandLowCred.length === 0 && internationalLowCred.length === 0 && timeline.length === 0) {
             console.log("⚠️ [SYNTHESIS] No articles or timeline events to synthesize");
             return null;
         }
@@ -922,34 +928,15 @@ export const synthesizeAll = internalAction({
    URL: ${a.sourceUrl || "(none)"}
    Summary: ${a.summary || "No summary"}`;
 
-        // ==================== LOW CREDIBILITY / PROPAGANDA (15 per country) ====================
-        // Sort by credibility ASC (lowest first) and take 15
-        const cambodiaLowCred = [...cambodiaAll]
-            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
-            .slice(0, 15);
-        const thailandLowCred = [...thailandAll]
-            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
-            .slice(0, 15);
-        const internationalLowCred = [...internationalAll]
-            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
-            .slice(0, 15);
-
-        const cambodiaPropaganda = cambodiaLowCred.map((a, i) => formatArticle(a, i)).join("\n");
-        const thailandPropaganda = thailandLowCred.map((a, i) => formatArticle(a, i)).join("\n");
-        const internationalPropaganda = internationalLowCred.map((a, i) => formatArticle(a, i)).join("\n");
+        const cambodiaPropaganda = cambodiaLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
+        const thailandPropaganda = thailandLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
+        const internationalPropaganda = internationalLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
 
         console.log(`📰 [SYNTHESIS] Low-cred articles: Cambodia=${cambodiaLowCred.length}, Thailand=${thailandLowCred.length}, Intl=${internationalLowCred.length}`);
 
         // ==================== BREAKING NEWS (30 most recent across all) ====================
-        // Combine all, sort by publishedAt DESC (newest first), take 30
-        const allArticles = [
-            ...cambodiaAll.map(a => ({ ...a, country: "cambodia" })),
-            ...thailandAll.map(a => ({ ...a, country: "thailand" })),
-            ...internationalAll.map(a => ({ ...a, country: "international" })),
-        ];
-        const breakingNews = [...allArticles]
-            .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
-            .slice(0, 30);
+        // Use new indexed query that fetches from all tables and sorts by publishedAt
+        const breakingNews: any[] = await ctx.runQuery(internal.api.getRecentBreakingNews, { limit: 30 });
 
         const breakingNewsList = breakingNews.map((a: any, idx: number) =>
             `${idx + 1}. [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
