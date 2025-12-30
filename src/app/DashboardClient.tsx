@@ -738,20 +738,10 @@ const usePersistentQuery = (query: any, args: any, storageKey: string, skip: boo
   const convexData = useQuery(query, skip ? "skip" : args);
   // Synchronous hydration attempt (for instant render on refresh)
   // This avoids the "flash of loading" by reading localStorage immediately if available.
-  const [localData, setLocalData] = useState<any>(() => {
-    if (skip) return null;
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem(storageKey);
-      if (cached) {
-        try {
-          return JSON.parse(cached);
-        } catch (e) {
-          console.error("Failed to parse cache for", storageKey, e);
-        }
-      }
-    }
-    return null;
-  });
+  // Hydration-safe State Initialization:
+  // ALWAYS start with null to match Server-Side Rendering (SSR).
+  // This prevents Error #418 (Hydration Mismatch) in production.
+  const [localData, setLocalData] = useState<any>(null);
 
   const [isHydrated, setIsHydrated] = useState(!!localData || skip);
 
@@ -761,8 +751,9 @@ const usePersistentQuery = (query: any, args: any, storageKey: string, skip: boo
 
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(storageKey);
-      if (cached && !localData) {
+      if (cached) {
         try {
+          // Update state ONLY after component has mounted on client
           setLocalData(JSON.parse(cached));
         } catch (e) { }
       }
