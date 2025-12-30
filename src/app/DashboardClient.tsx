@@ -1792,8 +1792,14 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
   // --- TIMELINE STATE AND LOGIC ---
   const [selectedTimelineDate, setSelectedTimelineDate] = useState<string | null>(null);
+  const [isScrollJump, setIsScrollJump] = useState(false);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
+
+  // Anti-Snapback Refs: Lock updates during programmatic scrolling
+  const isProgrammaticScroll = useRef(false);
+  const scrollTargetDate = useRef<string | null>(null);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Derive available dates and group ALL events by date (for continuous scroll)
   const { timelineDates, groupedEvents, dateCounts } = useMemo(() => {
@@ -2093,10 +2099,48 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
 
   // Scroll to selected date section (uses virtualizer for smooth navigation)
   const scrollToDate = (date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
+    // LOCK: Prevent scroll listener from overwriting selection during animation
+    isProgrammaticScroll.current = true;
+    scrollTargetDate.current = date;
+
+    // Clear existing timeout
+    if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+
+    // Set safety unlock (fallback if scroll event logic fails)
+    scrollTimeout.current = setTimeout(() => {
+      isProgrammaticScroll.current = false;
+      scrollTargetDate.current = null;
+      setIsScrollJump(false); // Safety reset
+    }, 1200);
+
     setSelectedTimelineDate(date);
     const index = dateToVirtualIndex[date];
+
     if (index !== undefined) {
-      rowVirtualizer.scrollToIndex(index, { align: 'start', behavior });
+      // Fade-Jump Logic:
+      // Check if the target is currently visible (or very close)
+      const virtualItems = rowVirtualizer.getVirtualItems();
+      const isVisible = virtualItems.some(item => Math.abs(item.index - index) < 3);
+
+      if (isVisible) {
+        // Smooth scroll for visible/nearby items
+        rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' });
+      } else {
+        // Fade-Jump for off-screen items
+        setIsScrollJump(true); // Fade out
+
+        setTimeout(() => {
+          // Instant jump after fade out
+          rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+
+          // Fade back in after brief delay to allow layout to settle
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              setIsScrollJump(false);
+            }, 50);
+          });
+        }, 200);
+      }
     }
   };
 
@@ -2120,10 +2164,12 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       if (!container) return;
 
       // 1. Check if we are at the very bottom (to fix the "Dec 28 vs 29" issue)
-      // If we're within 50px of the bottom, force select the latest date
       const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
       if (isAtBottom && timelineDates.length > 0) {
         const latestDate = timelineDates[timelineDates.length - 1];
+
+        // Always force update if at bottom, but respect lock if we aimed for an earlier date?
+        // Actually, if we aimed for bottom, this is fine. If we aimed elsewhere, we shouldn't be at bottom.
         if (latestDate !== lastSelectedDateRef.current) {
           lastSelectedDateRef.current = latestDate;
           setSelectedTimelineDate(latestDate);
@@ -2143,14 +2189,25 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
         const currentVirtualItems = virtualizerRef.current.getVirtualItems();
 
         // Find the item that overlaps the threshold line
-        // Since list is sorted by index, we find the first one that ends after the threshold
         const match = currentVirtualItems.find(item => item.end >= threshold);
 
         if (match) {
           const allItems = virtualItemsRef.current;
-          // Safety check
           if (allItems && allItems[match.index]) {
             const date = allItems[match.index].date;
+
+            // LOCK CHECK: If programmatically scrolling, ignore intermediate dates
+            if (isProgrammaticScroll.current) {
+              // If we reached our target, unlock and allow update
+              if (date === scrollTargetDate.current) {
+                isProgrammaticScroll.current = false;
+                scrollTargetDate.current = null;
+              } else {
+                // We are just passing through, do not update state
+                return;
+              }
+            }
+
             if (date && date !== lastSelectedDateRef.current) {
               lastSelectedDateRef.current = date;
               setSelectedTimelineDate(date);
@@ -2161,10 +2218,23 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     };
 
     const container = timelineScrollRef.current;
+
+    // Unlock on manual interaction (user grabs scrollbar, touches screen, or uses wheel)
+    const unlockScroll = () => {
+      if (isProgrammaticScroll.current) {
+        isProgrammaticScroll.current = false;
+        scrollTargetDate.current = null;
+      }
+    };
+
     container.addEventListener('scroll', handleScroll, { passive: true });
+    container.addEventListener('wheel', unlockScroll, { passive: true });
+    container.addEventListener('touchstart', unlockScroll, { passive: true });
 
     return () => {
       container.removeEventListener('scroll', handleScroll);
+      container.removeEventListener('wheel', unlockScroll);
+      container.removeEventListener('touchstart', unlockScroll);
       if (debounceTimer) clearTimeout(debounceTimer);
     };
   }, [timelineDates, lang]); // keep simple dependencies
@@ -2806,7 +2876,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                     {/* --- VIRTUALIZED TIMELINE --- */}
                     <div
                       ref={timelineScrollRef}
-                      className="flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px]"
+                      className={`flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] transition-opacity duration-200 ${isScrollJump ? 'opacity-0' : 'opacity-100'}`}
                       style={{ overflowAnchor: 'none', transform: 'translate3d(0,0,0)' }}
                     >
                       {/* Virtual container with total height */}
