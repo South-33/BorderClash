@@ -1474,6 +1474,9 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
 
+  // Layout readiness state (lifted up for eager calculation)
+  const [isLayoutReady, setIsLayoutReady] = useState(false);
+
   // On mount, read URL hash and update viewMode (client-only, avoids hydration mismatch)
   useEffect(() => {
     const hash = window.location.hash.toLowerCase().replace('#', '');
@@ -1566,7 +1569,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     api.api.getStats,
     {},
     "borderclash_system_stats",
-    false // ALWAYS subscribe to status to detect new research cycles
+    true // EMERG: Skip heartbeat to avoid Client Error on limit reached
   ) as any;
 
   // Use server data if available, unless fresh client stats detect a newer update
@@ -2248,7 +2251,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   };
 
   // Show error state if server-side fetching failed and we have no fallback data
-  if (serverError && !hasServerData) {
+  // FIXED: If we have cached data (neutralMeta), we show that instead of the error screen
+  if (serverError && !hasServerData && !neutralMeta) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8f5e6] p-8">
         <div className="max-w-md w-full bg-white p-8 border-4 border-red-500 shadow-lg">
@@ -2280,7 +2284,6 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   const neutralTextRef = useRef<HTMLDivElement>(null);
   const hasCalculated = useRef(false);
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
-  const [isLayoutReady, setIsLayoutReady] = useState(false);
 
   useLayoutEffect(() => {
     // Skip if already calculated this session
@@ -2294,16 +2297,17 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     // Only calculate on desktop in Analysis mode when elements exist
     if (!container || !textEl) return;
 
-    // On mobile or non-Analysis, just show immediately (no snug-fit needed)
-    if (!isDesktop || viewMode !== 'ANALYSIS') {
+    // On mobile, just show immediately
+    if (!isDesktop) {
       setIsLayoutReady(true);
-      hasCalculated.current = true;
       return;
     }
 
     if (neutralMetaLoading) return;
 
     const calculateSnugWidth = () => {
+      const startTime = performance.now();
+
       // STRATEGY: Start BIG, shrink until overflow, then step back + buffer
       // This ensures all content is rendered before we measure
       // Dynamic bounds based on viewport (keeps ~1.18 ratio like the original 2000/1700)
@@ -2591,7 +2595,8 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
         <main className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
 
           {/* ANALYSIS VIEW - Viewport-contained like Timeline */}
-          <div className={`xl:col-span-3 ${deferredViewMode !== 'ANALYSIS' ? 'hidden' : ''}`}>
+          {/* OPTIMIZATION: If not active but not ready, render invisibly for layout calc (Parallel Render) */}
+          <div className={`xl:col-span-3 ${deferredViewMode === 'ANALYSIS' ? '' : (!isLayoutReady ? 'absolute top-0 left-0 w-full opacity-0 pointer-events-none z-0' : 'hidden')}`}>
             <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
