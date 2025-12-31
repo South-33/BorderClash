@@ -1560,7 +1560,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
     api.api.getStats,
     {},
     "borderclash_system_stats",
-    true // TODO: REVERT TO 'false' WHEN CONVEX LIMIT RESETS (Enable Heartbeat)
+    false // ALWAYS subscribe to status to detect new research cycles
   ) as any;
 
   // Use server data if available, unless fresh client stats detect a newer update
@@ -2245,21 +2245,52 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
   // FIXED: If we have cached data (neutralMeta), we show that instead of the error screen
   if (serverError && !hasServerData && !neutralMeta) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f5e6] p-8">
-        <div className="max-w-md w-full bg-white p-8 border-4 border-red-500 shadow-lg">
-          <h1 className="font-display text-4xl text-red-600 mb-4">SYSTEM ERROR</h1>
-          <p className="font-mono text-sm text-gray-700 mb-4">
-            Failed to load data from the server. This could be a temporary issue.
+      <div className="min-h-screen flex items-center justify-center bg-riso-paper p-8">
+        <div className="max-w-lg w-full text-center">
+          {/* Logo / Icon */}
+          <div className="mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-riso-ink/10 rounded-full mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-riso-ink/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h1 className="font-display text-4xl md:text-5xl text-riso-ink uppercase tracking-wider">
+              Scheduled Maintenance
+            </h1>
+          </div>
+
+          {/* Status Message */}
+          <div className="bg-riso-ink/5 border border-riso-ink/20 p-6 mb-6">
+            <p className="font-mono text-sm md:text-base text-riso-ink/80 leading-relaxed mb-4">
+              We're performing routine maintenance on our data systems.
+              The dashboard will be back online shortly.
+            </p>
+            <div className="flex items-center justify-center gap-2 text-riso-ink/60">
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+              <span className="font-mono text-xs uppercase tracking-wider">Systems Updating</span>
+            </div>
+          </div>
+
+          {/* ETA */}
+          <p className="font-mono text-xs text-riso-ink/50 mb-6 uppercase tracking-wider">
+            Expected Resolution: Within a few hours
           </p>
-          <pre className="font-mono text-xs bg-gray-100 p-3 overflow-x-auto mb-4 text-red-700">
-            {serverError}
-          </pre>
+
+          {/* Retry Button */}
           <button
             onClick={() => window.location.reload()}
-            className="w-full bg-red-500 text-white py-3 font-mono font-bold uppercase tracking-wider hover:bg-red-600 transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-riso-ink text-riso-paper font-mono font-bold uppercase tracking-wider hover:bg-riso-ink/80 transition-colors"
           >
-            Retry
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Check Again
           </button>
+
+          {/* Footer */}
+          <p className="mt-8 font-mono text-[10px] text-riso-ink/30 uppercase">
+            BorderClash Conflict Monitor
+          </p>
         </div>
       </div>
     );
@@ -2408,9 +2439,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                   ) : isSyncing ? (
                     <span className="animate-pulse text-riso-accent">{t.running}</span>
                   ) : (sysStatsLoading || nextUpdateIn === null || isPossiblyStale) ? (
-                    // TODO: REVERT TO <HackerScramble /> WHEN CONVEX LIMIT RESETS
-                    <span className="text-yellow-600">{t.paused}</span>
-                    /* <HackerScramble /> */
+                    <HackerScramble />
                   ) : (
                     formatTime(nextUpdateIn)
                   )}
@@ -2420,9 +2449,7 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.sourcesTracked}</p>
                 <p className="font-mono text-xl">
                   {sysStatsLoading || countsLoading ? (
-                    // TODO: REVERT TO <HackerScramble /> WHEN CONVEX LIMIT RESETS
-                    <span>---</span>
-                    /* <HackerScramble /> */
+                    <HackerScramble />
                   ) : (
                     (articleCounts?.cambodia || 0) + (articleCounts?.international || 0) + (articleCounts?.thailand || 0)
                   )}
