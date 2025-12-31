@@ -8,6 +8,97 @@ import { Swords, Handshake, Heart, Landmark, Circle, Hourglass, BarChart3, Searc
 import type { BorderClashData } from '@/lib/convex-server';
 import Lenis from 'lenis';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import React from 'react';
+
+// --- Error Boundary for Convex Crashes ---
+// Catches API errors and shows maintenance page, auto-retries every 30s
+class ConvexErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; retryCount: number }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, retryCount: 0 };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('[ConvexErrorBoundary] Caught error:', error.message);
+  }
+
+  componentDidMount() {
+    // Auto-retry every 30 seconds when in error state
+    this.startAutoRetry();
+  }
+
+  componentDidUpdate(_: any, prevState: { hasError: boolean }) {
+    if (this.state.hasError && !prevState.hasError) {
+      this.startAutoRetry();
+    }
+  }
+
+  startAutoRetry = () => {
+    if (this.state.hasError) {
+      setTimeout(() => {
+        this.setState((prev) => ({ hasError: false, retryCount: prev.retryCount + 1 }));
+      }, 30000); // Retry every 30 seconds
+    }
+  };
+
+  handleRetry = () => {
+    this.setState((prev) => ({ hasError: false, retryCount: prev.retryCount + 1 }));
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-riso-paper p-8">
+          <div className="max-w-lg w-full text-center">
+            <div className="mb-8">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-riso-ink/10 rounded-full mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-riso-ink/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h1 className="font-display text-4xl md:text-5xl text-riso-ink uppercase tracking-wider">
+                Scheduled Maintenance
+              </h1>
+            </div>
+            <div className="bg-riso-ink/5 border border-riso-ink/20 p-6 mb-6">
+              <p className="font-mono text-sm md:text-base text-riso-ink/80 leading-relaxed mb-4">
+                We're performing routine maintenance on our data systems.
+                The dashboard will be back online shortly.
+              </p>
+              <div className="flex items-center justify-center gap-2 text-riso-ink/60">
+                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                <span className="font-mono text-xs uppercase tracking-wider">Auto-retrying in 30s...</span>
+              </div>
+            </div>
+            <p className="font-mono text-xs text-riso-ink/50 mb-6 uppercase tracking-wider">
+              Expected Resolution: Within a few hours
+            </p>
+            <button
+              onClick={this.handleRetry}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-riso-ink text-riso-paper font-mono font-bold uppercase tracking-wider hover:bg-riso-ink/80 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Check Now
+            </button>
+            <p className="mt-8 font-mono text-[10px] text-riso-ink/30 uppercase">
+              BorderClash Conflict Monitor
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // --- Icon Components ---
 const IconBase = ({ children, className = "", ...props }: any) => (
@@ -1456,7 +1547,7 @@ interface DashboardClientProps {
 // LazySection removed to eliminate layout shift jitter.
 // Relying on CSS containment and optimized transitions for performance instead.
 
-export function DashboardClient({ initialData, serverError }: DashboardClientProps) {
+function DashboardClientInner({ initialData, serverError }: DashboardClientProps) {
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
@@ -3470,5 +3561,14 @@ export function DashboardClient({ initialData, serverError }: DashboardClientPro
       {/* Bottom spacer - flexes equally with top */}
       < div />
     </div >
+  );
+}
+
+// Wrapped export with Error Boundary for Convex crash protection
+export function DashboardClient(props: DashboardClientProps) {
+  return (
+    <ConvexErrorBoundary>
+      <DashboardClientInner {...props} />
+    </ConvexErrorBoundary>
   );
 }
