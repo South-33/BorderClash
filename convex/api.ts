@@ -120,16 +120,41 @@ export const getArticleCounts = query({
             .first();
 
         if (cached) {
-            return {
-                thailand: cached.thailand,
-                cambodia: cached.cambodia,
-                international: cached.international,
-                total: cached.thailand + cached.cambodia + cached.international,
-            };
+            const total = cached.thailand + cached.cambodia + cached.international;
+
+            // SANITY CHECK: If total is suspiciously low (<50), verify against actual count
+            // This prevents displaying stale/wrong cache values
+            if (total < 50) {
+                // Quick spot-check: count just one table to see if cache is stale
+                const spotCheck = await ctx.db
+                    .query("thailandNews")
+                    .withIndex("by_status", q => q.eq("status", "active"))
+                    .take(100);
+
+                // If spot check shows more than cache claims, fall through to full recount
+                if (spotCheck.length > cached.thailand + 10) {
+                    console.log(`⚠️ [COUNTS] Cache seems stale (${total} cached, but TH alone has ${spotCheck.length}+). Falling back to recount.`);
+                    // Fall through to recount below
+                } else {
+                    return {
+                        thailand: cached.thailand,
+                        cambodia: cached.cambodia,
+                        international: cached.international,
+                        total,
+                    };
+                }
+            } else {
+                return {
+                    thailand: cached.thailand,
+                    cambodia: cached.cambodia,
+                    international: cached.international,
+                    total,
+                };
+            }
         }
 
-        // Fallback for first run or if cache doesn't exist yet
-        // This will be expensive but only happens once
+        // Fallback for first run, cache doesn't exist, or cache seems stale
+        // This will be expensive but only happens once per issue
         const countTable = async (tableName: "thailandNews" | "cambodiaNews" | "internationalNews") => {
             const active = await ctx.db
                 .query(tableName)

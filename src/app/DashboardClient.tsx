@@ -2075,16 +2075,26 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     return () => clearInterval(timer);
   }, [systemStats?.lastResearchAt, systemStats?.nextRunAt, systemStats?.isPaused, tabFocusKey]);
 
-  const formatTime = (seconds: number) => {
+  const formatTime = (seconds: number): React.ReactNode => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
+    const pad = (n: number) => n < 10 ? '0' + n : n;
 
-    // Show hours:minutes when > 60 min, otherwise minutes:seconds
+    // Format: H:MM:ss with seconds smaller and faded
     if (seconds >= 3600) {
-      return `${h}:${m < 10 ? '0' : ''}${m}`;
+      return (
+        <>
+          {h}:{pad(m)}<span className="text-[0.6em] opacity-80">:{pad(s)}</span>
+        </>
+      );
     }
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
+    // Under 1 hour: M:SS
+    return (
+      <>
+        {m}:{pad(s)}
+      </>
+    );
   };
 
   const formatTimestamp = (timestamp: number) => {
