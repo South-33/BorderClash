@@ -27,6 +27,48 @@ function formatTimelineEvent(e: any, idx?: number): string {
 // SHARED UTILS (deprecated Ghost API endpoints removed)
 // =============================================================================
 
+// =============================================================================
+// ADAPTIVE SCHEDULER: Heartbeat that checks if it's time to run
+// This runs every 4 hours and checks nextRunAt to decide if full cycle should run
+// =============================================================================
+export const maybeRunCycle = internalAction({
+    args: {},
+    handler: async (ctx): Promise<{ skipped: boolean; reason?: string; ran?: boolean }> => {
+        console.log("⏰ [SCHEDULER] Heartbeat check...");
+
+        const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+        const now = Date.now();
+
+        // If system is paused, skip
+        if (stats?.isPaused) {
+            console.log("⏸️ [SCHEDULER] System is paused, skipping");
+            return { skipped: true, reason: "paused" };
+        }
+
+        // If skipNextCycle is set, skip this one and clear the flag
+        if (stats?.skipNextCycle) {
+            console.log("⏭️ [SCHEDULER] Skip flag set, skipping this cycle");
+            await ctx.runMutation(internal.api.clearSkipNextCycle, {});
+            return { skipped: true, reason: "skipNextCycle flag" };
+        }
+
+        // Check if it's time to run
+        const nextRunAt = stats?.nextRunAt || 0;
+
+        if (now < nextRunAt) {
+            const hoursUntil = Math.round((nextRunAt - now) / 3600000 * 10) / 10;
+            console.log(`⏰ [SCHEDULER] Not yet time. Next run in ${hoursUntil}h (${new Date(nextRunAt).toLocaleString()})`);
+            return { skipped: true, reason: `not yet time, ${hoursUntil}h remaining` };
+        }
+
+        // Time to run!
+        console.log("🚀 [SCHEDULER] Time to run! Triggering full research cycle...");
+        await ctx.runAction(internal.research.runResearchCycle, {});
+
+        return { skipped: false, ran: true };
+    },
+});
+
 export const curateCambodia = internalAction({
     args: {},
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
@@ -1240,6 +1282,10 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "discrepancies": "List SPECIFIC contradictions. Use SYMMETRIC language: 'Country A claims X, Country B claims Y, international sources suggest Z'. ATTRIBUTE the 'believable' version to a NAMED source (Reuters, ICRC, etc), don't just pick one.",
     "confidence": 75,
     "confidenceRationale": "Must justify if Cambodia/Thailand confidence differs by >10 points. What's verified? What's propaganda from EACH side?"
+  },
+  "scheduling": {
+    "nextCycleHours": 12,
+    "reason": "Brief 1-sentence explanation. Example: 'Peaceful conditions, both sides defensive, no major developments'"
   }
 }
 </json>
@@ -1257,7 +1303,19 @@ RULES:
 4. INTENSITY COHERENCE: If one is AGGRESSIVE and other is DEFENSIVE, is the intensity gap ≥20 points? If both AGGRESSIVE, are intensities proportional to actions?
 5. NO EDITORIAL: No adjectives for third parties (Trump, UN) - only describe what they DID?
 6. CUMULATIVE BIAS: Across ALL claims, did you give one country benefit-of-doubt more often? If so, explicitly note it or rebalance.
-7. FOG OF WAR: If information is genuinely unclear/conflicting, say so. "Insufficient verified information" is a valid answer.`;
+7. FOG OF WAR: If information is genuinely unclear/conflicting, say so. "Insufficient verified information" is a valid answer.
+
+📅 ADAPTIVE SCHEDULING DECISION:
+Based on your analysis, decide when the system should run the next intelligence cycle.
+This controls monitoring frequency - more active situations need more frequent updates.
+
+GUIDELINES (pick ONE):
+• 4 hours: AGGRESSIVE posture detected, active conflict, rapid developments
+• 8 hours: ESCALATED posture, elevated tension, multiple new developments  
+• 16 hours: DEFENSIVE posture, some activity, routine monitoring
+• 24-48 hours: PEACEFUL both sides, minimal changes, quiet period
+
+Return your decision in the "scheduling" section of the JSON.`;
 
         try {
             // Use generic self-healing helper
@@ -1265,6 +1323,7 @@ RULES:
                 cambodia: any;
                 thailand: any;
                 neutral: any;
+                scheduling?: { nextCycleHours: number; reason: string };
             }>(prompt, "thinking", 3, "SYNTHESIS");
 
             if (!result) {
@@ -1746,14 +1805,35 @@ export const step4_synthesis = internalAction({
     handler: async (ctx, { errors }) => {
         console.log("\n── STEP 4: SYNTHESIS ──");
         const stepErrors = [...errors];
+        let schedulingResult: { nextCycleHours: number; reason: string } | null = null;
 
         try {
-            await ctx.runAction(internal.research.synthesizeAll, {});
+            const result = await ctx.runAction(internal.research.synthesizeAll, {});
             console.log("   ✅ Synthesis complete");
+
+            // Extract scheduling decision from AI result
+            if (result?.scheduling) {
+                const sched = result.scheduling;
+                schedulingResult = sched;
+                console.log(`   📅 AI scheduling decision: ${sched.nextCycleHours}h - ${sched.reason}`);
+            }
         } catch (e) {
             console.error("❌ [STEP 4] Synthesis Failed:", e);
             stepErrors.push(`Synthesis: ${String(e)}`);
         }
+
+        // ═══ ADAPTIVE SCHEDULING ═══
+        // Store next run time based on AI decision (or default to 12h)
+        const nextHours = schedulingResult?.nextCycleHours || 12;
+        const clampedHours = Math.max(4, Math.min(48, nextHours)); // Clamp to 4-48 range
+        const nextRunAt = Date.now() + (clampedHours * 60 * 60 * 1000);
+        const reason = schedulingResult?.reason || "Default scheduling (synthesis did not return decision)";
+
+        await ctx.runMutation(internal.api.setNextRunAt, {
+            nextRunAt,
+            lastCycleInterval: clampedHours,
+            schedulingReason: reason,
+        });
 
         // ═══ CYCLE COMPLETE ═══
         // Increment cycle counter and potentially trigger dashboard

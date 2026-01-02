@@ -4,11 +4,11 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 // =============================================================================
-// AUTOMATION - Full Research Cycle (runs every 12 hours)
-// Runs: Curation -> Validation -> Dashboard -> Synthesis
-// Changed to 720min (12h) to reduce bandwidth usage
+// ADAPTIVE SCHEDULER - Heartbeat runs every 4 hours
+// Checks if nextRunAt has passed, then runs full cycle if needed
+// AI decides next interval (4-48h) based on conflict activity
 // =============================================================================
-crons.interval("research-cycle", { minutes: 720 }, internal.research.runResearchCycle);
+crons.interval("adaptive-scheduler", { hours: 4 }, internal.research.maybeRunCycle);
 
 
 export default crons;

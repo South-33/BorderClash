@@ -679,8 +679,11 @@ export const flagArticle = internalMutation({
 
         if (article) {
             // BUGFIX: Track if article status change affects counts
+            // countable = active OR unverified (both show in frontend counts)
             const wasCountable = article.status === "active" || article.status === "unverified";
-            const willBeCountable = args.status === "active" || args.status === "unverified";
+            // flagArticle can only set: outdated, unverified, false, archived
+            // Of these, only "unverified" is countable
+            const willBeCountable = args.status === "unverified";
 
             await ctx.db.patch(article._id, { status: args.status });
             console.log(`Flagged "${args.title}" as ${args.status}`);
@@ -1085,6 +1088,29 @@ export const clearSkipNextCycle = internalMutation({
         if (existing) {
             await ctx.db.patch(existing._id, { skipNextCycle: false });
         }
+    },
+});
+
+// Set next run time for adaptive scheduling (called after synthesis decides interval)
+export const setNextRunAt = internalMutation({
+    args: {
+        nextRunAt: v.number(),
+        lastCycleInterval: v.number(),
+        schedulingReason: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const existing = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (existing) {
+            await ctx.db.patch(existing._id, {
+                nextRunAt: args.nextRunAt,
+                lastCycleInterval: args.lastCycleInterval,
+                schedulingReason: args.schedulingReason,
+            });
+        }
+        console.log(`📅 [SCHEDULER] Next run at ${new Date(args.nextRunAt).toLocaleString()} (${args.lastCycleInterval}h) - ${args.schedulingReason}`);
     },
 });
 

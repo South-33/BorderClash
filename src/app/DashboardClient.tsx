@@ -2039,21 +2039,32 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [isPossiblyStale, setIsPossiblyStale] = useState(false);
 
   useEffect(() => {
-    if (!systemStats?.lastResearchAt) return;
+    // Use nextRunAt if available (adaptive scheduling), otherwise fall back to fixed calc
+    const hasNextRunAt = systemStats?.nextRunAt && systemStats.nextRunAt > 0;
+
+    if (!systemStats?.lastResearchAt && !hasNextRunAt) return;
 
     const updateCountdown = () => {
-      // 720 minutes (12 hours) in milliseconds (matches cron schedule)
-      const cycleInterval = 720 * 60 * 1000;
-      // Calculate time since the last research finished
-      const timeSinceLastUpdate = Date.now() - systemStats.lastResearchAt;
-      // Calculate remaining time until next check
-      const remaining = Math.max(0, cycleInterval - timeSinceLastUpdate);
+      let remaining: number;
+
+      if (hasNextRunAt) {
+        // ADAPTIVE SCHEDULING: Use AI-decided nextRunAt directly
+        remaining = Math.max(0, (systemStats.nextRunAt || 0) - Date.now());
+      } else {
+        // FALLBACK: Fixed 12-hour interval (for backwards compatibility)
+        const cycleInterval = 720 * 60 * 1000;
+        const timeSinceLastUpdate = Date.now() - (systemStats?.lastResearchAt || 0);
+        remaining = Math.max(0, cycleInterval - timeSinceLastUpdate);
+      }
+
       setNextUpdateIn(Math.floor(remaining / 1000));
 
       // If remaining is 0 and has been for more than 60 seconds, data might be stale
-      // (the server should have updated by now)
-      if (remaining === 0 && timeSinceLastUpdate > cycleInterval + 60000) {
-        setIsPossiblyStale(true);
+      if (remaining === 0) {
+        const timeSinceExpected = hasNextRunAt
+          ? Date.now() - (systemStats?.nextRunAt || 0)
+          : Date.now() - (systemStats?.lastResearchAt || 0) - (720 * 60 * 1000);
+        setIsPossiblyStale(timeSinceExpected > 60000);
       } else {
         setIsPossiblyStale(false);
       }
@@ -2062,7 +2073,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, [systemStats?.lastResearchAt, systemStats?.isPaused, tabFocusKey]);
+  }, [systemStats?.lastResearchAt, systemStats?.nextRunAt, systemStats?.isPaused, tabFocusKey]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);

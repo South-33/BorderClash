@@ -258,6 +258,10 @@ export default defineSchema({
         isPaused: v.optional(v.boolean()),
         skipNextCycle: v.optional(v.boolean()), // Skip only the next cycle (auto-resets after skip)
         researchCycleCount: v.optional(v.number()), // Counter for triggering dashboard every N cycles
+        // Adaptive scheduling fields
+        nextRunAt: v.optional(v.number()),        // Timestamp for next cycle (set by AI)
+        lastCycleInterval: v.optional(v.number()), // Hours since last cycle (for debugging)
+        schedulingReason: v.optional(v.string()),  // AI's reasoning for the interval
     })
         .index("by_key", ["key"]),
 
