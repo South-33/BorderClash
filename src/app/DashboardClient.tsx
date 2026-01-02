@@ -292,7 +292,7 @@ const TRANSLATIONS = {
     monitoring: "MONITORING",
     active: "ACTIVE",
     situationReport: "SITUATION REPORT",
-    autoUpdating: "Auto-updating every 6 hours",
+    autoUpdating: "Auto-updating every 12 hours",
     keyDevelopments: "Key Developments",
     sourcesTracked: "SOURCES TRACKED",
     viewMode: "VIEW MODE",
@@ -456,7 +456,7 @@ const TRANSLATIONS = {
   th: {
     officialNarrative: "มุมมองจากทางการ",
     militaryIntensity: "สถานการณ์ความตึงเครียด",
-    peaceful: "เหตุการณ์ปกติ",
+    peaceful: "สงบ",
     defensive: "ตั้งรับ",
     escalated: "ตึงเครียด",
     aggressive: "เดือด", // Matches 'Kach' (Fierce) - Short for UI
@@ -474,7 +474,7 @@ const TRANSLATIONS = {
     monitoring: "กำลังจับตา",
     active: "ใช้งานอยู่",
     situationReport: "รายงานสถานการณ์สด",
-    autoUpdating: "อัปเดตเองทุก 6 ชั่วโมง",
+    autoUpdating: "อัปเดตเองทุก 12 ชั่วโมง",
     keyDevelopments: "เหตุการณ์สำคัญ",
     sourcesTracked: "แหล่งข่าว",
     viewMode: "โหมดดูข้อมูล",
@@ -638,7 +638,7 @@ const TRANSLATIONS = {
   kh: {
     officialNarrative: "គោលជំហរផ្លូវការ", // View of govt - natural
     militaryIntensity: "ស្ថានភាពនៅព្រំដែន", // Situation at border - natural
-    peaceful: "ធម្មតា", // Normal
+    peaceful: "សន្តិភាព", // Normal
     defensive: "ការពារ", // Defend
     escalated: "តានតឹង", // Tense
     aggressive: "កាច", // Tense - kept short as requested
@@ -656,7 +656,7 @@ const TRANSLATIONS = {
     monitoring: "កំពុងមើល",
     active: "សកម្ម",
     situationReport: "របាយការណ៍សង្ខេប",
-    autoUpdating: "អាប់ដេតរៀងរាល់ 6 ម៉ោង",
+    autoUpdating: "អាប់ដេតរៀងរាល់ 12 ម៉ោង",
     keyDevelopments: "ព្រឹត្តិការណ៍សំខាន់ៗ",
     sourcesTracked: "ប្រភពព័ត៌មាន",
     viewMode: "មើលជា",
@@ -2042,8 +2042,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     if (!systemStats?.lastResearchAt) return;
 
     const updateCountdown = () => {
-      // 360 minutes (6 hours) in milliseconds (matches cron schedule)
-      const cycleInterval = 360 * 60 * 1000;
+      // 720 minutes (12 hours) in milliseconds (matches cron schedule)
+      const cycleInterval = 720 * 60 * 1000;
       // Calculate time since the last research finished
       const timeSinceLastUpdate = Date.now() - systemStats.lastResearchAt;
       // Calculate remaining time until next check
@@ -2065,8 +2065,14 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   }, [systemStats?.lastResearchAt, systemStats?.isPaused, tabFocusKey]);
 
   const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
+
+    // Show hours:minutes when > 60 min, otherwise minutes:seconds
+    if (seconds >= 3600) {
+      return `${h}:${m < 10 ? '0' : ''}${m}`;
+    }
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 

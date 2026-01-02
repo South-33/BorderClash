@@ -775,12 +775,17 @@ export const runHistorianCycle = internalAction({
                 case "update_event":
                     // Update an existing timeline event with new info
                     if (action.targetEventTitle && action.eventUpdates) {
+                        // ONLY allow fields that are in the validator - strip everything else
+                        // This prevents AI from breaking the mutation with extra fields like 'sourceSnippet'
+                        const validFields = ['title', 'titleTh', 'titleKh', 'description', 'descriptionTh', 'descriptionKh', 'date', 'timeOfDay', 'category', 'importance', 'status'];
+                        const updates: any = {};
+                        for (const field of validFields) {
+                            if ((action.eventUpdates as any)[field] !== undefined) {
+                                updates[field] = (action.eventUpdates as any)[field];
+                            }
+                        }
+
                         // Validate category if provided
-                        const updates = { ...action.eventUpdates } as any;
-
-                        // Strip out 'reasoning' if AI included it in updates (not in validator)
-                        delete updates.reasoning;
-
                         if (updates.category) {
                             const validCategories = ["military", "diplomatic", "humanitarian", "political"];
                             if (!validCategories.includes(updates.category)) {

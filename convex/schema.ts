@@ -43,7 +43,9 @@ export default defineSchema({
         .index("by_url", ["sourceUrl"])
         // Phase 2 bandwidth optimization: compound indexes for synthesis queries
         .index("by_status_credibility", ["status", "credibility"])
-        .index("by_status_publishedAt", ["status", "publishedAt"]),
+        .index("by_status_publishedAt", ["status", "publishedAt"])
+        // Phase 3 bandwidth optimization: index for unprocessed article queries
+        .index("by_status_processed", ["status", "processedToTimeline"]),
 
     cambodiaNews: defineTable({
         title: v.string(),
@@ -82,7 +84,9 @@ export default defineSchema({
         .index("by_url", ["sourceUrl"])
         // Phase 2 bandwidth optimization: compound indexes for synthesis queries
         .index("by_status_credibility", ["status", "credibility"])
-        .index("by_status_publishedAt", ["status", "publishedAt"]),
+        .index("by_status_publishedAt", ["status", "publishedAt"])
+        // Phase 3 bandwidth optimization: index for unprocessed article queries
+        .index("by_status_processed", ["status", "processedToTimeline"]),
 
     // International/3rd party news (Reuters, AFP, BBC, Al Jazeera, etc.)
     internationalNews: defineTable({
@@ -122,7 +126,9 @@ export default defineSchema({
         .index("by_url", ["sourceUrl"])
         // Phase 2 bandwidth optimization: compound indexes for synthesis queries
         .index("by_status_credibility", ["status", "credibility"])
-        .index("by_status_publishedAt", ["status", "publishedAt"]),
+        .index("by_status_publishedAt", ["status", "publishedAt"])
+        // Phase 3 bandwidth optimization: index for unprocessed article queries
+        .index("by_status_processed", ["status", "processedToTimeline"]),
 
     // ==================== ANALYSIS TABLES ====================
     // Managed by Flash (Synthesizer) - Frontend display tables
@@ -229,6 +235,17 @@ export default defineSchema({
     })
         .index("by_recorded_at", ["recordedAt"]),
 
+    // ==================== ARTICLE COUNTS CACHE ====================
+    // Singleton for O(1) article count reads (bandwidth optimization)
+    // Updated by insertArticle/deleteArticle mutations
+    articleCounts: defineTable({
+        key: v.literal("main"),
+        thailand: v.number(),
+        cambodia: v.number(),
+        international: v.number(),
+        lastUpdatedAt: v.number(),
+    })
+        .index("by_key", ["key"]),
 
     // ==================== SYSTEM ====================
 

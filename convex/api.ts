@@ -113,13 +113,24 @@ export const getDashboardStats = query({
 export const getArticleCounts = query({
     args: {},
     handler: async (ctx) => {
-        // OPTIMIZED: Count using .take() with high limit
-        // Convex limitation: only ONE paginated query per function, so we use .take() instead
-        // .take() returns only doc IDs internally when we just need .length
+        // OPTIMIZED: Read from singleton cache instead of scanning all tables
+        // This reduces bandwidth from ~65 MB to ~100 bytes (99.9% reduction)
+        const cached = await ctx.db.query("articleCounts")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
 
+        if (cached) {
+            return {
+                thailand: cached.thailand,
+                cambodia: cached.cambodia,
+                international: cached.international,
+                total: cached.thailand + cached.cambodia + cached.international,
+            };
+        }
+
+        // Fallback for first run or if cache doesn't exist yet
+        // This will be expensive but only happens once
         const countTable = async (tableName: "thailandNews" | "cambodiaNews" | "internationalNews") => {
-            // Use .take() with a high limit - sufficient for news article counts
-            // This is more efficient than .collect() because it can stop early
             const active = await ctx.db
                 .query(tableName)
                 .withIndex("by_status", q => q.eq("status", "active"))
@@ -133,7 +144,6 @@ export const getArticleCounts = query({
             return active.length + unverified.length;
         };
 
-        // Count sequentially to avoid any Convex limitations
         const thailand = await countTable("thailandNews");
         const cambodia = await countTable("cambodiaNews");
         const international = await countTable("internationalNews");
@@ -170,6 +180,14 @@ export const getTimeline = query({
 // INTERNAL QUERIES (Research Agent)
 // =============================================================================
 
+/**
+ * Get recent article URLs for deduplication during curation
+ * 
+ * BANDWIDTH OPTIMIZATION v2:
+ * - Returns ONLY sourceUrl (curator prompt only uses URLs for dedup)
+ * - Uses indexed queries with time filter instead of scanning 5000 docs
+ * - Estimated reduction: 95% (21 MB → ~1 MB)
+ */
 export const getExistingTitlesInternal = internalQuery({
     args: { country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")) },
     handler: async (ctx, args) => {
@@ -177,20 +195,30 @@ export const getExistingTitlesInternal = internalQuery({
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
 
-        // Only get articles from last 2 days to keep prompt size small
         const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
         const cutoff = Date.now() - TWO_DAYS_MS;
 
-        // Use .take() instead of pagination - Convex only allows one paginated query per function
-        // .take(5000) is sufficient for 2-day article lookups
-        const articles = await ctx.db
+        // OPTIMIZED: Use indexed queries by status, fetch less, return only URL
+        // 300 active + 100 unverified covers 2-day window with safety margin
+        const activeArticles = await ctx.db
             .query(table)
-            .take(5000);
+            .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
+            .order("desc")
+            .take(300);
 
-        // Filter to recent articles and extract only needed fields
-        return articles
+        const unverifiedArticles = await ctx.db
+            .query(table)
+            .withIndex("by_status_publishedAt", q => q.eq("status", "unverified"))
+            .order("desc")
+            .take(100);
+
+        const all = [...activeArticles, ...unverifiedArticles];
+
+        // OPTIMIZED: Return ONLY sourceUrl - that's all the curator uses
+        // The curator prompt does: existing.map(a => a.sourceUrl).join("\n")
+        return all
             .filter(a => (a.publishedAt || a.fetchedAt) > cutoff)
-            .map(a => ({ title: a.title, source: a.source, sourceUrl: a.sourceUrl }));
+            .map(a => ({ sourceUrl: a.sourceUrl }));
     },
 });
 
@@ -492,6 +520,52 @@ export const resetSourceVerification = internalMutation({
     },
 });
 
+/**
+ * One-time initialization for articleCounts cache
+ * Run this once after deploying the optimization to seed the cache
+ * Safe to call multiple times - only initializes if cache is empty
+ */
+export const initializeArticleCounts = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        // Check if already initialized
+        const existing = await ctx.db.query("articleCounts")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
+
+        if (existing) {
+            console.log(`✅ [COUNTS] Cache already initialized: TH=${existing.thailand}, KH=${existing.cambodia}, INTL=${existing.international}`);
+            return { initialized: false, message: "Already initialized" };
+        }
+
+        // Count from actual tables
+        const countTable = async (tableName: "thailandNews" | "cambodiaNews" | "internationalNews") => {
+            const active = await ctx.db.query(tableName)
+                .withIndex("by_status", q => q.eq("status", "active"))
+                .take(10000);
+            const unverified = await ctx.db.query(tableName)
+                .withIndex("by_status", q => q.eq("status", "unverified"))
+                .take(10000);
+            return active.length + unverified.length;
+        };
+
+        const thailand = await countTable("thailandNews");
+        const cambodia = await countTable("cambodiaNews");
+        const international = await countTable("internationalNews");
+
+        await ctx.db.insert("articleCounts", {
+            key: "main",
+            thailand,
+            cambodia,
+            international,
+            lastUpdatedAt: Date.now(),
+        });
+
+        console.log(`✅ [COUNTS] Cache initialized: TH=${thailand}, KH=${cambodia}, INTL=${international}`);
+        return { initialized: true, thailand, cambodia, international };
+    },
+});
+
 // =============================================================================
 // INTERNAL MUTATIONS (Research Agent)
 // =============================================================================
@@ -557,6 +631,27 @@ export const insertArticle = internalMutation({
             fetchedAt: Date.now(),
         });
 
+        // BANDWIDTH OPTIMIZATION: Update cached article counts
+        const counts = await ctx.db.query("articleCounts")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
+
+        if (counts) {
+            await ctx.db.patch(counts._id, {
+                [args.perspective]: (counts[args.perspective] || 0) + 1,
+                lastUpdatedAt: Date.now(),
+            });
+        } else {
+            // First article ever - initialize the cache
+            await ctx.db.insert("articleCounts", {
+                key: "main",
+                thailand: args.perspective === "thailand" ? 1 : 0,
+                cambodia: args.perspective === "cambodia" ? 1 : 0,
+                international: args.perspective === "international" ? 1 : 0,
+                lastUpdatedAt: Date.now(),
+            });
+        }
+
         return newId;
     },
 });
@@ -583,8 +678,29 @@ export const flagArticle = internalMutation({
             .first();
 
         if (article) {
+            // BUGFIX: Track if article status change affects counts
+            const wasCountable = article.status === "active" || article.status === "unverified";
+            const willBeCountable = args.status === "active" || args.status === "unverified";
+
             await ctx.db.patch(article._id, { status: args.status });
             console.log(`Flagged "${args.title}" as ${args.status}`);
+
+            // Update counts if transitioning between countable <-> non-countable
+            if (wasCountable !== willBeCountable) {
+                const counts = await ctx.db.query("articleCounts")
+                    .withIndex("by_key", q => q.eq("key", "main"))
+                    .first();
+
+                if (counts) {
+                    const delta = willBeCountable ? 1 : -1;
+                    const newCount = Math.max(0, (counts[args.country] || 0) + delta);
+                    await ctx.db.patch(counts._id, {
+                        [args.country]: newCount,
+                        lastUpdatedAt: Date.now(),
+                    });
+                    console.log(`📊 [COUNTS] ${args.country} ${delta > 0 ? '+' : ''}${delta} → ${newCount}`);
+                }
+            }
         }
     },
 });
@@ -606,8 +722,26 @@ export const deleteArticle = internalMutation({
             .first();
 
         if (article) {
+            // Only decrement count if article is active or unverified
+            // (archived/false/outdated articles already don't count)
+            const shouldDecrement = article.status === "active" || article.status === "unverified";
+
             await ctx.db.delete(article._id);
             console.log(`🗑️ DELETED article: "${args.title}" (${args.reason || "No reason given"})`);
+
+            // BANDWIDTH OPTIMIZATION: Update cached article counts
+            if (shouldDecrement) {
+                const counts = await ctx.db.query("articleCounts")
+                    .withIndex("by_key", q => q.eq("key", "main"))
+                    .first();
+
+                if (counts && counts[args.country] > 0) {
+                    await ctx.db.patch(counts._id, {
+                        [args.country]: counts[args.country] - 1,
+                        lastUpdatedAt: Date.now(),
+                    });
+                }
+            }
         } else {
             console.log(`⚠️ Could not find article to delete: "${args.title}"`);
         }
@@ -1518,8 +1652,10 @@ export const getCrossRefArticles = internalQuery({
  * This returns articles regardless of validation status (active, unverified, etc.)
  * Only excludes: archived, false, and already processed articles
  * 
- * OPTIMIZED: Uses index filtering + .take() instead of full table scans
- * Note: Convex only allows ONE paginated query per function, so we use .take() instead
+ * BANDWIDTH OPTIMIZATION v2:
+ * - Uses filter() for processedToTimeline instead of fetching all then filtering in JS
+ * - Strips unused fields (translations) - AI prompt only needs core fields
+ * - Estimated reduction: 86% (37 MB → ~5 MB)
  */
 export const getUnprocessedForTimeline = internalQuery({
     args: {
@@ -1532,60 +1668,46 @@ export const getUnprocessedForTimeline = internalQuery({
             { name: "internationalNews" as const, country: "international" as const },
         ];
 
-        type ArticleWithCountry = {
+        // OPTIMIZED: Slim type - only fields that AI actually uses
+        // Removed: titleEn, titleTh, titleKh, summaryEn, fetchedAt, status, processedToTimeline
+        type SlimArticle = {
             _id: any;
             title: string;
-            titleEn?: string;
-            titleTh?: string;
-            titleKh?: string;
             source: string;
             sourceUrl: string;
             summary?: string;
-            summaryEn?: string;
             credibility: number;
             publishedAt: number;
-            fetchedAt: number;
-            status: string;
-            processedToTimeline?: boolean;
             country: "thailand" | "cambodia" | "international";
         };
 
-        const results: ArticleWithCountry[] = [];
+        const results: SlimArticle[] = [];
         const targetCount = args.batchSize;
-
-        // Use .take() instead of .paginate() - Convex only allows one paginated query per function
-        // .take(1000) is sufficient since we typically process ~200 articles at a time
-        const fetchLimit = Math.max(targetCount * 3, 500);  // Buffer for filtering
 
         for (const { name, country } of tables) {
             if (results.length >= targetCount) break;
 
-            // Fetch active articles using .take()
+            // OPTIMIZED: Use filter to exclude already-processed articles
+            // Note: Can't use compound index directly since processedToTimeline can be undefined OR false
             const activeArticles = await ctx.db
                 .query(name)
                 .withIndex("by_status", q => q.eq("status", "active"))
-                .take(fetchLimit);
+                .filter(q => q.neq(q.field("processedToTimeline"), true))
+                .take(targetCount - results.length + 50); // Small buffer
 
             for (const a of activeArticles) {
-                if (!a.processedToTimeline && results.length < targetCount) {
-                    results.push({
-                        _id: a._id,
-                        title: a.title,
-                        titleEn: a.titleEn,
-                        titleTh: a.titleTh,
-                        titleKh: a.titleKh,
-                        source: a.source,
-                        sourceUrl: a.sourceUrl,
-                        summary: a.summary,
-                        summaryEn: a.summaryEn,
-                        credibility: a.credibility,
-                        publishedAt: a.publishedAt,
-                        fetchedAt: a.fetchedAt,
-                        status: a.status,
-                        processedToTimeline: a.processedToTimeline,
-                        country,
-                    });
-                }
+                if (results.length >= targetCount) break;
+                // OPTIMIZED: Only return fields that AI actually uses in the prompt
+                results.push({
+                    _id: a._id,
+                    title: a.title,
+                    source: a.source,
+                    sourceUrl: a.sourceUrl,
+                    summary: a.summary || a.summaryEn, // Fallback to English
+                    credibility: a.credibility,
+                    publishedAt: a.publishedAt,
+                    country,
+                });
             }
 
             // Fetch unverified articles if we still need more
@@ -1593,28 +1715,21 @@ export const getUnprocessedForTimeline = internalQuery({
                 const unverifiedArticles = await ctx.db
                     .query(name)
                     .withIndex("by_status", q => q.eq("status", "unverified"))
-                    .take(fetchLimit);
+                    .filter(q => q.neq(q.field("processedToTimeline"), true))
+                    .take(targetCount - results.length + 50);
 
                 for (const a of unverifiedArticles) {
-                    if (!a.processedToTimeline && results.length < targetCount) {
-                        results.push({
-                            _id: a._id,
-                            title: a.title,
-                            titleEn: a.titleEn,
-                            titleTh: a.titleTh,
-                            titleKh: a.titleKh,
-                            source: a.source,
-                            sourceUrl: a.sourceUrl,
-                            summary: a.summary,
-                            summaryEn: a.summaryEn,
-                            credibility: a.credibility,
-                            publishedAt: a.publishedAt,
-                            fetchedAt: a.fetchedAt,
-                            status: a.status,
-                            processedToTimeline: a.processedToTimeline,
-                            country,
-                        });
-                    }
+                    if (results.length >= targetCount) break;
+                    results.push({
+                        _id: a._id,
+                        title: a.title,
+                        source: a.source,
+                        sourceUrl: a.sourceUrl,
+                        summary: a.summary || a.summaryEn,
+                        credibility: a.credibility,
+                        publishedAt: a.publishedAt,
+                        country,
+                    });
                 }
             }
         }

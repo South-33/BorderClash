@@ -1758,7 +1758,7 @@ export const step4_synthesis = internalAction({
         // ═══ CYCLE COMPLETE ═══
         // Increment cycle counter and potentially trigger dashboard
         const cycleCount = await ctx.runMutation(internal.api.incrementResearchCycleCount, {});
-        const shouldUpdateDashboard = cycleCount % 2 === 0; // Every 2 cycles = 12 hours
+        const shouldUpdateDashboard = cycleCount % 2 === 0; // Every 2 cycles = 24 hours
 
         if (stepErrors.length === 0) {
             console.log("═══════════════════════════════════════════════════════════════");
@@ -1773,7 +1773,7 @@ export const step4_synthesis = internalAction({
             await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: stepErrors.join(" | ") });
         }
 
-        // ═══ CONDITIONAL DASHBOARD UPDATE (every 2 cycles = 12 hours) ═══
+        // ═══ CONDITIONAL DASHBOARD UPDATE (every 2 cycles = 24 hours) ═══
         if (shouldUpdateDashboard) {
             console.log(`📊 [DASHBOARD] Triggering dashboard update (cycle #${cycleCount} is even)...`);
             try {

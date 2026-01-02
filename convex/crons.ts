@@ -4,11 +4,11 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 // =============================================================================
-// AUTOMATION - Full Research Cycle (runs every 6 hours)
+// AUTOMATION - Full Research Cycle (runs every 12 hours)
 // Runs: Curation -> Validation -> Dashboard -> Synthesis
-// Changed to 360min to reduce bandwidth usage
+// Changed to 720min (12h) to reduce bandwidth usage
 // =============================================================================
-crons.interval("research-cycle", { minutes: 360 }, internal.research.runResearchCycle);
+crons.interval("research-cycle", { minutes: 720 }, internal.research.runResearchCycle);
 
 
 export default crons;
