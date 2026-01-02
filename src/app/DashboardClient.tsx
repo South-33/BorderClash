@@ -1798,7 +1798,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const timelineLoading = hasServerData ? false : clientTimelineLoading;
 
   // Track if we're on desktop (xl+ breakpoint) for conditional CSS
-  const [isDesktop, setIsDesktop] = useState(true);
+  const [isDesktop, setIsDesktop] = useState<boolean | undefined>(undefined);
   useEffect(() => {
     const checkDesktop = () => setIsDesktop(window.innerWidth >= 1280);
     checkDesktop();
@@ -2153,11 +2153,13 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // Each item has { type: 'header' | 'event', date: string, event?: any, eventIndex?: number }
   const virtualItems = useMemo(() => {
     const items: Array<{ type: 'header' | 'event'; date: string; event?: any; eventIndex?: number; eventsInDate?: number }> = [];
+    let globalEventIndex = 0; // Running counter across all dates
     timelineDates.forEach(date => {
       const events = groupedEvents[date] || [];
       items.push({ type: 'header', date, eventsInDate: events.length });
-      events.forEach((event, idx) => {
-        items.push({ type: 'event', date, event, eventIndex: idx });
+      events.forEach((event) => {
+        items.push({ type: 'event', date, event, eventIndex: globalEventIndex });
+        globalEventIndex++;
       });
     });
     return items;
@@ -2391,26 +2393,89 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const isContentPending = viewMode !== deferredViewMode;
 
   // --- SIMPLE SNUG-FIT LAYOUT ---
-  // Calculate optimal width on page load. Recalculates fresh on each refresh
-  // but skips when switching view modes (to prevent bad measurements).
+  // Calculate optimal width on page load. Recalculates on significant resize.
   const layoutContainerRef = useRef<HTMLDivElement>(null);
   const neutralTextRef = useRef<HTMLDivElement>(null);
   const hasCalculated = useRef(false);
+  const lastViewportWidth = useRef<number>(0);
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
 
-  useLayoutEffect(() => {
-    // Skip if already calculated this session
-    if (hasCalculated.current) {
+  // Core calculation function - extracted so it can be reused
+  const calculateSnugWidth = useCallback(() => {
+    const container = layoutContainerRef.current;
+    const textEl = neutralTextRef.current;
+    if (!container || !textEl) return;
+
+    const viewportWidth = window.innerWidth;
+    const maxWidth = Math.min(viewportWidth * 0.95, 2000);
+    const minWidth = Math.min(viewportWidth * 0.80, 1700);
+    let width = maxWidth;
+
+    container.style.transition = 'none';
+    container.style.maxWidth = `${maxWidth}px`;
+
+    void textEl.offsetHeight;
+
+    const checkOverflow = () => {
+      void textEl.offsetHeight;
+      return textEl.scrollHeight > textEl.clientHeight + 2;
+    };
+
+    // First check: does content fit at maxWidth?
+    const overflowsAtMax = checkOverflow();
+
+    // If it overflows at max, viewport is too small for desktop - force mobile view
+    if (overflowsAtMax) {
+      container.style.removeProperty('max-width');
+      container.style.removeProperty('transition');
+      setLayoutWidth(null);
+      setIsDesktop(false); // Force mobile layout
+      lastViewportWidth.current = viewportWidth;
+      hasCalculated.current = true;
+
+      requestAnimationFrame(() => {
+        setIsLayoutReady(true);
+      });
       return;
     }
 
+    // Content fits at maxWidth - now shrink to find snug fit
+    let lastGoodWidth = maxWidth;
+    while (width > minWidth) {
+      container.style.maxWidth = `${width}px`;
+      void textEl.offsetHeight;
+
+      if (checkOverflow()) {
+        break;
+      }
+      lastGoodWidth = width;
+      width -= 25;
+    }
+
+    const snugWidth = checkOverflow() ? lastGoodWidth : width;
+    const finalWidth = Math.min(Math.round(snugWidth * 1.025), maxWidth);
+
+    container.style.maxWidth = `${finalWidth}px`;
+    setLayoutWidth(finalWidth);
+    lastViewportWidth.current = viewportWidth;
+    hasCalculated.current = true;
+
+    requestAnimationFrame(() => {
+      setIsLayoutReady(true);
+      container.style.removeProperty('transition');
+    });
+  }, []);
+
+  // Initial calculation on mount
+  useLayoutEffect(() => {
+    if (hasCalculated.current) return;
+
     const container = layoutContainerRef.current;
     const textEl = neutralTextRef.current;
-
-    // Only calculate on desktop in Analysis mode when elements exist
     if (!container || !textEl) return;
 
-    // On mobile, just show immediately
+    if (isDesktop === undefined) return;
+
     if (!isDesktop) {
       setIsLayoutReady(true);
       return;
@@ -2418,77 +2483,56 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
     if (neutralMetaLoading) return;
 
-    const calculateSnugWidth = () => {
-      const startTime = performance.now();
+    lastViewportWidth.current = window.innerWidth;
 
-      // STRATEGY: Start BIG, shrink until overflow, then step back + buffer
-      // This ensures all content is rendered before we measure
-      // Dynamic bounds based on viewport (keeps ~1.18 ratio like the original 2000/1700)
-      const viewportWidth = window.innerWidth;
-      const maxWidth = Math.min(viewportWidth * 0.95, 2000); // 95% of viewport, capped at 2000
-      const minWidth = Math.min(viewportWidth * 0.80, 1700); // 80% of viewport, capped at 1700
-      let width = maxWidth;
-
-      container.style.transition = 'none';
-      container.style.maxWidth = `${maxWidth}px`;
-
-      // Force reflow at max size to ensure all content renders
-      void textEl.offsetHeight;
-
-      const checkOverflow = () => {
-        void textEl.offsetHeight; // Force reflow before checking
-        return textEl.scrollHeight > textEl.clientHeight + 2;
-      };
-
-      // Shrink until we find overflow
-      let lastGoodWidth = maxWidth;
-      while (width > minWidth) {
-        container.style.maxWidth = `${width}px`;
-        void textEl.offsetHeight; // Force reflow
-
-        if (checkOverflow()) {
-          // Found overflow - use the last good width
-          break;
-        }
-        lastGoodWidth = width;
-        width -= 25;
-      }
-
-      // Use the last width that didn't overflow, plus 2.5% buffer for other languages
-      const snugWidth = checkOverflow() ? lastGoodWidth : width;
-      const finalWidth = Math.min(Math.round(snugWidth * 1.025), maxWidth);
-
-      // Apply final width
-      container.style.maxWidth = `${finalWidth}px`;
-
-      setLayoutWidth(finalWidth);
-      hasCalculated.current = true;
-
-      // Fade in after a tiny delay to ensure DOM is updated
-      requestAnimationFrame(() => {
-        setIsLayoutReady(true);
-      });
-
-      // Restore transitions
-      requestAnimationFrame(() => {
-        container.style.removeProperty('transition');
-      });
-    };
-
-    // Run after fonts are ready
     document.fonts.ready.then(() => {
       requestAnimationFrame(calculateSnugWidth);
     });
-  }, [isDesktop, viewMode, neutralMetaLoading]);
+  }, [isDesktop, viewMode, neutralMetaLoading, calculateSnugWidth]);
+
+  // Resize handler - recalculate on significant width change
+  useEffect(() => {
+    let resizeTimeout: NodeJS.Timeout;
+
+    const handleResize = () => {
+      clearTimeout(resizeTimeout);
+
+      resizeTimeout = setTimeout(() => {
+        const currentWidth = window.innerWidth;
+        const widthDelta = Math.abs(currentWidth - lastViewportWidth.current);
+
+        // On any significant resize, try desktop mode again
+        // calculateSnugWidth will force mobile if content doesn't fit
+        if (widthDelta > 50 && hasCalculated.current) {
+          setIsLayoutReady(false);
+          setIsDesktop(true); // Always try desktop first
+          hasCalculated.current = false; // Allow fresh calculation
+          lastViewportWidth.current = currentWidth;
+
+          setTimeout(() => {
+            document.fonts.ready.then(() => {
+              requestAnimationFrame(calculateSnugWidth);
+            });
+          }, 200);
+        }
+      }, 150);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearTimeout(resizeTimeout);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [calculateSnugWidth]);
 
   return (
-    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass}`}>
+    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${isDesktop === false ? 'force-mobile' : ''}`}>
       {/* Top spacer - flexes equally with bottom */}
       <div />
       <div
         ref={layoutContainerRef}
         className={`dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full transition-opacity duration-200 ${isLayoutReady ? 'opacity-100' : 'opacity-0'}`}
-        style={{ maxWidth: layoutWidth ? `${layoutWidth}px` : '1600px' }}
+        style={{ maxWidth: isDesktop && layoutWidth ? `${layoutWidth}px` : undefined }}
       >
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
@@ -3038,7 +3082,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                           } else {
                             // Event Card
                             const event = item.event;
-                            const isRight = (item.eventIndex || 0) % 2 === 0;
+                            const isRight = (item.eventIndex ?? 0) % 2 === 0;
                             const isImportant = (event?.importance || 0) > 75;
 
                             return (
@@ -3234,8 +3278,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                         {evt.sources?.length > 0 && (() => {
                           // Sort by credibility (highest first)
                           const sortedSources = [...evt.sources].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
-                          const topSources = sortedSources.slice(0, 3);
-                          const remainingSources = sortedSources.slice(3);
+                          // If 4 or fewer sources, show all. Only hide behind toggle if 5+ sources.
+                          const showAllInline = sortedSources.length <= 4;
+                          const topSources = showAllInline ? sortedSources : sortedSources.slice(0, 3);
+                          const remainingSources = showAllInline ? [] : sortedSources.slice(3);
 
                           return (
                             <div className="space-y-3">
