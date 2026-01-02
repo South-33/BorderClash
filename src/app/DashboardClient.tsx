@@ -2039,32 +2039,28 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [isPossiblyStale, setIsPossiblyStale] = useState(false);
 
   useEffect(() => {
-    // Use nextRunAt if available (adaptive scheduling), otherwise fall back to fixed calc
-    const hasNextRunAt = systemStats?.nextRunAt && systemStats.nextRunAt > 0;
+    // Use lastCycleInterval if available (adaptive scheduling), otherwise fall back to fixed 12h
+    const hasAdaptiveScheduling = systemStats?.lastCycleInterval && systemStats.lastCycleInterval > 0;
 
-    if (!systemStats?.lastResearchAt && !hasNextRunAt) return;
+    if (!systemStats?.lastResearchAt) return;
 
     const updateCountdown = () => {
-      let remaining: number;
+      // Get the interval in milliseconds (from server-stored hours)
+      const intervalMs = hasAdaptiveScheduling
+        ? (systemStats.lastCycleInterval || 12) * 60 * 60 * 1000
+        : 720 * 60 * 1000; // 12 hours default
 
-      if (hasNextRunAt) {
-        // ADAPTIVE SCHEDULING: Use AI-decided nextRunAt directly
-        remaining = Math.max(0, (systemStats.nextRunAt || 0) - Date.now());
-      } else {
-        // FALLBACK: Fixed 12-hour interval (for backwards compatibility)
-        const cycleInterval = 720 * 60 * 1000;
-        const timeSinceLastUpdate = Date.now() - (systemStats?.lastResearchAt || 0);
-        remaining = Math.max(0, cycleInterval - timeSinceLastUpdate);
-      }
+      // Calculate elapsed time since last research completed
+      const timeSinceLastUpdate = Date.now() - (systemStats.lastResearchAt || 0);
+
+      // Remaining = interval - elapsed
+      const remaining = Math.max(0, intervalMs - timeSinceLastUpdate);
 
       setNextUpdateIn(Math.floor(remaining / 1000));
 
       // If remaining is 0 and has been for more than 60 seconds, data might be stale
-      if (remaining === 0) {
-        const timeSinceExpected = hasNextRunAt
-          ? Date.now() - (systemStats?.nextRunAt || 0)
-          : Date.now() - (systemStats?.lastResearchAt || 0) - (720 * 60 * 1000);
-        setIsPossiblyStale(timeSinceExpected > 60000);
+      if (remaining === 0 && timeSinceLastUpdate > intervalMs + 60000) {
+        setIsPossiblyStale(true);
       } else {
         setIsPossiblyStale(false);
       }
@@ -2073,7 +2069,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, [systemStats?.lastResearchAt, systemStats?.nextRunAt, systemStats?.isPaused, tabFocusKey]);
+  }, [systemStats?.lastResearchAt, systemStats?.lastCycleInterval, systemStats?.isPaused, tabFocusKey]);
 
   const formatTime = (seconds: number): React.ReactNode => {
     const h = Math.floor(seconds / 3600);

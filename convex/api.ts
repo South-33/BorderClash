@@ -86,6 +86,9 @@ export const getStats = query({
             lastResearchAt: stats.lastResearchAt,
             systemStatus: stats.systemStatus,
             isPaused: stats.isPaused,
+            // Adaptive scheduling fields
+            lastCycleInterval: stats.lastCycleInterval,
+            schedulingReason: stats.schedulingReason,
         } : null;
     },
 });
