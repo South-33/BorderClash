@@ -2423,6 +2423,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const hasCalculated = useRef(false);
   const lastViewportWidth = useRef<number>(0);
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
+  const [neutralRatio, setNeutralRatio] = useState<number>(1); // Ratio of neutral card width (1.0 to 1.4)
+  const perspectivesGridRef = useRef<HTMLDivElement>(null);
 
   // Core calculation function - extracted so it can be reused
   const calculateSnugWidth = useCallback(() => {
@@ -2441,8 +2443,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     }
 
     const viewportWidth = window.innerWidth;
-    const maxWidth = Math.min(viewportWidth * 0.95, 2000);
-    const minWidth = Math.min(viewportWidth * 0.80, 1700);
+    const maxWidth = viewportWidth * 0.96;  // 90% of viewport
+    const minWidth = viewportWidth * 0.75;  // 75% of viewport
     let width = maxWidth;
 
     container.style.transition = 'none';
@@ -2455,29 +2457,56 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       return textEl.scrollHeight > textEl.clientHeight + 2;
     };
 
-    // First check: does content fit at maxWidth?
-    const overflowsAtMax = checkOverflow();
+    // First check: does content fit at maxWidth with current ratio?
+    const perspectivesGrid = perspectivesGridRef.current;
+    let currentRatio = 1.0;
+    const maxRatio = 1.4;
+    const ratioStep = 0.05;
 
-    // If it overflows at max, viewport is too small for desktop - force mobile view
+    // Helper to apply ratio to grid
+    const applyRatio = (ratio: number) => {
+      if (perspectivesGrid) {
+        perspectivesGrid.style.gridTemplateColumns = `1fr ${ratio}fr 1fr`;
+        void perspectivesGrid.offsetHeight; // Force reflow
+      }
+    };
+
+    // Start with ratio 1.0
+    applyRatio(currentRatio);
+    let overflowsAtMax = checkOverflow();
+
+    // If it overflows at maxWidth with ratio 1.0, try increasing ratio (snug-fit)
     if (overflowsAtMax) {
-      container.style.removeProperty('max-width');
-      container.style.removeProperty('transition');
-      setLayoutWidth(null);
-      setIsDesktop(false); // Force mobile layout
-      lastViewportWidth.current = viewportWidth;
-      hasCalculated.current = true;
-
-      // Restore Analysis view positioning before returning
-      if (analysisView) {
-        analysisView.style.removeProperty('position');
-        analysisView.style.removeProperty('opacity');
-        analysisView.style.removeProperty('pointer-events');
+      // Try progressively larger ratios until content fits or we hit max
+      while (currentRatio < maxRatio && overflowsAtMax) {
+        currentRatio = Math.min(currentRatio + ratioStep, maxRatio);
+        applyRatio(currentRatio);
+        overflowsAtMax = checkOverflow();
       }
 
-      requestAnimationFrame(() => {
-        setIsLayoutReady(true);
-      });
-      return;
+      // If still overflows at max ratio, force mobile
+      if (overflowsAtMax) {
+        container.style.removeProperty('max-width');
+        container.style.removeProperty('transition');
+        if (perspectivesGrid) perspectivesGrid.style.removeProperty('grid-template-columns');
+        setLayoutWidth(null);
+        setNeutralRatio(1);
+        setIsDesktop(false); // Force mobile layout
+        lastViewportWidth.current = viewportWidth;
+        hasCalculated.current = true;
+
+        // Restore Analysis view positioning before returning
+        if (analysisView) {
+          analysisView.style.removeProperty('position');
+          analysisView.style.removeProperty('opacity');
+          analysisView.style.removeProperty('pointer-events');
+        }
+
+        requestAnimationFrame(() => {
+          setIsLayoutReady(true);
+        });
+        return;
+      }
     }
 
     // Content fits at maxWidth - now shrink to find snug fit
@@ -2494,12 +2523,18 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     }
 
     const snugWidth = checkOverflow() ? lastGoodWidth : width;
-    const finalWidth = Math.min(Math.round(snugWidth * 1.025), maxWidth);
+    const finalWidth = Math.min(Math.round(snugWidth), maxWidth);
 
     container.style.maxWidth = `${finalWidth}px`;
     setLayoutWidth(finalWidth);
+    setNeutralRatio(currentRatio); // Store the calculated ratio
     lastViewportWidth.current = viewportWidth;
     hasCalculated.current = true;
+
+    // Clean up inline grid style - will be applied via React state
+    if (perspectivesGrid) {
+      perspectivesGrid.style.removeProperty('grid-template-columns');
+    }
 
     // Restore Analysis view positioning
     if (analysisView) {
@@ -2539,12 +2574,13 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   }, [isDesktop, viewMode, neutralMetaLoading, calculateSnugWidth]);
 
   // Invalidate layout cache when content changes (language or neutral meta data)
-  // This ensures the cached layoutWidth is always valid for current content
+  // This ensures the cached layoutWidth and neutralRatio are always valid for current content
   useEffect(() => {
     if (hasCalculated.current) {
       // Content changed - force recalculation on next resize or interaction
       hasCalculated.current = false;
       setLayoutWidth(null);
+      setNeutralRatio(1);
 
       // Trigger immediate recalculation if on desktop
       if (isDesktop && window.innerWidth >= 1280) {
@@ -2909,10 +2945,12 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                 </Card>
               </div>
 
-              {/* Three Perspectives Grid - Equal 1fr columns */}
+              {/* Three Perspectives Grid - Dynamic ratio based on content */}
               <div className="flex-1 min-h-0 overflow-visible">
                 <div
-                  className={`perspectives-grid grid gap-4 h-full ${isDesktop ? 'grid-cols-3' : 'grid-cols-1'}`}
+                  ref={perspectivesGridRef}
+                  className={`perspectives-grid grid gap-4 h-full ${isDesktop ? '' : 'grid-cols-1'}`}
+                  style={{ gridTemplateColumns: isDesktop ? `1fr ${neutralRatio}fr 1fr` : undefined }}
                   suppressHydrationWarning
                 >
 

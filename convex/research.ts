@@ -1822,23 +1822,47 @@ export const step4_synthesis = internalAction({
             stepErrors.push(`Synthesis: ${String(e)}`);
         }
 
-        // ═══ ADAPTIVE SCHEDULING ═══
-        // Store next run time based on AI decision (or default to 12h)
+        // ═══ ADAPTIVE SCHEDULING with scheduler.runAt ═══
+        // Schedule exact next run time (no more heartbeat polling!)
         const nextHours = schedulingResult?.nextCycleHours || 12;
         const clampedHours = Math.max(4, Math.min(48, nextHours)); // Clamp to 4-48 range
         const nextRunAt = Date.now() + (clampedHours * 60 * 60 * 1000);
         const reason = schedulingResult?.reason || "Default scheduling (synthesis did not return decision)";
 
+        console.log(`📅 AI scheduling decision: ${clampedHours}h - ${reason}`);
+
+        // Cancel any existing scheduled run to prevent duplicates
+        const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+        if (stats?.scheduledRunId) {
+            try {
+                await ctx.scheduler.cancel(stats.scheduledRunId);
+                console.log(`🗑️ Cancelled existing scheduled run: ${stats.scheduledRunId}`);
+            } catch (e) {
+                // Job might have already completed or been cancelled - that's fine
+                console.log(`ℹ️ Could not cancel existing job (may have already run): ${e}`);
+            }
+        }
+
+        // Schedule the exact next run time
+        const scheduledRunId = await ctx.scheduler.runAt(
+            nextRunAt,
+            internal.research.runResearchCycle,
+            {}
+        );
+        console.log(`📅 [SCHEDULER] Scheduled next run for ${new Date(nextRunAt).toLocaleString()} (${clampedHours}h from now)`);
+        console.log(`   Job ID: ${scheduledRunId}`);
+
+        // Store scheduling info for frontend display and tracking
         await ctx.runMutation(internal.api.setNextRunAt, {
             nextRunAt,
             lastCycleInterval: clampedHours,
             schedulingReason: reason,
+            scheduledRunId,
         });
 
         // ═══ CYCLE COMPLETE ═══
-        // Increment cycle counter and potentially trigger dashboard
+        // Increment cycle counter and trigger dashboard (every cycle now, since cycles are 16h+)
         const cycleCount = await ctx.runMutation(internal.api.incrementResearchCycleCount, {});
-        const shouldUpdateDashboard = cycleCount % 2 === 0; // Every 2 cycles = 24 hours
 
         if (stepErrors.length === 0) {
             console.log("═══════════════════════════════════════════════════════════════");
@@ -1853,18 +1877,14 @@ export const step4_synthesis = internalAction({
             await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: stepErrors.join(" | ") });
         }
 
-        // ═══ CONDITIONAL DASHBOARD UPDATE (every 2 cycles = 24 hours) ═══
-        if (shouldUpdateDashboard) {
-            console.log(`📊 [DASHBOARD] Triggering dashboard update (cycle #${cycleCount} is even)...`);
-            try {
-                await ctx.runAction(internal.research.updateDashboard, {});
-                console.log("✅ [DASHBOARD] Dashboard updated successfully");
-            } catch (dashboardError) {
-                // Non-fatal - don't fail the cycle just because dashboard failed
-                console.warn("⚠️ [DASHBOARD] Dashboard update failed (non-fatal):", dashboardError);
-            }
-        } else {
-            console.log(`📊 [DASHBOARD] Skipping dashboard update (cycle #${cycleCount} is odd, next update at cycle #${cycleCount + 1})`);
+        // ═══ DASHBOARD UPDATE (every cycle since cycles are now 16h+) ═══
+        console.log(`📊 [DASHBOARD] Triggering dashboard update...`);
+        try {
+            await ctx.runAction(internal.research.updateDashboard, {});
+            console.log("✅ [DASHBOARD] Dashboard updated successfully");
+        } catch (dashboardError) {
+            // Non-fatal - don't fail the cycle just because dashboard failed
+            console.warn("⚠️ [DASHBOARD] Dashboard update failed (non-fatal):", dashboardError);
         }
 
         // ═══ TRIGGER ISR REVALIDATION ═══

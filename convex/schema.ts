@@ -262,6 +262,7 @@ export default defineSchema({
         nextRunAt: v.optional(v.number()),        // Timestamp for next cycle (set by AI)
         lastCycleInterval: v.optional(v.number()), // Hours since last cycle (for debugging)
         schedulingReason: v.optional(v.string()),  // AI's reasoning for the interval
+        scheduledRunId: v.optional(v.id("_scheduled_functions")), // scheduler.runAt job ID
     })
         .index("by_key", ["key"]),
 

@@ -1125,6 +1125,7 @@ export const setNextRunAt = internalMutation({
         nextRunAt: v.number(),
         lastCycleInterval: v.number(),
         schedulingReason: v.string(),
+        scheduledRunId: v.optional(v.id("_scheduled_functions")),
     },
     handler: async (ctx, args) => {
         const existing = await ctx.db.query("systemStats")
@@ -1136,6 +1137,7 @@ export const setNextRunAt = internalMutation({
                 nextRunAt: args.nextRunAt,
                 lastCycleInterval: args.lastCycleInterval,
                 schedulingReason: args.schedulingReason,
+                scheduledRunId: args.scheduledRunId,
             });
         }
         console.log(`📅 [SCHEDULER] Next run at ${new Date(args.nextRunAt).toLocaleString()} (${args.lastCycleInterval}h) - ${args.schedulingReason}`);
