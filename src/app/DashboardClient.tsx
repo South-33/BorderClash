@@ -2419,6 +2419,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // Calculate optimal width on page load. Recalculates on significant resize.
   const layoutContainerRef = useRef<HTMLDivElement>(null);
   const neutralTextRef = useRef<HTMLDivElement>(null);
+  const analysisViewRef = useRef<HTMLDivElement>(null); // Ref to Analysis view for measurement
   const hasCalculated = useRef(false);
   const lastViewportWidth = useRef<number>(0);
   const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
@@ -2427,7 +2428,17 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const calculateSnugWidth = useCallback(() => {
     const container = layoutContainerRef.current;
     const textEl = neutralTextRef.current;
+    const analysisView = analysisViewRef.current;
     if (!container || !textEl) return;
+
+    // CRITICAL: Temporarily force Analysis view into normal document flow for accurate measurement
+    // When on Timeline/Guide, the Analysis view is absolute-positioned which breaks height calculation
+    const wasAbsolute = analysisView?.style.position;
+    if (analysisView) {
+      analysisView.style.position = 'static';
+      analysisView.style.opacity = '0';
+      analysisView.style.pointerEvents = 'none';
+    }
 
     const viewportWidth = window.innerWidth;
     const maxWidth = Math.min(viewportWidth * 0.95, 2000);
@@ -2456,6 +2467,13 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       lastViewportWidth.current = viewportWidth;
       hasCalculated.current = true;
 
+      // Restore Analysis view positioning before returning
+      if (analysisView) {
+        analysisView.style.removeProperty('position');
+        analysisView.style.removeProperty('opacity');
+        analysisView.style.removeProperty('pointer-events');
+      }
+
       requestAnimationFrame(() => {
         setIsLayoutReady(true);
       });
@@ -2482,6 +2500,13 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     setLayoutWidth(finalWidth);
     lastViewportWidth.current = viewportWidth;
     hasCalculated.current = true;
+
+    // Restore Analysis view positioning
+    if (analysisView) {
+      analysisView.style.removeProperty('position');
+      analysisView.style.removeProperty('opacity');
+      analysisView.style.removeProperty('pointer-events');
+    }
 
     requestAnimationFrame(() => {
       setIsLayoutReady(true);
@@ -2513,30 +2538,68 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     });
   }, [isDesktop, viewMode, neutralMetaLoading, calculateSnugWidth]);
 
+  // Invalidate layout cache when content changes (language or neutral meta data)
+  // This ensures the cached layoutWidth is always valid for current content
+  useEffect(() => {
+    if (hasCalculated.current) {
+      // Content changed - force recalculation on next resize or interaction
+      hasCalculated.current = false;
+      setLayoutWidth(null);
+
+      // Trigger immediate recalculation if on desktop
+      if (isDesktop && window.innerWidth >= 1280) {
+        setIsLayoutReady(false);
+        requestAnimationFrame(calculateSnugWidth);
+      }
+    }
+  }, [lang, neutralMeta?._id, calculateSnugWidth, isDesktop]);
+
   // Resize handler - recalculate on significant width change
   useEffect(() => {
     let resizeTimeout: NodeJS.Timeout;
+    let needsRecalc = false;
 
     const handleResize = () => {
+      const currentWidth = window.innerWidth;
+      const widthDelta = Math.abs(currentWidth - lastViewportWidth.current);
+
+      // IMMEDIATELY fade out on any significant resize to hide layout shifts
+      if (widthDelta > 50 && hasCalculated.current && !needsRecalc) {
+        setIsLayoutReady(false);
+        needsRecalc = true;
+      }
+
       clearTimeout(resizeTimeout);
 
       resizeTimeout = setTimeout(() => {
-        const currentWidth = window.innerWidth;
-        const widthDelta = Math.abs(currentWidth - lastViewportWidth.current);
+        const finalWidth = window.innerWidth;
 
-        // On any significant resize, try desktop mode again
-        // calculateSnugWidth will force mobile if content doesn't fit
-        if (widthDelta > 50 && hasCalculated.current) {
-          setIsLayoutReady(false);
-          setIsDesktop(true); // Always try desktop first
-          hasCalculated.current = false; // Allow fresh calculation
-          lastViewportWidth.current = currentWidth;
+        // If we faded out, we need to recalculate and fade back in
+        if (needsRecalc) {
+          needsRecalc = false;
+          lastViewportWidth.current = finalWidth;
 
-          setTimeout(() => {
-            document.fonts.ready.then(() => {
-              requestAnimationFrame(calculateSnugWidth);
-            });
-          }, 200);
+          // Quick path: viewport below xl breakpoint = force mobile
+          if (finalWidth < 1280) {
+            setIsDesktop(false);
+            setLayoutWidth(null);
+            setIsLayoutReady(true);
+            return;
+          }
+
+          // OPTIMIZATION: If we have a cached layoutWidth and viewport still supports it,
+          // skip the expensive DOM measurement (which requires position toggling on other views)
+          // The cached width is valid as long as the neutral card content hasn't changed
+          if (layoutWidth && finalWidth * 0.95 >= layoutWidth) {
+            // Viewport is large enough - reuse cached layout, no measurement needed
+            hasCalculated.current = true;
+            setIsLayoutReady(true);
+            return;
+          }
+
+          // Viewport is smaller than cached width, or no cache - do full calculation
+          hasCalculated.current = false;
+          requestAnimationFrame(calculateSnugWidth);
         }
       }, 150);
     };
@@ -2546,7 +2609,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       clearTimeout(resizeTimeout);
       window.removeEventListener('resize', handleResize);
     };
-  }, [calculateSnugWidth]);
+  }, [calculateSnugWidth, layoutWidth]);
 
   return (
     <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${isDesktop === false ? 'force-mobile' : ''}`}>
@@ -2775,8 +2838,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         <main className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
 
           {/* ANALYSIS VIEW - Viewport-contained like Timeline */}
-          {/* OPTIMIZATION: If not active but not ready, render invisibly for layout calc (Parallel Render) */}
-          <div className={`xl:col-span-3 ${deferredViewMode === 'ANALYSIS' ? '' : (!isLayoutReady ? 'absolute top-0 left-0 w-full opacity-0 pointer-events-none z-0' : 'hidden')}`}>
+          {/* ALWAYS render invisibly when not active (never hidden) so neutralTextRef is measurable for layout calculations */}
+          <div ref={analysisViewRef} className={`xl:col-span-3 ${deferredViewMode === 'ANALYSIS' ? '' : 'absolute top-0 left-0 w-full opacity-0 pointer-events-none z-0'}`}>
             <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
