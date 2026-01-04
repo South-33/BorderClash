@@ -69,7 +69,7 @@ graph TB
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 15 + Tailwind CSS |
+| Frontend | Next.js 16 + Tailwind CSS |
 | Backend | Convex |
 | AI | Gemini |
 | Hosting | Vercel |
