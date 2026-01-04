@@ -10,6 +10,7 @@ import Lenis from 'lenis';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
+import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
 
 
 // --- Error Boundary for Convex Crashes ---
@@ -986,15 +987,15 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
-  const [viewMode, setViewMode] = useState<'ANALYSIS' | 'LOSSES' | 'GUIDE'>('ANALYSIS');
+  const [viewMode, setViewMode] = useState<'ANALYSIS' | 'TIMELINE' | 'GUIDE'>('ANALYSIS');
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
 
   // On mount, read URL hash and update viewMode (client-only, avoids hydration mismatch)
   useEffect(() => {
     const hash = window.location.hash.toLowerCase().replace('#', '');
-    if (hash === 'timeline' || hash === 'losses') {
-      setViewMode('LOSSES');
+    if (hash === 'timeline' || hash === 'TIMELINE') {
+      setViewMode('TIMELINE');
     } else if (hash === 'guide') {
       setViewMode('GUIDE');
     }
@@ -1004,15 +1005,13 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // Sync viewMode changes back to URL hash (skip first run to avoid clearing hash before reading)
   useEffect(() => {
     if (!hasInitializedFromHash.current) return; // Skip initial mount
-    const hashMap: Record<string, string> = { 'ANALYSIS': '', 'LOSSES': '#timeline', 'GUIDE': '#guide' };
+    const hashMap: Record<string, string> = { 'ANALYSIS': '', 'TIMELINE': '#timeline', 'GUIDE': '#guide' };
     const newHash = hashMap[viewMode] || '';
     if (window.location.hash !== newHash) {
       window.history.replaceState(null, '', newHash || window.location.pathname);
     }
   }, [viewMode]);
 
-  const [lang, setLang] = useState<'en' | 'th' | 'kh'>('en');
-  const t = TRANSLATIONS[lang as Lang];
 
 
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
@@ -1225,23 +1224,47 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const countsLoading = hasServerData ? false : clientCountsLoading;
   const timelineLoading = hasServerData ? false : clientTimelineLoading;
 
-  // Simple mobile breakpoint: < 1280px = mobile
-  const [isDesktop, setIsDesktop] = useState(false);
-  useEffect(() => {
-    const checkDesktop = () => setIsDesktop(window.innerWidth >= 1280);
-    checkDesktop();
-    window.addEventListener('resize', checkDesktop);
-    return () => window.removeEventListener('resize', checkDesktop);
-  }, []);
 
   // --- CASCADE LAYOUT CONTROL ---
-  // These will be controlled by useCascadeLayout hook when implemented
-  // Algorithm: 1) increase container width → 2) increase neutral ratio → 3) force mobile
-  const containerRef = useRef<HTMLDivElement>(null);
-  const neutralCardRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number | null>(null); // null = 100%
-  const [neutralRatio, setNeutralRatio] = useState(1); // 1 = equal, max 1.5
-  const [forceMobile, setForceMobile] = useState(false);
+  // All layout logic (mobile detecting, width, ratios) is handled inside the hook
+  const {
+    containerRef,
+    neutralCardRef,
+    isDesktop,
+    containerWidth,
+    neutralRatio,
+    forceMobile,
+    lang,
+    isLayoutReady,
+    setLang
+  } = useCascadeLayout({ viewMode: viewMode.toLowerCase() as 'analysis' | 'timeline' | 'guide' });
+
+  // Get translations for current lang
+  const t = TRANSLATIONS[lang as Lang];
+
+  // Helper to get narrative based on language
+  const getNarrative = (meta: any) => {
+    if (!meta) return null;
+    if (lang === 'th' && meta.officialNarrativeTh) return meta.officialNarrativeTh;
+    if (lang === 'kh' && meta.officialNarrativeKh) return meta.officialNarrativeKh;
+    return meta.officialNarrativeEn || meta.officialNarrative;
+  };
+
+  // Helper to get summary based on language
+  const getSummary = (meta: any) => {
+    if (!meta) return null;
+    if (lang === 'th' && meta.generalSummaryTh) return meta.generalSummaryTh;
+    if (lang === 'kh' && meta.generalSummaryKh) return meta.generalSummaryKh;
+    return meta.generalSummaryEn || meta.generalSummary;
+  };
+
+  // Helper to get key events based on language
+  const getKeyEvents = (meta: any) => {
+    if (!meta) return [];
+    if (lang === 'th' && meta.keyEventsTh?.length) return meta.keyEventsTh;
+    if (lang === 'kh' && meta.keyEventsKh?.length) return meta.keyEventsKh;
+    return meta.keyEventsEn || meta.keyEvents || [];
+  };
 
   // --- Modal Navigation & Touch State ---
 
@@ -1367,7 +1390,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   // Handle auto-scroll to latest date on initial load or view switch (ONLY ONCE)
   useEffect(() => {
-    if (viewMode === 'LOSSES' && timelineDates.length > 0 && !hasAutoScrolledTimeline.current) {
+    if (viewMode === 'TIMELINE' && timelineDates.length > 0 && !hasAutoScrolledTimeline.current) {
       const latestDate = timelineDates[timelineDates.length - 1];
       // Small delay to ensure the timeline container is rendered and height is calculated
       const timer = setTimeout(() => {
@@ -1400,7 +1423,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   // Initialize Lenis for horizontal date picker
   useEffect(() => {
-    if (viewMode !== 'LOSSES' || !datePickerRef.current) return;
+    if (viewMode !== 'TIMELINE' || !datePickerRef.current) return;
 
     // Small delay to ensure render
     const timer = setTimeout(() => {
@@ -1534,29 +1557,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     return new Date(timestamp).toLocaleTimeString();
   };
 
-  // Helper to get narrative based on language
-  const getNarrative = (meta: any) => {
-    if (!meta) return null;
-    if (lang === 'th' && meta.officialNarrativeTh) return meta.officialNarrativeTh;
-    if (lang === 'kh' && meta.officialNarrativeKh) return meta.officialNarrativeKh;
-    return meta.officialNarrativeEn || meta.officialNarrative;
-  };
 
-  // Helper to get summary based on language
-  const getSummary = (meta: any) => {
-    if (!meta) return null;
-    if (lang === 'th' && meta.generalSummaryTh) return meta.generalSummaryTh;
-    if (lang === 'kh' && meta.generalSummaryKh) return meta.generalSummaryKh;
-    return meta.generalSummaryEn || meta.generalSummary;
-  };
-
-  // Helper to get key events based on language
-  const getKeyEvents = (meta: any) => {
-    if (!meta) return [];
-    if (lang === 'th' && meta.keyEventsTh?.length) return meta.keyEventsTh;
-    if (lang === 'kh' && meta.keyEventsKh?.length) return meta.keyEventsKh;
-    return meta.keyEventsEn || meta.keyEvents || [];
-  };
 
 
 
@@ -1843,7 +1844,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
 
   return (
-    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${(!isDesktop || forceMobile) ? 'force-mobile' : ''}`}>
+    <div
+      className={`min-h-screen grid grid-rows-[1fr_auto_1fr] transition-opacity duration-[150ms] ease-out ${langClass} ${(!isDesktop || forceMobile) ? 'force-mobile' : ''}`}
+      style={{ opacity: isLayoutReady ? 1 : 0 }}
+    >
       {/* Top spacer - flexes equally with bottom */}
       <div />
       <div
@@ -2003,7 +2007,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
             <div className={`grid grid-cols-1 gap-2 ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[12px]'}`}>
               {[
                 { id: 'ANALYSIS', label: t.analysis, icon: ReportIcon, size: 22 },
-                { id: 'LOSSES', label: t.timeline, icon: TimelineIcon, size: 20 },
+                { id: 'TIMELINE', label: t.timeline, icon: TimelineIcon, size: 20 },
                 { id: 'GUIDE', label: t.guide, icon: GuideIcon, size: 20 }
               ].map((mode) => (
                 <button
@@ -2068,8 +2072,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         {/* Main Content Grid */}
         <main className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
 
-          {/* ANALYSIS VIEW */}
-          <div className={`xl:col-span-3 ${viewMode === 'ANALYSIS' ? '' : 'hidden'}`}>
+
+          {/* ANALYSIS VIEW - Always render during pre-render phase (!isLayoutReady) for overflow measurement */}
+          <div className={`xl:col-span-3 ${(!isLayoutReady || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
             <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
@@ -2140,10 +2145,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
               </div>
 
               {/* Three Perspectives Grid - Simple 3-column on desktop */}
-              <div className="flex-1 min-h-0">
+              <div className={isDesktop && !forceMobile ? 'flex-1 min-h-0' : ''}>
                 <div
-                  className={`perspectives-grid grid gap-4 h-full ${isDesktop ? '' : 'grid-cols-1'}`}
-                  style={isDesktop ? { gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${neutralRatio}fr) minmax(0, 1fr)` } : undefined}
+                  className={`perspectives-grid grid gap-4 ${isDesktop && !forceMobile ? 'h-full' : 'grid-cols-1'}`}
+                  style={isDesktop && !forceMobile ? { gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${neutralRatio}fr) minmax(0, 1fr)` } : undefined}
                 >
                   {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
                   <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0 min-w-0">
@@ -2151,7 +2156,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div className="flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
+                      <div ref={neutralCardRef} className="flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
                         <div className="mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
                           <h3 className={`font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
                             {t.situationReport}
@@ -2282,7 +2287,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           </div>
 
           {/* LOSSES VIEW */}
-          <div className={`xl:col-span-3 ${viewMode !== 'LOSSES' ? 'hidden' : ''}`}>
+          <div className={`xl:col-span-3 ${viewMode !== 'TIMELINE' ? 'hidden' : ''}`}>
             <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card title={`${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
 
