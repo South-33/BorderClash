@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import { useQuery, useConvex } from 'convex/react';
 import { FunctionReference } from 'convex/server';
 import { api } from '../../convex/_generated/api';
@@ -10,6 +10,7 @@ import Lenis from 'lenis';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
+import { useCascadeLayout } from './hooks/useCascadeLayout';
 
 
 // --- Error Boundary for Convex Crashes ---
@@ -987,6 +988,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
   const [viewMode, setViewMode] = useState<'ANALYSIS' | 'LOSSES' | 'GUIDE'>('ANALYSIS');
+  const deferredViewMode = useDeferredValue(viewMode); // Deferred for heavy renders
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
 
@@ -1225,23 +1227,14 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const countsLoading = hasServerData ? false : clientCountsLoading;
   const timelineLoading = hasServerData ? false : clientTimelineLoading;
 
-  // Simple mobile breakpoint: < 1280px = mobile
-  const [isDesktop, setIsDesktop] = useState(false);
+  // Track if we're on desktop (xl+ breakpoint) for conditional CSS
+  const [isDesktop, setIsDesktop] = useState<boolean | undefined>(undefined);
   useEffect(() => {
     const checkDesktop = () => setIsDesktop(window.innerWidth >= 1280);
     checkDesktop();
     window.addEventListener('resize', checkDesktop);
     return () => window.removeEventListener('resize', checkDesktop);
   }, []);
-
-  // --- CASCADE LAYOUT CONTROL ---
-  // These will be controlled by useCascadeLayout hook when implemented
-  // Algorithm: 1) increase container width → 2) increase neutral ratio → 3) force mobile
-  const containerRef = useRef<HTMLDivElement>(null);
-  const neutralCardRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number | null>(null); // null = 100%
-  const [neutralRatio, setNeutralRatio] = useState(1); // 1 = equal, max 1.5
-  const [forceMobile, setForceMobile] = useState(false);
 
   // --- Modal Navigation & Touch State ---
 
@@ -1599,6 +1592,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
+  // Language class for font-size boost (Thai/Khmer need larger text)
+  const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
+
   // Build flat list for virtualization: [header, event, event, ..., header, event, ...]
   // Each item has { type: 'header' | 'event', date: string, event?: any, eventIndex?: number }
   const virtualItems = useMemo(() => {
@@ -1839,17 +1835,26 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     );
   }
 
-  // Language class for font-size boost (Thai/Khmer need larger text)
-  const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
+  // Detect if we're in a pending view transition state
+  const isContentPending = viewMode !== deferredViewMode;
+
+  // --- CASCADE LAYOUT ---
+  // Centralized hook for snug-fit algorithm. Set enabled: true to activate.
+  const cascade = useCascadeLayout({
+    isDesktop: isDesktop ?? false,
+    lang,
+    contentKey: getSummary(neutralMeta), // Recalculate when neutral content changes
+    enabled: true, // ENABLED - using bounding rect detection
+  });
 
   return (
-    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${(!isDesktop || forceMobile) ? 'force-mobile' : ''}`}>
+    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${(isDesktop === false || cascade.forceMobile) ? 'force-mobile' : ''}`}>
       {/* Top spacer - flexes equally with bottom */}
       <div />
       <div
-        ref={containerRef}
-        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full"
-        style={{ maxWidth: containerWidth ? `${containerWidth}px` : undefined }}
+        ref={cascade.containerRef}
+        className={`dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full ${cascade.containerClass}`}
+        style={cascade.containerStyle}
       >
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
@@ -2069,7 +2074,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         <main className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
 
           {/* ANALYSIS VIEW */}
-          <div className={`xl:col-span-3 ${viewMode === 'ANALYSIS' ? '' : 'hidden'}`}>
+          <div className={`xl:col-span-3 ${deferredViewMode === 'ANALYSIS' ? '' : 'hidden'}`}>
             <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
@@ -2139,12 +2144,14 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                 </Card>
               </div>
 
-              {/* Three Perspectives Grid - Simple 3-column on desktop */}
+              {/* Three Perspectives Grid - Uses cascade hook for dynamic ratio */}
               <div className="flex-1 min-h-0">
                 <div
-                  className={`perspectives-grid grid gap-4 h-full ${isDesktop ? '' : 'grid-cols-1'}`}
-                  style={isDesktop ? { gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${neutralRatio}fr) minmax(0, 1fr)` } : undefined}
+                  ref={cascade.gridRef}
+                  className={`perspectives-grid grid gap-4 h-full ${(isDesktop && !cascade.forceMobile) ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)]' : 'grid-cols-1'}`}
+                  style={cascade.gridStyle}
                 >
+
                   {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
                   <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0 min-w-0">
                     <div className="bg-riso-ink text-riso-paper py-2 px-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
@@ -2163,7 +2170,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                           </div>
                         </div>
 
-                        <div ref={neutralCardRef} className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
+                        <div ref={cascade.neutralTextRef} className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
                           {getSummary(neutralMeta) || t.analyzingFeeds}
                         </div>
 
@@ -2177,7 +2184,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                             </ul>
                           </div>
                         )}
+
                         {/* Source Stats - Compact */}
+
                       </div>
                     </Card>
                   </div>
@@ -2218,6 +2227,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                           perspective="cambodia"
                           lang={lang}
                         />
+
                         {/* Intelligence Log - Scrollable & Filterable */}
                         <IntelligenceLog
                           articles={cambodiaNews}
@@ -2276,13 +2286,14 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                       </div>
                     </Card>
                   </div>
+
                 </div> {/* End of Three Perspectives Grid */}
               </div> {/* End of perspectives container */}
             </div> {/* End of main flex container */}
           </div>
 
           {/* LOSSES VIEW */}
-          <div className={`xl:col-span-3 ${viewMode !== 'LOSSES' ? 'hidden' : ''}`}>
+          <div className={`xl:col-span-3 ${deferredViewMode !== 'LOSSES' ? 'hidden' : ''}`}>
             <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card title={`${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
 
@@ -2738,7 +2749,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           </div>
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
-          <div className={`xl:col-span-3 ${viewMode !== 'GUIDE' ? 'hidden' : ''}`}>
+          <div className={`xl:col-span-3 ${deferredViewMode !== 'GUIDE' ? 'hidden' : ''}`}>
             <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
@@ -2806,6 +2817,13 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                         <span>{t.dfTip1}</span>
                       </div>
                     </div>
+
+
+
+
+
+
+
                   </div>
 
                   {/* RIGHT COLUMN: HOW IT WORKS */}
@@ -2852,6 +2870,11 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                       <h3 className="font-display text-2xl uppercase mb-2">{t.statelessApproach}</h3>
                       <p className={`font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.statelessDesc}</p>
                     </div>
+
+
+
+
+
                   </div> {/* End of right column */}
                 </div> {/* End of grid */}
 
