@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const FADE_MS = 150;
 const MOBILE_BREAKPOINT = 1280; // Below this = automatic mobile view
 const MIN_SNUG_WIDTH = 1800;
-const MAX_RATIO = 1.5;
+const MAX_RATIO = 1.35;
 
 // Precision Settings
 const SEARCH_PRECISION_PX = 100; // Stop searching when range is smaller than this
