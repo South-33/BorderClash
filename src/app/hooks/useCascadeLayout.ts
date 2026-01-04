@@ -26,13 +26,15 @@ export interface CascadeLayoutResult {
 
 export interface CascadeLayoutOptions {
     viewMode?: 'analysis' | 'timeline' | 'guide';
+    isLoading?: boolean;
 }
 
-export function useCascadeLayout({ viewMode = 'analysis' }: CascadeLayoutOptions = {}): CascadeLayoutResult {
+export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: CascadeLayoutOptions = {}): CascadeLayoutResult {
     // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const neutralCardRef = useRef<HTMLDivElement>(null);
     const isTransitioning = useRef(false);
+    const prevLoading = useRef(isLoading);
 
     // State
     const [isDesktop, setIsDesktop] = useState(false);
@@ -89,17 +91,8 @@ export function useCascadeLayout({ viewMode = 'analysis' }: CascadeLayoutOptions
             // 3. FORCE DESKTOP LAYOUT
             setIsDesktop(true);
 
-            // Only check overflow in analysis mode
-            if (viewMode !== 'analysis') {
-                console.log('[Cascade] Not analysis mode, staying desktop');
-                setForceMobile(false);
-                setIsLayoutReady(true);
-                isTransitioning.current = false;
-                return;
-            }
-
-            // 4. FORCE DESKTOP LAYOUT to check overflow (analysis mode only)
-            console.log('[Cascade] Analysis mode - forcing desktop to check overflow');
+            // 4. CHECK OVERFLOW (DashboardClient renders analysis view when !isLayoutReady)
+            console.log('[Cascade] Checking overflow for measurement');
             setForceMobile(false);
 
             // 5. WAIT FOR RENDER, then check overflow
@@ -156,6 +149,19 @@ export function useCascadeLayout({ viewMode = 'analysis' }: CascadeLayoutOptions
         if (newLang === lang) return;
         recalculate(newLang);
     }, [lang, recalculate]);
+
+    // === DATA LOADING HANDLER ===
+    useEffect(() => {
+        // Only trigger if we finished loading (true -> false)
+        if (prevLoading.current && !isLoading) {
+            console.log('[Cascade] Loading finished, recalculating...');
+            // Small delay to allow React to render data
+            setTimeout(() => {
+                recalculate();
+            }, 100);
+        }
+        prevLoading.current = isLoading;
+    }, [isLoading, recalculate]);
 
     return {
         containerRef,

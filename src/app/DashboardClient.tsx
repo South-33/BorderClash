@@ -1237,7 +1237,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     lang,
     isLayoutReady,
     setLang
-  } = useCascadeLayout({ viewMode: viewMode.toLowerCase() as 'analysis' | 'timeline' | 'guide' });
+  } = useCascadeLayout({
+    viewMode: viewMode.toLowerCase() as 'analysis' | 'timeline' | 'guide',
+    isLoading: neutralMetaLoading
+  });
 
   // Get translations for current lang
   const t = TRANSLATIONS[lang as Lang];
