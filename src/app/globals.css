@@ -37,6 +37,13 @@
     grid-template-columns: 1fr !important;
 }
 
+/* MOBILE FIX: Force all nested flex/grid items to shrink properly */
+.force-mobile .dashboard-layout,
+.force-mobile .dashboard-layout * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
 @theme {
     /* Risograph Color Palette */
     --color-riso-ink: #1e3a8a;
@@ -58,11 +65,12 @@
 }
 
 /* Risograph Style Overrides */
+html,
 body {
     background-color: #f8f5e6;
     color: #1e3a8a;
-    overflow-x: hidden;
-    /* Multi-lang body: browser uses first font that supports each character */
+    overflow-x: hidden !important;
+    max-width: 100vw;
     font-family: var(--font-inter), var(--font-ibm-thai), var(--font-kantumruy), sans-serif;
 }
 

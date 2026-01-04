@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback, useDeferredValue } from 'react';
-import { useQuery, useMutation, useConvex } from 'convex/react';
+import { useQuery, useConvex } from 'convex/react';
 import { FunctionReference } from 'convex/server';
 import { api } from '../../convex/_generated/api';
-import { Swords, Handshake, Heart, Landmark, Circle, Hourglass, BarChart3, Search, Eye, Globe, Camera, Calendar, AlertTriangle, Radar, History, BookOpen, Clock } from 'lucide-react';
+import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle } from 'lucide-react';
 import type { BorderClashData } from '@/lib/convex-server';
 import Lenis from 'lenis';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
-import { TRANSLATIONS, categoryIcons, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
+import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
+import { useCascadeLayout } from './hooks/useCascadeLayout';
 
 
 // --- Error Boundary for Convex Crashes ---
@@ -980,8 +981,7 @@ interface DashboardClientProps {
   serverError?: string | null;
 }
 
-// LazySection removed to eliminate layout shift jitter.
-// Relying on CSS containment and optimized transitions for performance instead.
+
 
 function DashboardClientInner({ initialData, serverError }: DashboardClientProps) {
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
@@ -991,9 +991,6 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const deferredViewMode = useDeferredValue(viewMode); // Deferred for heavy renders
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
-
-  // Layout readiness state (lifted up for eager calculation)
-  const [isLayoutReady, setIsLayoutReady] = useState(false);
 
   // On mount, read URL hash and update viewMode (client-only, avoids hydration mismatch)
   useEffect(() => {
@@ -1046,10 +1043,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   }, [selectedEvent]);
 
 
-
-  // Sidebar height sync for all cards
-
-  // Sidebar height sync for timeline view
+  // Sidebar ref and height sync
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
 
@@ -1446,7 +1440,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     }
   };
 
-  // Measure sidebar height for layout synchronization
+  // Measure sidebar height for layout synchronization 
   useLayoutEffect(() => {
     const measureSidebarHeight = () => {
       if (window.innerWidth >= 1280 && sidebarRef.current) {
@@ -1468,7 +1462,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       resizeObserver.disconnect();
       window.removeEventListener('resize', measureSidebarHeight);
     };
-  }, [viewMode, lang, sysStatsLoading]);
+  }, []); // Empty deps - only run once, ResizeObserver handles updates
 
   // Timer Logic for countdown display
   // Also detect "possibly stale" state when we think the cycle should have completed
@@ -1596,13 +1590,6 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       return d.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric' });
     }
     return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
-  };
-
-  // Default stats (analyses table removed - using simple defaults)
-  const displayStats = {
-    displacedCivilians: 0,
-    confirmedInjuries: 0,
-    propertyDamaged: 0,
   };
 
   // Language class for font-size boost (Thai/Khmer need larger text)
@@ -1851,246 +1838,23 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // Detect if we're in a pending view transition state
   const isContentPending = viewMode !== deferredViewMode;
 
-  // --- SIMPLE SNUG-FIT LAYOUT ---
-  // Calculate optimal width on page load. Recalculates on significant resize.
-  const layoutContainerRef = useRef<HTMLDivElement>(null);
-  const neutralTextRef = useRef<HTMLDivElement>(null);
-  const analysisViewRef = useRef<HTMLDivElement>(null); // Ref to Analysis view for measurement
-  const hasCalculated = useRef(false);
-  const lastViewportWidth = useRef<number>(0);
-  const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
-  const [neutralRatio, setNeutralRatio] = useState<number>(1); // Ratio of neutral card width (1.0 to 1.4)
-  const perspectivesGridRef = useRef<HTMLDivElement>(null);
-
-  // Core calculation function - extracted so it can be reused
-  const calculateSnugWidth = useCallback(() => {
-    const container = layoutContainerRef.current;
-    const textEl = neutralTextRef.current;
-    const analysisView = analysisViewRef.current;
-    if (!container || !textEl) return;
-
-    // CRITICAL: Temporarily force Analysis view into normal document flow for accurate measurement
-    // When on Timeline/Guide, the Analysis view is absolute-positioned which breaks height calculation
-    const wasAbsolute = analysisView?.style.position;
-    if (analysisView) {
-      analysisView.style.position = 'static';
-      analysisView.style.opacity = '0';
-      analysisView.style.pointerEvents = 'none';
-    }
-
-    const viewportWidth = window.innerWidth;
-    const maxWidth = viewportWidth * 0.96;  // 90% of viewport
-    const minWidth = viewportWidth * 0.75;  // 75% of viewport
-    let width = maxWidth;
-
-    container.style.transition = 'none';
-    container.style.maxWidth = `${maxWidth}px`;
-
-    void textEl.offsetHeight;
-
-    const checkOverflow = () => {
-      void textEl.offsetHeight;
-      return textEl.scrollHeight > textEl.clientHeight + 2;
-    };
-
-    // First check: does content fit at maxWidth with current ratio?
-    const perspectivesGrid = perspectivesGridRef.current;
-    let currentRatio = 1.0;
-    const maxRatio = 1.4;
-    const ratioStep = 0.05;
-
-    // Helper to apply ratio to grid
-    const applyRatio = (ratio: number) => {
-      if (perspectivesGrid) {
-        perspectivesGrid.style.gridTemplateColumns = `1fr ${ratio}fr 1fr`;
-        void perspectivesGrid.offsetHeight; // Force reflow
-      }
-    };
-
-    // Start with ratio 1.0
-    applyRatio(currentRatio);
-    let overflowsAtMax = checkOverflow();
-
-    // If it overflows at maxWidth with ratio 1.0, try increasing ratio (snug-fit)
-    if (overflowsAtMax) {
-      // Try progressively larger ratios until content fits or we hit max
-      while (currentRatio < maxRatio && overflowsAtMax) {
-        currentRatio = Math.min(currentRatio + ratioStep, maxRatio);
-        applyRatio(currentRatio);
-        overflowsAtMax = checkOverflow();
-      }
-
-      // If still overflows at max ratio, force mobile
-      if (overflowsAtMax) {
-        container.style.removeProperty('max-width');
-        container.style.removeProperty('transition');
-        if (perspectivesGrid) perspectivesGrid.style.removeProperty('grid-template-columns');
-        setLayoutWidth(null);
-        setNeutralRatio(1);
-        setIsDesktop(false); // Force mobile layout
-        lastViewportWidth.current = viewportWidth;
-        hasCalculated.current = true;
-
-        // Restore Analysis view positioning before returning
-        if (analysisView) {
-          analysisView.style.removeProperty('position');
-          analysisView.style.removeProperty('opacity');
-          analysisView.style.removeProperty('pointer-events');
-        }
-
-        requestAnimationFrame(() => {
-          setIsLayoutReady(true);
-        });
-        return;
-      }
-    }
-
-    // Content fits at maxWidth - now shrink to find snug fit
-    let lastGoodWidth = maxWidth;
-    while (width > minWidth) {
-      container.style.maxWidth = `${width}px`;
-      void textEl.offsetHeight;
-
-      if (checkOverflow()) {
-        break;
-      }
-      lastGoodWidth = width;
-      width -= 25;
-    }
-
-    const snugWidth = checkOverflow() ? lastGoodWidth : width;
-    const finalWidth = Math.min(Math.round(snugWidth), maxWidth);
-
-    container.style.maxWidth = `${finalWidth}px`;
-    setLayoutWidth(finalWidth);
-    setNeutralRatio(currentRatio); // Store the calculated ratio
-    lastViewportWidth.current = viewportWidth;
-    hasCalculated.current = true;
-
-    // Clean up inline grid style - will be applied via React state
-    if (perspectivesGrid) {
-      perspectivesGrid.style.removeProperty('grid-template-columns');
-    }
-
-    // Restore Analysis view positioning
-    if (analysisView) {
-      analysisView.style.removeProperty('position');
-      analysisView.style.removeProperty('opacity');
-      analysisView.style.removeProperty('pointer-events');
-    }
-
-    requestAnimationFrame(() => {
-      setIsLayoutReady(true);
-      container.style.removeProperty('transition');
-    });
-  }, []);
-
-  // Initial calculation on mount
-  useLayoutEffect(() => {
-    if (hasCalculated.current) return;
-
-    const container = layoutContainerRef.current;
-    const textEl = neutralTextRef.current;
-    if (!container || !textEl) return;
-
-    if (isDesktop === undefined) return;
-
-    if (!isDesktop) {
-      setIsLayoutReady(true);
-      return;
-    }
-
-    if (neutralMetaLoading) return;
-
-    lastViewportWidth.current = window.innerWidth;
-
-    document.fonts.ready.then(() => {
-      requestAnimationFrame(calculateSnugWidth);
-    });
-  }, [isDesktop, viewMode, neutralMetaLoading, calculateSnugWidth]);
-
-  // Invalidate layout cache when content changes (language or neutral meta data)
-  // This ensures the cached layoutWidth and neutralRatio are always valid for current content
-  useEffect(() => {
-    if (hasCalculated.current) {
-      // Content changed - force recalculation on next resize or interaction
-      hasCalculated.current = false;
-      setLayoutWidth(null);
-      setNeutralRatio(1);
-
-      // Trigger immediate recalculation if on desktop
-      if (isDesktop && window.innerWidth >= 1280) {
-        setIsLayoutReady(false);
-        requestAnimationFrame(calculateSnugWidth);
-      }
-    }
-  }, [lang, neutralMeta?._id, calculateSnugWidth, isDesktop]);
-
-  // Resize handler - recalculate on significant width change
-  useEffect(() => {
-    let resizeTimeout: NodeJS.Timeout;
-    let needsRecalc = false;
-
-    const handleResize = () => {
-      const currentWidth = window.innerWidth;
-      const widthDelta = Math.abs(currentWidth - lastViewportWidth.current);
-
-      // IMMEDIATELY fade out on any significant resize to hide layout shifts
-      if (widthDelta > 50 && hasCalculated.current && !needsRecalc) {
-        setIsLayoutReady(false);
-        needsRecalc = true;
-      }
-
-      clearTimeout(resizeTimeout);
-
-      resizeTimeout = setTimeout(() => {
-        const finalWidth = window.innerWidth;
-
-        // If we faded out, we need to recalculate and fade back in
-        if (needsRecalc) {
-          needsRecalc = false;
-          lastViewportWidth.current = finalWidth;
-
-          // Quick path: viewport below xl breakpoint = force mobile
-          if (finalWidth < 1280) {
-            setIsDesktop(false);
-            setLayoutWidth(null);
-            setIsLayoutReady(true);
-            return;
-          }
-
-          // OPTIMIZATION: If we have a cached layoutWidth and viewport still supports it,
-          // skip the expensive DOM measurement (which requires position toggling on other views)
-          // The cached width is valid as long as the neutral card content hasn't changed
-          if (layoutWidth && finalWidth * 0.95 >= layoutWidth) {
-            // Viewport is large enough - reuse cached layout, no measurement needed
-            hasCalculated.current = true;
-            setIsLayoutReady(true);
-            return;
-          }
-
-          // Viewport is smaller than cached width, or no cache - do full calculation
-          hasCalculated.current = false;
-          requestAnimationFrame(calculateSnugWidth);
-        }
-      }, 150);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      clearTimeout(resizeTimeout);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [calculateSnugWidth, layoutWidth]);
+  // --- CASCADE LAYOUT ---
+  // Centralized hook for snug-fit algorithm. Set enabled: true to activate.
+  const cascade = useCascadeLayout({
+    isDesktop: isDesktop ?? false,
+    lang,
+    contentKey: getSummary(neutralMeta), // Recalculate when neutral content changes
+    enabled: true, // ENABLED - using bounding rect detection
+  });
 
   return (
-    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${isDesktop === false ? 'force-mobile' : ''}`}>
+    <div className={`min-h-screen grid grid-rows-[1fr_auto_1fr] ${langClass} ${(isDesktop === false || cascade.forceMobile) ? 'force-mobile' : ''}`}>
       {/* Top spacer - flexes equally with bottom */}
       <div />
       <div
-        ref={layoutContainerRef}
-        className={`dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full transition-opacity duration-200 ${isLayoutReady ? 'opacity-100' : 'opacity-0'}`}
-        style={{ maxWidth: isDesktop && layoutWidth ? `${layoutWidth}px` : undefined }}
+        ref={cascade.containerRef}
+        className={`dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full ${cascade.containerClass}`}
+        style={cascade.containerStyle}
       >
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
@@ -2309,9 +2073,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         {/* Main Content Grid */}
         <main className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
 
-          {/* ANALYSIS VIEW - Viewport-contained like Timeline */}
-          {/* ALWAYS render invisibly when not active (never hidden) so neutralTextRef is measurable for layout calculations */}
-          <div ref={analysisViewRef} className={`xl:col-span-3 ${deferredViewMode === 'ANALYSIS' ? '' : 'absolute top-0 left-0 w-full opacity-0 pointer-events-none z-0'}`}>
+          {/* ANALYSIS VIEW */}
+          <div className={`xl:col-span-3 ${deferredViewMode === 'ANALYSIS' ? '' : 'hidden'}`}>
             <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
@@ -2381,22 +2144,21 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                 </Card>
               </div>
 
-              {/* Three Perspectives Grid - Dynamic ratio based on content */}
-              <div className="flex-1 min-h-0 overflow-visible">
+              {/* Three Perspectives Grid - Uses cascade hook for dynamic ratio */}
+              <div className="flex-1 min-h-0">
                 <div
-                  ref={perspectivesGridRef}
-                  className={`perspectives-grid grid gap-4 h-full ${isDesktop ? '' : 'grid-cols-1'}`}
-                  style={{ gridTemplateColumns: isDesktop ? `1fr ${neutralRatio}fr 1fr` : undefined }}
-                  suppressHydrationWarning
+                  ref={cascade.gridRef}
+                  className={`perspectives-grid grid gap-4 h-full ${(isDesktop && !cascade.forceMobile) ? 'grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)]' : 'grid-cols-1'}`}
+                  style={cascade.gridStyle}
                 >
 
                   {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
-                  <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0">
-                    <div className="bg-riso-ink text-riso-paper py-2 px-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2 overflow-visible">
+                  <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0 min-w-0">
+                    <div className="bg-riso-ink text-riso-paper py-2 px-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div ref={neutralTextRef} className="flex-1 flex flex-col space-y-2 min-h-0 overflow-visible">
+                      <div className="flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
                         <div className="mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
                           <h3 className={`font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
                             {t.situationReport}
@@ -2408,7 +2170,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                           </div>
                         </div>
 
-                        <div className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
+                        <div ref={cascade.neutralTextRef} className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
                           {getSummary(neutralMeta) || t.analyzingFeeds}
                         </div>
 

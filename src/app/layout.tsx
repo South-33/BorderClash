@@ -1,4 +1,4 @@
-import { type Metadata } from "next";
+import { type Metadata, type Viewport } from "next";
 import { Anton, JetBrains_Mono, Inter, Chakra_Petch, IBM_Plex_Sans_Thai, Moul, Kantumruy_Pro } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "./ConvexClientProvider";
@@ -51,6 +51,13 @@ const kantumruy = Kantumruy_Pro({
   display: "swap",
   weight: ["400", "700"],
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: "BORDER CLASH MONITOR",
