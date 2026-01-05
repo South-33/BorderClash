@@ -2457,7 +2457,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                         </span>
                                       </div>
 
-                                      <h4 className={`leading-tight mb-1 ${lang === 'kh' ? 'font-bold text-base font-mono leading-relaxed' : lang === 'th' ? 'font-bold text-base font-mono' : 'font-semibold text-[15px] font-display uppercase tracking-wide'}`}>
+                                      <h4 className={`leading-tight mb-1 ${lang === 'kh' ? 'font-bold text-base font-mono leading-relaxed' : lang === 'th' ? 'font-bold text-base font-mono leading-tight' : 'font-[1] text-[16px] font-display uppercase tracking-wide'}`}>
                                         {(() => {
                                           if (lang === 'th' && event?.titleTh) return event.titleTh;
                                           if (lang === 'kh' && event?.titleKh) return event.titleKh;
