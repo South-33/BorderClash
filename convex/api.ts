@@ -1350,22 +1350,9 @@ export const resetAllValidation = mutation({
             resetCount++;
         }
 
-        // Reset validation state
-        const valState = await ctx.db.query("validationState")
-            .withIndex("by_key", (q) => q.eq("key", "main"))
-            .first();
-        if (valState) {
-            await ctx.db.patch(valState._id, {
-                isRunning: false,
-                currentLoop: 0,
-                completionPercent: 0,
-                currentInstruction: "",
-                lastUpdatedAt: Date.now(),
-            });
-        }
-
         console.log(`✅ Reset ${resetCount} articles to unverified status`);
         return { success: true, resetCount };
+
     },
 });
 
@@ -1511,198 +1498,6 @@ export const exportTimelineEvents = action({
     },
 });
 
-
-// =============================================================================
-// VALIDATION QUERIES & MUTATIONS (used by validation.ts action)
-// =============================================================================
-
-export const getValidationState = internalQuery({
-    args: {},
-    handler: async (ctx) => {
-        return await ctx.db
-            .query("validationState")
-            .withIndex("by_key", (q) => q.eq("key", "main"))
-            .first();
-    },
-});
-
-export const updateValidationState = internalMutation({
-    args: {
-        isRunning: v.optional(v.boolean()),
-        activeRunId: v.optional(v.string()), // New field for lock
-        currentLoop: v.optional(v.number()),
-        lastManagerRun: v.optional(v.number()),
-        completionPercent: v.optional(v.number()),
-        currentInstruction: v.optional(v.string()),
-    },
-    handler: async (ctx, args) => {
-        const existing = await ctx.db
-            .query("validationState")
-            .withIndex("by_key", (q) => q.eq("key", "main"))
-            .first();
-
-        const updates = {
-            ...(args.isRunning !== undefined && { isRunning: args.isRunning }),
-            ...(args.activeRunId !== undefined && { activeRunId: args.activeRunId }),
-            ...(args.currentLoop !== undefined && { currentLoop: args.currentLoop }),
-            ...(args.lastManagerRun !== undefined && { lastManagerRun: args.lastManagerRun }),
-            ...(args.completionPercent !== undefined && { completionPercent: args.completionPercent }),
-            ...(args.currentInstruction !== undefined && { currentInstruction: args.currentInstruction }),
-            lastUpdatedAt: Date.now(),
-        };
-
-        if (existing) {
-            await ctx.db.patch(existing._id, updates);
-        } else {
-            await ctx.db.insert("validationState", {
-                key: "main",
-                isRunning: args.isRunning ?? false,
-                activeRunId: args.activeRunId,
-                currentLoop: args.currentLoop ?? 0,
-                lastManagerRun: args.lastManagerRun ?? 0,
-                completionPercent: args.completionPercent ?? 0,
-                currentInstruction: args.currentInstruction ?? "",
-                lastUpdatedAt: Date.now(),
-            });
-        }
-    },
-});
-
-export const getValidationStats = internalQuery({
-    args: {},
-    handler: async (ctx) => {
-        const thai = await ctx.db.query("thailandNews").collect();
-        const cambo = await ctx.db.query("cambodiaNews").collect();
-        const intl = await ctx.db.query("internationalNews").collect();
-
-        const all = [
-            ...thai.map(a => ({ ...a, country: "thailand" as const })),
-            ...cambo.map(a => ({ ...a, country: "cambodia" as const })),
-            ...intl.map(a => ({ ...a, country: "international" as const })),
-        ];
-
-        const today = Date.now() - 24 * 60 * 60 * 1000;
-
-        return {
-            totalArticles: all.length,
-            unverifiedCount: all.filter(a => a.status === "unverified").length,
-            activeCount: all.filter(a => a.status === "active").length,
-            conflictCount: all.filter(a => a.hasConflict).length,
-            reviewedTodayCount: all.filter(a => a.lastReviewedAt && a.lastReviewedAt > today).length,
-        };
-    },
-});
-
-export const getUnreviewedBatch = internalQuery({
-    args: {
-        batchSize: v.number(),
-        priority: v.optional(v.string()),
-    },
-    handler: async (ctx, args) => {
-        const thai = await ctx.db.query("thailandNews").collect();
-        const cambo = await ctx.db.query("cambodiaNews").collect();
-        const intl = await ctx.db.query("internationalNews").collect();
-
-        let all = [
-            ...thai.map(a => ({ ...a, country: "thailand" as const })),
-            ...cambo.map(a => ({ ...a, country: "cambodia" as const })),
-            ...intl.map(a => ({ ...a, country: "international" as const })),
-        ];
-
-        // 1. Never reviewed
-        // 2. Unverified status
-        // 3. Has specific conflict flag
-        // 4. "Active" but Checks due (Time > nextReviewAt)
-
-        all = all.filter(a => {
-            if (!a.lastReviewedAt) return true;
-            if (a.status === "unverified") return true;
-            if (a.hasConflict) return true;
-            // If active, check if it's time for review
-            if (a.status === "active" && a.nextReviewAt && Date.now() > a.nextReviewAt) return true;
-            // Fallback for old records without nextReviewAt (default 12h)
-            if (a.status === "active" && !a.nextReviewAt && (Date.now() - a.lastReviewedAt > 12 * 60 * 60 * 1000)) return true;
-            return false;
-        });
-
-        // PRIORITIZATION:
-        // 1. Conflicts (Immediate attention)
-        // 2. Unverified (New info)
-        // 3. Oldest Reviewed (Routine checkup)
-        all.sort((a, b) => {
-            // Conflicts first
-            if (a.hasConflict && !b.hasConflict) return -1;
-            if (!a.hasConflict && b.hasConflict) return 1;
-
-            // Then Unverified
-            if (a.status === "unverified" && b.status !== "unverified") return -1;
-            if (a.status !== "unverified" && b.status === "unverified") return 1;
-
-            // Then specific Priority arg
-            if (args.priority?.includes("cambodia") && a.country === "cambodia" && b.country !== "cambodia") return -1;
-            if (args.priority?.includes("thailand") && a.country === "thailand" && b.country !== "thailand") return -1;
-
-            // Finally: Oldest review time first (Rotate through stale news)
-            const timeA = a.lastReviewedAt || 0;
-            const timeB = b.lastReviewedAt || 0;
-            return timeA - timeB;
-        });
-
-        return all.slice(0, args.batchSize);
-    },
-});
-
-export const getCrossRefArticles = internalQuery({
-    args: {
-        excludeCountry: v.optional(v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international"))),
-        limit: v.number(),
-    },
-    handler: async (ctx, args) => {
-        const articles: Array<{ title: string; source: string; credibility: number; country: "thailand" | "cambodia" | "international"; summary?: string }> = [];
-
-        if (args.excludeCountry !== "thailand") {
-            const thai = await ctx.db.query("thailandNews")
-                .withIndex("by_status", q => q.eq("status", "active"))
-                .take(args.limit);
-            articles.push(...thai.map(a => ({
-                title: a.title,
-                source: a.source,
-                credibility: a.credibility,
-                country: "thailand" as const,
-                summary: a.summary || a.summaryEn,
-            })));
-        }
-
-        if (args.excludeCountry !== "cambodia") {
-            const cambo = await ctx.db.query("cambodiaNews")
-                .withIndex("by_status", q => q.eq("status", "active"))
-                .take(args.limit);
-            articles.push(...cambo.map(a => ({
-                title: a.title,
-                source: a.source,
-                credibility: a.credibility,
-                country: "cambodia" as const,
-                summary: a.summary || a.summaryEn,
-            })));
-        }
-
-        if (args.excludeCountry !== "international") {
-            const intl = await ctx.db.query("internationalNews")
-                .withIndex("by_status", q => q.eq("status", "active"))
-                .take(args.limit);
-            articles.push(...intl.map(a => ({
-                title: a.title,
-                source: a.source,
-                credibility: a.credibility,
-                country: "international" as const,
-                summary: a.summary || a.summaryEn,
-            })));
-        }
-
-        return articles.slice(0, args.limit);
-    },
-});
-
 /**
  * Get articles that haven't been processed by the Historian yet
  * This returns articles regardless of validation status (active, unverified, etc.)
@@ -1713,6 +1508,7 @@ export const getCrossRefArticles = internalQuery({
  * - Strips unused fields (translations) - AI prompt only needs core fields
  * - Estimated reduction: 86% (37 MB → ~5 MB)
  */
+
 export const getUnprocessedForTimeline = internalQuery({
     args: {
         batchSize: v.number(),

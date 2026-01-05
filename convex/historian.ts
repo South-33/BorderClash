@@ -4,22 +4,8 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { MODELS } from "./config";
-import { callGeminiStudio } from "./ai_utils";
+import { callGeminiStudio, formatTimelineEvent } from "./ai_utils";
 
-
-// =============================================================================
-// SHARED HELPER: Format timeline events consistently for all AI prompts
-// =============================================================================
-
-function formatTimelineEvent(e: any, idx?: number): string {
-    const time = e.timeOfDay ? ` ${e.timeOfDay}` : "";
-    const sources = e.sources?.slice(0, 2).map((s: any) => `${s.name}(${s.credibility}): ${s.url}`).join(" | ") || "(none)";
-    const trans = (e.titleTh && e.titleKh) ? "✓" : "⚠️needs-trans";
-    const prefix = idx !== undefined ? `${idx + 1}. ` : "";
-    return `${prefix}[${e.date}${time}] "${e.title}" (${e.status}, ${e.category}, imp:${e.importance}) [${trans}]
-   ${e.description}
-   Sources: ${sources}`;
-}
 
 // =============================================================================
 // HISTORIAN PROMPT

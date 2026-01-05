@@ -46,6 +46,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
     const neutralCardRef = useRef<HTMLDivElement>(null);
     const isTransitioning = useRef(false);
     const prevLoading = useRef(isLoading);
+    const lastProcessedWidth = useRef<number | null>(null);
 
     // State
     const [layoutState, setLayoutState] = useState({
@@ -83,6 +84,9 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         const langToUse = newLang ?? lang;
         const windowWidth = window.innerWidth;
         const isDesktopNow = windowWidth >= MOBILE_BREAKPOINT;
+
+        // Track processed width to prevent height-only resize events (mobile address bar) from triggering recalc
+        lastProcessedWidth.current = windowWidth;
 
         console.log('[Cascade] Recalculating...', { lang: langToUse, windowWidth });
 
@@ -192,6 +196,11 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
     useEffect(() => {
         let timeout: number;
         const handleResize = () => {
+            // Only recalculate if WIDTH changed (ignore height-only changes from mobile address bar)
+            const currentWidth = window.innerWidth;
+            if (lastProcessedWidth.current !== null && lastProcessedWidth.current === currentWidth) {
+                return; // Width unchanged, skip (likely mobile scroll causing address bar hide/show)
+            }
             clearTimeout(timeout);
             timeout = window.setTimeout(() => recalculate(), 150);
         };

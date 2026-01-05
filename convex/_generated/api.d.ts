@@ -14,7 +14,6 @@ import type * as config from "../config.js";
 import type * as crons from "../crons.js";
 import type * as historian from "../historian.js";
 import type * as research from "../research.js";
-import type * as validation from "../validation.js";
 
 import type {
   ApiFromModules,
@@ -29,7 +28,6 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   historian: typeof historian;
   research: typeof research;
-  validation: typeof validation;
 }>;
 
 /**

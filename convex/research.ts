@@ -6,22 +6,8 @@ import { v } from "convex/values";
 
 // Use gemini-studio-api helpers
 import { MODELS } from "./config";
-import { callGeminiStudio, callGeminiStudioWithSelfHealing } from "./ai_utils";
+import { callGeminiStudio, callGeminiStudioWithSelfHealing, formatTimelineEvent } from "./ai_utils";
 
-
-// =============================================================================
-// SHARED HELPER: Format timeline events consistently for all AI prompts
-// =============================================================================
-
-function formatTimelineEvent(e: any, idx?: number): string {
-    const time = e.timeOfDay ? ` ${e.timeOfDay}` : "";
-    const sources = e.sources?.slice(0, 2).map((s: any) => `${s.name}(${s.credibility}): ${s.url}`).join(" | ") || "(none)";
-    const trans = (e.titleTh && e.titleKh) ? "✓" : "⚠️needs-trans";
-    const prefix = idx !== undefined ? `${idx + 1}. ` : "";
-    return `${prefix}[${e.date}${time}] "${e.title}" (${e.status}, ${e.category}, imp:${e.importance}) [${trans}]
-   ${e.description}
-   Sources: ${sources}`;
-}
 
 // =============================================================================
 // SHARED UTILS (deprecated Ghost API endpoints removed)
@@ -125,7 +111,11 @@ This means searching CAMBODIAN news outlets that publish news FOR Cambodians.
 - If the URL redirects, use the FINAL destination URL
 - Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
 
-📺 CAMBODIAN NEWS SOURCES (these are what Cambodians read):
+📺 CAMBODIAN NEWS SOURCES (EXAMPLES - not exhaustive!):
+These are MAJOR sources Cambodians read. Use them as STARTING POINTS,
+but DO NOT limit yourself to only these. If you find relevant articles
+from OTHER Cambodian outlets, INCLUDE them!
+
 KHMER LANGUAGE (prioritize these!):
 • Fresh News ហ្វ្រេសញូស (freshnewsasia.com) - Most popular in Cambodia
 • DAP News ដាប់ញូស (dap-news.com) - Popular Khmer news
@@ -142,6 +132,9 @@ ENGLISH LANGUAGE:
 • Khmer Times (khmertimeskh.com)
 • Cambodia Daily (cambodiadaily.com)
 • AKP - Agence Kampuchea Presse (akp.gov.kh) - Government
+
+⚠️ ALSO SEARCH FOR: Other Cambodian news sites NOT on this list!
+Include ANY legitimate Cambodian news source you discover.
 
 ⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
 ${existingUrls || "(database is empty - find new articles!)"}
@@ -327,7 +320,11 @@ This means searching THAI news outlets that publish news FOR Thai people.
 - If the URL redirects, use the FINAL destination URL
 - Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
 
-📺 THAI NEWS SOURCES (these are what Thais read):
+📺 THAI NEWS SOURCES (EXAMPLES - not exhaustive!):
+These are MAJOR sources Thais read. Use them as STARTING POINTS,
+but DO NOT limit yourself to only these. If you find relevant articles
+from OTHER Thai outlets, INCLUDE them!
+
 THAI LANGUAGE (prioritize these!):
 • ไทยรัฐ Thai Rath (thairath.co.th) - #1 largest circulation in Thailand
 • เดลินิวส์ Daily News (dailynews.co.th) - Major Thai daily
@@ -346,6 +343,9 @@ ENGLISH LANGUAGE:
 • The Nation Thailand (nationthailand.com)
 • Thai PBS World (thaipbsworld.com)
 • Khaosod English (khaosodenglish.com)
+
+⚠️ ALSO SEARCH FOR: Other Thai news sites NOT on this list!
+Include ANY legitimate Thai news source you discover.
 
 ⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
 ${existingUrls || "(database is empty - find new articles!)"}
@@ -530,7 +530,11 @@ These sources should provide NEUTRAL, BALANCED reporting without favoring either
 - If the URL redirects, use the FINAL destination URL
 - Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
 
-📺 INTERNATIONAL SOURCES (prioritize these):
+📺 INTERNATIONAL SOURCES (EXAMPLES - not exhaustive!):
+These are well-known international outlets. Use them as STARTING POINTS,
+but DO NOT limit yourself to only these. If you find relevant articles
+from OTHER international sources, INCLUDE them!
+
 WIRE SERVICES (highest credibility):
 • Reuters (reuters.com) - HIGHEST priority
 • Associated Press / AP News (apnews.com)
@@ -553,6 +557,9 @@ ASIA-FOCUSED INTERNATIONAL:
 OFFICIAL INTERNATIONAL:
 • UN News (news.un.org)
 • ASEAN official statements
+
+⚠️ ALSO SEARCH FOR: Other international news sites NOT on this list!
+Include ANY legitimate international news source covering this conflict.
 
 ⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
 ${existingUrls || "(database is empty - find new articles!)"}
@@ -1940,17 +1947,23 @@ export const updateDashboard = internalAction({
         // Get previous stats
         const prevStats = await ctx.runQuery(api.api.getDashboardStats, {}) as any;
 
-        // ==================== TIMELINE CONTEXT (same as synthesizeAll) ====================
+        // ==================== TIMELINE CONTEXT ====================
         const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 30 });
         // Build timeline context using shared helper
         const timelineContext = timeline.length > 0
             ? timeline.map((e: any) => formatTimelineEvent(e)).join("\n\n")
             : "(No timeline events)";
 
-        // ==================== ARTICLE CONTEXT (same as synthesizeAll) ====================
-        const cambodiaAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "cambodia", limit: 50 });
-        const thailandAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "thailand", limit: 50 });
-        const internationalAll: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "international", limit: 50 });
+        // ==================== OPTIMIZED ARTICLE CONTEXT ====================
+        // Use indexed queries instead of fetching 150 articles and sorting client-side
+        // This reduces bandwidth by ~95% (67MB → ~4MB)
+
+        // Low credibility articles (10 per country) - using indexed query
+        const [cambodiaLowCred, thailandLowCred, internationalLowCred] = await Promise.all([
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "cambodia", limit: 10 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "thailand", limit: 10 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "international", limit: 10 }),
+        ]);
 
         // Helper to format article
         const formatArticle = (a: any) =>
@@ -1958,30 +1971,12 @@ export const updateDashboard = internalAction({
    URL: ${a.sourceUrl || "(none)"}
    Summary: ${a.summary || "No summary"}`;
 
-        // Low credibility articles (10 per country for dashboard - smaller than synthesis)
-        const cambodiaLowCred = [...cambodiaAll]
-            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
-            .slice(0, 10);
-        const thailandLowCred = [...thailandAll]
-            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
-            .slice(0, 10);
-        const internationalLowCred = [...internationalAll]
-            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
-            .slice(0, 10);
-
         const cambodiaPropaganda = cambodiaLowCred.map(formatArticle).join("\n");
         const thailandPropaganda = thailandLowCred.map(formatArticle).join("\n");
         const internationalPropaganda = internationalLowCred.map(formatArticle).join("\n");
 
-        // Breaking news (20 most recent)
-        const allArticles = [
-            ...cambodiaAll.map(a => ({ ...a, country: "cambodia" })),
-            ...thailandAll.map(a => ({ ...a, country: "thailand" })),
-            ...internationalAll.map(a => ({ ...a, country: "international" })),
-        ];
-        const breakingNews = [...allArticles]
-            .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
-            .slice(0, 20);
+        // Breaking news (20 most recent) - using indexed query
+        const breakingNews: any[] = await ctx.runQuery(internal.api.getRecentBreakingNews, { limit: 20 });
 
         const breakingNewsList = breakingNews.map((a: any) =>
             `- [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
@@ -1989,6 +1984,7 @@ export const updateDashboard = internalAction({
         ).join("\n");
 
         console.log(`📊 [DASHBOARD] Context: ${timeline.length} timeline events, ${breakingNews.length} breaking news`);
+
 
         const prompt = `You are the DASHBOARD CONTROLLER for the BorderClash monitor.
 Your job is to maintain ACCURATE, STABLE statistics - NOT to invent changes.
