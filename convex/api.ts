@@ -200,6 +200,7 @@ export const getTimeline = query({
             return await query.take(args.limit);
         }
 
+        // Frontend timeline needs all events for full history display
         return await query.collect();
     },
 });
@@ -259,16 +260,31 @@ export const getNewsInternal = internalQuery({
         const table = args.country === "thailand" ? "thailandNews"
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
-        // Get all articles and filter to active + unverified
-        const allArticles = await ctx.db
+
+        const targetLimit = args.limit ?? 50;
+        // Fetch 2x limit from each status to ensure we have enough after sorting
+        const fetchBuffer = Math.min(targetLimit * 2, 300);
+
+        // BANDWIDTH FIX: Use indexed queries with publishedAt ordering
+        // This ensures we get NEWEST articles first, so .take() gets best candidates
+        const activeArticles = await ctx.db
             .query(table)
-            .collect();
+            .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
+            .order("desc")  // Newest first
+            .take(fetchBuffer);
+
+        const unverifiedArticles = await ctx.db
+            .query(table)
+            .withIndex("by_status_publishedAt", q => q.eq("status", "unverified"))
+            .order("desc")  // Newest first
+            .take(fetchBuffer);
+
+        const allArticles = [...activeArticles, ...unverifiedArticles];
 
         const now = Date.now();
         const ONE_DAY = 24 * 60 * 60 * 1000;
 
         return allArticles
-            .filter(a => a.status === "active" || a.status === "unverified")
             .sort((a, b) => {
                 // Hybrid score: 70% recency + 30% credibility
                 const ageA = Math.min((now - (a.publishedAt || a.fetchedAt)) / ONE_DAY, 7); // Cap at 7 days
@@ -281,7 +297,7 @@ export const getNewsInternal = internalQuery({
                 const scoreB = recencyScoreB * 0.7 + credB * 0.3;
                 return scoreB - scoreA; // Highest score first
             })
-            .slice(0, args.limit ?? 50);
+            .slice(0, targetLimit);
     },
 });
 
@@ -1498,6 +1514,34 @@ export const exportTimelineEvents = action({
     },
 });
 
+// Export EXACTLY what Historian sees for token measurement
+export const exportHistorianContext = action({
+    args: { limit: v.optional(v.number()) },
+    handler: async (ctx, args): Promise<string> => {
+        const limit = args.limit ?? 500; // Default to what Historian uses
+        const events = await ctx.runQuery(internal.api.getRecentTimeline, { limit });
+
+        // Use same format as Historian (formatTimelineEvent from ai_utils)
+        const formatted = events.map((e: any) => {
+            const time = e.timeOfDay ? ` ${e.timeOfDay}` : "";
+            // Sort by credibility (highest first) before taking top 2
+            const sortedSources = [...(e.sources || [])].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
+            const sources = sortedSources.slice(0, 2).map((s: any) => `${s.name}(${s.credibility}): ${s.url}`).join(" | ") || "(none)";
+            const trans = (e.titleTh && e.titleKh) ? "✓" : "⚠️needs-trans";
+            return `[${e.date}${time}] "${e.title}" (${e.status}, ${e.category}, imp:${e.importance}) [${trans}]\n   ${e.description}\n   Sources: ${sources}`;
+        }).join("\n\n");
+
+        const output = `📜 EXISTING TIMELINE (${events.length} events):\n${formatted}`;
+
+        console.log(`\n=== HISTORIAN CONTEXT (${events.length} events) ===`);
+        console.log(`Character count: ${output.length}`);
+        console.log(`Estimated tokens: ~${Math.ceil(output.length / 4)}`);
+        console.log(output);
+
+        return output;
+    },
+});
+
 /**
  * Get articles that haven't been processed by the Historian yet
  * This returns articles regardless of validation status (active, unverified, etc.)
@@ -1539,13 +1583,24 @@ export const getUnprocessedForTimeline = internalQuery({
         for (const { name, country } of tables) {
             if (results.length >= targetCount) break;
 
-            // OPTIMIZED: Use filter to exclude already-processed articles
-            // Note: Can't use compound index directly since processedToTimeline can be undefined OR false
-            const activeArticles = await ctx.db
+            // BANDWIDTH FIX: Use compound index instead of filter() to avoid full table scan
+            // Query for undefined (never processed) - most common case
+            const unprocessedUndefined = await ctx.db
                 .query(name)
-                .withIndex("by_status", q => q.eq("status", "active"))
-                .filter(q => q.neq(q.field("processedToTimeline"), true))
-                .take(targetCount - results.length + 50); // Small buffer
+                .withIndex("by_status_processed", q =>
+                    q.eq("status", "active").eq("processedToTimeline", undefined)
+                )
+                .take(targetCount - results.length + 25);
+
+            // Query for false (reset articles) - less common
+            const unprocessedFalse = await ctx.db
+                .query(name)
+                .withIndex("by_status_processed", q =>
+                    q.eq("status", "active").eq("processedToTimeline", false)
+                )
+                .take(targetCount - results.length + 25);
+
+            const activeArticles = [...unprocessedUndefined, ...unprocessedFalse];
 
             for (const a of activeArticles) {
                 if (results.length >= targetCount) break;
@@ -1564,11 +1619,21 @@ export const getUnprocessedForTimeline = internalQuery({
 
             // Fetch unverified articles if we still need more
             if (results.length < targetCount) {
-                const unverifiedArticles = await ctx.db
+                const unverifiedUndefined = await ctx.db
                     .query(name)
-                    .withIndex("by_status", q => q.eq("status", "unverified"))
-                    .filter(q => q.neq(q.field("processedToTimeline"), true))
-                    .take(targetCount - results.length + 50);
+                    .withIndex("by_status_processed", q =>
+                        q.eq("status", "unverified").eq("processedToTimeline", undefined)
+                    )
+                    .take(targetCount - results.length + 25);
+
+                const unverifiedFalse = await ctx.db
+                    .query(name)
+                    .withIndex("by_status_processed", q =>
+                        q.eq("status", "unverified").eq("processedToTimeline", false)
+                    )
+                    .take(targetCount - results.length + 25);
+
+                const unverifiedArticles = [...unverifiedUndefined, ...unverifiedFalse];
 
                 for (const a of unverifiedArticles) {
                     if (results.length >= targetCount) break;

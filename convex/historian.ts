@@ -540,12 +540,12 @@ export const runHistorianCycle = internalAction({
 
         console.log(`📰 Found ${allArticles.length} unprocessed articles total`);
 
-        // 2. Get existing timeline for context (increased limit)
-        // Historian needs FULL timeline access to update/delete old events that are now proven false
+        // 2. Get existing timeline for context
+        // 300 events = ~30k tokens context, enough for duplicate detection and updates
         const timeline = await ctx.runQuery(internal.api.getRecentTimeline, {
-            limit: 500  // Full access - Historian is the manager, needs to see everything
+            limit: 300  // Recent events for context (older events rarely updated)
         });
-        console.log(`📜 Full timeline loaded: ${timeline.length} events (Historian has full access)`);
+        console.log(`📜 Timeline context: ${timeline.length} recent events`);
 
         // 3. Get timeline stats
         const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
@@ -1022,9 +1022,9 @@ export const runTimelineCleanup = internalAction({
         console.log("═══════════════════════════════════════════════════════════════");
 
         // Get existing timeline with full details
-        // Cleanup also needs full timeline access to find duplicates anywhere
+        // 300 events sufficient for finding recent duplicates
         const allTimeline = await ctx.runQuery(internal.api.getRecentTimeline, {
-            limit: 500  // Full access for comprehensive cleanup
+            limit: 300  // Recent events for cleanup
         });
 
         // Filter by date or date range if provided

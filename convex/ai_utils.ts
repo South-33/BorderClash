@@ -141,7 +141,9 @@ export async function callGeminiStudioWithSelfHealing<T>(
  */
 export function formatTimelineEvent(e: any, idx?: number): string {
     const time = e.timeOfDay ? ` ${e.timeOfDay}` : "";
-    const sources = e.sources?.slice(0, 2).map((s: any) => `${s.name}(${s.credibility}): ${s.url}`).join(" | ") || "(none)";
+    // Sort by credibility (highest first) before taking top 2
+    const sortedSources = [...(e.sources || [])].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
+    const sources = sortedSources.slice(0, 2).map((s: any) => `${s.name}(${s.credibility}): ${s.url}`).join(" | ") || "(none)";
     const trans = (e.titleTh && e.titleKh) ? "✓" : "⚠️needs-trans";
     const prefix = idx !== undefined ? `${idx + 1}. ` : "";
     return `${prefix}[${e.date}${time}] "${e.title}" (${e.status}, ${e.category}, imp:${e.importance}) [${trans}]
