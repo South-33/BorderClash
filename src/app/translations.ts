@@ -183,6 +183,8 @@ export const TRANSLATIONS = {
         aiSynthesis: "AI SYNTHESIS",
         analyzingFeeds: "Analyzing global intelligence feeds... The system is monitoring news from both Thailand and Cambodia perspectives to synthesize a balanced report.",
         events: "Events",
+        showAllEvents: "Show all",
+        hidingMinor: "Key events only",
         // New Guide Content
         factVsPropaganda: "FACT VS PROPAGANDA",
         fact1: "Fact: Describes what happened, where, and when.",
@@ -365,6 +367,8 @@ export const TRANSLATIONS = {
         aiSynthesis: "สรุปโดย AI",
         analyzingFeeds: "กำลังวิเคราะห์ข้อมูลข่าวกรองทั่วโลก... ระบบกำลังติดตามข่าวสารจากทั้งฝั่งไทยและกัมพูชาเพื่อสรุปรายงานที่สมดุล",
         events: "เหตุการณ์",
+        showAllEvents: "แสดงทั้งหมด",
+        hidingMinor: "เฉพาะเหตุการณ์สำคัญ",
         // New Guide Content (Thai Spoken/Casual)
         factVsPropaganda: "เรื่องจริง vs ข่าวปั่น",
         fact1: "เรื่องจริง: บอกแค่เกิดอะไร ที่ไหน เมื่อไหร่ จบ",
@@ -547,6 +551,8 @@ export const TRANSLATIONS = {
         paused: "ផ្អាក",
         analyzingFeeds: "កំពុងវិភាគទិន្នន័យចារកម្មសកល... ប្រព័ន្ធកំពុងតាមដានព័ត៌មានពីទាំងភាគីថៃនិងកម្ពុជាដើម្បីសង្ខេបរបាយការណ៍ដែលមានតុល្យភាព។",
         events: "ព្រឹត្តិការណ៍",
+        showAllEvents: "បង្ហាញទាំងអស់",
+        hidingMinor: "ព្រឹត្តិការណ៍សំខាន់ប៉ុណ្ណោះ",
         // New Guide Content (Khmer Casual/Spoken)
         factVsPropaganda: "ការពិត vs ព័ត៌មានបំប៉ោង",
         fact1: "ការពិត: ប្រាប់ថាមានរឿងអី នៅណា ពេលណា ចប់។",

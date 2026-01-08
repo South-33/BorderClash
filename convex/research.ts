@@ -173,21 +173,17 @@ SCORING GUIDE:
 - DO NOT INFER or EXTRAPOLATE beyond what's written
 - If unsure, keep summary SHORTER and more conservative
 
-TRANSLATION REQUIREMENTS:
-- Translate the MEANING and INTENT, not literal word-for-word
-- Understand the context first, then express the same idea naturally in the target language
-- Thai: natural, conversational everyday language - how a regular Thai person would explain to a friend
-- Khmer: natural, conversational everyday language - how a Cambodian would explain to family
+LANGUAGE & TRANSLATION:
+- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
+- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
-- Prioritize clear communication over literal accuracy
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
 {
   "newArticles": [
     {
-      "title": "Original headline as published",
-      "titleEn": "English translation of headline",
+      "title": "English headline",
       "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
       "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
       "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time as shown on the page - Thailand/Cambodia are both UTC+7)",
@@ -196,7 +192,6 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
       "category": "military|political|humanitarian|diplomatic",
       "credibility": 60,
       "summary": "English summary",
-      "summaryEn": "English summary",
       "summaryTh": "สรุปข่าวภาษาไทย",
       "summaryKh": "សង្ខេបជាភាសាខ្មែរ"
     }
@@ -383,21 +378,17 @@ Don't just score based on source name. Analyze the CONTENT:
 - DO NOT INFER or EXTRAPOLATE beyond what's written
 - If unsure, keep summary SHORTER and more conservative
 
-TRANSLATION REQUIREMENTS:
-- Translate the MEANING and INTENT, not literal word-for-word
-- Understand the context first, then express the same idea naturally in the target language
-- Thai: natural, conversational everyday language - how a regular Thai person would explain to a friend
-- Khmer: natural, conversational everyday language - how a Cambodian would explain to family
+LANGUAGE & TRANSLATION:
+- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
+- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
-- Prioritize clear communication over literal accuracy
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
 {
   "newArticles": [
     {
-      "title": "Original headline as published",
-      "titleEn": "English translation of headline",
+      "title": "English headline",
       "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
       "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
       "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time as shown on the page - Thailand is UTC+7)",
@@ -406,7 +397,6 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
       "category": "military|political|humanitarian|diplomatic",
       "credibility": 60,
       "summary": "English summary",
-      "summaryEn": "English summary",
       "summaryTh": "สรุปข่าวภาษาไทย",
       "summaryKh": "សង្ខេបជាភាសាខ្មែរ"
     }
@@ -598,21 +588,17 @@ SCORING GUIDE:
 - DO NOT INFER or EXTRAPOLATE beyond what's written
 - If unsure, keep summary SHORTER and more conservative
 
-TRANSLATION REQUIREMENTS:
-- Translate the MEANING and INTENT, not literal word-for-word
-- Understand the context first, then express the same idea naturally in the target language
-- Thai: natural, conversational everyday language - how a regular Thai person would explain to a friend
-- Khmer: natural, conversational everyday language - how a Cambodian would explain to family
-- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
-- Prioritize clear communication over literal accuracy
+LANGUAGE & TRANSLATION:
+- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
+- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
+- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២๣
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
 {
   "newArticles": [
     {
-      "title": "Original headline as published",
-      "titleEn": "English translation of headline",
+      "title": "English headline",
       "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
       "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
       "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time - convert to Thailand/Cambodia time UTC+7)",
@@ -621,7 +607,6 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
       "category": "military|political|humanitarian|diplomatic",
       "credibility": 85,
       "summary": "English summary",
-      "summaryEn": "English summary",
       "summaryTh": "สรุปข่าวภาษาไทย",
       "summaryKh": "សង្ខេបជាភាសាខ្មែរ"
     }
@@ -1033,8 +1018,6 @@ Your job is to maintain an accurate, **evolving** narrative - not to create dram
 
 💡 TIP: You have the [google_search] tool available. If current news articles don't provide enough clarity or if you need to verify a specific claim, feel free to use it to search for the most recent context.
 
-⏱️ TIME CONSTRAINT: Respond EFFICIENTLY. Don't over-analyze - trust your expertise and give concise, confident assessments.
-
 🎯 FOR CAMBODIA/THAILAND SECTIONS: Provide RESPECTFUL summaries of each country's perspective - what their media reports, how they frame things. You are a REPORTER here, not a judge.
 
 ⚖️ FOR THE NEUTRAL SECTION: BE A REFEREE. You're the guy calling out BS, flagging obvious spin, and pointing out when the numbers don't add up. You're fair but you're NOT a pushover. If someone's lying or exaggerating, you say it. Think sports commentator calling a bad call: assertive, clear, no diplomatic fluff.
@@ -1133,13 +1116,10 @@ Each article has a credibility score. Weight your analysis accordingly:
 - cred:0-19: UNRELIABLE - do not use as basis for facts, only note the narrative exists
 If high-cred and low-cred articles conflict, TRUST THE HIGH-CRED SOURCE.
 
-🌐 TRANSLATION QUALITY:
-- Translate the MEANING and INTENT, not literal word-for-word
-- Understand the context first, then express the same idea naturally in the target language
-- Thai translations: natural, conversational everyday language - how a regular Thai person would explain to a friend
-- Khmer translations: natural, conversational everyday language - how a Cambodian would explain to family
+🌐 LANGUAGE & TRANSLATION:
+- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
+- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
 - ALWAYS use English numerals (0-9) in translations - NEVER Thai ๑๒๓ or Khmer ១២៣
-- Prioritize clear communication over literal accuracy
 
 ═══════════════════════════════════════════════════════════════
 🔶 LOW-CREDIBILITY / UNVERIFIED ARTICLES (analyze for spin & framing):
@@ -1236,8 +1216,7 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
 <json>
 {
   "cambodia": {
-    "officialNarrative": "2-3 sentences (max 50 words). Key claims from Cambodian media only.",
-    "officialNarrativeEn": "English (2-3 sentences)",
+    "officialNarrative": "English (2-3 sentences, max 50 words). Key claims from Cambodian media only.",
     "officialNarrativeTh": "Thai translation",
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
@@ -1246,7 +1225,7 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "postureLabel": "Short phrase (max 4 words)",
     "postureLabelTh": "Thai translation",
     "postureLabelKh": "Khmer translation",
-    "postureRationale": "1-2 sentences. WHY this posture? Focus on actions, not sources.",
+    "postureRationale": "English 1-2 sentences. WHY this posture? Focus on actions, not sources.",
     "postureRationaleTh": "Thai translation",
     "postureRationaleKh": "Khmer translation",
     "biasNotes": "Key themes emphasized",
@@ -1254,8 +1233,7 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Brief justification"
   },
   "thailand": {
-    "officialNarrative": "2-3 sentences (max 50 words). Key claims from Thai media only.",
-    "officialNarrativeEn": "English (2-3 sentences)",
+    "officialNarrative": "English (2-3 sentences, max 50 words). Key claims from Thai media only.",
     "officialNarrativeTh": "Thai translation",
     "officialNarrativeKh": "Khmer translation",
     "narrativeSource": "Primary source(s)",
@@ -1264,7 +1242,7 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "postureLabel": "Short phrase (max 4 words)",
     "postureLabelTh": "Thai translation",
     "postureLabelKh": "Khmer translation",
-    "postureRationale": "1-2 sentences. WHY this posture? Focus on actions, not sources.",
+    "postureRationale": "English 1-2 sentences. WHY this posture? Focus on actions, not sources.",
     "postureRationaleTh": "Thai translation",
     "postureRationaleKh": "Khmer translation",
     "biasNotes": "Key themes emphasized",
@@ -1272,18 +1250,16 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "confidenceRationale": "Brief justification"
   },
   "neutral": {
-    "generalSummary": "3-5 sentences (50-80 words). Summarize BOTH sides' key actions, humanitarian impact, diplomatic developments. Compare claims. Note where sources agree/disagree. Be the impartial commentator giving the full picture.",
-    "generalSummaryEn": "English (3-5 sentences)",
+    "generalSummary": "English (3-5 sentences, 50-80 words). Summarize BOTH sides' key actions, humanitarian impact, diplomatic developments. Compare claims. Note where sources agree/disagree. Be the impartial commentator giving the full picture.",
     "generalSummaryTh": "Thai translation",
     "generalSummaryKh": "Khmer translation",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
     "keyEvents": [
-      "2-5 SHORT headlines (adjust based on summary length!)",
+      "2-5 SHORT English headlines (adjust based on summary length!)",
       "MAX 12 words each - use NEUTRAL framing",
       "If summary is 70+ words, use only 2-3 events",
       "If summary is 50-60 words, can use 4-5 events"
     ],
-    "keyEventsEn": ["Short headlines in English - max 12 words each"],
     "keyEventsTh": ["หัวข้อสั้นๆ ไม่เกิน 12 คำ"],
     "keyEventsKh": ["ចំណងជើងខ្លី មិនលើស 12 ពាក្យ"],
     "discrepancies": "List SPECIFIC contradictions. Use SYMMETRIC language: 'Country A claims X, Country B claims Y, international sources suggest Z'. ATTRIBUTE the 'believable' version to a NAMED source (Reuters, ICRC, etc), don't just pick one.",

@@ -37,11 +37,18 @@
     grid-template-columns: 1fr !important;
 }
 
-/* MOBILE FIX: Force all nested flex/grid items to shrink properly */
+/* MOBILE FIX: Force all nested flex/grid items to shrink properly 
+   EXCEPT for measuring elements (like marquee ghosts) that need natural width */
 .force-mobile .dashboard-layout,
-.force-mobile .dashboard-layout * {
+.force-mobile .dashboard-layout :not([data-no-cap="true"]) {
     min-width: 0 !important;
     max-width: 100% !important;
+}
+
+/* Allow marquee and ghost containers to expand their children naturally */
+.force-mobile [data-no-cap="true"],
+.force-mobile [data-no-cap="true"] * {
+    max-width: none !important;
 }
 
 @theme {

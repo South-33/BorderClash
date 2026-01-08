@@ -767,6 +767,8 @@ const AutoScrollLabel = ({ text, className = "", fontSizeClass = "text-[10px]" }
         ref={ghostRef}
         className={`absolute invisible whitespace-nowrap ${fontSizeClass} font-mono pointer-events-none px-1.5`}
         aria-hidden="true"
+        data-no-cap="true"
+        style={{ maxWidth: 'none' }}
       >
         {text}
       </span>
@@ -774,7 +776,7 @@ const AutoScrollLabel = ({ text, className = "", fontSizeClass = "text-[10px]" }
       {isOverflowing ? (
         <>
           {/* Marquee Container */}
-          <div className="animate-marquee items-center cursor-help inline-flex">
+          <div className="animate-marquee items-center cursor-help inline-flex" data-no-cap="true">
             <span className={`${fontSizeClass} font-mono whitespace-nowrap mr-8`}>{text}</span>
             <span className={`${fontSizeClass} font-mono whitespace-nowrap mr-8`}>{text}</span>
             <span className={`${fontSizeClass} font-mono whitespace-nowrap mr-8`}>{text}</span>
@@ -1341,6 +1343,19 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // --- TIMELINE STATE AND LOGIC ---
   const [selectedTimelineDate, setSelectedTimelineDate] = useState<string | null>(null);
   const [isScrollJump, setIsScrollJump] = useState(false);
+  const [showMinorEvents, setShowMinorEventsRaw] = useState(false); // Toggle for showing events with importance < 70
+  const [isFilterTransitioning, setIsFilterTransitioning] = useState(false); // For fade animation
+  const IMPORTANCE_THRESHOLD = 70; // Events below this are considered "minor" — gives meaningful 65/35 split
+
+  // Animated filter toggle handler — fade out, update, fade in
+  const setShowMinorEvents = useCallback((value: boolean) => {
+    if (value === showMinorEvents) return;
+    setIsFilterTransitioning(true);
+    setTimeout(() => {
+      setShowMinorEventsRaw(value);
+      setTimeout(() => setIsFilterTransitioning(false), 50);
+    }, 200);
+  }, [showMinorEvents]);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
 
@@ -1349,21 +1364,29 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const scrollTargetDate = useRef<string | null>(null);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Derive available dates and group ALL events by date (for continuous scroll)
-  const { timelineDates, groupedEvents, dateCounts } = useMemo(() => {
+  // Derive available dates and group events by date (filtered by importance)
+  const { timelineDates, groupedEvents, dateCounts, totalEventsCount, filteredEventsCount } = useMemo(() => {
     if (!timelineEvents || timelineEvents.length === 0) {
-      return { timelineDates: [], groupedEvents: {} as Record<string, any[]>, dateCounts: {} };
+      return { timelineDates: [], groupedEvents: {} as Record<string, any[]>, dateCounts: {}, totalEventsCount: 0, filteredEventsCount: 0 };
     }
 
-    // counts per date and group events
+    // counts per date and group events (filtered by importance unless showMinorEvents is true)
     const counts: Record<string, number> = {};
     const groups: Record<string, any[]> = {};
+    let total = 0;
+    let filtered = 0;
 
     timelineEvents.forEach((e: any) => {
       if (e.date) {
-        counts[e.date] = (counts[e.date] || 0) + 1;
-        if (!groups[e.date]) groups[e.date] = [];
-        groups[e.date].push(e);
+        total++;
+        // Filter by importance threshold unless showMinorEvents is enabled
+        const importance = e.importance || 0;
+        if (showMinorEvents || importance >= IMPORTANCE_THRESHOLD) {
+          filtered++;
+          counts[e.date] = (counts[e.date] || 0) + 1;
+          if (!groups[e.date]) groups[e.date] = [];
+          groups[e.date].push(e);
+        }
       }
     });
 
@@ -1377,11 +1400,11 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       });
     });
 
-    // Unique dates sorted ascending (oldest first)
+    // Unique dates sorted ascending (oldest first) - only dates with events
     const dates = Object.keys(counts).sort();
 
-    return { timelineDates: dates, groupedEvents: groups, dateCounts: counts };
-  }, [timelineEvents]);
+    return { timelineDates: dates, groupedEvents: groups, dateCounts: counts, totalEventsCount: total, filteredEventsCount: filtered };
+  }, [timelineEvents, showMinorEvents, IMPORTANCE_THRESHOLD]);
 
   // Set default selected date to the last (newest) because users want the most recent info
   useEffect(() => {
@@ -2292,7 +2315,32 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           {/* LOSSES VIEW */}
           <div className={`xl:col-span-3 ${viewMode !== 'TIMELINE' ? 'hidden' : ''}`}>
             <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
-              <Card title={`${t.historicalTimeline}`} loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
+              <Card loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
+                {/* Custom Header with Filter Toggle */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
+                  <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{t.historicalTimeline}</h3>
+
+                  {/* Simple box: 3 sections with 2 dividers */}
+                  <div className="flex items-stretch">
+                    <button
+                      onClick={() => setShowMinorEvents(false)}
+                      className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2
+                        ${!showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20 border-r-0'}`}
+                    >
+                      {t.hidingMinor}
+                    </button>
+                    <button
+                      onClick={() => setShowMinorEvents(true)}
+                      className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2 border-l-0
+                        ${showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20'}`}
+                    >
+                      {t.showAllEvents}
+                    </button>
+                    <span className="px-3 py-1.5 text-[10px] font-mono text-riso-ink/50 tabular-nums whitespace-nowrap border-2 border-l-0 border-riso-ink/20">
+                      {filteredEventsCount}/{totalEventsCount}
+                    </span>
+                  </div>
+                </div>
 
                 {(!timelineEvents || timelineEvents.length === 0) ? (
                   <div className="text-center py-12 flex-1 flex flex-col justify-center items-center">
@@ -2300,7 +2348,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                     <p className="font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
                   </div>
                 ) : (
-                  <div className="flex flex-col h-full min-h-0">
+                  <div className={`flex flex-col h-full min-h-0 transition-opacity duration-200 ease-out ${isFilterTransitioning ? 'opacity-0' : 'opacity-100'}`}>
                     {/* --- DATE SELECTOR BAR --- */}
                     <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5 relative group">
 
