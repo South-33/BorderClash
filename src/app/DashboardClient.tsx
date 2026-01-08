@@ -1347,15 +1347,20 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [isFilterTransitioning, setIsFilterTransitioning] = useState(false); // For fade animation
   const IMPORTANCE_THRESHOLD = 70; // Events below this are considered "minor" — gives meaningful 65/35 split
 
-  // Animated filter toggle handler — fade out, update, fade in
+  // Ref to remember date during filter toggle (for scroll restoration)
+  const filterToggleDateRef = useRef<string | null>(null);
+
+  // Animated filter toggle handler — fade out, remember date, update, fade in
   const setShowMinorEvents = useCallback((value: boolean) => {
     if (value === showMinorEvents) return;
+    // Remember current date before transition
+    filterToggleDateRef.current = selectedTimelineDate;
     setIsFilterTransitioning(true);
     setTimeout(() => {
       setShowMinorEventsRaw(value);
       setTimeout(() => setIsFilterTransitioning(false), 50);
     }, 200);
-  }, [showMinorEvents]);
+  }, [showMinorEvents, selectedTimelineDate]);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
 
@@ -1426,6 +1431,34 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       return () => clearTimeout(timer);
     }
   }, [viewMode, timelineDates.length]); // Still track dates in case they load after view switch
+
+  // Restore scroll position after filter toggle completes
+  useEffect(() => {
+    // Only run when filter transition just ended and we have a remembered date
+    if (!isFilterTransitioning && filterToggleDateRef.current && timelineDates.length > 0) {
+      const targetDate = filterToggleDateRef.current;
+      // Clear the ref first to prevent re-triggering
+      filterToggleDateRef.current = null;
+
+      // Small delay to let the new layout render
+      const timer = setTimeout(() => {
+        // Check if the remembered date exists in the current filtered dates
+        if (timelineDates.includes(targetDate)) {
+          scrollToDate(targetDate, 'auto');
+        } else {
+          // If the date doesn't exist in filtered view, find the nearest one
+          const nearestDate = timelineDates.reduce((nearest, date) => {
+            const targetTime = new Date(targetDate).getTime();
+            const dateTime = new Date(date).getTime();
+            const nearestTime = new Date(nearest).getTime();
+            return Math.abs(dateTime - targetTime) < Math.abs(nearestTime - targetTime) ? date : nearest;
+          }, timelineDates[0]);
+          scrollToDate(nearestDate, 'auto');
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isFilterTransitioning, timelineDates]);
 
   // Auto-scroll date picker to show selected date
   // Needs delay on initial render since the picker may not be visible yet
@@ -1728,6 +1761,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       if (!container) return;
 
       // 1. Check if we are at the very bottom (to fix the "Dec 28 vs 29" issue)
+      // Skip if filter is transitioning
+      if (filterToggleDateRef.current) return;
+
       const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
       if (isAtBottom && timelineDates.length > 0) {
         const latestDate = timelineDates[timelineDates.length - 1];
@@ -1760,8 +1796,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           if (allItems && allItems[match.index]) {
             const date = allItems[match.index].date;
 
-            // LOCK CHECK: If programmatically scrolling, ignore intermediate dates
-            if (isProgrammaticScroll.current) {
+            // LOCK CHECK: If programmatically scrolling OR filter is transitioning, ignore intermediate dates
+            if (isProgrammaticScroll.current || filterToggleDateRef.current) {
               // If we reached our target, unlock and allow update
               if (date === scrollTargetDate.current) {
                 isProgrammaticScroll.current = false;
