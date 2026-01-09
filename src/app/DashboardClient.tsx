@@ -1662,13 +1662,33 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // Build flat list for virtualization: [header, event, event, ..., header, event, ...]
   // Each item has { type: 'header' | 'event', date: string, event?: any, eventIndex?: number }
   const virtualItems = useMemo(() => {
-    const items: Array<{ type: 'header' | 'event'; date: string; event?: any; eventIndex?: number; eventsInDate?: number }> = [];
+    const items: Array<{ type: 'header' | 'event'; date: string; event?: any; eventIndex?: number; eventsInDate?: number; estimatedSize: number }> = [];
     let globalEventIndex = 0; // Running counter across all dates
     timelineDates.forEach(date => {
       const events = groupedEvents[date] || [];
-      items.push({ type: 'header', date, eventsInDate: events.length });
+      items.push({ type: 'header', date, eventsInDate: events.length, estimatedSize: 60 });
       events.forEach((event) => {
-        items.push({ type: 'event', date, event, eventIndex: globalEventIndex });
+        // Smart Estimation Logic for Event Height
+        // Tight estimates for mobile
+        let height = 85; // Base: wrapper py-3 + card padding + category badge
+
+        const titleLen = (event.title || event.titleTh || '').length;
+        const descLen = (event.description || event.descriptionTh || '').length;
+        const hasSources = event.sources && event.sources.length > 0;
+
+        // Title estimation (avg 40 chars per line on mobile)
+        if (titleLen > 80) height += 50; // 3 lines
+        else if (titleLen > 40) height += 35; // 2 lines
+        else height += 20; // 1 line
+
+        // Description (line-clamp-2, avg 60 chars per line)
+        if (descLen > 60) height += 35; // 2 lines
+        else if (descLen > 0) height += 20; // 1 line
+
+        // Sources row
+        if (hasSources) height += 24;
+
+        items.push({ type: 'event', date, event, eventIndex: globalEventIndex, estimatedSize: height });
         globalEventIndex++;
       });
     });
@@ -1690,9 +1710,18 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const rowVirtualizer = useVirtualizer({
     count: virtualItems.length,
     getScrollElement: () => timelineScrollRef.current,
-    estimateSize: (index) => virtualItems[index]?.type === 'header' ? 60 : 160,
-    overscan: 10, // Render 10 extra items above/below viewport for smooth scroll
+    estimateSize: (index) => virtualItems[index]?.estimatedSize || 180,
+    overscan: 15, // Buffer items above/below viewport
   });
+
+  // Force virtualizer to recalculate when filter changes (fixes spacing after toggle)
+  useEffect(() => {
+    // Small delay to ensure DOM has updated
+    const timer = setTimeout(() => {
+      rowVirtualizer.measure();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [showMinorEvents]);
 
   // Scroll to selected date section (uses virtualizer for smooth navigation)
   const scrollToDate = (date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
@@ -1814,7 +1843,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
             }
           }
         }
-      }, 50); // Faster debounce for responsiveness
+      }, 100); // Debounce for performance
     };
 
     const container = timelineScrollRef.current;
@@ -2442,7 +2471,12 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                     <div
                       ref={timelineScrollRef}
                       className={`flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] transition-opacity duration-200 ${isScrollJump ? 'opacity-0' : 'opacity-100'}`}
-                      style={{ overflowAnchor: 'none', transform: 'translate3d(0,0,0)' }}
+                      style={{
+                        overflowAnchor: 'none',
+                        transform: 'translate3d(0,0,0)',
+                        WebkitOverflowScrolling: 'touch', // iOS momentum scrolling
+                        overscrollBehaviorY: 'contain', // Prevent rubber-band escape to parent
+                      }}
                     >
                       {/* Virtual container with total height */}
                       <div
@@ -2464,7 +2498,6 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                 key={`header-${item.date}`}
                                 id={`timeline-date-${item.date}`}
                                 data-index={virtualRow.index}
-                                ref={rowVirtualizer.measureElement}
                                 className="absolute top-0 left-0 w-full z-20"
                                 style={{ transform: `translateY(${virtualRow.start}px)` }}
                               >
@@ -2492,7 +2525,6 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                               <div
                                 key={event?._id || `event-${virtualRow.index}`}
                                 data-index={virtualRow.index}
-                                ref={rowVirtualizer.measureElement}
                                 className="absolute top-0 left-0 w-full px-4 md:px-8 py-3"
                                 style={{ transform: `translateY(${virtualRow.start}px)` }}
                               >
