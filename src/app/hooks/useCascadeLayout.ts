@@ -88,7 +88,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         // Track processed width to prevent height-only resize events (mobile address bar) from triggering recalc
         lastProcessedWidth.current = windowWidth;
 
-        console.log('[Cascade] Recalculating...', { lang: langToUse, windowWidth });
+
 
         // 0. FADE OUT & RESET
         updateState({ isLayoutReady: false });
@@ -122,7 +122,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         await nextFrame();
 
         if (!checkOverflow()) {
-            console.log(`[Cascade] Success: Fits at Min Width (${targetMinWidth}px)`);
+
             updateState({ isLayoutReady: true });
             isTransitioning.current = false;
             return;
@@ -137,7 +137,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         if (fitsAtMax) {
             // It fits at Max, and failed at Min.
             // SEARCH: Find the "Snug" fit using Adaptive Binary Search
-            console.log('[Cascade] Fits at Max, optimizing width...');
+
 
             let min = targetMinWidth;
             let max = windowWidth;
@@ -162,26 +162,26 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
                 }
             }
 
-            console.log(`[Cascade] Found Snug Width: ${bestFit}px (Steps: ${steps}, Range: ${max - min}px)`);
+
             updateState({ containerWidth: bestFit, isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
 
         // === STEP 3: MAX RATIO (1.5) ===
-        console.log('[Cascade] Max Width failed. Trying Max Ratio...');
+
         updateState({ containerWidth: windowWidth, neutralRatio: MAX_RATIO });
         await nextFrame();
 
         if (!checkOverflow()) {
-            console.log('[Cascade] Success: Fits with Max Ratio');
+
             updateState({ isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
 
         // === STEP 4: MOBILE FALLBACK ===
-        console.log('[Cascade] Failed all checks. Forcing Mobile.');
+
         updateState({
             forceMobile: true,
             neutralRatio: 1.0,
