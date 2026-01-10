@@ -387,7 +387,15 @@ async function runHistorian(
             credibility?: number;
             snippet?: string;
         }>;
-    }>
+    }>,
+    newsContext?: Record<string, Array<{
+        title: string;
+        summary: string;
+        date: string;
+        source: string;
+        sourceUrl: string;
+        credibility: number;
+    }>>
 ): Promise<HistorianResult | null> {
 
     // Build article context with publication dates
@@ -404,6 +412,33 @@ async function runHistorian(
         ? existingTimeline.map((e: any) => formatTimelineEvent(e)).join("\n\n")
         : "(Timeline is empty)";
 
+    // Build lean news context section (latest 20 already-processed articles per country)
+    // This gives the Historian awareness of what's been happening without processing overhead
+    let newsContextSection = "";
+    if (newsContext) {
+        const formatCountryContext = (articles: typeof newsContext.TH, label: string) => {
+            if (!articles || articles.length === 0) return "";
+            return `[${label}]\n` + articles.map(a =>
+                `• "${a.title}" (${a.date}, cred:${a.credibility})\n  ${a.source}: ${a.sourceUrl}\n  ${a.summary.substring(0, 100)}...`
+            ).join("\n");
+        };
+
+        const thContext = formatCountryContext(newsContext.TH, "THAI NEWS");
+        const khContext = formatCountryContext(newsContext.KH, "CAMBODIAN NEWS");
+        const intContext = formatCountryContext(newsContext.INT, "INTERNATIONAL NEWS");
+
+        if (thContext || khContext || intContext) {
+            newsContextSection = `
+📊 RECENT NEWS CONTEXT (already processed - for your awareness only):
+${thContext}
+
+${khContext}
+
+${intContext}
+`;
+        }
+    }
+
     const prompt = `${HISTORIAN_PROMPT}
 
 ═══════════════════════════════════════════════════════════════
@@ -412,11 +447,13 @@ ${articlesContext}
 
 📜 EXISTING TIMELINE (${existingTimeline.length} events):
 ${timelineContext}
+${newsContextSection}
 ═══════════════════════════════════════════════════════════════
 
 Process each article above and decide its fate. Output your decisions in JSON.`;
 
     const response = await callGeminiStudio(prompt, MODELS.thinking, 2);
+
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): HistorianResult | null => {
@@ -551,6 +588,11 @@ export const runHistorianCycle = internalAction({
         const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
         console.log(`📊 Timeline stats: ${timelineStats.totalEvents} events, avg importance: ${timelineStats.avgImportance}`);
 
+        // 4. Get recent news context (latest 20 processed articles per country)
+        // This gives the Historian situational awareness without processing overhead
+        const newsContext = await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
+        console.log(`📰 News context: TH=${newsContext.TH.length}, KH=${newsContext.KH.length}, INT=${newsContext.INT.length}`);
+
         // ====================================================================
         // PHASE 1: PLANNER - Pick up to 10 most important articles
         // ====================================================================
@@ -651,7 +693,8 @@ export const runHistorianCycle = internalAction({
                     credibility: s.credibility,  // For sorting top sources
                     snippet: s.snippet,
                 })),
-            }))
+            })),
+            newsContext  // Pass recent news context for situational awareness
         );
 
 

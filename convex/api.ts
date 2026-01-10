@@ -400,6 +400,59 @@ export const getRecentBreakingNews = internalQuery({
     },
 });
 
+/**
+ * HISTORIAN CONTEXT: Lean query for latest 20 processed articles per country
+ * Used to give the Historian AI awareness of recent news even if not processing them
+ * 
+ * Token-efficient: Returns only essential fields (title, summaryEn, date, source, credibility)
+ * Filters: Only articles that have been processed (processedToTimeline = true)
+ */
+export const getRecentNewsContextForHistorian = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        const tables = [
+            { name: "thailandNews" as const, country: "TH" as const },
+            { name: "cambodiaNews" as const, country: "KH" as const },
+            { name: "internationalNews" as const, country: "INT" as const },
+        ];
+
+        const result: Record<string, Array<{
+            title: string;
+            summary: string;
+            date: string;
+            source: string;
+            sourceUrl: string;
+            credibility: number;
+        }>> = { TH: [], KH: [], INT: [] };
+
+        for (const { name, country } of tables) {
+            // Get recent processed articles, sorted by publishedAt DESC
+            const articles = await ctx.db
+                .query(name)
+                .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
+                .order("desc")
+                .take(60); // Fetch extra to filter for processed
+
+            // Filter for processed articles and map to lean format
+            const processed = articles
+                .filter(a => a.processedToTimeline === true)
+                .slice(0, 20)
+                .map(a => ({
+                    title: a.title,
+                    summary: a.summaryEn || a.summary || "(no summary)",
+                    date: a.publishedAt ? new Date(a.publishedAt).toISOString().split('T')[0] : "unknown",
+                    source: a.source,
+                    sourceUrl: a.sourceUrl,
+                    credibility: a.credibility || 50,
+                }));
+
+            result[country] = processed;
+        }
+
+        return result;
+    },
+});
+
 // =============================================================================
 // SOURCE VERIFICATION LOCK (articlecred step - prevents zombies)
 // =============================================================================
