@@ -154,7 +154,23 @@ npx convex run api:runDashboardUpdate
 
 # Data management
 npx convex run api:clearAllData
+
+# Maintenance (run once after fresh deploy)
+npx convex run api:initializeTimelineStats
+npx convex run api:cleanupOldArticles
 ```
+
+---
+
+## Autonomous Operation
+
+The system is designed to run indefinitely without maintenance:
+
+- **Adaptive Scheduling** — AI decides next run time (4-48h) based on conflict intensity
+- **Safety Net Cron** — 24h fallback if scheduler fails
+- **Monthly Cleanup** — Auto-deletes archived articles >1 year old
+- **Denormalized Stats** — O(1) reads for timeline statistics
+- **ISR Caching** — Frontend served from Vercel edge, minimizing Convex bandwidth
 
 ---
 
@@ -176,12 +192,6 @@ The system utilizes a **Hierarchical AI Agent Pipeline** to process information 
 2. **Source Verify**: Dedicated agents visit found URLs to verify content existence and score initial credibility based on language patterns and evidentiary claims.
 3. **Historian**: A "thinking" model that processes verified articles, cross-references dates, and manages the timeline database (merging duplicates, updating fatalities, etc.).
 4. **Synthesis**: The final stage where the dashboard narratives are generated in three languages, ensuring tone-perfect translations for local audiences.
-
----
-
-## License
-
-This project is licensed under the MIT License.
 
 ---
 
