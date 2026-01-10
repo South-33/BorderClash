@@ -247,6 +247,27 @@ export default defineSchema({
     })
         .index("by_key", ["key"]),
 
+    // ==================== TIMELINE STATS CACHE ====================
+    // Singleton for O(1) timeline stats reads (bandwidth optimization)
+    // Updated by createTimelineEvent/updateEventStatus/deleteTimelineEvent mutations
+    timelineStats: defineTable({
+        key: v.literal("main"),
+        totalEvents: v.number(),
+        confirmedCount: v.number(),
+        disputedCount: v.number(),
+        debunkedCount: v.number(),
+        // Category breakdown
+        militaryCount: v.number(),
+        diplomaticCount: v.number(),
+        humanitarianCount: v.number(),
+        politicalCount: v.number(),
+        // Rolling average (updated on each event creation)
+        avgImportance: v.number(),
+        importanceSum: v.number(),  // For recalculating average
+        lastUpdatedAt: v.number(),
+    })
+        .index("by_key", ["key"]),
+
     // ==================== SYSTEM ====================
 
     systemStats: defineTable({

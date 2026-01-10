@@ -186,6 +186,7 @@ export const getArticleCounts = query({
 });
 
 // Timeline events for frontend display
+// ISR caching ensures Convex is only hit on revalidation, not per user
 export const getTimeline = query({
     args: {
         limit: v.optional(v.number()),
@@ -200,7 +201,7 @@ export const getTimeline = query({
             return await query.take(args.limit);
         }
 
-        // Frontend timeline needs all events for full history display
+        // Full history for timeline display (ISR caches this)
         return await query.collect();
     },
 });
@@ -228,18 +229,18 @@ export const getExistingTitlesInternal = internalQuery({
         const cutoff = Date.now() - TWO_DAYS_MS;
 
         // OPTIMIZED: Use indexed queries by status, fetch less, return only URL
-        // 300 active + 100 unverified covers 2-day window with safety margin
+        // 225 active + 75 unverified = 300 total (insertArticle catches any duplicates at DB level)
         const activeArticles = await ctx.db
             .query(table)
             .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
             .order("desc")
-            .take(300);
+            .take(225);
 
         const unverifiedArticles = await ctx.db
             .query(table)
             .withIndex("by_status_publishedAt", q => q.eq("status", "unverified"))
             .order("desc")
-            .take(100);
+            .take(75);
 
         const all = [...activeArticles, ...unverifiedArticles];
 
@@ -746,6 +747,16 @@ export const insertArticle = internalMutation({
                 cambodia: args.perspective === "cambodia" ? 1 : 0,
                 international: args.perspective === "international" ? 1 : 0,
                 lastUpdatedAt: Date.now(),
+            });
+        }
+
+        // Increment lifetime counter (never decremented, for frontend display)
+        const sysStats = await ctx.db.query("systemStats")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
+        if (sysStats) {
+            await ctx.db.patch(sysStats._id, {
+                totalArticlesFetched: (sysStats.totalArticlesFetched || 0) + 1,
             });
         }
 
@@ -1887,6 +1898,31 @@ export const createTimelineEvent = internalMutation({
             lastUpdatedAt: now,
         });
 
+        // Update cached timeline stats (O(1) reads)
+        const stats = await ctx.db.query("timelineStats")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
+
+        const categoryKey = `${args.category}Count` as "militaryCount" | "diplomaticCount" | "humanitarianCount" | "politicalCount";
+        const importance = Math.max(0, Math.min(100, args.importance));
+
+        if (stats) {
+            const newTotal = stats.totalEvents + 1;
+            const newSum = stats.importanceSum + importance;
+            await ctx.db.patch(stats._id, {
+                totalEvents: newTotal,
+                confirmedCount: stats.confirmedCount + 1, // New events start as confirmed
+                [categoryKey]: stats[categoryKey] + 1,
+                importanceSum: newSum,
+                avgImportance: Math.round(newSum / newTotal),
+                lastUpdatedAt: now,
+            });
+        } else {
+            // Stats singleton not yet created - skip update
+            // Run `npx convex run api:initializeTimelineStats` to initialize
+            console.log("⚠️ [createTimelineEvent] Stats cache not initialized - run initializeTimelineStats");
+        }
+
         console.log(`📌 Created timeline event: "${args.title}" (importance: ${args.importance})`);
         return eventId;
     },
@@ -2037,7 +2073,53 @@ export const updateTimelineEvent = internalMutation({
         if (args.updates.importance !== undefined) patch.importance = Math.max(0, Math.min(100, args.updates.importance));
         if (args.updates.status !== undefined) patch.status = args.updates.status;
 
+        // Capture old values for stats update
+        const oldStatus = event.status;
+        const oldCategory = event.category;
+        const oldImportance = event.importance;
+
         await ctx.db.patch(event._id, patch);
+
+        // Update cached timeline stats if status, category, or importance changed
+        const statusChanged = args.updates.status !== undefined && args.updates.status !== oldStatus;
+        const categoryChanged = args.updates.category !== undefined && args.updates.category !== oldCategory;
+        const importanceChanged = args.updates.importance !== undefined && args.updates.importance !== oldImportance;
+
+        if (statusChanged || categoryChanged || importanceChanged) {
+            const stats = await ctx.db.query("timelineStats")
+                .withIndex("by_key", q => q.eq("key", "main"))
+                .first();
+
+            if (stats) {
+                const statsPatch: any = { lastUpdatedAt: Date.now() };
+
+                // Handle status change
+                if (statusChanged) {
+                    const oldStatusKey = `${oldStatus}Count` as "confirmedCount" | "disputedCount" | "debunkedCount";
+                    const newStatusKey = `${args.updates.status}Count` as "confirmedCount" | "disputedCount" | "debunkedCount";
+                    statsPatch[oldStatusKey] = Math.max(0, stats[oldStatusKey] - 1);
+                    statsPatch[newStatusKey] = stats[newStatusKey] + 1;
+                }
+
+                // Handle category change
+                if (categoryChanged) {
+                    const oldCatKey = `${oldCategory}Count` as "militaryCount" | "diplomaticCount" | "humanitarianCount" | "politicalCount";
+                    const newCatKey = `${args.updates.category}Count` as "militaryCount" | "diplomaticCount" | "humanitarianCount" | "politicalCount";
+                    statsPatch[oldCatKey] = Math.max(0, stats[oldCatKey] - 1);
+                    statsPatch[newCatKey] = stats[newCatKey] + 1;
+                }
+
+                // Handle importance change
+                if (importanceChanged) {
+                    const newImportance = Math.max(0, Math.min(100, args.updates.importance!));
+                    const newSum = stats.importanceSum - oldImportance + newImportance;
+                    statsPatch.importanceSum = newSum;
+                    statsPatch.avgImportance = stats.totalEvents > 0 ? Math.round(newSum / stats.totalEvents) : 0;
+                }
+
+                await ctx.db.patch(stats._id, statsPatch);
+            }
+        }
 
         const changedFields = Object.keys(args.updates).filter(k => (args.updates as any)[k] !== undefined);
         console.log(`✏️ Updated event "${args.eventTitle}": [${changedFields.join(", ")}] - ${args.reason}`);
@@ -2089,7 +2171,34 @@ export const deleteTimelineEvent = internalMutation({
             return null;
         }
 
+        // Capture event data before deletion for stats update
+        const eventStatus = event.status;
+        const eventCategory = event.category;
+        const eventImportance = event.importance;
+
         await ctx.db.delete(event._id);
+
+        // Update cached timeline stats
+        const stats = await ctx.db.query("timelineStats")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
+
+        if (stats && stats.totalEvents > 0) {
+            const statusKey = `${eventStatus}Count` as "confirmedCount" | "disputedCount" | "debunkedCount";
+            const categoryKey = `${eventCategory}Count` as "militaryCount" | "diplomaticCount" | "humanitarianCount" | "politicalCount";
+            const newTotal = stats.totalEvents - 1;
+            const newSum = stats.importanceSum - eventImportance;
+
+            await ctx.db.patch(stats._id, {
+                totalEvents: newTotal,
+                [statusKey]: Math.max(0, stats[statusKey] - 1),
+                [categoryKey]: Math.max(0, stats[categoryKey] - 1),
+                importanceSum: Math.max(0, newSum),
+                avgImportance: newTotal > 0 ? Math.round(newSum / newTotal) : 0,
+                lastUpdatedAt: Date.now(),
+            });
+        }
+
         console.log(`🗑️ DELETED timeline event: "${args.eventTitle}" - Reason: ${args.reason}`);
         return event._id;
     },
@@ -2251,10 +2360,37 @@ export const getEventsForConflictCheck = internalQuery({
 
 /**
  * Get timeline statistics for the Manager to make decisions
+ * OPTIMIZED: Reads from cached singleton instead of collecting all events
+ * Falls back to full recount if cache doesn't exist (creates it for future reads)
  */
 export const getTimelineStats = internalQuery({
     args: {},
     handler: async (ctx) => {
+        // Try to read from cached stats singleton (O(1) read)
+        const cached = await ctx.db.query("timelineStats")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
+
+        if (cached) {
+            return {
+                totalEvents: cached.totalEvents,
+                confirmedCount: cached.confirmedCount,
+                disputedCount: cached.disputedCount,
+                debunkedCount: cached.debunkedCount,
+                avgImportance: cached.avgImportance,
+                byCategory: {
+                    military: cached.militaryCount,
+                    diplomatic: cached.diplomaticCount,
+                    humanitarian: cached.humanitarianCount,
+                    political: cached.politicalCount,
+                },
+            };
+        }
+
+        // Fallback: No cache exists yet, do full recount
+        // WARNING: This is SLOW and happens on EVERY call until cache is initialized!
+        // Run `npx convex run api:initializeTimelineStats` to fix
+        console.log("⚠️ [getTimelineStats] Cache miss - full recount (run initializeTimelineStats to fix)");
         const all = await ctx.db.query("timelineEvents").collect();
 
         return {
@@ -2272,6 +2408,120 @@ export const getTimelineStats = internalQuery({
                 political: all.filter(e => e.category === "political").length,
             },
         };
+    },
+});
+
+/**
+ * Initialize timeline stats cache from existing events
+ * Run this ONCE after deploying to populate the singleton
+ * Usage: npx convex run api:initializeTimelineStats
+ */
+export const initializeTimelineStats = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        // Check if already initialized
+        const existing = await ctx.db.query("timelineStats")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
+
+        if (existing) {
+            console.log("⚠️ Timeline stats already initialized. Recounting...");
+            await ctx.db.delete(existing._id);
+        }
+
+        // Count all events
+        const all = await ctx.db.query("timelineEvents").collect();
+
+        const stats = {
+            key: "main" as const,
+            totalEvents: all.length,
+            confirmedCount: all.filter(e => e.status === "confirmed").length,
+            disputedCount: all.filter(e => e.status === "disputed").length,
+            debunkedCount: all.filter(e => e.status === "debunked").length,
+            militaryCount: all.filter(e => e.category === "military").length,
+            diplomaticCount: all.filter(e => e.category === "diplomatic").length,
+            humanitarianCount: all.filter(e => e.category === "humanitarian").length,
+            politicalCount: all.filter(e => e.category === "political").length,
+            importanceSum: all.reduce((sum, e) => sum + e.importance, 0),
+            avgImportance: all.length > 0
+                ? Math.round(all.reduce((sum, e) => sum + e.importance, 0) / all.length)
+                : 0,
+            lastUpdatedAt: Date.now(),
+        };
+
+        await ctx.db.insert("timelineStats", stats);
+
+        console.log(`✅ Timeline stats initialized:`);
+        console.log(`   Total: ${stats.totalEvents} events`);
+        console.log(`   Status: ${stats.confirmedCount} confirmed, ${stats.disputedCount} disputed, ${stats.debunkedCount} debunked`);
+        console.log(`   Categories: M=${stats.militaryCount} D=${stats.diplomaticCount} H=${stats.humanitarianCount} P=${stats.politicalCount}`);
+        console.log(`   Avg importance: ${stats.avgImportance}`);
+
+        return stats;
+    },
+});
+
+/**
+ * Get lifetime statistics for frontend display
+ * This counter is NEVER decremented, even when old articles are deleted
+ */
+export const getLifetimeStats = query({
+    args: {},
+    handler: async (ctx) => {
+        const sysStats = await ctx.db.query("systemStats")
+            .withIndex("by_key", q => q.eq("key", "main"))
+            .first();
+
+        return {
+            totalArticlesProcessed: sysStats?.totalArticlesFetched || 0,
+        };
+    },
+});
+
+/**
+ * Cleanup old archived articles to prevent unbounded growth
+ * Deletes articles with status="archived" older than 1 year
+ * The lifetime counter (totalArticlesFetched) is NOT affected
+ * 
+ * Usage: npx convex run api:cleanupOldArticles
+ * Can also be scheduled monthly via cron
+ */
+export const cleanupOldArticles = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+        const cutoffDate = Date.now() - ONE_YEAR_MS;
+
+        let totalDeleted = 0;
+        const tables = ["thailandNews", "cambodiaNews", "internationalNews"] as const;
+
+        for (const table of tables) {
+            // Get archived articles older than 1 year
+            const oldArticles = await ctx.db
+                .query(table)
+                .withIndex("by_status", q => q.eq("status", "archived"))
+                .filter(q => q.lt(q.field("fetchedAt"), cutoffDate))
+                .take(500); // Process in batches to avoid timeout
+
+            for (const article of oldArticles) {
+                await ctx.db.delete(article._id);
+                totalDeleted++;
+            }
+
+            if (oldArticles.length > 0) {
+                console.log(`🧹 [CLEANUP] Deleted ${oldArticles.length} old archived articles from ${table}`);
+            }
+        }
+
+        // Update articleCounts cache to reflect deletions
+        // (but NOT totalArticlesFetched - that's lifetime)
+        if (totalDeleted > 0) {
+            console.log(`✅ [CLEANUP] Total deleted: ${totalDeleted} archived articles older than 1 year`);
+        } else {
+            console.log(`✅ [CLEANUP] No old archived articles to clean up`);
+        }
+
+        return { deleted: totalDeleted };
     },
 });
 
