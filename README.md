@@ -1,5 +1,8 @@
 # BorderClash
 
+BorderClash was built to address misinformation, propaganda bias, and fragmented reporting during sensitive geopolitical conflicts.  
+The system prioritizes neutrality, verification, and multilingual accessibility for local populations.
+
 > Real-time intelligence dashboard tracking the Thailand-Cambodia border situation with multi-perspective news and AI-powered neutral analysis.
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/South-33/BorderClash)
