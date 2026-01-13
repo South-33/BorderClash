@@ -67,7 +67,6 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
     const checkOverflow = useCallback((): boolean => {
         const el = neutralCardRef.current;
         if (!el) return false;
-        // Small buffer to allow for sub-pixel rendering differences
         return el.scrollHeight > el.clientHeight + 2;
     }, []);
 
@@ -122,7 +121,6 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         await nextFrame();
 
         if (!checkOverflow()) {
-
             updateState({ isLayoutReady: true });
             isTransitioning.current = false;
             return;
@@ -137,7 +135,6 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         if (fitsAtMax) {
             // It fits at Max, and failed at Min.
             // SEARCH: Find the "Snug" fit using Adaptive Binary Search
-
 
             let min = targetMinWidth;
             let max = windowWidth;
@@ -168,20 +165,45 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
             return;
         }
 
-        // === STEP 3: MAX RATIO (1.5) ===
+        // === STEP 3: BINARY SEARCH RATIO ===
+        // Content overflows even at max width. Try finding minimum ratio that fits.
 
+        let minRatio = 1.0;
+        let maxRatio = MAX_RATIO;
+        let bestRatio = MAX_RATIO;
+        let ratioSteps = 0;
+        const RATIO_PRECISION = 0.05; // Stop when range is smaller than 5%
+        const MAX_RATIO_STEPS = 5;
+
+        // First check if MAX_RATIO even works
         updateState({ containerWidth: windowWidth, neutralRatio: MAX_RATIO });
         await nextFrame();
 
         if (!checkOverflow()) {
+            // MAX_RATIO works, binary search for minimum
+            while ((maxRatio - minRatio) > RATIO_PRECISION && ratioSteps < MAX_RATIO_STEPS) {
+                ratioSteps++;
+                const midRatio = (minRatio + maxRatio) / 2;
 
-            updateState({ isLayoutReady: true });
+                updateState({ neutralRatio: midRatio });
+                await nextFrame();
+
+                if (!checkOverflow()) {
+                    // Fits at this ratio, try smaller
+                    bestRatio = midRatio;
+                    maxRatio = midRatio;
+                } else {
+                    // Overflows, need larger ratio
+                    minRatio = midRatio;
+                }
+            }
+
+            updateState({ neutralRatio: bestRatio, isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
 
         // === STEP 4: MOBILE FALLBACK ===
-
         updateState({
             forceMobile: true,
             neutralRatio: 1.0,

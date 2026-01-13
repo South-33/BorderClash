@@ -2259,7 +2259,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                           </div>
                         </div>
 
-                        <div ref={neutralCardRef} className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
+                        <div className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
                           {getSummary(neutralMeta) || t.analyzingFeeds}
                         </div>
 

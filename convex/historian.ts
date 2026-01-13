@@ -160,61 +160,24 @@ RULES:
 // Phase 1: Sees ALL articles, picks up to 10 most important to process
 // =============================================================================
 
-const PLANNER_PROMPT = `You are the PLANNER for BorderClash's Timeline Historian system.
-Your job is to look at ALL pending articles and pick UP TO 10 MOST IMPORTANT ones to process right now.
+const PLANNER_PROMPT = `Select 5-10 articles to process next.
 
-🎯 YOUR MISSION:
-You have the [google_search] tool available - use it if you need more context before planning.
-You will receive a list of ALL unprocessed news articles.
-You must select 5-10 that are MOST worth processing based on:
+STRATEGY:
+1. Look for a "Main Event" (a cluster of articles about the same incident). Pick ALL articles related to it.
+2. If that's fewer than 5, fill the rest of the quota (up to 10) with the next most important independent updates.
 
-1. IMPACT - Major events that will shape the conflict
-2. URGENCY - Breaking news that needs immediate processing
-3. CROSS-VALIDATION - Multiple articles about the same event (group them!)
-4. GAPS - Events not yet covered in the timeline
+PRIORITIZE: Breaking news, heavily corroborated events.
+SKIP FOR LATER: Low-value opinion pieces if you have better news.
 
-📊 SELECTION CRITERIA:
-
-✅ PRIORITIZE:
-- Breaking news about active conflict
-- Articles that confirm/contradict existing timeline events
-- High-credibility sources (AP, Reuters, BBC, major national outlets)
-- Multiple articles covering the same event (pick all of them together)
-- Events with clear dates and verifiable details
-
-❌ DE-PRIORITIZE (save for later):
-- Opinion pieces and analysis (process facts first)
-- Routine government statements
-- Very old news (unless filling a timeline gap)
-
-🔍 GROUPING:
-If multiple articles cover the SAME EVENT, include ALL of them together.
-This helps the Historian cross-validate and merge sources.
-
-Example: If 3 articles all talk about "Dec 12 border clash", pick all 3.
-
-OUTPUT FORMAT - Wrap your JSON in <json> tags:
+OUTPUT FORMAT (wrap in <json> tags):
 <json>
 {
-  "selectedArticles": [
-    "Exact title of article 1",
-    "Exact title of article 2",
-    "Exact title of article 3"
-  ],
-  "reasoning": "Brief explanation of why these 5-10 were chosen",
-  "groupedEvents": [
-    {
-      "eventDescription": "Dec 12 border clash at Preah Vihear",
-      "relatedArticles": ["Article 1 title", "Article 2 title"]
-    }
-  ]
+  "selectedArticles": ["Exact title 1", "Exact title 2", "..."],
+  "reasoning": "Selected [Event A] cluster and [Event B] updates"
 }
 </json>
 
-RULES:
-- Select 5-10 articles (no more, no less unless fewer are available)
-- Use EXACT article titles from the input
-- You can think before the <json> tags
+Copy article titles EXACTLY from the input list.
 `;
 
 // =============================================================================
@@ -260,56 +223,65 @@ ${timelineContext}
 
 Pick 5-10 articles to process now. Output your selection in JSON.`;
 
-    console.log("🧠 [PLANNER] Analyzing all articles to pick best 5-10...");
-    const response = await callGeminiStudio(prompt, MODELS.thinking, 2);
-
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): any => {
-        // Strategy 1: Direct parse
-        try {
-            return JSON.parse(jsonStr);
-        } catch { /* continue */ }
-
-        // Strategy 2: Remove control characters + trailing commas
+        try { return JSON.parse(jsonStr); } catch { /* continue */ }
         try {
             const cleaned = jsonStr
                 .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
                 .replace(/,\s*([\]\}])/g, '$1');
             return JSON.parse(cleaned);
         } catch { /* continue */ }
-
-        // Strategy 3: Escape unescaped newlines inside strings
-        try {
-            const escaped = jsonStr.replace(
-                /"([^"\\]|\\.)*"/g,
-                (match) => match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
-            );
-            const cleaned = escaped
-                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-                .replace(/,\s*([\]\}])/g, '$1');
-            return JSON.parse(cleaned);
-        } catch { /* continue */ }
-
         return null;
     };
 
-    // Extract JSON
-    const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
-    if (!tagMatch) {
-        console.log("❌ [PLANNER] No JSON found in API response");
-        console.log("ℹ️ [PLANNER] Will fall back to default article selection");
-        return null;
+    // RETRY LOOP (3 attempts)
+    const MAX_RETRIES = 3;
+    let currentPrompt = prompt;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        console.log(`🧠 [PLANNER] Attempt ${attempt}/${MAX_RETRIES}...`);
+
+        try {
+            const response = await callGeminiStudio(currentPrompt, MODELS.fast, 2);
+
+            // Extract JSON
+            const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
+            if (!tagMatch) {
+                console.log(`❌ [PLANNER] Attempt ${attempt}: No <json> tags found`);
+                if (attempt < MAX_RETRIES) {
+                    // SHORT repair prompt - don't resend full article list
+                    currentPrompt = `Your response had no <json> tags. Output ONLY:\n<json>\n{"selectedArticles": ["Title 1", "Title 2", ...], "reasoning": "..."}\n</json>\n\nSelect 5-10 from the list you already saw.`;
+                    continue;
+                }
+                return null;
+            }
+
+            const result = tryParseJson(tagMatch[1].trim());
+            if (result && result.selectedArticles && Array.isArray(result.selectedArticles)) {
+                console.log(`✅ [PLANNER] Selected ${result.selectedArticles.length} articles`);
+                if (result.reasoning) console.log(`   Reasoning: ${result.reasoning}`);
+                return result.selectedArticles;
+            }
+
+            // Wrong structure - retry with feedback
+            console.log(`❌ [PLANNER] Attempt ${attempt}: Wrong JSON structure (missing selectedArticles)`);
+            console.log(`   Got: ${tagMatch[1].substring(0, 150)}...`);
+            if (attempt < MAX_RETRIES) {
+                // SHORT repair prompt - just tell it what was wrong
+                currentPrompt = `Wrong format. You returned: ${tagMatch[1].substring(0, 200)}...\n\nOutput ONLY:\n<json>\n{"selectedArticles": ["Exact Title 1", "Exact Title 2", ...]}\n</json>`;
+            }
+        } catch (error) {
+            // Network error - wait before retry
+            console.log(`❌ [PLANNER] Attempt ${attempt} network error: ${error}`);
+            if (attempt < MAX_RETRIES) {
+                await new Promise(r => setTimeout(r, 3000));
+                currentPrompt = prompt; // Reset to original prompt for network retries
+            }
+        }
     }
 
-    const result = tryParseJson(tagMatch[1].trim());
-    if (result && result.selectedArticles && Array.isArray(result.selectedArticles)) {
-        console.log(`✅ [PLANNER] Selected ${result.selectedArticles.length} articles`);
-        console.log(`   Reasoning: ${result.reasoning}`);
-        return result.selectedArticles;
-    }
-
-    console.log("❌ [PLANNER] Invalid result structure or parse failed");
-    console.log("ℹ️ [PLANNER] Will fall back to default article selection");
+    console.log("ℹ️ [PLANNER] All attempts failed - falling back to default article selection");
     return null;
 }
 
@@ -452,26 +424,15 @@ ${newsContextSection}
 
 Process each article above and decide its fate. Output your decisions in JSON.`;
 
-    const response = await callGeminiStudio(prompt, MODELS.thinking, 2);
-
-
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): HistorianResult | null => {
-        // Strategy 1: Direct parse
-        try {
-            return JSON.parse(jsonStr);
-        } catch { /* continue */ }
-
-        // Strategy 2: Remove control characters + trailing commas
+        try { return JSON.parse(jsonStr); } catch { /* continue */ }
         try {
             const cleaned = jsonStr
                 .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
                 .replace(/,\s*([\]\}])/g, '$1');
             return JSON.parse(cleaned);
         } catch { /* continue */ }
-
-        // Strategy 3: Escape unescaped newlines inside strings
-        // This regex finds strings and replaces real newlines with \n
         try {
             const escaped = jsonStr.replace(
                 /"([^"\\]|\\.)*"/g,
@@ -482,64 +443,82 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
                 .replace(/,\s*([\]\}])/g, '$1');
             return JSON.parse(cleaned);
         } catch { /* continue */ }
-
         return null;
     };
 
-    // Extract JSON from response
-    const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
-    let jsonStr: string | null = null;
+    // RETRY LOOP (3 attempts)
+    const MAX_RETRIES = 3;
+    let currentPrompt = prompt;
 
-    if (tagMatch) {
-        jsonStr = tagMatch[1].trim();
-    } else {
-        // Fallback: try to find raw JSON
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            jsonStr = jsonMatch[0];
-        }
-    }
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        console.log(`📜 [HISTORIAN] Attempt ${attempt}/${MAX_RETRIES}...`);
 
-    if (!jsonStr) {
-        console.log("❌ [HISTORIAN] No JSON found in response");
-        return null;
-    }
+        try {
+            const response = await callGeminiStudio(currentPrompt, MODELS.thinking, 2);
 
-    // Try to parse with all strategies
-    const result = tryParseJson(jsonStr);
-    if (result) {
-        return result;
-    }
+            // Extract JSON from response
+            const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
+            let jsonStr: string | null = null;
 
-    // Strategy 4: Ask AI to repair the broken JSON
-    console.log("🔧 [HISTORIAN] JSON parse failed, asking AI to repair...");
-    try {
-        const repairPrompt = `The following JSON has syntax errors. Fix them and output ONLY valid JSON wrapped in <json> tags.
+            if (tagMatch) {
+                jsonStr = tagMatch[1].trim();
+            } else {
+                // Fallback: try to find raw JSON
+                const jsonMatch = response.match(/\{[\s\S]*\}/);
+                if (jsonMatch) jsonStr = jsonMatch[0];
+            }
 
-BROKEN JSON:
-${jsonStr.substring(0, 3000)}${jsonStr.length > 3000 ? '...(truncated)' : ''}
+            if (!jsonStr) {
+                console.log(`❌ [HISTORIAN] Attempt ${attempt}: No JSON found`);
+                if (attempt < MAX_RETRIES) {
+                    // SHORT repair prompt
+                    currentPrompt = `Your response had no JSON. Output ONLY:\n<json>\n{"actions": [{"articleTitle": "...", "action": "create_event|archive|discard", ...}], "summary": "..."}\n</json>\n\nProcess the articles you already saw.`;
+                    continue;
+                }
+                return null;
+            }
 
-Rules:
-- Fix any unescaped characters in strings
-- Fix trailing commas
-- Fix unclosed brackets
-- Output ONLY the fixed JSON in <json>...</json> tags`;
+            // Try to parse
+            let result = tryParseJson(jsonStr);
 
-        const repairResponse = await callGeminiStudio(repairPrompt, MODELS.thinking, 1);
-        const repairMatch = repairResponse.match(/<json>([\s\S]*?)<\/json>/i);
+            // If parse failed, try AI repair
+            if (!result) {
+                console.log(`🔧 [HISTORIAN] Attempt ${attempt}: JSON parse failed, asking AI to repair...`);
+                try {
+                    const repairPrompt = `Fix this broken JSON and output ONLY valid JSON in <json> tags:\n\n${jsonStr.substring(0, 2000)}`;
+                    const repairResponse = await callGeminiStudio(repairPrompt, MODELS.fast, 1);
+                    const repairMatch = repairResponse.match(/<json>([\s\S]*?)<\/json>/i);
+                    if (repairMatch) {
+                        result = tryParseJson(repairMatch[1].trim());
+                        if (result) console.log(`✅ [HISTORIAN] JSON repaired by AI`);
+                    }
+                } catch (repairError) {
+                    console.log(`❌ [HISTORIAN] AI repair failed: ${repairError}`);
+                }
+            }
 
-        if (repairMatch) {
-            const repaired = tryParseJson(repairMatch[1].trim());
-            if (repaired) {
-                console.log("✅ [HISTORIAN] JSON repaired successfully by AI");
-                return repaired;
+            // Validate result structure
+            if (result && result.actions && Array.isArray(result.actions)) {
+                console.log(`✅ [HISTORIAN] Got ${result.actions.length} actions`);
+                return result;
+            }
+
+            console.log(`❌ [HISTORIAN] Attempt ${attempt}: Invalid structure (missing actions array)`);
+            if (attempt < MAX_RETRIES) {
+                // SHORT repair prompt
+                currentPrompt = `Wrong format. Output ONLY:\n<json>\n{"actions": [{"articleTitle": "...", "action": "...", "eventData": {...}}]}\n</json>`;
+            }
+        } catch (error) {
+            // Network error - wait before retry
+            console.log(`❌ [HISTORIAN] Attempt ${attempt} network error: ${error}`);
+            if (attempt < MAX_RETRIES) {
+                await new Promise(r => setTimeout(r, 5000));
+                currentPrompt = prompt; // Reset to original for network retries
             }
         }
-    } catch (repairError) {
-        console.log(`❌ [HISTORIAN] AI repair failed: ${repairError}`);
     }
 
-    console.log("❌ [HISTORIAN] All JSON parse attempts failed");
+    console.log("❌ [HISTORIAN] All attempts failed");
     console.log("ℹ️ [HISTORIAN] No timeline changes will be made - existing events preserved");
     return null;
 }
@@ -578,9 +557,8 @@ export const runHistorianCycle = internalAction({
         console.log(`📰 Found ${allArticles.length} unprocessed articles total`);
 
         // 2. Get existing timeline for context
-        // 300 events = ~30k tokens context, enough for duplicate detection and updates
         const timeline = await ctx.runQuery(internal.api.getRecentTimeline, {
-            limit: 300  // Recent events for context (older events rarely updated)
+            limit: 300  // Recent events only - older events rarely need updates
         });
         console.log(`📜 Timeline context: ${timeline.length} recent events`);
 
@@ -605,9 +583,19 @@ export const runHistorianCycle = internalAction({
             console.log(`   Only ${allArticles.length} articles - processing all`);
             selectedTitles = allArticles.map((a: any) => a.title);
         } else {
+            // Pre-filter to top 50 by credibility to avoid overwhelming the Planner
+            const maxPlannerArticles = 50;
+            const articlesForPlanner = allArticles.length > maxPlannerArticles
+                ? allArticles.slice(0, maxPlannerArticles)
+                : allArticles;
+
+            if (allArticles.length > maxPlannerArticles) {
+                console.log(`   ⚠️ ${allArticles.length} articles too many - sending top ${maxPlannerArticles} to Planner`);
+            }
+
             // Run Planner to pick 5-10
             const plannerSelection = await runPlanner(
-                allArticles.map((a: any) => ({
+                articlesForPlanner.map((a: any) => ({
                     title: a.title,
                     country: a.country,
                     source: a.source,
@@ -717,6 +705,7 @@ export const runHistorianCycle = internalAction({
 
         // Helper to decode HTML entities (AI sometimes returns &quot; instead of ")
         const decodeHtmlEntities = (str: string) => {
+            if (!str) return "";
             return str
                 .replace(/&quot;/g, '"')
                 .replace(/&amp;/g, '&')
@@ -727,6 +716,12 @@ export const runHistorianCycle = internalAction({
         };
 
         for (const action of historianResult.actions) {
+            // Safety check for missing title
+            if (!action.articleTitle) {
+                console.log(`⚠️ Unprocessable action (missing articleTitle): ${JSON.stringify(action)}`);
+                continue;
+            }
+
             // Decode HTML entities in the article title from AI response
             const searchTitle = decodeHtmlEntities(action.articleTitle);
             const article = selectedArticles.find((a: any) => a.title === searchTitle);

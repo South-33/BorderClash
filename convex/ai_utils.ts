@@ -15,6 +15,11 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const startTime = Date.now();
+
+        // 3-minute timeout per request (Gemini can be slow on complex prompts)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
+
         try {
             const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
                 method: "POST",
@@ -30,7 +35,10 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
                     model: model,
                     messages: [{ role: "user", content: datedPrompt }]
                 }),
+                signal: controller.signal,
             });
+
+            clearTimeout(timeoutId);
 
             const duration = Date.now() - startTime;
 
@@ -51,6 +59,7 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
             return content;
 
         } catch (error) {
+            clearTimeout(timeoutId);
             const duration = Date.now() - startTime;
             console.warn(`⚠️ [GEMINI STUDIO] Attempt ${attempt}/${maxRetries} failed after ${duration}ms: ${error}`);
 

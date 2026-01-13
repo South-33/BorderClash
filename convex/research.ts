@@ -774,6 +774,12 @@ Please output the FIXED JSON wrapped in <json> tags:
             // Normalize "newArticles" - sometimes models return just the array, or wrap it differently
             const articles = Array.isArray(result) ? result : (result.newArticles || []);
 
+            // DEBUG: Log what AI actually returned
+            console.log(`📋 [${country.toUpperCase()}] AI returned ${articles.length} articles in JSON`);
+            if (articles.length === 0) {
+                console.log(`📄 [${country.toUpperCase()}] Raw response preview: ${rawResponse.substring(0, 500)}...`);
+            }
+
             // Insert new articles
             for (const article of articles) {
                 // VALIDATE and PARSE publishedAt - fall back to fetch time if invalid/missing
@@ -1735,11 +1741,11 @@ export const step3_historian = internalAction({
 
         // With chaining, we now have full 10 mins for historian
         const startTime = Date.now();
-        const MAX_RUNTIME_MS = 8 * 60 * 1000; // 8 mins (2 min buffer)
+        const MAX_RUNTIME_MS = 10 * 60 * 1000; // 10 mins (max utilization)
         const getTimeRemaining = () => MAX_RUNTIME_MS - (Date.now() - startTime);
 
         let historianLoops = 0;
-        const MAX_HISTORIAN_LOOPS = 30; // Can do more now since we have more time
+        const MAX_HISTORIAN_LOOPS = 10; // User requested limit
 
         try {
             while (historianLoops < MAX_HISTORIAN_LOOPS) {
@@ -2213,8 +2219,8 @@ export const verifyAllSources = internalAction({
                 return { verified: 0, updated: 0, deleted: 0, errors: 0 };
             }
 
-            // Process 5 articles at a time - smaller batches for better URL verification
-            const BATCH_SIZE = 5;
+            // Process 10 articles at a time - smaller batches for better URL verification
+            const BATCH_SIZE = 10;
 
             // Time budget - stop processing before Convex timeout
             const startTime = Date.now();
@@ -2416,14 +2422,27 @@ RULES:
 
                     // Process results
                     for (const r of result.results || []) {
-                        const articleIndex = (r.articleIndex || 1) - 1;
-                        if (articleIndex < 0 || articleIndex >= batch.length) {
-                            console.log(`   ⚠️ Invalid articleIndex ${r.articleIndex}, skipping`);
-                            continue;
+                        // Convert from 1-indexed (prompt) to 0-indexed (array)
+                        const rawIndex = r.articleIndex || 1;
+                        const articleIndex = rawIndex - 1;
+
+                        // Validate index - if out of range, try to find by URL matching
+                        let article = null;
+                        if (articleIndex >= 0 && articleIndex < batch.length) {
+                            article = batch[articleIndex];
+                        } else {
+                            // Fallback: try to find article by URL if AI returned wrong index
+                            const matchedByUrl = batch.find(a => r.url && a.sourceUrl === r.url);
+                            if (matchedByUrl) {
+                                article = matchedByUrl;
+                                console.log(`   ⚠️ Index ${rawIndex} out of range, but found by URL match`);
+                            } else {
+                                console.log(`   ⚠️ Invalid articleIndex ${rawIndex} (batch has ${batch.length}), skipping`);
+                                continue;
+                            }
                         }
 
-                        processedIndices.add(articleIndex);
-                        const article = batch[articleIndex];
+                        processedIndices.add(batch.indexOf(article));
                         const status = r.status?.toUpperCase() || "UNKNOWN";
 
                         switch (status) {
