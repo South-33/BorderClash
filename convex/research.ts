@@ -990,6 +990,7 @@ export const synthesizeAll = internalAction({
         const prevCambodia = await ctx.runQuery(api.api.getAnalysis, { target: "cambodia" }) as any;
         const prevThailand = await ctx.runQuery(api.api.getAnalysis, { target: "thailand" }) as any;
         const prevNeutral = await ctx.runQuery(api.api.getAnalysis, { target: "neutral" }) as any;
+        const prevStats = await ctx.runQuery(api.api.getDashboardStats, {}) as any;
 
         const memoryContext = `
 📜 TIMELINE (VERIFIED HISTORICAL RECORD - ${timeline.length} events):
@@ -1275,9 +1276,44 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
   "scheduling": {
     "nextCycleHours": 12,
     "reason": "Brief 1-sentence explanation. Example: 'Peaceful conditions, both sides defensive, no major developments'"
+  },
+  "dashboard": {
+    "conflictLevel": "LOW|ELEVATED|CRITICAL|UNCERTAIN",
+    "casualtyCount": 0,
+    "displacedCount": 0,
+    "civilianInjuredCount": 0,
+    "militaryInjuredCount": 0,
+    "unchanged": true,
+    "changeReason": "Brief explanation of why stats changed or stayed same"
   }
 }
 </json>
+
+📊 DASHBOARD STATS RULES (in the "dashboard" section):
+These are the LIVE STATS shown on the dashboard. Be CONSERVATIVE - only change if you have NEW verified evidence.
+
+CONFLICT LEVEL:
+- "LOW": No kinetic action, only diplomatic words
+- "ELEVATED": Troop movements, drills, minor skirmishes, small-scale evacuations
+- "CRITICAL": Sustained shelling, confirmed fatalities, major offensive
+- "UNCERTAIN": Conflicting reports, cannot determine with confidence
+
+STATS RULES:
+- casualtyCount: CUMULATIVE fatalities - can only increase, never decrease
+- displacedCount: Current number of displaced civilians
+- civilianInjuredCount: Separate civilian injuries
+- militaryInjuredCount: Separate military injuries
+- unchanged: true if you're keeping previous values (this is GOOD if nothing changed)
+- changeReason: Explain why you changed or kept the values
+
+PREVIOUS DASHBOARD VALUES (keep these if no new verified evidence):
+- Conflict Level: ${prevNeutral?.conflictLevel || "LOW"}
+- Casualties: ${prevStats?.casualtyCount ?? 0}
+- Displaced: ${prevStats?.displacedCount ?? 0}
+- Civilian Injured: ${prevStats?.civilianInjuredCount ?? 0}
+- Military Injured: ${prevStats?.militaryInjuredCount ?? 0}
+
+If timeline shows no new casualties/displacement events, KEEP THE SAME NUMBERS.
 
 RULES:
 - You MUST include <json> and </json> tags
@@ -1313,6 +1349,15 @@ Return your decision in the "scheduling" section of the JSON.`;
                 thailand: any;
                 neutral: any;
                 scheduling?: { nextCycleHours: number; reason: string };
+                dashboard?: {
+                    conflictLevel?: string;
+                    casualtyCount?: number;
+                    displacedCount?: number;
+                    civilianInjuredCount?: number;
+                    militaryInjuredCount?: number;
+                    unchanged?: boolean;
+                    changeReason?: string;
+                };
             }>(prompt, "thinking", 3, "SYNTHESIS");
 
             if (!result) {
@@ -1403,7 +1448,7 @@ Return your decision in the "scheduling" section of the JSON.`;
                 console.log(`✅[THAILAND] Posture: ${posture} (${result.thailand.postureLabel || 'N/A'}), Intensity: ${result.thailand.militaryIntensity}, Territory: ${territory || 'N/A'}`);
             }
 
-            // Save Neutral analysis (narrative + key events only, stats are handled by updateDashboard)
+            // Save Neutral analysis (narrative + key events)
             if (result.neutral) {
                 await ctx.runMutation(internal.api.upsertAnalysis, {
                     target: "neutral",
@@ -1418,6 +1463,29 @@ Return your decision in the "scheduling" section of the JSON.`;
                     keyEventsKh: result.neutral.keyEventsKh,
                 });
                 console.log(`✅[NEUTRAL] Conflict Level: ${result.neutral.conflictLevel} `);
+            }
+
+            // Save Dashboard Stats (merged from updateDashboard)
+            if (result.dashboard) {
+                // Log whether values changed or stayed the same
+                if (result.dashboard.unchanged) {
+                    console.log(`✅ [DASHBOARD] No changes needed: ${result.dashboard.changeReason || "values stable"}`);
+                } else {
+                    console.log(`📊 [DASHBOARD] Updating values: ${result.dashboard.changeReason || "new evidence found"}`);
+                }
+
+                await ctx.runMutation(internal.api.upsertDashboardStats, {
+                    conflictLevel: result.dashboard.conflictLevel || result.neutral?.conflictLevel || prevStats?.conflictLevel || "LOW",
+                    displacedCount: result.dashboard.displacedCount ?? prevStats?.displacedCount ?? 0,
+                    displacedTrend: prevStats?.displacedTrend ?? 0, // Keep existing trend
+                    casualtyCount: result.dashboard.casualtyCount ?? prevStats?.casualtyCount ?? 0,
+                    civilianInjuredCount: result.dashboard.civilianInjuredCount ?? prevStats?.civilianInjuredCount ?? 0,
+                    militaryInjuredCount: result.dashboard.militaryInjuredCount ?? prevStats?.militaryInjuredCount ?? 0,
+                });
+                console.log(`✅ [DASHBOARD] Stats saved: casualties=${result.dashboard.casualtyCount ?? prevStats?.casualtyCount ?? 0}, displaced=${result.dashboard.displacedCount ?? prevStats?.displacedCount ?? 0}`);
+            } else {
+                // If no dashboard in response, keep existing values
+                console.log(`⚠️ [DASHBOARD] No dashboard section in response - keeping existing values`);
             }
 
             return result;
@@ -1643,12 +1711,23 @@ RULES:
 export const runResearchCycle = internalAction({
     args: {},
     handler: async (ctx) => {
+        // ═══ DEDUPLICATION: Acquire lock to prevent overlapping runs ═══
+        const runId = crypto.randomUUID();
+        const lockResult = await ctx.runMutation(internal.api.acquireCycleLock, { runId });
+        
+        if (!lockResult.acquired) {
+            console.log(`🚫 [CYCLE] Aborting - ${lockResult.reason}`);
+            console.log("ℹ️ This happens when manual run overlaps with scheduled run. Only one cycle runs at a time.");
+            return;
+        }
+
         // Check if we should skip this cycle (one-time skip, auto-resets)
         const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
         if (stats?.skipNextCycle) {
             console.log("⏭️ SKIPPING THIS CYCLE (skipNextCycle was set)");
             await ctx.runMutation(internal.api.setStatus, { status: "online" });
             await ctx.runMutation(internal.api.clearSkipNextCycle, {});
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId }); // Release lock when skipping
             return;
         }
 
@@ -1694,6 +1773,7 @@ export const runResearchCycle = internalAction({
         if (errors.length >= 3) {
             console.error("🛑 ALL CURATION STEPS FAILED. Aborting cycle.");
             await ctx.runMutation(internal.api.setStatus, { status: "error", errorLog: "Curation failed completely" });
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId });
             return;
         }
 
@@ -1701,15 +1781,16 @@ export const runResearchCycle = internalAction({
 
         // Chain to Step 2 (runs immediately with fresh 10-min timer)
         await ctx.scheduler.runAfter(0, internal.research.step2_verification, {
-            errors: errors
+            errors: errors,
+            runId: runId
         });
     },
 });
 
 // Step 2: Source Verification
 export const step2_verification = internalAction({
-    args: { errors: v.array(v.string()) },
-    handler: async (ctx, { errors }) => {
+    args: { errors: v.array(v.string()), runId: v.string() },
+    handler: async (ctx, { errors, runId }) => {
         console.log("\n── STEP 2: SOURCE VERIFICATION ──");
         const stepErrors = [...errors];
 
@@ -1727,15 +1808,16 @@ export const step2_verification = internalAction({
 
         // Chain to Step 3 (fresh 10-min timer)
         await ctx.scheduler.runAfter(0, internal.research.step3_historian, {
-            errors: stepErrors
+            errors: stepErrors,
+            runId: runId
         });
     },
 });
 
 // Step 3: Historian Loop - Now has full 10 mins for processing articles
 export const step3_historian = internalAction({
-    args: { errors: v.array(v.string()) },
-    handler: async (ctx, { errors }) => {
+    args: { errors: v.array(v.string()), runId: v.string() },
+    handler: async (ctx, { errors, runId }) => {
         console.log("\n── STEP 3: HISTORIAN LOOP ──");
         const stepErrors = [...errors];
 
@@ -1746,6 +1828,14 @@ export const step3_historian = internalAction({
 
         let historianLoops = 0;
         const MAX_HISTORIAN_LOOPS = 10; // User requested limit
+
+        // ═══ CACHE TIMELINE + NEWS CONTEXT ONCE ═══
+        // These rarely change within the loop, so fetch once to save bandwidth
+        // Note: If Historian creates new events, they won't appear in cache until next cycle
+        // This is acceptable since new events are unlikely to be duplicated by different articles
+        const cachedTimeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 150 });
+        const cachedNewsContext = await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
+        console.log(`📦 [CACHE] Timeline: ${cachedTimeline.length} events, News: TH=${cachedNewsContext.TH.length}, KH=${cachedNewsContext.KH.length}, INT=${cachedNewsContext.INT.length}`);
 
         try {
             while (historianLoops < MAX_HISTORIAN_LOOPS) {
@@ -1758,7 +1848,10 @@ export const step3_historian = internalAction({
                 historianLoops++;
                 console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
 
-                const result = await ctx.runAction(internal.historian.runHistorianCycle, {});
+                const result = await ctx.runAction(internal.historian.runHistorianCycle, {
+                    cachedTimeline,
+                    cachedNewsContext,
+                });
 
                 if (!result || result.processed === 0) {
                     console.log("   ✅ Historian complete - no more articles to process");
@@ -1783,15 +1876,16 @@ export const step3_historian = internalAction({
 
         // Chain to Step 4 (fresh 10-min timer for synthesis)
         await ctx.scheduler.runAfter(0, internal.research.step4_synthesis, {
-            errors: stepErrors
+            errors: stepErrors,
+            runId: runId
         });
     },
 });
 
 // Step 4: Synthesis - Final analysis (gets full 10 mins)
 export const step4_synthesis = internalAction({
-    args: { errors: v.array(v.string()) },
-    handler: async (ctx, { errors }) => {
+    args: { errors: v.array(v.string()), runId: v.string() },
+    handler: async (ctx, { errors, runId }) => {
         console.log("\n── STEP 4: SYNTHESIS ──");
         const stepErrors = [...errors];
         let schedulingResult: { nextCycleHours: number; reason: string } | null = null;
@@ -1820,16 +1914,25 @@ export const step4_synthesis = internalAction({
 
         console.log(`📅 AI scheduling decision: ${clampedHours}h - ${reason}`);
 
-        // Cancel any existing scheduled run to prevent duplicates
-        const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
-        if (stats?.scheduledRunId) {
-            try {
-                await ctx.scheduler.cancel(stats.scheduledRunId);
-                console.log(`🗑️ Cancelled existing scheduled run: ${stats.scheduledRunId}`);
-            } catch (e) {
-                // Job might have already completed or been cancelled - that's fine
-                console.log(`ℹ️ Could not cancel existing job (may have already run): ${e}`);
+        // ═══ CANCEL ALL PENDING runResearchCycle JOBS ═══
+        // This prevents duplicate stacking from manual runs + scheduled runs
+        try {
+            const pendingJobIds = await ctx.runQuery(internal.api.getPendingCycleJobs, {});
+            if (pendingJobIds.length > 0) {
+                console.log(`🗑️ Found ${pendingJobIds.length} pending runResearchCycle jobs - cancelling all...`);
+                for (const jobId of pendingJobIds) {
+                    try {
+                        await ctx.scheduler.cancel(jobId as any);
+                        console.log(`   ✓ Cancelled job ${jobId}`);
+                    } catch (e) {
+                        // Job might have already run or been cancelled
+                        console.log(`   ⚠️ Could not cancel ${jobId}: ${e}`);
+                    }
+                }
             }
+        } catch (e) {
+            // Non-fatal - continue with scheduling
+            console.log(`⚠️ Could not query pending jobs: ${e}`);
         }
 
         // Schedule the exact next run time
@@ -1864,16 +1967,6 @@ export const step4_synthesis = internalAction({
             console.log("Errors encountered:", stepErrors);
             console.log("═══════════════════════════════════════════════════════════════");
             await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: stepErrors.join(" | ") });
-        }
-
-        // ═══ DASHBOARD UPDATE (every cycle since cycles are now 16h+) ═══
-        console.log(`📊 [DASHBOARD] Triggering dashboard update...`);
-        try {
-            await ctx.runAction(internal.research.updateDashboard, {});
-            console.log("✅ [DASHBOARD] Dashboard updated successfully");
-        } catch (dashboardError) {
-            // Non-fatal - don't fail the cycle just because dashboard failed
-            console.warn("⚠️ [DASHBOARD] Dashboard update failed (non-fatal):", dashboardError);
         }
 
         // ═══ TRIGGER ISR REVALIDATION ═══
@@ -1914,229 +2007,11 @@ export const step4_synthesis = internalAction({
             // Non-fatal - don't fail the cycle just because revalidation failed
             console.warn("⚠️ [ISR] Cache revalidation failed (non-fatal):", revalidateError);
         }
+
+        // ═══ RELEASE CYCLE LOCK ═══
+        // Always release at the very end of the cycle
+        await ctx.runMutation(internal.api.releaseCycleLock, { runId });
     },
-});
-
-// =============================================================================
-// DASHBOARD CONTROLLER (Single API Call for Stats)
-// =============================================================================
-
-export const updateDashboard = internalAction({
-    args: {},
-    handler: async (ctx) => {
-        console.log("📊 [DASHBOARD] Starting live stats update...");
-
-        // Get previous stats
-        const prevStats = await ctx.runQuery(api.api.getDashboardStats, {}) as any;
-
-        // ==================== TIMELINE CONTEXT ====================
-        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 30 });
-        // Build timeline context using shared helper
-        const timelineContext = timeline.length > 0
-            ? timeline.map((e: any) => formatTimelineEvent(e)).join("\n\n")
-            : "(No timeline events)";
-
-        // ==================== OPTIMIZED ARTICLE CONTEXT ====================
-        // Use indexed queries instead of fetching 150 articles and sorting client-side
-        // This reduces bandwidth by ~95% (67MB → ~4MB)
-
-        // Low credibility articles (10 per country) - using indexed query
-        const [cambodiaLowCred, thailandLowCred, internationalLowCred] = await Promise.all([
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "cambodia", limit: 10 }),
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "thailand", limit: 10 }),
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "international", limit: 10 }),
-        ]);
-
-        // Helper to format article
-        const formatArticle = (a: any) =>
-            `- [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
-   URL: ${a.sourceUrl || "(none)"}
-   Summary: ${a.summary || "No summary"}`;
-
-        const cambodiaPropaganda = cambodiaLowCred.map(formatArticle).join("\n");
-        const thailandPropaganda = thailandLowCred.map(formatArticle).join("\n");
-        const internationalPropaganda = internationalLowCred.map(formatArticle).join("\n");
-
-        // Breaking news (20 most recent) - using indexed query
-        const breakingNews: any[] = await ctx.runQuery(internal.api.getRecentBreakingNews, { limit: 20 });
-
-        const breakingNewsList = breakingNews.map((a: any) =>
-            `- [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
-   Summary: ${a.summary || "No summary"}`
-        ).join("\n");
-
-        console.log(`📊 [DASHBOARD] Context: ${timeline.length} timeline events, ${breakingNews.length} breaking news`);
-
-
-        const prompt = `You are the DASHBOARD CONTROLLER for the BorderClash monitor.
-Your job is to maintain ACCURATE, STABLE statistics - NOT to invent changes.
-
-⚠️ CRITICAL RULE - STABILITY OVER ACTIVITY:
-- Numbers should ONLY change when there is NEW, VERIFIED evidence
-- If nothing has changed, RETURN THE SAME NUMBERS
-- It is 100% acceptable to return identical values to previous update
-- DO NOT make small random adjustments just to show "activity"
-- Accuracy and stability matter MORE than frequent updates
-
-📊 CURRENT DASHBOARD STATS (from previous update):
-
-Conflict Level: ${prevStats?.conflictLevel || "UNKNOWN"}
-Casualties: ${prevStats?.casualtyCount || 0}
-Displaced: ${prevStats?.displacedCount || 0} (Trend: ${prevStats?.displacedTrend || 0}%)
-Civilian Injured: ${prevStats?.civilianInjuredCount || 0}
-Military Injured: ${prevStats?.militaryInjuredCount || 0}
-
-
-═══════════════════════════════════════════════════════════════
-📜 TIMELINE (VERIFIED EVENTS - PRIMARY SOURCE):
-These are confirmed, verified events with sources. Base your assessment primarily on these:
-
-${timelineContext}
-═══════════════════════════════════════════════════════════════
-
-🔴 LOW-CREDIBILITY / PROPAGANDA ARTICLES (for context - be skeptical):
-
-🇰🇭 CAMBODIAN LOW-CRED (${cambodiaLowCred.length} articles):
-${cambodiaPropaganda || "(none)"}
-
-🇹🇭 THAI LOW-CRED (${thailandLowCred.length} articles):
-${thailandPropaganda || "(none)"}
-
-🌍 INTERNATIONAL LOW-CRED (${internationalLowCred.length} articles):
-${internationalPropaganda || "(none)"}
-
-⚡ BREAKING NEWS (${breakingNews.length} most recent):
-${breakingNewsList || "(none)"}
-═══════════════════════════════════════════════════════════════
-
-🔍 YOUR TASK:
-1. Review the timeline events above for any NEW information about casualties/displaced
-2. Cross-reference with breaking news - does it confirm or contradict?
-3. Be SKEPTICAL of low-cred sources - they often exaggerate numbers
-4. ONLY if there is clear, verified evidence of change, update the numbers
-5. If nothing significant has changed, KEEP CURRENT NUMBERS
-
-📊 WHEN TO CHANGE NUMBERS:
-✅ CHANGE IF: Timeline shows new confirmed casualties (check sources!)
-✅ CHANGE IF: Multiple HIGH-credibility sources confirm different numbers
-❌ DON'T CHANGE IF: Only low-cred sources report new numbers
-❌ DON'T CHANGE IF: Numbers are "estimates" or "unconfirmed"
-❌ DON'T CHANGE IF: Breaking news just repeats old events
-
-🌐 WEB SEARCH - USE IT TO VERIFY:
-You have access to web search. Use it to:
-- Verify casualty numbers from international wire services (Reuters, AP, AFP)
-- Check for official government announcements
-- Cross-reference claims from the timeline/articles above
-- Search in English, Thai (ไทย กัมพูชา ปะทะ), and Khmer (ការប៉ះទង្គិច ព្រំដែន)
-If your search confirms the current numbers are still accurate, KEEP THEM.
-
- CONFLICT LEVEL (use UPPERCASE):
-- "LOW": No kinetic action, only diplomatic words
-- "ELEVATED": Troop movements, drills, minor skirmishes, small-scale evacuations
-- "CRITICAL": Sustained shelling, confirmed fatalities, major offensive
-- "UNCERTAIN": Conflicting reports, cannot determine with confidence
-
-🔢 STATS RULES:
-- displaced: Only change if NEW displacement events in timeline
-- fatalities: CUMULATIVE total - can only increase, never decrease
-- civilianInjured: Separate civilian injuries
-- militaryInjured: Separate military injuries
-
-Wrap your response in <json> tags:
-<json>
-{
-  "conflictLevel": "${prevStats?.conflictLevel || "LOW"}",
-  "unchanged": true,
-  "changeReason": "No new verified information - keeping stable values",
-  "stats": {
-    "displaced": ${prevStats?.displacedCount || 0},
-    "fatalities": ${prevStats?.casualtyCount || 0},
-    "civilianInjured": ${prevStats?.civilianInjuredCount || 0},
-    "militaryInjured": ${prevStats?.militaryInjuredCount || 0}
-  }
-}
-</json>
-
-NOTE: The above JSON shows the CURRENT values. If nothing has changed, you can return this EXACTLY.
-Only modify values if you have found new verified evidence.
-
-RULES:
-- You MUST include <json> and </json> tags
-- Inside the tags, output valid JSON only
-- "unchanged": true means you're returning same values (this is GOOD if nothing changed)
-- "unchanged": false means you found new evidence and are updating
-- Use English numerals (0-9) only`;
-
-        interface DashboardData {
-            conflictLevel?: string;
-            unchanged?: boolean;  // true = keeping same values (this is good!)
-            changeReason?: string;  // Explanation of why changed or kept same
-            stats?: {
-                displaced?: number;
-                displacedTrend?: number;  // % change from 1 week ago
-                fatalities?: number;
-                civilianInjured?: number;
-                militaryInjured?: number;
-                injured?: number; // Legacy fallback
-            };
-        }
-
-        try {
-            // Use generic self-healing helper
-            const data = await callGeminiStudioWithSelfHealing<DashboardData>(
-                prompt,
-                "thinking",
-                3,
-                "DASHBOARD"
-            );
-
-            if (!data) {
-                console.log("❌ [DASHBOARD] Invalid or missing JSON response from API");
-                console.log("ℹ️ [DASHBOARD] Existing dashboard stats preserved - no updates will be made this cycle");
-                // Return without updating - existing dashboardStats table remains untouched
-                // This is intentional: we never overwrite good data with nothing
-                return;
-            }
-
-            // Safety check: If we have no previous stats AND no valid new data, don't write zeros
-            const hasValidNewData = data.stats && (
-                data.stats.displaced !== undefined ||
-                data.stats.fatalities !== undefined ||
-                data.stats.civilianInjured !== undefined ||
-                data.stats.militaryInjured !== undefined
-            );
-
-            if (!prevStats && !hasValidNewData) {
-                console.log("⚠️ [DASHBOARD] No previous stats and no valid new data - skipping update to avoid writing zeros");
-                return;
-            }
-
-            // Log whether values changed or stayed the same
-            if (data.unchanged) {
-                console.log(`✅ [DASHBOARD] No changes needed: ${data.changeReason || "values stable"}`);
-            } else {
-                console.log(`📊 [DASHBOARD] Updating values: ${data.changeReason || "new evidence found"}`);
-            }
-            console.log("📊 [DASHBOARD] Parsed data:", data);
-
-            // Update Database (even if unchanged - this updates lastUpdatedAt)
-            await ctx.runMutation(internal.api.upsertDashboardStats, {
-                conflictLevel: data.conflictLevel || prevStats?.conflictLevel || "LOW",
-                displacedCount: data.stats?.displaced ?? prevStats?.displacedCount ?? 0,
-                displacedTrend: data.stats?.displacedTrend ?? prevStats?.displacedTrend ?? 0,
-                casualtyCount: data.stats?.fatalities ?? prevStats?.casualtyCount ?? 0,
-                civilianInjuredCount: data.stats?.civilianInjured ?? prevStats?.civilianInjuredCount ?? 0,
-                militaryInjuredCount: data.stats?.militaryInjured ?? prevStats?.militaryInjuredCount ?? 0,
-            });
-
-            console.log("💾 [DASHBOARD] Database updated successfully.");
-
-        } catch (error) {
-            console.error("❌ [DASHBOARD] Update failed:", error);
-            console.log("ℹ️ [DASHBOARD] Existing dashboard stats preserved due to error");
-        }
-    }
 });
 
 // =============================================================================

@@ -529,8 +529,12 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
 // =============================================================================
 
 export const runHistorianCycle = internalAction({
-    args: {},
-    handler: async (ctx): Promise<{
+    args: {
+        // Optional cached data to reduce bandwidth when called in a loop
+        cachedTimeline: v.optional(v.array(v.any())),
+        cachedNewsContext: v.optional(v.any()),
+    },
+    handler: async (ctx, { cachedTimeline, cachedNewsContext }): Promise<{
         processed: number;
         eventsCreated: number;
         eventsUpdated?: number;
@@ -556,20 +560,20 @@ export const runHistorianCycle = internalAction({
 
         console.log(`📰 Found ${allArticles.length} unprocessed articles total`);
 
-        // 2. Get existing timeline for context
-        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, {
-            limit: 300  // Recent events only - older events rarely need updates
+        // 2. Get existing timeline for context (use cache if provided)
+        const timeline = cachedTimeline ?? await ctx.runQuery(internal.api.getRecentTimeline, {
+            limit: 150  // Recent events only - older events rarely need updates
         });
-        console.log(`📜 Timeline context: ${timeline.length} recent events`);
+        console.log(`📜 Timeline context: ${timeline.length} recent events${cachedTimeline ? " (cached)" : ""}`);
 
-        // 3. Get timeline stats
+        // 3. Get timeline stats (always fresh - small query)
         const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
         console.log(`📊 Timeline stats: ${timelineStats.totalEvents} events, avg importance: ${timelineStats.avgImportance}`);
 
-        // 4. Get recent news context (latest 20 processed articles per country)
+        // 4. Get recent news context (use cache if provided)
         // This gives the Historian situational awareness without processing overhead
-        const newsContext = await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
-        console.log(`📰 News context: TH=${newsContext.TH.length}, KH=${newsContext.KH.length}, INT=${newsContext.INT.length}`);
+        const newsContext = cachedNewsContext ?? await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
+        console.log(`📰 News context: TH=${newsContext.TH.length}, KH=${newsContext.KH.length}, INT=${newsContext.INT.length}${cachedNewsContext ? " (cached)" : ""}`);
 
         // ====================================================================
         // PHASE 1: PLANNER - Pick up to 10 most important articles
@@ -1062,7 +1066,7 @@ export const runTimelineCleanup = internalAction({
         // Get existing timeline with full details
         // 300 events sufficient for finding recent duplicates
         const allTimeline = await ctx.runQuery(internal.api.getRecentTimeline, {
-            limit: 300  // Recent events for cleanup
+            limit: 150  // Recent events for cleanup
         });
 
         // Filter by date or date range if provided

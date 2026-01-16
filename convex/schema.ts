@@ -206,7 +206,7 @@ export default defineSchema({
     }),
 
     // ==================== DASHBOARD STATS ====================
-    // Managed by updateDashboard - SEPARATE from synthesis
+    // Managed by synthesizeAll - SEPARATE from analysis text
     // This stores live stats from web research, not analysis
 
     dashboardStats: defineTable({
@@ -284,6 +284,9 @@ export default defineSchema({
         lastCycleInterval: v.optional(v.number()), // Hours since last cycle (for debugging)
         schedulingReason: v.optional(v.string()),  // AI's reasoning for the interval
         scheduledRunId: v.optional(v.id("_scheduled_functions")), // scheduler.runAt job ID
+        // Cycle deduplication (prevents overlapping runs from manual + scheduled)
+        cycleRunId: v.optional(v.string()),       // UUID of currently running cycle
+        cycleStartedAt: v.optional(v.number()),   // When current cycle started (for zombie detection)
     })
         .index("by_key", ["key"]),
 

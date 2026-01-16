@@ -103,7 +103,7 @@ export const getSystemStatsInternal = internalQuery({
 });
 
 // Dashboard stats - SEPARATE from synthesis analysis
-// This returns live stats from updateDashboard (casualties, displaced, etc.)
+// This returns live stats from synthesizeAll (casualties, displaced, etc.)
 export const getDashboardStats = query({
     args: {},
     handler: async (ctx) => {
@@ -1250,6 +1250,93 @@ export const incrementResearchCycleCount = internalMutation({
 
         console.log(`📊 [SYSTEM] Research cycle count: ${newCount}`);
         return newCount;
+    },
+});
+
+// ═══ CYCLE LOCK SYSTEM (prevents duplicate overlapping runs) ═══
+// Acquire lock before starting a cycle - returns null if another cycle is running
+export const acquireCycleLock = internalMutation({
+    args: { runId: v.string() },
+    handler: async (ctx, { runId }): Promise<{ acquired: boolean; reason?: string }> => {
+        const existing = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        const now = Date.now();
+        const ZOMBIE_TIMEOUT_MS = 45 * 60 * 1000; // 45 minutes (full cycle should be ~40 mins max)
+
+        if (existing?.cycleRunId) {
+            // Check if the existing cycle is a zombie (stale lock)
+            const cycleAge = now - (existing.cycleStartedAt || 0);
+            if (cycleAge < ZOMBIE_TIMEOUT_MS) {
+                // Another cycle is legitimately running
+                const minsAgo = Math.round(cycleAge / 60000);
+                console.log(`🚫 [LOCK] Cycle ${existing.cycleRunId} already running (started ${minsAgo}m ago)`);
+                return { acquired: false, reason: `cycle ${existing.cycleRunId.slice(0, 8)} running (${minsAgo}m)` };
+            }
+            // Zombie detected - take over
+            console.log(`⚠️ [LOCK] Zombie cycle detected (${Math.round(cycleAge / 60000)}m old), taking over`);
+        }
+
+        // Acquire the lock
+        if (existing) {
+            await ctx.db.patch(existing._id, {
+                cycleRunId: runId,
+                cycleStartedAt: now,
+            });
+        } else {
+            await ctx.db.insert("systemStats", {
+                key: "main",
+                totalArticlesFetched: 0,
+                lastResearchAt: now,
+                systemStatus: "syncing",
+                cycleRunId: runId,
+                cycleStartedAt: now,
+            });
+        }
+        console.log(`🔒 [LOCK] Acquired cycle lock: ${runId}`);
+        return { acquired: true };
+    },
+});
+
+// Release lock when cycle completes (success or failure)
+export const releaseCycleLock = internalMutation({
+    args: { runId: v.string() },
+    handler: async (ctx, { runId }) => {
+        const existing = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (existing) {
+            // Only release if we own the lock (prevents race conditions)
+            if (existing.cycleRunId === runId) {
+                await ctx.db.patch(existing._id, {
+                    cycleRunId: undefined,
+                    cycleStartedAt: undefined,
+                });
+                console.log(`🔓 [LOCK] Released cycle lock: ${runId}`);
+            } else {
+                console.log(`⚠️ [LOCK] Lock owned by ${existing.cycleRunId}, not ${runId} - not releasing`);
+            }
+        }
+    },
+});
+
+// Get all pending runResearchCycle job IDs for bulk cancellation
+export const getPendingCycleJobs = internalQuery({
+    args: {},
+    handler: async (ctx): Promise<string[]> => {
+        // Query the system table for scheduled functions
+        const pendingJobs = await ctx.db.system.query("_scheduled_functions")
+            .filter((q) => 
+                q.and(
+                    q.eq(q.field("state.kind"), "pending"),
+                    q.eq(q.field("name"), "research.ts:runResearchCycle")
+                )
+            )
+            .collect();
+        
+        return pendingJobs.map(job => job._id);
     },
 });
 
