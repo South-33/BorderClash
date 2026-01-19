@@ -4,18 +4,19 @@
  * This is a Server Component that:
  * 1. Fetches data from Convex at build/revalidation time (NOT on every user request)
  * 2. Passes the data to the client component as props
- * 3. Configures ISR with a 3-hour revalidation window
+ * 3. Uses on-demand revalidation (triggered after each research cycle)
  * 
- * Result: Convex is hit once per 3 hours, not once per user.
+ * Result: Convex is hit once per research cycle, not once per user.
  * Bandwidth reduction: ~99% at scale.
  */
 
 import { fetchBorderClashData, type BorderClashData } from '@/lib/convex-server';
 import { DashboardClient } from './DashboardClient';
 
-// ISR Configuration: Revalidate every 3 hours (10800 seconds)
-// Change this value to adjust how often the cache refreshes
-export const revalidate = 10800; // 3 hours in seconds
+// ISR Configuration: 24-hour fallback (86400 seconds)
+// Primary revalidation is on-demand via /api/revalidate (triggered after each research cycle)
+// This is just a safety net in case on-demand revalidation fails
+export const revalidate = 86400; // 24 hours fallback
 
 export default async function DashboardPage() {
   // This runs at build time and during ISR revalidation

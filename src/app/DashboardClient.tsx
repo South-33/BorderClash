@@ -1054,21 +1054,82 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   const hasServerData = initialData !== null;
 
+  // =============================================================================
+  // STALE LOCALSTORAGE CLEANUP
+  // When ISR data is available, check if localStorage has older data and clear it.
+  // This prevents showing stale cached data when fresh ISR data exists.
+  // =============================================================================
+  useEffect(() => {
+    if (!hasServerData || typeof window === 'undefined') return;
+    
+    const isrLastResearchAt = initialData?.systemStats?.lastResearchAt;
+    if (!isrLastResearchAt) return;
+    
+    // Check localStorage for cached system stats
+    const cachedStats = localStorage.getItem('borderclash_system_stats');
+    if (cachedStats) {
+      try {
+        const parsed = JSON.parse(cachedStats);
+        const localLastResearchAt = parsed?.lastResearchAt;
+        
+        // If ISR data is NEWER than localStorage, clear all stale caches
+        if (localLastResearchAt && isrLastResearchAt > localLastResearchAt) {
+          console.log('🧹 [BorderClash] ISR data is newer than localStorage, clearing stale caches...');
+          // Clear all borderclash caches
+          const keysToRemove = Object.keys(localStorage).filter(k => k.startsWith('borderclash_'));
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+        }
+      } catch (e) {
+        // Invalid cache, clear it
+        localStorage.removeItem('borderclash_system_stats');
+      }
+    }
+  }, [hasServerData, initialData?.systemStats?.lastResearchAt]);
+
   const [forceClientMode, setForceClientMode] = useState(false);
   const [tabFocusKey, setTabFocusKey] = useState(0);
+  const lastVisibilityCheck = useRef<number>(Date.now());
+  const isRefreshingPage = useRef<boolean>(false);
 
   // Re-sync data when tab regains focus (handles browser cache staleness)
+  // If user was away for >2 minutes, do a soft page reload to get fresh ISR
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log("👁️ [BorderClash] Tab became visible, triggering data refresh check...");
+      if (document.visibilityState === 'visible' && !isRefreshingPage.current) {
+        const now = Date.now();
+        const timeSinceLastCheck = now - lastVisibilityCheck.current;
+        const TWO_MINUTES = 2 * 60 * 1000;
+        
+        console.log(`👁️ [BorderClash] Tab became visible after ${Math.round(timeSinceLastCheck / 1000)}s`);
+        
+        // If away for more than 2 minutes, reload to get fresh ISR cache
+        if (timeSinceLastCheck > TWO_MINUTES && hasServerData) {
+          console.log("🔄 [BorderClash] Away for >2min with ISR data, reloading for fresh cache...");
+          isRefreshingPage.current = true;
+          window.location.reload();
+          return;
+        }
+        
+        // Otherwise just refresh the countdown timer
+        lastVisibilityCheck.current = now;
         setTabFocusKey(prev => prev + 1);
       }
     };
 
+    // Also track when tab becomes hidden to measure away time accurately
+    const handleVisibilityHidden = () => {
+      if (document.visibilityState === 'hidden') {
+        lastVisibilityCheck.current = Date.now();
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+    document.addEventListener('visibilitychange', handleVisibilityHidden);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityHidden);
+    };
+  }, [hasServerData]);
 
   // SystemStats subscription - NEVER skip this!
   // This is our "heartbeat" to detect when static ISR data becomes stale.
