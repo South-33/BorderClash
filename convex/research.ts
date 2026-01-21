@@ -5,8 +5,8 @@ import { internal, api } from "./_generated/api";
 import { v } from "convex/values";
 
 // Use gemini-studio-api helpers
-import { MODELS } from "./config";
-import { callGeminiStudio, callGeminiStudioWithSelfHealing, formatTimelineEvent } from "./ai_utils";
+import { MODELS, FALLBACK_CHAINS } from "./config";
+import { callGeminiStudio, callGeminiStudioWithSelfHealing, callGeminiStudioWithFallback, formatTimelineEvent } from "./ai_utils";
 
 
 // =============================================================================
@@ -1714,7 +1714,7 @@ export const runResearchCycle = internalAction({
         // ═══ DEDUPLICATION: Acquire lock to prevent overlapping runs ═══
         const runId = crypto.randomUUID();
         const lockResult = await ctx.runMutation(internal.api.acquireCycleLock, { runId });
-        
+
         if (!lockResult.acquired) {
             console.log(`🚫 [CYCLE] Aborting - ${lockResult.reason}`);
             console.log("ℹ️ This happens when manual run overlaps with scheduled run. Only one cycle runs at a time.");
@@ -2257,7 +2257,7 @@ RULES:
 - Articles about internal Cambodian/Thai politics (not border-related) = OFF_TOPIC`;
 
                 try {
-                    const response = await callGeminiStudio(verificationPrompt, MODELS.thinking, 2);
+                    const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 2, "SOURCE-VERIFY");
 
                     // Extract JSON
                     let jsonStr: string | null = null;
@@ -2571,7 +2571,7 @@ RULES:
 - Be honest about whether the stored summary matches the actual content`;
 
         try {
-            const response = await callGeminiStudio(verificationPrompt, MODELS.thinking, 2);
+            const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 2, "VERIFY-SINGLE");
 
             // Extract JSON
             let jsonStr: string | null = null;

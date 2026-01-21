@@ -3,8 +3,8 @@
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { MODELS } from "./config";
-import { callGeminiStudio, formatTimelineEvent } from "./ai_utils";
+import { MODELS, FALLBACK_CHAINS } from "./config";
+import { callGeminiStudio, callGeminiStudioWithFallback, formatTimelineEvent } from "./ai_utils";
 
 
 // =============================================================================
@@ -454,7 +454,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         console.log(`📜 [HISTORIAN] Attempt ${attempt}/${MAX_RETRIES}...`);
 
         try {
-            const response = await callGeminiStudio(currentPrompt, MODELS.thinking, 2);
+            const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, 2, "HISTORIAN");
 
             // Extract JSON from response
             const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
@@ -1108,7 +1108,7 @@ ${timelineContext}
 
 Find duplicate or related events that should be merged.Output JSON with your merge actions.`;
 
-        const response = await callGeminiStudio(prompt, MODELS.thinking, 2);
+        const response = await callGeminiStudioWithFallback(prompt, FALLBACK_CHAINS.critical, 2, "CLEANUP");
 
         // Extract JSON
         const jsonMatch = response.match(/```json\s * ([\s\S] *?) \s * ```/i) ||

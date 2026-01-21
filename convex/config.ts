@@ -9,4 +9,13 @@ export const GEMINI_STUDIO_API_URL = process.env.GEMINI_STUDIO_API_URL || "http:
 export const MODELS = {
     fast: "fast",         // Used for: news curation, quick tasks
     thinking: "thinking", // Used for: synthesis, historian, verification, analysis
+    pro: "pro",           // Used for: fallback when thinking is rate limited
 };
+
+// Fallback chains for rate limit recovery
+// Critical tasks try thinking → pro → fast
+// Standard tasks just use fast (infinite rate limits)
+export const FALLBACK_CHAINS = {
+    critical: ["thinking", "pro", "fast"],  // Agent/Historian/Synthesis
+    standard: ["fast"],                     // Planner, JSON repair, curation
+} as const;

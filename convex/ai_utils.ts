@@ -1,6 +1,6 @@
 "use node";
 
-import { GEMINI_STUDIO_API_URL, MODELS } from "./config";
+import { GEMINI_STUDIO_API_URL, MODELS, FALLBACK_CHAINS } from "./config";
 
 /**
  * Call the gemini-studio-api (OpenAI compatible)
@@ -74,9 +74,85 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
 }
 
 /**
+ * Check if an error is a rate limit error (429 or rate/quota keywords)
+ */
+function isRateLimitError(error: any): boolean {
+    const errorStr = String(error?.message || error).toLowerCase();
+    return errorStr.includes("429") ||
+        errorStr.includes("rate") ||
+        errorStr.includes("quota") ||
+        errorStr.includes("too many");
+}
+
+/**
+ * Call Gemini API with smart model fallback for rate limit handling.
+ * Tries each model in the fallback chain until one succeeds.
+ * 
+ * @param prompt - The prompt to send
+ * @param fallbackChain - Array of model names to try in order (default: critical chain)
+ * @param maxRetriesPerModel - Max retries per model before moving to next (default: 2)
+ * @param debugLabel - Label for logging
+ */
+export async function callGeminiStudioWithFallback(
+    prompt: string,
+    fallbackChain: readonly string[] = FALLBACK_CHAINS.critical,
+    maxRetriesPerModel: number = 2,
+    debugLabel: string = "AI"
+): Promise<string> {
+    const RETRY_DELAY = 5000; // 5 seconds between retries
+
+    for (let modelIdx = 0; modelIdx < fallbackChain.length; modelIdx++) {
+        const model = fallbackChain[modelIdx];
+        const isLastModel = modelIdx === fallbackChain.length - 1;
+
+        for (let attempt = 1; attempt <= maxRetriesPerModel; attempt++) {
+            try {
+                console.log(`🤖 [${debugLabel}] Model '${model}' attempt ${attempt}/${maxRetriesPerModel}...`);
+                const result = await callGeminiStudio(prompt, model, 1);
+
+                if (modelIdx > 0) {
+                    console.log(`✅ [${debugLabel}] Got response from fallback model '${model}'`);
+                }
+                return result;
+
+            } catch (error: any) {
+                const errorMsg = error?.message || String(error);
+
+                // Check if this is a rate limit error
+                if (isRateLimitError(error)) {
+                    console.warn(`⚠️ [${debugLabel}] Model '${model}' rate limited: ${errorMsg.substring(0, 80)}`);
+
+                    if (!isLastModel) {
+                        console.log(`🔄 [${debugLabel}] Falling back to next model '${fallbackChain[modelIdx + 1]}'...`);
+                        break; // Skip remaining retries, move to next model
+                    } else {
+                        console.error(`❌ [${debugLabel}] All models exhausted (last was '${model}')`);
+                        throw new Error(`All models rate limited. Last error: ${errorMsg}`);
+                    }
+                }
+
+                // Non-rate-limit error (network, timeout, etc.) - retry same model
+                console.warn(`⚠️ [${debugLabel}] Model '${model}' error (attempt ${attempt}): ${errorMsg.substring(0, 80)}`);
+
+                if (attempt < maxRetriesPerModel) {
+                    await new Promise(r => setTimeout(r, RETRY_DELAY));
+                } else if (!isLastModel) {
+                    console.log(`🔄 [${debugLabel}] Max retries on '${model}', trying '${fallbackChain[modelIdx + 1]}'...`);
+                } else {
+                    throw error; // Last model, last attempt - propagate error
+                }
+            }
+        }
+    }
+
+    throw new Error("All models in fallback chain failed");
+}
+
+/**
  * GENERIC SELF-HEALING HELPER
  * Handles retry logic and JSON repair
  * Extracts JSON from <json> tags first, then falls back to regex
+ * Uses model fallback for thinking model (critical chain: thinking → pro → fast)
  */
 export async function callGeminiStudioWithSelfHealing<T>(
     prompt: string,
@@ -85,18 +161,25 @@ export async function callGeminiStudioWithSelfHealing<T>(
     debugLabel: string = "AI"
 ): Promise<T | null> {
     let currentPrompt = prompt;
-    const modelName = MODELS[modelType];
+
+    // Use fallback chain for thinking model (critical tasks)
+    const useFallback = modelType === "thinking";
+    const fallbackChain = useFallback ? FALLBACK_CHAINS.critical : [MODELS[modelType]];
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         let rawResponse = "";
         try {
-            console.log(`🤖 [${debugLabel}] Attempt ${attempt}/${maxRetries} (${modelName})...`);
+            console.log(`🤖 [${debugLabel}] Attempt ${attempt}/${maxRetries}...`);
 
-            // 1. CALL API
+            // 1. CALL API - use fallback for thinking model
             try {
-                rawResponse = await callGeminiStudio(currentPrompt, modelName, 1);
+                if (useFallback) {
+                    rawResponse = await callGeminiStudioWithFallback(currentPrompt, fallbackChain, 2, debugLabel);
+                } else {
+                    rawResponse = await callGeminiStudio(currentPrompt, MODELS[modelType], 1);
+                }
             } catch (networkError: any) {
-                console.log(`⚠️ [${debugLabel}] Error with API. Retrying...`);
+                console.log(`⚠️ [${debugLabel}] API error: ${networkError.message}`);
                 throw networkError;
             }
 
