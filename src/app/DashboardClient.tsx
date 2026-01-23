@@ -1536,7 +1536,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [selectedTimelineDate, viewMode]); // Also re-run when viewMode changes (picker becomes visible)
+  }, [selectedTimelineDate, viewMode, timelineDates.length]); // Also re-run when viewMode changes or filter toggle changes available dates
 
   // NOTE: Lenis removed from timeline - it conflicts with virtualization.
   // Native scrolling + virtualization = optimal performance.
