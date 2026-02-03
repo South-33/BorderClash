@@ -1429,6 +1429,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const isProgrammaticScroll = useRef(false);
   const scrollTargetDate = useRef<string | null>(null);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
+  
+  // Ref to access scrollToDate in effects (defined later, updated via useEffect)
+  const scrollToDateRef = useRef<(date: string, behavior?: 'auto' | 'smooth') => void>(() => {});
 
   // Derive available dates and group events by date (filtered by importance)
   const { timelineDates, groupedEvents, dateCounts, totalEventsCount, filteredEventsCount } = useMemo(() => {
@@ -1481,17 +1484,18 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   }, [timelineDates, selectedTimelineDate]);
 
   // Handle auto-scroll to latest date on initial load or view switch (ONLY ONCE)
+  // Handle auto-scroll to latest date on initial load or view switch (ONLY ONCE)
   useEffect(() => {
     if (viewMode === 'TIMELINE' && timelineDates.length > 0 && !hasAutoScrolledTimeline.current) {
       const latestDate = timelineDates[timelineDates.length - 1];
       // Small delay to ensure the timeline container is rendered and height is calculated
       const timer = setTimeout(() => {
-        scrollToDate(latestDate, 'auto');
+        scrollToDateRef.current(latestDate, 'auto');
         hasAutoScrolledTimeline.current = true;
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [viewMode, timelineDates.length]); // Still track dates in case they load after view switch
+  }, [viewMode, timelineDates.length]);
 
   // Restore scroll position after filter toggle completes
   useEffect(() => {
@@ -1503,9 +1507,13 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
       // Small delay to let the new layout render
       const timer = setTimeout(() => {
+        // Resize Lenis to update scroll bounds for the new date count
+        const lenis = (datePickerRef.current as any)?.lenis;
+        if (lenis) lenis.resize();
+
         // Check if the remembered date exists in the current filtered dates
         if (timelineDates.includes(targetDate)) {
-          scrollToDate(targetDate, 'auto');
+          scrollToDateRef.current(targetDate, 'auto');
         } else {
           // If the date doesn't exist in filtered view, find the nearest one
           const nearestDate = timelineDates.reduce((nearest, date) => {
@@ -1514,7 +1522,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
             const nearestTime = new Date(nearest).getTime();
             return Math.abs(dateTime - targetTime) < Math.abs(nearestTime - targetTime) ? date : nearest;
           }, timelineDates[0]);
-          scrollToDate(nearestDate, 'auto');
+          scrollToDateRef.current(nearestDate, 'auto');
         }
       }, 100);
       return () => clearTimeout(timer);
@@ -1785,7 +1793,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   }, [showMinorEvents]);
 
   // Scroll to selected date section (uses virtualizer for smooth navigation)
-  const scrollToDate = (date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
+  const scrollToDate = useCallback((date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
     // LOCK: Prevent scroll listener from overwriting selection during animation
     isProgrammaticScroll.current = true;
     scrollTargetDate.current = date;
@@ -1806,8 +1814,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     if (index !== undefined) {
       // Fade-Jump Logic:
       // Check if the target is currently visible (or very close)
-      const virtualItems = rowVirtualizer.getVirtualItems();
-      const isVisible = virtualItems.some(item => Math.abs(item.index - index) < 3);
+      const items = rowVirtualizer.getVirtualItems();
+      const isVisible = items.some(item => Math.abs(item.index - index) < 3);
 
       if (isVisible) {
         // Smooth scroll for visible/nearby items
@@ -1829,7 +1837,12 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         }, 200);
       }
     }
-  };
+  }, [dateToVirtualIndex, rowVirtualizer]);
+
+  // Keep scrollToDateRef updated with latest function
+  useEffect(() => {
+    scrollToDateRef.current = scrollToDate;
+  }, [scrollToDate]);
 
   // Sync date selector when user scrolls (optimized with refs to avoid re-binding)
   const virtualizerRef = useRef(rowVirtualizer);
@@ -2226,7 +2239,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
 
           {/* ANALYSIS VIEW - Always render during pre-render phase (!isLayoutReady) for overflow measurement */}
-          <div className={`xl:col-span-3 ${(!isLayoutReady || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
+          <div className={`xl:col-span-3 transition-opacity duration-150 ${(!isLayoutReady || viewMode === 'ANALYSIS') ? 'opacity-100' : 'opacity-0 pointer-events-none absolute'}`}>
             <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
@@ -2439,7 +2452,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           </div>
 
           {/* LOSSES VIEW */}
-          <div className={`xl:col-span-3 ${viewMode !== 'TIMELINE' ? 'hidden' : ''}`}>
+          <div className={`xl:col-span-3 transition-opacity duration-150 ${viewMode === 'TIMELINE' ? 'opacity-100' : 'opacity-0 pointer-events-none absolute'}`}>
             <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
@@ -2923,7 +2936,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           </div>
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
-          <div className={`xl:col-span-3 ${viewMode !== 'GUIDE' ? 'hidden' : ''}`}>
+          <div className={`xl:col-span-3 transition-opacity duration-150 ${viewMode === 'GUIDE' ? 'opacity-100' : 'opacity-0 pointer-events-none absolute'}`}>
             <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
