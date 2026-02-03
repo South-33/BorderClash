@@ -1310,6 +1310,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     forceMobile,
     lang,
     isLayoutReady,
+    isMeasuring,
     setLang
   } = useCascadeLayout({
     viewMode: viewMode.toLowerCase() as 'analysis' | 'timeline' | 'guide',
@@ -2249,8 +2250,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         <main className={`flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch transition-opacity duration-150 ${isViewTransitioning ? 'opacity-0' : 'opacity-100'}`}>
 
 
-          {/* ANALYSIS VIEW - Always render during pre-render phase (!isLayoutReady) for overflow measurement */}
-          <div className={`xl:col-span-3 ${(!isLayoutReady || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
+          {/* ANALYSIS VIEW - Always render during measuring phase for overflow measurement */}
+          <div className={`xl:col-span-3 ${(isMeasuring || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
             <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">

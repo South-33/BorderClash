@@ -32,6 +32,7 @@ export interface CascadeLayoutResult {
     forceMobile: boolean;
     lang: 'en' | 'th' | 'kh';
     isLayoutReady: boolean;
+    isMeasuring: boolean;
     setLang: (newLang: 'en' | 'th' | 'kh') => void;
 }
 
@@ -54,7 +55,8 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         forceMobile: false,
         containerWidth: null as number | null,
         neutralRatio: 1.0,
-        isLayoutReady: false
+        isLayoutReady: false,
+        isMeasuring: false
     });
     const [lang, setLangState] = useState<'en' | 'th' | 'kh'>('en');
 
@@ -93,6 +95,8 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         updateState({ isLayoutReady: false });
         await new Promise(r => setTimeout(r, FADE_MS));
 
+        // Now that we're faded out, enable measuring mode (shows ANALYSIS view for measurements)
+        updateState({ isMeasuring: true });
         setLangState(langToUse);
 
         // If physically on mobile/tablet, skip all logic
@@ -102,6 +106,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
                 forceMobile: false,
                 containerWidth: null,
                 neutralRatio: 1.0,
+                isMeasuring: false,
                 isLayoutReady: true
             });
             isTransitioning.current = false;
@@ -121,7 +126,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         await nextFrame();
 
         if (!checkOverflow()) {
-            updateState({ isLayoutReady: true });
+            updateState({ isMeasuring: false, isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
@@ -160,7 +165,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
             }
 
 
-            updateState({ containerWidth: bestFit, isLayoutReady: true });
+            updateState({ containerWidth: bestFit, isMeasuring: false, isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
@@ -198,7 +203,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
                 }
             }
 
-            updateState({ neutralRatio: bestRatio, isLayoutReady: true });
+            updateState({ neutralRatio: bestRatio, isMeasuring: false, isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
@@ -208,6 +213,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
             forceMobile: true,
             neutralRatio: 1.0,
             containerWidth: null,
+            isMeasuring: false,
             isLayoutReady: true
         });
         isTransitioning.current = false;
@@ -256,6 +262,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         forceMobile: layoutState.forceMobile,
         lang,
         isLayoutReady: layoutState.isLayoutReady,
+        isMeasuring: layoutState.isMeasuring,
         setLang,
     };
 }
