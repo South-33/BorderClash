@@ -989,17 +989,28 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
-  const [viewMode, setViewMode] = useState<'ANALYSIS' | 'TIMELINE' | 'GUIDE'>('ANALYSIS');
+  const [viewMode, setViewModeRaw] = useState<'ANALYSIS' | 'TIMELINE' | 'GUIDE'>('ANALYSIS');
+  const [isViewTransitioning, setIsViewTransitioning] = useState(false);
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
+
+  // Animated view mode switch - fade out, switch, fade in
+  const setViewMode = useCallback((mode: 'ANALYSIS' | 'TIMELINE' | 'GUIDE') => {
+    if (mode === viewMode) return;
+    setIsViewTransitioning(true);
+    setTimeout(() => {
+      setViewModeRaw(mode);
+      setTimeout(() => setIsViewTransitioning(false), 50);
+    }, 150);
+  }, [viewMode]);
 
   // On mount, read URL hash and update viewMode (client-only, avoids hydration mismatch)
   useEffect(() => {
     const hash = window.location.hash.toLowerCase().replace('#', '');
     if (hash === 'timeline' || hash === 'TIMELINE') {
-      setViewMode('TIMELINE');
+      setViewModeRaw('TIMELINE');
     } else if (hash === 'guide') {
-      setViewMode('GUIDE');
+      setViewModeRaw('GUIDE');
     }
     hasInitializedFromHash.current = true;
   }, []);
@@ -2235,11 +2246,11 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         </aside>
 
         {/* Main Content Grid */}
-        <main className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
+        <main className={`flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch transition-opacity duration-150 ${isViewTransitioning ? 'opacity-0' : 'opacity-100'}`}>
 
 
           {/* ANALYSIS VIEW - Always render during pre-render phase (!isLayoutReady) for overflow measurement */}
-          <div className={`xl:col-span-3 transition-opacity duration-150 ${(!isLayoutReady || viewMode === 'ANALYSIS') ? 'opacity-100' : 'opacity-0 pointer-events-none absolute'}`}>
+          <div className={`xl:col-span-3 ${(!isLayoutReady || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
             <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
@@ -2452,7 +2463,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           </div>
 
           {/* LOSSES VIEW */}
-          <div className={`xl:col-span-3 transition-opacity duration-150 ${viewMode === 'TIMELINE' ? 'opacity-100' : 'opacity-0 pointer-events-none absolute'}`}>
+          <div className={`xl:col-span-3 ${viewMode !== 'TIMELINE' ? 'hidden' : ''}`}>
             <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
@@ -2936,7 +2947,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           </div>
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
-          <div className={`xl:col-span-3 transition-opacity duration-150 ${viewMode === 'GUIDE' ? 'opacity-100' : 'opacity-0 pointer-events-none absolute'}`}>
+          <div className={`xl:col-span-3 ${viewMode !== 'GUIDE' ? 'hidden' : ''}`}>
             <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
