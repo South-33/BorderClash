@@ -2063,9 +2063,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
           {/* Control Panel */}
           <div className="bg-riso-ink text-riso-paper p-3 rough-border-sm">
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.nextAutoScan}</p>
+            <div className="flex justify-between items-stretch mb-2">
+              <div className="flex flex-col justify-between">
+                <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'} whitespace-nowrap`}>{t.nextAutoScan}</p>
                 <p className="font-mono text-3xl font-bold" suppressHydrationWarning>
                   {systemStats?.isPaused ? (
                     <span className="text-yellow-600">{t.paused}</span>
@@ -2078,9 +2078,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                   )}
                 </p>
               </div>
-              <div className="text-right">
-                <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'}`}>{t.sourcesTracked}</p>
-                <p className="font-mono text-xl">
+              <div className="text-right flex flex-col justify-between">
+                <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'} whitespace-nowrap`}>{t.sourcesTracked}</p>
+                <p className="font-mono text-2xl opacity-80">
                   {sysStatsLoading || countsLoading ? (
                     <HackerScramble />
                   ) : (
