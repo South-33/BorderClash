@@ -140,7 +140,7 @@ export default defineSchema({
         officialNarrativeKh: v.optional(v.string()),
         narrativeSource: v.string(),
         militaryIntensity: v.number(),
-        militaryPosture: v.union(v.literal("PEACEFUL"), v.literal("DEFENSIVE"), v.literal("AGGRESSIVE")),
+        militaryPosture: v.union(v.literal("PEACEFUL"), v.literal("DEFENSIVE"), v.literal("ESCALATED"), v.literal("AGGRESSIVE")),
         // Detailed posture context with translations
         postureLabel: v.optional(v.string()),           // Short label (English default)
         postureLabelEn: v.optional(v.string()),
@@ -166,7 +166,7 @@ export default defineSchema({
         officialNarrativeKh: v.optional(v.string()),
         narrativeSource: v.string(),
         militaryIntensity: v.number(),
-        militaryPosture: v.union(v.literal("PEACEFUL"), v.literal("DEFENSIVE"), v.literal("AGGRESSIVE")),
+        militaryPosture: v.union(v.literal("PEACEFUL"), v.literal("DEFENSIVE"), v.literal("ESCALATED"), v.literal("AGGRESSIVE")),
         // Detailed posture context with translations
         postureLabel: v.optional(v.string()),
         postureLabelEn: v.optional(v.string()),

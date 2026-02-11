@@ -43,7 +43,7 @@ export interface Analysis {
     officialNarrativeTh?: string;
     officialNarrativeKh?: string;
     militaryIntensity: number;
-    militaryPosture: "PEACEFUL" | "DEFENSIVE" | "AGGRESSIVE";
+    militaryPosture: "PEACEFUL" | "DEFENSIVE" | "ESCALATED" | "AGGRESSIVE";
     postureLabel?: string;
     postureLabelTh?: string;
     postureLabelKh?: string;

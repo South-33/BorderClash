@@ -1892,7 +1892,12 @@ export const step4_synthesis = internalAction({
 
         try {
             const result = await ctx.runAction(internal.research.synthesizeAll, {});
-            console.log("   ✅ Synthesis complete");
+            if (!result) {
+                console.warn("⚠️ [STEP 4] Synthesis returned no result; dashboard/analysis may be unchanged");
+                stepErrors.push("Synthesis: returned null result");
+            } else {
+                console.log("   ✅ Synthesis complete");
+            }
 
             // Extract scheduling decision from AI result
             if (result?.scheduling) {

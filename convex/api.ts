@@ -1013,7 +1013,7 @@ export const upsertAnalysis = internalMutation({
         officialNarrativeKh: v.optional(v.string()),
         narrativeSource: v.optional(v.string()),
         militaryIntensity: v.optional(v.number()),
-        militaryPosture: v.optional(v.union(v.literal("PEACEFUL"), v.literal("DEFENSIVE"), v.literal("AGGRESSIVE"))),
+        militaryPosture: v.optional(v.union(v.literal("PEACEFUL"), v.literal("DEFENSIVE"), v.literal("ESCALATED"), v.literal("AGGRESSIVE"))),
         // Detailed posture context with translations
         postureLabel: v.optional(v.string()),
         postureLabelEn: v.optional(v.string()),
@@ -2611,4 +2611,3 @@ export const cleanupOldArticles = internalMutation({
         return { deleted: totalDeleted };
     },
 });
-
