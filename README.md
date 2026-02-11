@@ -108,11 +108,24 @@ npm run dev
 
 ```bash
 npx convex env set GEMINI_STUDIO_API_URL "https://your-api-url.com"
+npx convex env set GEMINI_PROJECT_NAME "borderclash"
+npx convex env set GEMINI_CLIENT_NAME "borderclash-convex"
 ```
+
+- `GEMINI_PROJECT_NAME` and `GEMINI_CLIENT_NAME` are sent as `X-Project-Name` and `X-Client-Name` on every Gemini Studio chat completion request for source attribution.
+- `X-Request-ID` is generated per request and mirrored in `request_id` body fields for traceability.
 
 ### AI Backend
 
 This project uses a custom Gemini integration for the live deployment. If you want to run this yourself, you'll need to replace the AI layer with the [official Gemini API](https://ai.google.dev/). The prompts in `convex/research.ts` and `convex/historian.ts` are designed to be unbiased and can be audited directly in this repository.
+
+### Verify request source headers
+
+```bash
+pnpm verify:gemini-headers
+```
+
+The script sends a test `POST /v1/chat/completions` with attribution headers and then checks `GET /v1/diagnostics` for a matching `recent_requests` entry.
 
 ---
 

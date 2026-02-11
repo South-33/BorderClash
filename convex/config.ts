@@ -5,6 +5,10 @@
 // The URL for your gemini-studio-api instance (local or Cloudflare tunnel)
 export const GEMINI_STUDIO_API_URL = process.env.GEMINI_STUDIO_API_URL || "http://localhost:8001";
 
+// Request source attribution for Gemini Studio API traceability
+export const GEMINI_PROJECT_NAME = process.env.GEMINI_PROJECT_NAME || "borderclash";
+export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash-convex";
+
 // Model roles - change the values here to swap models across the entire app
 export const MODELS = {
     fast: "fast",         // Used for: news curation, quick tasks

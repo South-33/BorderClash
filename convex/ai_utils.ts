@@ -1,6 +1,56 @@
 "use node";
 
-import { GEMINI_STUDIO_API_URL, MODELS, FALLBACK_CHAINS } from "./config";
+import { randomUUID } from "node:crypto";
+
+import { GEMINI_CLIENT_NAME, GEMINI_PROJECT_NAME, GEMINI_STUDIO_API_URL, MODELS, FALLBACK_CHAINS } from "./config";
+
+type GeminiRequestInit = {
+    headers: Record<string, string>;
+    body: {
+        model: string;
+        messages: Array<{ role: "user"; content: string }>;
+        project: string;
+        client: string;
+        request_id: string;
+        metadata: {
+            project: string;
+            client: string;
+        };
+    };
+    requestId: string;
+};
+
+function buildGeminiStudioRequest(model: string, content: string, existingRequestId?: string): GeminiRequestInit {
+    const requestId = existingRequestId || randomUUID();
+    const projectName = GEMINI_PROJECT_NAME;
+    const clientName = GEMINI_CLIENT_NAME;
+
+    return {
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer anything",
+            // Browser-like headers to bypass Cloudflare bot protection
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "X-Project-Name": projectName,
+            "X-Client-Name": clientName,
+            "X-Request-ID": requestId,
+        },
+        body: {
+            model,
+            messages: [{ role: "user", content }],
+            project: projectName,
+            client: clientName,
+            request_id: requestId,
+            metadata: {
+                project: projectName,
+                client: clientName,
+            },
+        },
+        requestId,
+    };
+}
 
 /**
  * Call the gemini-studio-api (OpenAI compatible)
@@ -13,6 +63,8 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
     console.log(`🤖 [GEMINI STUDIO] Calling ${model}...`);
     const RETRY_DELAY = 8000; // 8 seconds - enough time for Cloudflare tunnel to reconnect
 
+    const requestId = randomUUID();
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const startTime = Date.now();
 
@@ -21,20 +73,11 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
         const timeoutId = setTimeout(() => controller.abort(), 180000);
 
         try {
+            const request = buildGeminiStudioRequest(model, datedPrompt, requestId);
             const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer anything",
-                    // Browser-like headers to bypass Cloudflare bot protection
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                },
-                body: JSON.stringify({
-                    model: model,
-                    messages: [{ role: "user", content: datedPrompt }]
-                }),
+                headers: request.headers,
+                body: JSON.stringify(request.body),
                 signal: controller.signal,
             });
 
@@ -44,7 +87,7 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.warn(`⚠️ [GEMINI STUDIO] Error ${response.status} after ${duration}ms: ${errorText.substring(0, 100)}`);
+                console.warn(`⚠️ [GEMINI STUDIO] Error ${response.status} after ${duration}ms (requestId: ${request.requestId}): ${errorText.substring(0, 100)}`);
                 throw new Error(`API error (${response.status}): ${errorText.substring(0, 100)}`);
             }
 
@@ -55,13 +98,13 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
                 throw new Error("API returned empty response content");
             }
 
-            console.log(`✅ [GEMINI STUDIO] Got response (${content.length} chars) in ${duration}ms`);
+            console.log(`✅ [GEMINI STUDIO] Got response (${content.length} chars) in ${duration}ms (requestId: ${request.requestId})`);
             return content;
 
         } catch (error) {
             clearTimeout(timeoutId);
             const duration = Date.now() - startTime;
-            console.warn(`⚠️ [GEMINI STUDIO] Attempt ${attempt}/${maxRetries} failed after ${duration}ms: ${error}`);
+            console.warn(`⚠️ [GEMINI STUDIO] Attempt ${attempt}/${maxRetries} failed after ${duration}ms (requestId: ${requestId}): ${error}`);
 
             if (attempt < maxRetries) {
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));

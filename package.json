@@ -8,7 +8,8 @@
     "dev:convex": "convex dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:gemini-headers": "node scripts/verify-gemini-headers.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
