@@ -87,6 +87,7 @@ export const getStats = query({
             systemStatus: stats.systemStatus,
             isPaused: stats.isPaused,
             // Adaptive scheduling fields
+            nextRunAt: stats.nextRunAt,
             lastCycleInterval: stats.lastCycleInterval,
             schedulingReason: stats.schedulingReason,
         } : null;
@@ -1168,9 +1169,11 @@ export const setStatus = internalMutation({
             .withIndex("by_key", (q) => q.eq("key", "main"))
             .first();
 
+        const now = Date.now();
+
         const data = {
             systemStatus: args.status,
-            lastResearchAt: Date.now(),
+            lastResearchAt: now,
             ...(args.errorLog !== undefined && { errorLog: args.errorLog }),
         };
 

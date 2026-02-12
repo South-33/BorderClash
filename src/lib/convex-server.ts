@@ -91,6 +91,9 @@ export interface TimelineEvent {
 
 export interface SystemStats {
     lastResearchAt: number;
+    nextRunAt?: number;
+    lastCycleInterval?: number;
+    schedulingReason?: string;
     totalArticlesFetched: number;
     systemStatus: string;
     isPaused?: boolean;

@@ -1368,127 +1368,180 @@ Return your decision in the "scheduling" section of the JSON.`;
                 return null;
             }
 
+            const writeErrors: string[] = [];
+            const validPostures = ["PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"] as const;
+            const validTerritories = ["OWN_TERRITORY", "DISPUTED_ZONE", "FOREIGN_TERRITORY", "BORDER_ZONE"] as const;
+            const validConflictLevels = ["LOW", "ELEVATED", "CRITICAL", "UNCERTAIN"] as const;
+
+            const normalizePosture = (raw: unknown): (typeof validPostures)[number] => {
+                if (typeof raw !== "string") return "DEFENSIVE";
+                const upper = raw.toUpperCase() as (typeof validPostures)[number];
+                return validPostures.includes(upper) ? upper : "DEFENSIVE";
+            };
+
+            const normalizeTerritory = (raw: unknown): (typeof validTerritories)[number] | undefined => {
+                if (typeof raw !== "string") return undefined;
+                const upper = raw.toUpperCase() as (typeof validTerritories)[number];
+                return validTerritories.includes(upper) ? upper : undefined;
+            };
+
+            const clampIntensity = (posture: (typeof validPostures)[number], raw: unknown): number => {
+                const value = typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+                if (posture === "PEACEFUL") return Math.max(0, Math.min(30, value ?? 15));
+                if (posture === "DEFENSIVE") return Math.max(31, Math.min(55, value ?? 45));
+                if (posture === "ESCALATED") return Math.max(56, Math.min(69, value ?? 62));
+                return Math.max(70, Math.min(100, value ?? 80));
+            };
+
+            const normalizeConflictLevel = (raw: unknown): (typeof validConflictLevels)[number] => {
+                if (typeof raw !== "string") return "LOW";
+                const upper = raw.toUpperCase() as (typeof validConflictLevels)[number];
+                return validConflictLevels.includes(upper) ? upper : "LOW";
+            };
+
+            const normalizeNonNegativeInt = (raw: unknown, fallback: number): number => {
+                if (typeof raw !== "number" || !Number.isFinite(raw)) return fallback;
+                return Math.max(0, Math.round(raw));
+            };
+
+            let dashboardUpdated = false;
+
             // Save Cambodia analysis
             if (result.cambodia) {
-                const validPostures = ["PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"];
-                const posture = validPostures.includes(result.cambodia.militaryPosture)
-                    ? result.cambodia.militaryPosture : "DEFENSIVE";
+                try {
+                    const posture = normalizePosture(result.cambodia.militaryPosture);
+                    const territory = normalizeTerritory(result.cambodia.territorialContext);
+                    const intensity = clampIntensity(posture, result.cambodia.militaryIntensity);
 
-                const validTerritories = ["OWN_TERRITORY", "DISPUTED_ZONE", "FOREIGN_TERRITORY", "BORDER_ZONE"];
-                const territory = validTerritories.includes(result.cambodia.territorialContext)
-                    ? result.cambodia.territorialContext : undefined;
-
-                // Clamp intensity to match posture range
-                const clampIntensity = (p: string, raw: number) => {
-                    if (p === "PEACEFUL") return Math.max(0, Math.min(30, raw || 15));
-                    if (p === "DEFENSIVE") return Math.max(31, Math.min(55, raw || 45));
-                    if (p === "ESCALATED") return Math.max(56, Math.min(69, raw || 62));
-                    return Math.max(70, Math.min(100, raw || 80)); // AGGRESSIVE
-                };
-
-                await ctx.runMutation(internal.api.upsertAnalysis, {
-                    target: "cambodia",
-                    officialNarrative: result.cambodia.officialNarrative || "No narrative available.",
-                    officialNarrativeEn: result.cambodia.officialNarrativeEn,
-                    officialNarrativeTh: result.cambodia.officialNarrativeTh,
-                    officialNarrativeKh: result.cambodia.officialNarrativeKh,
-                    narrativeSource: result.cambodia.narrativeSource || "Unknown",
-                    militaryIntensity: clampIntensity(posture, result.cambodia.militaryIntensity),
-                    militaryPosture: posture,
-                    postureLabel: result.cambodia.postureLabel || result.cambodia.postureLabelEn,
-                    postureLabelEn: result.cambodia.postureLabelEn || result.cambodia.postureLabel,
-                    postureLabelTh: result.cambodia.postureLabelTh,
-                    postureLabelKh: result.cambodia.postureLabelKh,
-                    postureRationale: result.cambodia.postureRationale || result.cambodia.postureRationaleEn,
-                    postureRationaleEn: result.cambodia.postureRationaleEn || result.cambodia.postureRationale,
-                    postureRationaleTh: result.cambodia.postureRationaleTh,
-                    postureRationaleKh: result.cambodia.postureRationaleKh,
-                    territorialContext: territory,
-                });
-                console.log(`✅[CAMBODIA] Posture: ${posture} (${result.cambodia.postureLabel || 'N/A'}), Intensity: ${result.cambodia.militaryIntensity}, Territory: ${territory || 'N/A'}`);
+                    await ctx.runMutation(internal.api.upsertAnalysis, {
+                        target: "cambodia",
+                        officialNarrative: result.cambodia.officialNarrative || "No narrative available.",
+                        officialNarrativeEn: result.cambodia.officialNarrativeEn,
+                        officialNarrativeTh: result.cambodia.officialNarrativeTh,
+                        officialNarrativeKh: result.cambodia.officialNarrativeKh,
+                        narrativeSource: result.cambodia.narrativeSource || "Unknown",
+                        militaryIntensity: intensity,
+                        militaryPosture: posture,
+                        postureLabel: result.cambodia.postureLabel || result.cambodia.postureLabelEn,
+                        postureLabelEn: result.cambodia.postureLabelEn || result.cambodia.postureLabel,
+                        postureLabelTh: result.cambodia.postureLabelTh,
+                        postureLabelKh: result.cambodia.postureLabelKh,
+                        postureRationale: result.cambodia.postureRationale || result.cambodia.postureRationaleEn,
+                        postureRationaleEn: result.cambodia.postureRationaleEn || result.cambodia.postureRationale,
+                        postureRationaleTh: result.cambodia.postureRationaleTh,
+                        postureRationaleKh: result.cambodia.postureRationaleKh,
+                        territorialContext: territory,
+                    });
+                    console.log(`✅[CAMBODIA] Posture: ${posture} (${result.cambodia.postureLabel || "N/A"}), Intensity: ${intensity}, Territory: ${territory || "N/A"}`);
+                } catch (error) {
+                    const message = `Cambodia analysis upsert failed: ${String(error)}`;
+                    writeErrors.push(message);
+                    console.error(`❌ [SYNTHESIS] ${message}`);
+                }
             }
 
             // Save Thailand analysis
             if (result.thailand) {
-                const validPostures = ["PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"];
-                const posture = validPostures.includes(result.thailand.militaryPosture)
-                    ? result.thailand.militaryPosture : "DEFENSIVE";
+                try {
+                    const posture = normalizePosture(result.thailand.militaryPosture);
+                    const territory = normalizeTerritory(result.thailand.territorialContext);
+                    const intensity = clampIntensity(posture, result.thailand.militaryIntensity);
 
-                const validTerritories = ["OWN_TERRITORY", "DISPUTED_ZONE", "FOREIGN_TERRITORY", "BORDER_ZONE"];
-                const territory = validTerritories.includes(result.thailand.territorialContext)
-                    ? result.thailand.territorialContext : undefined;
-
-                // Clamp intensity to match posture range
-                const clampIntensity = (p: string, raw: number) => {
-                    if (p === "PEACEFUL") return Math.max(0, Math.min(30, raw || 15));
-                    if (p === "DEFENSIVE") return Math.max(31, Math.min(55, raw || 45));
-                    if (p === "ESCALATED") return Math.max(56, Math.min(69, raw || 62));
-                    return Math.max(70, Math.min(100, raw || 80)); // AGGRESSIVE
-                };
-
-                await ctx.runMutation(internal.api.upsertAnalysis, {
-                    target: "thailand",
-                    officialNarrative: result.thailand.officialNarrative || "No narrative available.",
-                    officialNarrativeEn: result.thailand.officialNarrativeEn,
-                    officialNarrativeTh: result.thailand.officialNarrativeTh,
-                    officialNarrativeKh: result.thailand.officialNarrativeKh,
-                    narrativeSource: result.thailand.narrativeSource || "Unknown",
-                    militaryIntensity: clampIntensity(posture, result.thailand.militaryIntensity),
-                    militaryPosture: posture,
-                    postureLabel: result.thailand.postureLabel || result.thailand.postureLabelEn,
-                    postureLabelEn: result.thailand.postureLabelEn || result.thailand.postureLabel,
-                    postureLabelTh: result.thailand.postureLabelTh,
-                    postureLabelKh: result.thailand.postureLabelKh,
-                    postureRationale: result.thailand.postureRationale || result.thailand.postureRationaleEn,
-                    postureRationaleEn: result.thailand.postureRationaleEn || result.thailand.postureRationale,
-                    postureRationaleTh: result.thailand.postureRationaleTh,
-                    postureRationaleKh: result.thailand.postureRationaleKh,
-                    territorialContext: territory,
-                });
-                console.log(`✅[THAILAND] Posture: ${posture} (${result.thailand.postureLabel || 'N/A'}), Intensity: ${result.thailand.militaryIntensity}, Territory: ${territory || 'N/A'}`);
+                    await ctx.runMutation(internal.api.upsertAnalysis, {
+                        target: "thailand",
+                        officialNarrative: result.thailand.officialNarrative || "No narrative available.",
+                        officialNarrativeEn: result.thailand.officialNarrativeEn,
+                        officialNarrativeTh: result.thailand.officialNarrativeTh,
+                        officialNarrativeKh: result.thailand.officialNarrativeKh,
+                        narrativeSource: result.thailand.narrativeSource || "Unknown",
+                        militaryIntensity: intensity,
+                        militaryPosture: posture,
+                        postureLabel: result.thailand.postureLabel || result.thailand.postureLabelEn,
+                        postureLabelEn: result.thailand.postureLabelEn || result.thailand.postureLabel,
+                        postureLabelTh: result.thailand.postureLabelTh,
+                        postureLabelKh: result.thailand.postureLabelKh,
+                        postureRationale: result.thailand.postureRationale || result.thailand.postureRationaleEn,
+                        postureRationaleEn: result.thailand.postureRationaleEn || result.thailand.postureRationale,
+                        postureRationaleTh: result.thailand.postureRationaleTh,
+                        postureRationaleKh: result.thailand.postureRationaleKh,
+                        territorialContext: territory,
+                    });
+                    console.log(`✅[THAILAND] Posture: ${posture} (${result.thailand.postureLabel || "N/A"}), Intensity: ${intensity}, Territory: ${territory || "N/A"}`);
+                } catch (error) {
+                    const message = `Thailand analysis upsert failed: ${String(error)}`;
+                    writeErrors.push(message);
+                    console.error(`❌ [SYNTHESIS] ${message}`);
+                }
             }
 
             // Save Neutral analysis (narrative + key events)
             if (result.neutral) {
-                await ctx.runMutation(internal.api.upsertAnalysis, {
-                    target: "neutral",
-                    generalSummary: result.neutral.generalSummary || "No data.",
-                    generalSummaryEn: result.neutral.generalSummaryEn,
-                    generalSummaryTh: result.neutral.generalSummaryTh,
-                    generalSummaryKh: result.neutral.generalSummaryKh,
-                    conflictLevel: result.neutral.conflictLevel || "Low",
-                    keyEvents: result.neutral.keyEvents || [],
-                    keyEventsEn: result.neutral.keyEventsEn,
-                    keyEventsTh: result.neutral.keyEventsTh,
-                    keyEventsKh: result.neutral.keyEventsKh,
-                });
-                console.log(`✅[NEUTRAL] Conflict Level: ${result.neutral.conflictLevel} `);
+                try {
+                    await ctx.runMutation(internal.api.upsertAnalysis, {
+                        target: "neutral",
+                        generalSummary: result.neutral.generalSummary || "No data.",
+                        generalSummaryEn: result.neutral.generalSummaryEn,
+                        generalSummaryTh: result.neutral.generalSummaryTh,
+                        generalSummaryKh: result.neutral.generalSummaryKh,
+                        conflictLevel: result.neutral.conflictLevel || "Low",
+                        keyEvents: result.neutral.keyEvents || [],
+                        keyEventsEn: result.neutral.keyEventsEn,
+                        keyEventsTh: result.neutral.keyEventsTh,
+                        keyEventsKh: result.neutral.keyEventsKh,
+                    });
+                    console.log(`✅[NEUTRAL] Conflict Level: ${result.neutral.conflictLevel} `);
+                } catch (error) {
+                    const message = `Neutral analysis upsert failed: ${String(error)}`;
+                    writeErrors.push(message);
+                    console.error(`❌ [SYNTHESIS] ${message}`);
+                }
             }
 
             // Save Dashboard Stats (merged from updateDashboard)
+            const dashboard = result.dashboard || {};
             if (result.dashboard) {
                 // Log whether values changed or stayed the same
-                if (result.dashboard.unchanged) {
-                    console.log(`✅ [DASHBOARD] No changes needed: ${result.dashboard.changeReason || "values stable"}`);
+                if (dashboard.unchanged) {
+                    console.log(`✅ [DASHBOARD] No changes needed: ${dashboard.changeReason || "values stable"}`);
                 } else {
-                    console.log(`📊 [DASHBOARD] Updating values: ${result.dashboard.changeReason || "new evidence found"}`);
+                    console.log(`📊 [DASHBOARD] Updating values: ${dashboard.changeReason || "new evidence found"}`);
                 }
-
-                await ctx.runMutation(internal.api.upsertDashboardStats, {
-                    conflictLevel: result.dashboard.conflictLevel || result.neutral?.conflictLevel || prevStats?.conflictLevel || "LOW",
-                    displacedCount: result.dashboard.displacedCount ?? prevStats?.displacedCount ?? 0,
-                    displacedTrend: prevStats?.displacedTrend ?? 0, // Keep existing trend
-                    casualtyCount: result.dashboard.casualtyCount ?? prevStats?.casualtyCount ?? 0,
-                    civilianInjuredCount: result.dashboard.civilianInjuredCount ?? prevStats?.civilianInjuredCount ?? 0,
-                    militaryInjuredCount: result.dashboard.militaryInjuredCount ?? prevStats?.militaryInjuredCount ?? 0,
-                });
-                console.log(`✅ [DASHBOARD] Stats saved: casualties=${result.dashboard.casualtyCount ?? prevStats?.casualtyCount ?? 0}, displaced=${result.dashboard.displacedCount ?? prevStats?.displacedCount ?? 0}`);
             } else {
-                // If no dashboard in response, keep existing values
-                console.log(`⚠️ [DASHBOARD] No dashboard section in response - keeping existing values`);
+                console.log("⚠️ [DASHBOARD] No dashboard section in response - writing fallback values from previous stats");
             }
 
-            return result;
+            try {
+                const conflictLevel = normalizeConflictLevel(dashboard.conflictLevel || result.neutral?.conflictLevel || prevStats?.conflictLevel || "LOW");
+                const displacedCount = normalizeNonNegativeInt(dashboard.displacedCount, prevStats?.displacedCount ?? 0);
+                const casualtyCount = normalizeNonNegativeInt(dashboard.casualtyCount, prevStats?.casualtyCount ?? 0);
+                const civilianInjuredCount = normalizeNonNegativeInt(dashboard.civilianInjuredCount, prevStats?.civilianInjuredCount ?? 0);
+                const militaryInjuredCount = normalizeNonNegativeInt(dashboard.militaryInjuredCount, prevStats?.militaryInjuredCount ?? 0);
+
+                await ctx.runMutation(internal.api.upsertDashboardStats, {
+                    conflictLevel,
+                    displacedCount,
+                    displacedTrend: prevStats?.displacedTrend ?? 0,
+                    casualtyCount,
+                    civilianInjuredCount,
+                    militaryInjuredCount,
+                });
+                dashboardUpdated = true;
+                console.log(`✅ [DASHBOARD] Stats saved: casualties=${casualtyCount}, displaced=${displacedCount}`);
+            } catch (error) {
+                const message = `Dashboard upsert failed: ${String(error)}`;
+                writeErrors.push(message);
+                console.error(`❌ [SYNTHESIS] ${message}`);
+            }
+
+            if (writeErrors.length > 0) {
+                console.warn(`⚠️ [SYNTHESIS] Completed with ${writeErrors.length} write issue(s)`);
+            }
+
+            return {
+                ...result,
+                writeErrors,
+                dashboardUpdated,
+            };
         } catch (error) {
             console.error("❌ [SYNTHESIS] Error:", error);
             return null;
@@ -1889,6 +1942,8 @@ export const step4_synthesis = internalAction({
         console.log("\n── STEP 4: SYNTHESIS ──");
         const stepErrors = [...errors];
         let schedulingResult: { nextCycleHours: number; reason: string } | null = null;
+        let synthesisSucceeded = false;
+        let dashboardUpdated = false;
 
         try {
             const result = await ctx.runAction(internal.research.synthesizeAll, {});
@@ -1896,6 +1951,15 @@ export const step4_synthesis = internalAction({
                 console.warn("⚠️ [STEP 4] Synthesis returned no result; dashboard/analysis may be unchanged");
                 stepErrors.push("Synthesis: returned null result");
             } else {
+                synthesisSucceeded = true;
+                dashboardUpdated = result.dashboardUpdated === true;
+
+                if (Array.isArray(result.writeErrors) && result.writeErrors.length > 0) {
+                    for (const writeError of result.writeErrors) {
+                        stepErrors.push(`SynthesisWrite: ${String(writeError)}`);
+                    }
+                }
+
                 console.log("   ✅ Synthesis complete");
             }
 
@@ -1967,12 +2031,22 @@ export const step4_synthesis = internalAction({
             console.log("═══════════════════════════════════════════════════════════════");
             await ctx.runMutation(internal.api.setStatus, { status: "online" });
         } else {
+            const compactErrors = stepErrors.slice(0, 8).map((error) =>
+                error.length > 240 ? `${error.substring(0, 240)}...` : error
+            );
+            const hiddenErrorCount = stepErrors.length - compactErrors.length;
+            const errorLog = `${compactErrors.join(" | ")}${hiddenErrorCount > 0 ? ` | ...and ${hiddenErrorCount} more` : ""}`.substring(0, 1900);
+
             console.log("═══════════════════════════════════════════════════════════════");
             console.log(`⚠️ RESEARCH CYCLE #${cycleCount} COMPLETE (WITH ERRORS)`);
             console.log("Errors encountered:", stepErrors);
             console.log("═══════════════════════════════════════════════════════════════");
-            await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog: stepErrors.join(" | ") });
+            await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog });
         }
+
+        const verificationOk = !stepErrors.some((error) => error.startsWith("Verification:"));
+        const historianOk = !stepErrors.some((error) => error.startsWith("Historian:"));
+        console.log(`📊 [CYCLE SUMMARY] verificationOk=${verificationOk} historianOk=${historianOk} synthesisOk=${synthesisSucceeded} dashboardUpdated=${dashboardUpdated} hadErrors=${stepErrors.length > 0} errorCount=${stepErrors.length}`);
 
         // ═══ TRIGGER ISR REVALIDATION ═══
         // Purge Vercel's cache so the next user gets fresh data
@@ -1994,16 +2068,43 @@ export const step4_synthesis = internalAction({
                     headers['x-revalidate-secret'] = REVALIDATE_SECRET;
                 }
 
-                const response = await fetch(revalidateUrl, {
-                    method: 'POST',
-                    headers,
-                });
+                const maxRevalidateAttempts = 3;
+                let revalidated = false;
 
-                if (response.ok) {
-                    const result = await response.json();
-                    console.log(`✅ [ISR] Cache revalidated successfully:`, result);
-                } else {
-                    console.warn(`⚠️ [ISR] Revalidation returned ${response.status}: ${await response.text()}`);
+                for (let attempt = 1; attempt <= maxRevalidateAttempts; attempt++) {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                    try {
+                        const response = await fetch(revalidateUrl, {
+                            method: 'POST',
+                            headers,
+                            signal: controller.signal,
+                        });
+
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log(`✅ [ISR] Cache revalidated successfully (attempt ${attempt}/${maxRevalidateAttempts}):`, result);
+                            revalidated = true;
+                            clearTimeout(timeoutId);
+                            break;
+                        }
+
+                        const responseText = (await response.text()).substring(0, 300);
+                        console.warn(`⚠️ [ISR] Revalidation attempt ${attempt}/${maxRevalidateAttempts} returned ${response.status}: ${responseText}`);
+                    } catch (revalidateAttemptError) {
+                        console.warn(`⚠️ [ISR] Revalidation attempt ${attempt}/${maxRevalidateAttempts} failed: ${revalidateAttemptError}`);
+                    } finally {
+                        clearTimeout(timeoutId);
+                    }
+
+                    if (attempt < maxRevalidateAttempts) {
+                        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                    }
+                }
+
+                if (!revalidated) {
+                    console.warn(`⚠️ [ISR] Revalidation failed after ${maxRevalidateAttempts} attempts`);
                 }
             } else {
                 console.log("ℹ️ [ISR] No VERCEL_URL/SITE_URL set - skipping cache revalidation");

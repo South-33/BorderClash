@@ -390,7 +390,26 @@ const useCachedQuery = <T,>(
     if (skip) return;
 
     try {
-      const result = await convex.query(queryFn, args);
+      let result: unknown;
+      let lastError: unknown;
+
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          result = await convex.query(queryFn, args);
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempt < 2) {
+            console.warn(`⚠️ [${storageKey}] Fetch attempt ${attempt}/2 failed, retrying...`, error);
+            await new Promise(resolve => setTimeout(resolve, 700));
+          }
+        }
+      }
+
+      if (result === undefined && lastError) {
+        throw lastError;
+      }
+
       setData(result as T);
       lastFetchedAt.current = Date.now();
 
@@ -1072,7 +1091,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // =============================================================================
   useEffect(() => {
     if (!hasServerData || typeof window === 'undefined') return;
-    
+
     const isrLastResearchAt = initialData?.systemStats?.lastResearchAt;
     if (!isrLastResearchAt) return;
     
@@ -1082,7 +1101,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       try {
         const parsed = JSON.parse(cachedStats);
         const localLastResearchAt = parsed?.lastResearchAt;
-        
+
         // If ISR data is NEWER than localStorage, clear all stale caches
         if (localLastResearchAt && isrLastResearchAt > localLastResearchAt) {
           console.log('🧹 [BorderClash] ISR data is newer than localStorage, clearing stale caches...');
@@ -1645,6 +1664,18 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     if (!systemStats?.lastResearchAt) return;
 
     const updateCountdown = () => {
+      if (systemStats?.nextRunAt) {
+        const remainingToRun = Math.max(0, systemStats.nextRunAt - Date.now());
+        setNextUpdateIn(Math.floor(remainingToRun / 1000));
+
+        if (remainingToRun === 0 && Date.now() - systemStats.nextRunAt > 60000) {
+          setIsPossiblyStale(true);
+        } else {
+          setIsPossiblyStale(false);
+        }
+        return;
+      }
+
       // Get the interval in milliseconds (from server-stored hours)
       const intervalMs = hasAdaptiveScheduling
         ? (systemStats.lastCycleInterval || 12) * 60 * 60 * 1000
