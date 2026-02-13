@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation, internalQuery, action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 
 // =============================================================================
 // PUBLIC QUERIES (Frontend)
@@ -166,6 +167,94 @@ export const getTimelineImportanceBackups = query({
             totalEvents: backup.totalEvents,
             avgImportance: backup.avgImportance,
         }));
+    },
+});
+
+// List latest full timeline snapshots for structural rollback
+export const getTimelineEventBackups = query({
+    args: {
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const limit = Math.max(1, Math.min(args.limit ?? 20, 100));
+        const backups = await ctx.db
+            .query("timelineEventBackups")
+            .withIndex("by_createdAt")
+            .order("desc")
+            .take(limit);
+
+        return backups.map((backup) => ({
+            _id: backup._id,
+            createdAt: backup.createdAt,
+            label: backup.label,
+            source: backup.source,
+            totalEvents: backup.totalEvents,
+            totalChunks: backup.totalChunks,
+        }));
+    },
+});
+
+// Public status for timeline canonicalization run (duplicate merge pass)
+export const getTimelineCanonicalizationStatus = query({
+    args: {},
+    handler: async (ctx) => {
+        const timelineStats = await ctx.db
+            .query("timelineStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+        const currentTotalEvents = timelineStats?.totalEvents ?? 0;
+
+        const state = await ctx.db
+            .query("timelineCanonicalizationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state) {
+            return {
+                isRunning: false,
+                progress: "idle",
+                totalEvents: 0,
+                processedEvents: 0,
+                nextIndex: 0,
+                findings: 0,
+                updatesApplied: 0,
+                mergesApplied: 0,
+                deletesApplied: 0,
+                noActionCount: 0,
+                currentTotalEvents,
+                dryRunOnly: true,
+                runRescoreAfter: false,
+                rescoreBatchSize: undefined,
+                backupId: undefined,
+                lastError: undefined,
+                startedAt: undefined,
+                completedAt: undefined,
+            };
+        }
+
+        return {
+            isRunning: state.isRunning,
+            runId: state.runId,
+            progress: state.progress,
+            totalEvents: state.totalEvents && state.totalEvents > 0
+                ? state.totalEvents
+                : currentTotalEvents,
+            processedEvents: state.processedEvents,
+            nextIndex: state.nextIndex,
+            findings: state.findings,
+            updatesApplied: state.updatesApplied,
+            mergesApplied: state.mergesApplied,
+            deletesApplied: state.deletesApplied,
+            noActionCount: state.noActionCount,
+            currentTotalEvents,
+            dryRunOnly: state.dryRunOnly,
+            runRescoreAfter: state.runRescoreAfter,
+            rescoreBatchSize: state.rescoreBatchSize,
+            backupId: state.backupId,
+            lastError: state.lastError,
+            startedAt: state.startedAt,
+            completedAt: state.completedAt,
+        };
     },
 });
 
@@ -907,6 +996,248 @@ export const resetTimelineImpactRescoreState = internalMutation({
     },
 });
 
+// =============================================================================
+// TIMELINE CANONICALIZATION STATE (one-time merge pass)
+// =============================================================================
+
+export const getTimelineCanonicalizationState = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        return await ctx.db
+            .query("timelineCanonicalizationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+    },
+});
+
+export const acquireTimelineCanonicalizationLock = internalMutation({
+    args: {
+        runId: v.string(),
+        batchSize: v.number(),
+        totalEvents: v.number(),
+        dryRunOnly: v.boolean(),
+        runRescoreAfter: v.optional(v.boolean()),
+        rescoreBatchSize: v.optional(v.number()),
+        snapshotEventIds: v.array(v.id("timelineEvents")),
+        backupId: v.optional(v.id("timelineEventBackups")),
+    },
+    handler: async (ctx, args) => {
+        const existing = await ctx.db
+            .query("timelineCanonicalizationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        const now = Date.now();
+        const ZOMBIE_TIMEOUT = 20 * 60 * 1000;
+
+        if (existing && existing.isRunning) {
+            const lastActivity = existing.lastHeartbeat || existing.startedAt || 0;
+            if (now - lastActivity <= ZOMBIE_TIMEOUT) {
+                return { acquired: false as const, activeRunId: existing.runId };
+            }
+            console.log(`🧟 [CANONICALIZE] Taking over zombie run ${existing.runId}`);
+        }
+
+        const patch = {
+            key: "main" as const,
+            isRunning: true,
+            runId: args.runId,
+            startedAt: now,
+            completedAt: undefined,
+            lastHeartbeat: now,
+            progress: "starting...",
+            totalEvents: args.totalEvents,
+            processedEvents: 0,
+            nextIndex: 0,
+            batchSize: args.batchSize,
+            dryRunOnly: args.dryRunOnly,
+            findings: 0,
+            updatesApplied: 0,
+            mergesApplied: 0,
+            deletesApplied: 0,
+            noActionCount: 0,
+            runRescoreAfter: args.runRescoreAfter,
+            rescoreBatchSize: args.rescoreBatchSize,
+            snapshotEventIds: args.snapshotEventIds,
+            backupId: args.backupId,
+            lastError: undefined,
+        };
+
+        if (existing) {
+            await ctx.db.patch(existing._id, patch);
+        } else {
+            await ctx.db.insert("timelineCanonicalizationState", patch);
+        }
+
+        return { acquired: true as const };
+    },
+});
+
+export const updateTimelineCanonicalizationProgress = internalMutation({
+    args: {
+        runId: v.string(),
+        processedEvents: v.number(),
+        nextIndex: v.number(),
+        findings: v.number(),
+        updatesApplied: v.number(),
+        mergesApplied: v.number(),
+        deletesApplied: v.number(),
+        noActionCount: v.number(),
+        progress: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const state = await ctx.db
+            .query("timelineCanonicalizationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state || !state.isRunning || state.runId !== args.runId) return;
+
+        await ctx.db.patch(state._id, {
+            processedEvents: args.processedEvents,
+            nextIndex: args.nextIndex,
+            findings: args.findings,
+            updatesApplied: args.updatesApplied,
+            mergesApplied: args.mergesApplied,
+            deletesApplied: args.deletesApplied,
+            noActionCount: args.noActionCount,
+            progress: args.progress,
+            lastHeartbeat: Date.now(),
+        });
+    },
+});
+
+export const completeTimelineCanonicalizationRun = internalMutation({
+    args: {
+        runId: v.string(),
+        progress: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const state = await ctx.db
+            .query("timelineCanonicalizationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state || state.runId !== args.runId) {
+            return { completed: false };
+        }
+
+        await ctx.db.patch(state._id, {
+            isRunning: false,
+            runId: undefined,
+            completedAt: Date.now(),
+            lastHeartbeat: undefined,
+            progress: args.progress,
+            snapshotEventIds: undefined,
+            nextIndex: undefined,
+            lastError: undefined,
+        });
+
+        return { completed: true };
+    },
+});
+
+export const failTimelineCanonicalizationRun = internalMutation({
+    args: {
+        runId: v.string(),
+        error: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const state = await ctx.db
+            .query("timelineCanonicalizationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state || state.runId !== args.runId) {
+            return { failed: false };
+        }
+
+        const clippedError = args.error.length > 1800 ? `${args.error.substring(0, 1800)}...` : args.error;
+
+        await ctx.db.patch(state._id, {
+            isRunning: false,
+            runId: undefined,
+            completedAt: Date.now(),
+            lastHeartbeat: undefined,
+            progress: "failed",
+            lastError: clippedError,
+        });
+
+        return { failed: true };
+    },
+});
+
+export const cancelTimelineCanonicalizationRun = internalMutation({
+    args: {
+        reason: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const state = await ctx.db
+            .query("timelineCanonicalizationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state) {
+            return { cancelled: false, reason: "No state record" };
+        }
+
+        if (!state.isRunning) {
+            return { cancelled: false, reason: "No active run" };
+        }
+
+        await ctx.db.patch(state._id, {
+            isRunning: false,
+            runId: undefined,
+            completedAt: Date.now(),
+            lastHeartbeat: undefined,
+            progress: "cancelled",
+            lastError: args.reason,
+        });
+
+        return { cancelled: true };
+    },
+});
+
+export const resetTimelineCanonicalizationState = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const state = await ctx.db
+            .query("timelineCanonicalizationState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state) {
+            return { reset: false, reason: "No state record" };
+        }
+
+        await ctx.db.patch(state._id, {
+            isRunning: false,
+            runId: undefined,
+            startedAt: undefined,
+            completedAt: undefined,
+            lastHeartbeat: undefined,
+            progress: "idle",
+            totalEvents: 0,
+            processedEvents: 0,
+            nextIndex: 0,
+            batchSize: undefined,
+            dryRunOnly: true,
+            findings: 0,
+            updatesApplied: 0,
+            mergesApplied: 0,
+            deletesApplied: 0,
+            noActionCount: 0,
+            runRescoreAfter: undefined,
+            rescoreBatchSize: undefined,
+            snapshotEventIds: undefined,
+            backupId: undefined,
+            lastError: undefined,
+        });
+
+        return { reset: true };
+    },
+});
+
 export const createTimelineImportanceBackup = internalMutation({
     args: {
         label: v.optional(v.string()),
@@ -987,6 +1318,140 @@ export const restoreTimelineImportanceBackup = internalMutation({
             restoredCount,
             totalEvents: refreshedEvents.length,
             avgImportance: refreshedAvg,
+        };
+    },
+});
+
+export const createTimelineEventBackup = internalMutation({
+    args: {
+        label: v.optional(v.string()),
+        source: v.union(v.literal("manual"), v.literal("pre_canonicalization")),
+    },
+    handler: async (ctx, args) => {
+        const events = await ctx.db.query("timelineEvents").collect();
+        const entries = events.map((event) => ({
+            originalEventId: event._id,
+            date: event.date,
+            timeOfDay: event.timeOfDay,
+            title: event.title,
+            titleTh: event.titleTh,
+            titleKh: event.titleKh,
+            description: event.description,
+            descriptionTh: event.descriptionTh,
+            descriptionKh: event.descriptionKh,
+            category: event.category,
+            importance: event.importance,
+            status: event.status,
+            sources: event.sources,
+            createdAt: event.createdAt,
+            lastUpdatedAt: event.lastUpdatedAt,
+        }));
+
+        const chunkSize = 20;
+        const chunks: typeof entries[] = [];
+        for (let i = 0; i < entries.length; i += chunkSize) {
+            chunks.push(entries.slice(i, i + chunkSize));
+        }
+
+        const backupId = await ctx.db.insert("timelineEventBackups", {
+            createdAt: Date.now(),
+            label: args.label,
+            source: args.source,
+            totalEvents: entries.length,
+            totalChunks: chunks.length,
+        });
+
+        for (let index = 0; index < chunks.length; index++) {
+            await ctx.db.insert("timelineEventBackupChunks", {
+                backupId,
+                chunkIndex: index,
+                entries: chunks[index],
+            });
+        }
+
+        return { backupId, totalEvents: entries.length, totalChunks: chunks.length };
+    },
+});
+
+export const restoreTimelineEventBackup = internalMutation({
+    args: {
+        backupId: v.id("timelineEventBackups"),
+    },
+    handler: async (ctx, args) => {
+        const backup = await ctx.db.get(args.backupId);
+        if (!backup) {
+            return { restored: false, reason: "Backup not found" };
+        }
+
+        const chunks = await ctx.db
+            .query("timelineEventBackupChunks")
+            .withIndex("by_backupId_chunk", (q) => q.eq("backupId", args.backupId))
+            .order("asc")
+            .collect();
+
+        const entries = chunks.flatMap((chunk) => chunk.entries);
+        if (entries.length === 0) {
+            return { restored: false, reason: "Backup has no entries" };
+        }
+
+        const existing = await ctx.db.query("timelineEvents").collect();
+        for (const event of existing) {
+            await ctx.db.delete(event._id);
+        }
+
+        for (const entry of entries) {
+            await ctx.db.insert("timelineEvents", {
+                date: entry.date,
+                timeOfDay: entry.timeOfDay,
+                title: entry.title,
+                titleTh: entry.titleTh,
+                titleKh: entry.titleKh,
+                description: entry.description,
+                descriptionTh: entry.descriptionTh,
+                descriptionKh: entry.descriptionKh,
+                category: entry.category,
+                importance: entry.importance,
+                status: entry.status,
+                sources: entry.sources,
+                createdAt: entry.createdAt,
+                lastUpdatedAt: Date.now(),
+                impactRescoreProcessed: undefined,
+                impactRescoreProcessedAt: undefined,
+                impactRescoreRunId: undefined,
+            });
+        }
+
+        const statsDoc = await ctx.db
+            .query("timelineStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (statsDoc) {
+            await ctx.db.delete(statsDoc._id);
+        }
+
+        const all = await ctx.db.query("timelineEvents").collect();
+        const importanceSum = all.reduce((sum, event) => sum + event.importance, 0);
+
+        await ctx.db.insert("timelineStats", {
+            key: "main",
+            totalEvents: all.length,
+            confirmedCount: all.filter((event) => event.status === "confirmed").length,
+            disputedCount: all.filter((event) => event.status === "disputed").length,
+            debunkedCount: all.filter((event) => event.status === "debunked").length,
+            militaryCount: all.filter((event) => event.category === "military").length,
+            diplomaticCount: all.filter((event) => event.category === "diplomatic").length,
+            humanitarianCount: all.filter((event) => event.category === "humanitarian").length,
+            politicalCount: all.filter((event) => event.category === "political").length,
+            importanceSum,
+            avgImportance: all.length > 0 ? Math.round(importanceSum / all.length) : 0,
+            lastUpdatedAt: Date.now(),
+        });
+
+        return {
+            restored: true,
+            restoredCount: entries.length,
+            deletedCurrentCount: existing.length,
         };
     },
 });
@@ -2076,6 +2541,325 @@ export const restoreTimelineImportanceScores = action({
     },
 });
 
+// Create a full timeline snapshot backup (supports structural rollback after merge/delete)
+export const backupTimelineEventsSnapshot = action({
+    args: {
+        label: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const timestamp = new Date().toISOString();
+            const result = await ctx.runMutation(internal.api.createTimelineEventBackup, {
+                label: args.label ?? `timeline-snapshot-${timestamp}`,
+                source: "manual",
+            });
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Restore full timeline from snapshot backup (recreates all events from snapshot)
+export const restoreTimelineEventsSnapshot = action({
+    args: {
+        backupId: v.id("timelineEventBackups"),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const result = await ctx.runMutation(internal.api.restoreTimelineEventBackup, {
+                backupId: args.backupId,
+            });
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Run AI canonicalization in synchronous chunks across all timeline events.
+// dryRunOnly=true returns findings without modifying data.
+export const runTimelineCanonicalizationLoop = action({
+    args: {
+        batchSize: v.optional(v.number()),
+        maxBatches: v.optional(v.number()),
+        runId: v.optional(v.string()),
+        resumeIfRunning: v.optional(v.boolean()),
+        dryRunOnly: v.optional(v.boolean()),
+        createBackup: v.optional(v.boolean()),
+        backupLabel: v.optional(v.string()),
+        runRescoreAfter: v.optional(v.boolean()),
+        rescoreBatchSize: v.optional(v.number()),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const maxBatches = Math.max(1, Math.min(args.maxBatches ?? 1, 200));
+            const dryRunOnly = args.dryRunOnly ?? true;
+            const shouldBackup = dryRunOnly ? false : (args.createBackup ?? true);
+            let backupId: Id<"timelineEventBackups"> | undefined;
+            let runId: string | undefined;
+            let startedNewRun = false;
+
+            const existingState = await ctx.runQuery(internal.api.getTimelineCanonicalizationState, {});
+
+            if (args.runId) {
+                if (!existingState || !existingState.isRunning || existingState.runId !== args.runId) {
+                    return {
+                        success: false,
+                        result: {
+                            reason: "Requested runId is not currently active",
+                            requestedRunId: args.runId,
+                            activeRunId: existingState?.isRunning ? existingState.runId : undefined,
+                        },
+                    };
+                }
+                runId = args.runId;
+            } else if ((args.resumeIfRunning ?? true) && existingState?.isRunning && existingState.runId) {
+                runId = existingState.runId;
+            }
+
+            if (!runId) {
+                if (shouldBackup) {
+                    const timestamp = new Date().toISOString();
+                    const backup = await ctx.runMutation(internal.api.createTimelineEventBackup, {
+                        label: args.backupLabel ?? `pre-canonicalization-${timestamp}`,
+                        source: "pre_canonicalization",
+                    });
+                    backupId = backup.backupId;
+                }
+
+                const start = await ctx.runAction(internal.historian.startTimelineCanonicalization, {
+                    batchSize: args.batchSize,
+                    dryRunOnly,
+                    runRescoreAfter: args.runRescoreAfter ?? true,
+                    rescoreBatchSize: args.rescoreBatchSize ?? 60,
+                    autoStart: false,
+                    backupId,
+                });
+
+                if (!start.started || !start.runId) {
+                    return {
+                        success: false,
+                        result: {
+                            ...start,
+                            backupId,
+                        },
+                    };
+                }
+
+                runId = start.runId;
+                startedNewRun = true;
+            }
+
+            let batchesProcessed = 0;
+            let finalStep: {
+                continued: boolean;
+                done: boolean;
+                processedInBatch?: number;
+                processedTotal?: number;
+                totalEvents?: number;
+                findingsInBatch?: number;
+                updatesAppliedInBatch?: number;
+                mergesAppliedInBatch?: number;
+                deletesAppliedInBatch?: number;
+                noActionInBatch?: number;
+                actionPreview?: Array<{
+                    action: string;
+                    eventId?: string;
+                    sourceEventId?: string;
+                    targetEventId?: string;
+                    confidence?: string;
+                    reasoning?: string;
+                }>;
+                error?: string;
+            } | null = null;
+
+            for (let i = 0; i < maxBatches; i++) {
+                finalStep = await ctx.runAction(internal.historian.runTimelineCanonicalizationBatch, {
+                    runId,
+                    applyChanges: !dryRunOnly,
+                    scheduleNext: false,
+                });
+                batchesProcessed++;
+
+                if (!finalStep || finalStep.done || !finalStep.continued) {
+                    break;
+                }
+            }
+
+            const state = await ctx.runQuery(internal.api.getTimelineCanonicalizationState, {});
+
+            return {
+                success: true,
+                result: {
+                    runId,
+                    backupId,
+                    dryRunOnly,
+                    startedNewRun,
+                    resumedExistingRun: !startedNewRun,
+                    maxBatches,
+                    batchesProcessed,
+                    finalStep,
+                    canContinue: finalStep ? !finalStep.done : false,
+                    status: state ? {
+                        isRunning: state.isRunning,
+                        progress: state.progress,
+                        processedEvents: state.processedEvents,
+                        totalEvents: state.totalEvents,
+                        findings: state.findings,
+                        updatesApplied: state.updatesApplied,
+                        mergesApplied: state.mergesApplied,
+                        deletesApplied: state.deletesApplied,
+                        noActionCount: state.noActionCount,
+                        lastError: state.lastError,
+                    } : null,
+                },
+            };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Start canonicalization asynchronously and return immediately.
+// Use this to avoid 524 timeouts during long AI batches.
+export const startTimelineCanonicalizationAsync = action({
+    args: {
+        batchSize: v.optional(v.number()),
+        dryRunOnly: v.optional(v.boolean()),
+        createBackup: v.optional(v.boolean()),
+        backupLabel: v.optional(v.string()),
+        runRescoreAfter: v.optional(v.boolean()),
+        rescoreBatchSize: v.optional(v.number()),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const dryRunOnly = args.dryRunOnly ?? true;
+
+            const existing = await ctx.runQuery(internal.api.getTimelineCanonicalizationState, {});
+            if (existing?.isRunning && existing.runId) {
+                return {
+                    success: true,
+                    result: {
+                        started: false,
+                        reason: "A canonicalization run is already active",
+                        activeRunId: existing.runId,
+                        progress: existing.progress,
+                    },
+                };
+            }
+
+            let backupId: Id<"timelineEventBackups"> | undefined;
+            if (!dryRunOnly && (args.createBackup ?? true)) {
+                const timestamp = new Date().toISOString();
+                const backup = await ctx.runMutation(internal.api.createTimelineEventBackup, {
+                    label: args.backupLabel ?? `pre-canonicalization-${timestamp}`,
+                    source: "pre_canonicalization",
+                });
+                backupId = backup.backupId;
+            }
+
+            const start = await ctx.runAction(internal.historian.startTimelineCanonicalization, {
+                batchSize: args.batchSize,
+                dryRunOnly,
+                runRescoreAfter: args.runRescoreAfter ?? true,
+                rescoreBatchSize: args.rescoreBatchSize ?? 60,
+                autoStart: true,
+                backupId,
+            });
+
+            return {
+                success: true,
+                result: {
+                    ...start,
+                    backupId,
+                },
+            };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Resume an active canonicalization run asynchronously (non-blocking).
+// Useful when CLI requests hit 524 timeouts on long AI batches.
+export const resumeTimelineCanonicalizationAsync = action({
+    args: {
+        runId: v.optional(v.string()),
+        applyChanges: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const state = await ctx.runQuery(internal.api.getTimelineCanonicalizationState, {});
+            if (!state || !state.isRunning || !state.runId) {
+                return {
+                    success: false,
+                    result: { reason: "No active canonicalization run" },
+                };
+            }
+
+            const runId = args.runId ?? state.runId;
+            if (runId !== state.runId) {
+                return {
+                    success: false,
+                    result: {
+                        reason: "Requested runId does not match active run",
+                        activeRunId: state.runId,
+                        requestedRunId: runId,
+                    },
+                };
+            }
+
+            await ctx.scheduler.runAfter(0, internal.historian.runTimelineCanonicalizationBatch, {
+                runId,
+                applyChanges: args.applyChanges ?? !state.dryRunOnly,
+                scheduleNext: true,
+            });
+
+            return {
+                success: true,
+                result: {
+                    enqueued: true,
+                    runId,
+                    applyChanges: args.applyChanges ?? !state.dryRunOnly,
+                    progress: state.progress,
+                },
+            };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+export const cancelTimelineCanonicalization = action({
+    args: {},
+    handler: async (ctx): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const result = await ctx.runMutation(internal.api.cancelTimelineCanonicalizationRun, {
+                reason: "Cancelled by operator",
+            });
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+export const resetTimelineCanonicalization = action({
+    args: {},
+    handler: async (ctx): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            await ctx.runMutation(internal.api.cancelTimelineCanonicalizationRun, {
+                reason: "Reset requested by operator",
+            });
+            const result = await ctx.runMutation(internal.api.resetTimelineCanonicalizationState, {});
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
 // Run impact rescore in synchronous chunks.
 // Safe for CLI time limits: rerun to continue from the last checkpoint.
 export const runTimelineImpactRescoreLoop = action({
@@ -2851,6 +3635,216 @@ export const updateTimelineEvent = internalMutation({
         const changedFields = Object.keys(args.updates).filter(k => (args.updates as any)[k] !== undefined);
         console.log(`✏️ Updated event "${args.eventTitle}": [${changedFields.join(", ")}] - ${args.reason}`);
         return event._id;
+    },
+});
+
+/**
+ * Update timeline event by ID (safer than title matching for canonicalization)
+ */
+export const updateTimelineEventById = internalMutation({
+    args: {
+        eventId: v.id("timelineEvents"),
+        updates: v.object({
+            title: v.optional(v.string()),
+            titleTh: v.optional(v.string()),
+            titleKh: v.optional(v.string()),
+            description: v.optional(v.string()),
+            descriptionTh: v.optional(v.string()),
+            descriptionKh: v.optional(v.string()),
+            date: v.optional(v.string()),
+            timeOfDay: v.optional(v.string()),
+            category: v.optional(v.union(
+                v.literal("military"),
+                v.literal("diplomatic"),
+                v.literal("humanitarian"),
+                v.literal("political")
+            )),
+            importance: v.optional(v.number()),
+            status: v.optional(v.union(
+                v.literal("confirmed"),
+                v.literal("disputed"),
+                v.literal("debunked")
+            )),
+        }),
+        reason: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const event = await ctx.db.get(args.eventId);
+        if (!event) {
+            return null;
+        }
+
+        const patch: any = { lastUpdatedAt: Date.now() };
+        if (args.updates.title !== undefined) patch.title = args.updates.title;
+        if (args.updates.titleTh !== undefined) patch.titleTh = args.updates.titleTh;
+        if (args.updates.titleKh !== undefined) patch.titleKh = args.updates.titleKh;
+        if (args.updates.description !== undefined) patch.description = args.updates.description;
+        if (args.updates.descriptionTh !== undefined) patch.descriptionTh = args.updates.descriptionTh;
+        if (args.updates.descriptionKh !== undefined) patch.descriptionKh = args.updates.descriptionKh;
+        if (args.updates.date !== undefined) patch.date = args.updates.date;
+        if (args.updates.timeOfDay !== undefined) patch.timeOfDay = args.updates.timeOfDay;
+        if (args.updates.category !== undefined) patch.category = args.updates.category;
+        if (args.updates.importance !== undefined) patch.importance = Math.max(0, Math.min(100, args.updates.importance));
+        if (args.updates.status !== undefined) patch.status = args.updates.status;
+
+        const oldStatus = event.status;
+        const oldCategory = event.category;
+        const oldImportance = event.importance;
+
+        await ctx.db.patch(args.eventId, patch);
+
+        const statusChanged = args.updates.status !== undefined && args.updates.status !== oldStatus;
+        const categoryChanged = args.updates.category !== undefined && args.updates.category !== oldCategory;
+        const importanceChanged = args.updates.importance !== undefined && args.updates.importance !== oldImportance;
+
+        if (statusChanged || categoryChanged || importanceChanged) {
+            const stats = await ctx.db.query("timelineStats")
+                .withIndex("by_key", (q) => q.eq("key", "main"))
+                .first();
+
+            if (stats) {
+                const statsPatch: any = { lastUpdatedAt: Date.now() };
+
+                if (statusChanged) {
+                    const oldStatusKey = `${oldStatus}Count` as "confirmedCount" | "disputedCount" | "debunkedCount";
+                    const newStatusKey = `${args.updates.status}Count` as "confirmedCount" | "disputedCount" | "debunkedCount";
+                    statsPatch[oldStatusKey] = Math.max(0, stats[oldStatusKey] - 1);
+                    statsPatch[newStatusKey] = stats[newStatusKey] + 1;
+                }
+
+                if (categoryChanged) {
+                    const oldCatKey = `${oldCategory}Count` as "militaryCount" | "diplomaticCount" | "humanitarianCount" | "politicalCount";
+                    const newCatKey = `${args.updates.category}Count` as "militaryCount" | "diplomaticCount" | "humanitarianCount" | "politicalCount";
+                    statsPatch[oldCatKey] = Math.max(0, stats[oldCatKey] - 1);
+                    statsPatch[newCatKey] = stats[newCatKey] + 1;
+                }
+
+                if (importanceChanged) {
+                    const nextImportance = Math.max(0, Math.min(100, args.updates.importance!));
+                    const newSum = stats.importanceSum - oldImportance + nextImportance;
+                    statsPatch.importanceSum = newSum;
+                    statsPatch.avgImportance = stats.totalEvents > 0 ? Math.round(newSum / stats.totalEvents) : 0;
+                }
+
+                await ctx.db.patch(stats._id, statsPatch);
+            }
+        }
+
+        return args.eventId;
+    },
+});
+
+/**
+ * Delete timeline event by ID
+ */
+export const deleteTimelineEventById = internalMutation({
+    args: {
+        eventId: v.id("timelineEvents"),
+        reason: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const event = await ctx.db.get(args.eventId);
+        if (!event) {
+            return { deleted: false, reason: "Event not found" };
+        }
+
+        const eventStatus = event.status;
+        const eventCategory = event.category;
+        const eventImportance = event.importance;
+
+        await ctx.db.delete(args.eventId);
+
+        const stats = await ctx.db.query("timelineStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (stats && stats.totalEvents > 0) {
+            const statusKey = `${eventStatus}Count` as "confirmedCount" | "disputedCount" | "debunkedCount";
+            const categoryKey = `${eventCategory}Count` as "militaryCount" | "diplomaticCount" | "humanitarianCount" | "politicalCount";
+            const newTotal = stats.totalEvents - 1;
+            const newSum = stats.importanceSum - eventImportance;
+
+            await ctx.db.patch(stats._id, {
+                totalEvents: newTotal,
+                [statusKey]: Math.max(0, stats[statusKey] - 1),
+                [categoryKey]: Math.max(0, stats[categoryKey] - 1),
+                importanceSum: Math.max(0, newSum),
+                avgImportance: newTotal > 0 ? Math.round(newSum / newTotal) : 0,
+                lastUpdatedAt: Date.now(),
+            });
+        }
+
+        console.log(`🗑️ Deleted event by ID ${String(args.eventId)} - ${args.reason}`);
+        return { deleted: true };
+    },
+});
+
+/**
+ * Merge one timeline event into another by ID
+ * - Adds unique sources from source event into target event
+ * - Deletes source event
+ */
+export const mergeTimelineEventsById = internalMutation({
+    args: {
+        sourceEventId: v.id("timelineEvents"),
+        targetEventId: v.id("timelineEvents"),
+        reason: v.string(),
+    },
+    handler: async (ctx, args) => {
+        if (args.sourceEventId === args.targetEventId) {
+            return { merged: false, reason: "Source and target are identical" };
+        }
+
+        const [sourceEvent, targetEvent] = await Promise.all([
+            ctx.db.get(args.sourceEventId),
+            ctx.db.get(args.targetEventId),
+        ]);
+
+        if (!sourceEvent || !targetEvent) {
+            return { merged: false, reason: "Source or target not found" };
+        }
+
+        const targetSourceUrls = new Set(targetEvent.sources.map((source) => source.url));
+        const newSources = sourceEvent.sources.filter((source) => !targetSourceUrls.has(source.url));
+
+        if (newSources.length > 0) {
+            await ctx.db.patch(args.targetEventId, {
+                sources: [...targetEvent.sources, ...newSources],
+                lastUpdatedAt: Date.now(),
+            });
+        }
+
+        const sourceStatus = sourceEvent.status;
+        const sourceCategory = sourceEvent.category;
+        const sourceImportance = sourceEvent.importance;
+
+        await ctx.db.delete(args.sourceEventId);
+
+        const stats = await ctx.db.query("timelineStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (stats && stats.totalEvents > 0) {
+            const statusKey = `${sourceStatus}Count` as "confirmedCount" | "disputedCount" | "debunkedCount";
+            const categoryKey = `${sourceCategory}Count` as "militaryCount" | "diplomaticCount" | "humanitarianCount" | "politicalCount";
+            const newTotal = stats.totalEvents - 1;
+            const newSum = stats.importanceSum - sourceImportance;
+
+            await ctx.db.patch(stats._id, {
+                totalEvents: newTotal,
+                [statusKey]: Math.max(0, stats[statusKey] - 1),
+                [categoryKey]: Math.max(0, stats[categoryKey] - 1),
+                importanceSum: Math.max(0, newSum),
+                avgImportance: newTotal > 0 ? Math.round(newSum / newTotal) : 0,
+                lastUpdatedAt: Date.now(),
+            });
+        }
+
+        console.log(`🔀 Merged event ${String(args.sourceEventId)} into ${String(args.targetEventId)} - ${args.reason}`);
+        return {
+            merged: true,
+            sourcesMoved: newSources.length,
+        };
     },
 });
 

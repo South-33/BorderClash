@@ -351,6 +351,82 @@ export default defineSchema({
     })
         .index("by_createdAt", ["createdAt"]),
 
+    // Full timeline snapshots for structural rollback (merge/delete safety)
+    timelineEventBackups: defineTable({
+        createdAt: v.number(),
+        label: v.optional(v.string()),
+        source: v.union(v.literal("manual"), v.literal("pre_canonicalization")),
+        totalEvents: v.number(),
+        totalChunks: v.number(),
+    })
+        .index("by_createdAt", ["createdAt"]),
+
+    timelineEventBackupChunks: defineTable({
+        backupId: v.id("timelineEventBackups"),
+        chunkIndex: v.number(),
+        entries: v.array(v.object({
+            originalEventId: v.id("timelineEvents"),
+            date: v.string(),
+            timeOfDay: v.optional(v.string()),
+            title: v.string(),
+            titleTh: v.optional(v.string()),
+            titleKh: v.optional(v.string()),
+            description: v.string(),
+            descriptionTh: v.optional(v.string()),
+            descriptionKh: v.optional(v.string()),
+            category: v.union(
+                v.literal("military"),
+                v.literal("diplomatic"),
+                v.literal("humanitarian"),
+                v.literal("political")
+            ),
+            importance: v.number(),
+            status: v.union(
+                v.literal("confirmed"),
+                v.literal("disputed"),
+                v.literal("debunked")
+            ),
+            sources: v.array(v.object({
+                url: v.string(),
+                name: v.string(),
+                country: v.string(),
+                credibility: v.number(),
+                snippet: v.optional(v.string()),
+                addedAt: v.number(),
+            })),
+            createdAt: v.number(),
+            lastUpdatedAt: v.number(),
+        })),
+    })
+        .index("by_backupId_chunk", ["backupId", "chunkIndex"]),
+
+    // State tracker for one-time timeline canonicalization runs
+    timelineCanonicalizationState: defineTable({
+        key: v.literal("main"),
+        isRunning: v.boolean(),
+        runId: v.optional(v.string()),
+        startedAt: v.optional(v.number()),
+        completedAt: v.optional(v.number()),
+        lastHeartbeat: v.optional(v.number()),
+        progress: v.optional(v.string()),
+        totalEvents: v.optional(v.number()),
+        processedEvents: v.optional(v.number()),
+        nextIndex: v.optional(v.number()),
+        batchSize: v.optional(v.number()),
+        dryRunOnly: v.optional(v.boolean()),
+        findings: v.optional(v.number()),
+        updatesApplied: v.optional(v.number()),
+        mergesApplied: v.optional(v.number()),
+        deletesApplied: v.optional(v.number()),
+        noActionCount: v.optional(v.number()),
+        runRescoreAfter: v.optional(v.boolean()),
+        rescoreBatchSize: v.optional(v.number()),
+        snapshotEventIds: v.optional(v.array(v.id("timelineEvents"))),
+        backupId: v.optional(v.id("timelineEventBackups")),
+        lastError: v.optional(v.string()),
+    })
+        .index("by_key", ["key"]),
+
     // ==================== TIMELINE EVENTS ====================
     // The "memory" of the system - key historical events extracted from news
     // This is what the AI synthesizes from, NOT raw articles

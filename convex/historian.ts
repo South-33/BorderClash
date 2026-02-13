@@ -1596,242 +1596,521 @@ export const runTimelineImpactRescoreBatch = internalAction({
 });
 
 // =============================================================================
-// TIMELINE CLEANUP ACTION
-// Dedicated action to review and merge/consolidate existing timeline events
-// Can be called independently of new articles
+// TIMELINE CANONICALIZATION (ONE-TIME REFACTOR)
+// AI-driven merge-only pass across existing timeline events
 // =============================================================================
 
-const CLEANUP_PROMPT = `You are the HISTORIAN doing a timeline audit.
+type CanonicalizationAction = {
+    action: "no_action" | "merge_events";
+    eventId?: string;
+    sourceEventId?: string;
+    targetEventId?: string;
+    reasoning?: string;
+    confidence?: "low" | "medium" | "high";
+};
 
-🧠 YOUR MINDSET:
-You're reviewing the historical record. Your goal is a CLEAN, ACCURATE, READABLE timeline.
-Be CONSERVATIVE on merges - if two events MIGHT be different, keep them separate.
-But DO fix redundancy and confusing titles.
+type CanonicalizationResult = {
+    analysis?: string;
+    reasoning?: string;
+    actions: CanonicalizationAction[];
+};
 
-⚠️ KEY PRINCIPLE: Better to have 2 related events than accidentally merge distinct incidents.
+const CANONICALIZATION_PROMPT = `You are the HISTORIAN performing a timeline canonicalization pass.
 
-🎯 WHAT TO FIX:
+GOAL:
+- Keep timeline coherent, non-redundant, and historically accurate.
+- Do NOT force changes. If an event is already good, return no_action.
 
-1. OBVIOUS DUPLICATES - SAME event, different wording (same date, location, actors, action)
-   → MERGE: Keep the one with more detail/sources, delete the other
+OPERATING STANCE:
+- Neutral and evidence-first.
+- Prefer conservative edits over aggressive rewriting.
+- Use no_action whenever uncertain.
 
-2. REDUNDANT UPDATES - Multiple events on same topic with slightly updated numbers
-   → Keep the MOST COMPLETE/LATEST one, delete the partial updates
-   → Example: "400k displaced" (10:30) + "405k displaced" (11:30) on SAME day = redundant
-   → Keep the 11:30 one with higher number, delete the 10:30 partial update
-   
-3. CONFUSING TITLES - Titles that are misleading or could confuse readers
-   → UPDATE the title to be clearer (don't change the facts, just the wording)
-   → Example: If Dec 12 says "First civilian deaths" and Dec 14 also says "First civilian death"
-   → Clarify: Dec 12 → "First Civilian Deaths (Evacuation-Related)", Dec 14 → "First Direct Combat Civilian Fatality"
+ACTIONS:
+- no_action: event is already good and should remain as-is.
+- merge_events: sourceEventId is duplicate/redundant and should be merged into targetEventId (target survives).
+- If an event needs wording/translation refinement but is not a duplicate, use no_action.
+- If merge is uncertain, use no_action.
 
-4. WRONG INFO - Factual errors you're confident about → UPDATE
+CANONICALIZATION PRINCIPLES:
+1) One canonical event per same incident window (same actors/place/time with no material new state).
+2) Keep distinct events separate if they represent different state changes.
+3) Follow-up confirmations of the same milestone are usually supporting, not separate key events.
+4) Avoid duplicate titles for the same date/time incident.
+5) If current scoring already fits narrative importance, do not change it.
 
-5. FALSE EVENTS - Things proven to not have happened → DELETE or mark DEBUNKED
-
-6. MISSING TRANSLATIONS - Events without Thai/Khmer → UPDATE to add them
-
-⛔ DO NOT MERGE - These are DIFFERENT events:
-- Different dates (even if same topic)
-- Different locations (even if same date)
-- Different actors (Thai vs Cambodian)
-- Attack vs Response (keep both - they tell a story)
-- Similar but distinct incidents (2 shellings at 2 places = 2 events)
-
-📋 YOUR ACTIONS:
-
-| Action | When |
-|--------|------|
-| update_event | Fix errors, clarify titles, add translations, consolidate redundant info |
-| delete_event | Remove duplicates/redundant updates (after merging info), or fabrications |
-| no_action | Timeline looks good - nothing to fix |
-
-🌐 TRANSLATIONS:
-If updating, include Thai (titleTh, descriptionTh) and Khmer (titleKh, descriptionKh).
-Translate the MEANING and INTENT, not literal word-for-word.
-Understand the context first, then express the same idea naturally in the target language.
-Style: CASUAL, CONVERSATIONAL - how a regular person explains it to a friend.
-Always use English numerals (0-9), never Thai ๑๒๓ or Khmer ១២๣.
-
-OUTPUT:
-\`\`\`json
+OUTPUT ONLY valid JSON wrapped in <json> tags:
+<json>
 {
-  "analysis": "What you found - duplicates, redundancies, confusing titles, etc.",
-  "mergeActions": [
+  "analysis": "brief",
+  "reasoning": "batch rationale",
+  "actions": [
     {
-      "action": "update_event|delete_event|no_action",
-      "targetEventTitle": "Exact title from timeline",
-      "eventUpdates": { "field": "newValue" },
-      "reasoning": "Why this change"
+      "action": "no_action|merge_events",
+      "eventId": "for no_action",
+      "sourceEventId": "for merge",
+      "targetEventId": "for merge",
+      "reasoning": "why",
+      "confidence": "low|medium|high"
     }
-  ],
-  "summary": "What you did"
+  ]
 }
-\`\`\`
+</json>
 
-RULES:
-- It's OK to return empty mergeActions if timeline is clean
-- For redundant updates: UPDATE the better one first, then DELETE the partial one
-- Provide clear reasoning for every action
+REQUIREMENTS:
+- Every event in CURRENT BATCH must appear once in actions (usually as no_action unless change is needed).
+- Use event IDs exactly as provided.
+- Prefer no_action over speculative edits.
 `;
 
-interface CleanupAction {
-    action: "update_event" | "delete_event" | "no_action";
-    targetEventTitle: string;
-    eventUpdates?: {
-        title?: string;
-        titleTh?: string;
-        titleKh?: string;
-        description?: string;
-        descriptionTh?: string;
-        descriptionKh?: string;
-        importance?: number;
-        timeOfDay?: string;
-    };
-    reasoning: string;
+function tryParseCanonicalizationJson(raw: string): CanonicalizationResult | null {
+    const tagMatch = raw.match(/<json>([\s\S]*?)<\/json>/i);
+    const fencedMatch = raw.match(/```json\s*([\s\S]*?)```/i);
+    const jsonCandidate = tagMatch
+        ? tagMatch[1].trim()
+        : fencedMatch
+            ? fencedMatch[1].trim()
+            : raw.trim();
+
+    const attempts = [
+        jsonCandidate,
+        jsonCandidate
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+            .replace(/,\s*([\]\}])/g, "$1"),
+    ];
+
+    for (const attempt of attempts) {
+        try {
+            const parsed = JSON.parse(attempt) as CanonicalizationResult;
+            if (parsed && Array.isArray(parsed.actions)) {
+                return parsed;
+            }
+        } catch {
+            // Try next parse variant.
+        }
+    }
+
+    return null;
 }
 
-interface CleanupResult {
-    analysis: string;
-    mergeActions: CleanupAction[];
-    summary: string;
+async function runCanonicalizationAiBatch(events: ImpactRescoreEvent[]): Promise<CanonicalizationResult | null> {
+    const eventContext = events.map((event, index) => {
+        const topSources = [...(event.sources || [])]
+            .sort((a, b) => b.credibility - a.credibility)
+            .slice(0, 3)
+            .map((source) => `${source.name}(${source.country},${source.credibility})`)
+            .join(" | ") || "(none)";
+
+        return `${index + 1}. id:${String(event._id)}\n` +
+            `   Date: ${event.date}${event.timeOfDay ? ` ${event.timeOfDay}` : ""}\n` +
+            `   Category: ${event.category} | Status: ${event.status} | Importance: ${event.importance}\n` +
+            `   Title: ${event.title}\n` +
+            `   Description: ${event.description}\n` +
+            `   Sources: ${topSources}`;
+    }).join("\n\n");
+
+    const prompt = `${CANONICALIZATION_PROMPT}
+
+═══════════════════════════════════════════════════════════════
+CURRENT BATCH (${events.length} events):
+${eventContext}
+═══════════════════════════════════════════════════════════════`;
+
+    const maxRetries = 3;
+    let currentPrompt = prompt;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        console.log(`🧹 [CANONICALIZE] Attempt ${attempt}/${maxRetries} for ${events.length} events...`);
+        try {
+            const response = await callGeminiStudioWithFallback(
+                currentPrompt,
+                FALLBACK_CHAINS.critical,
+                1,
+                "CANONICALIZE"
+            );
+
+            const parsed = tryParseCanonicalizationJson(response);
+            if (parsed && Array.isArray(parsed.actions)) {
+                return parsed;
+            }
+
+            if (attempt < maxRetries) {
+                currentPrompt = `${prompt}\n\nYour previous output was invalid. Re-output valid JSON in <json> tags with one action per event id.`;
+            }
+        } catch (error) {
+            console.log(`❌ [CANONICALIZE] Attempt ${attempt} failed: ${error}`);
+            if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                currentPrompt = prompt;
+            }
+        }
+    }
+
+    return null;
 }
+
+export const startTimelineCanonicalization = internalAction({
+    args: {
+        batchSize: v.optional(v.number()),
+        dryRunOnly: v.optional(v.boolean()),
+        runRescoreAfter: v.optional(v.boolean()),
+        rescoreBatchSize: v.optional(v.number()),
+        autoStart: v.optional(v.boolean()),
+        backupId: v.optional(v.id("timelineEventBackups")),
+    },
+    handler: async (ctx, args): Promise<{
+        started: boolean;
+        runId?: string;
+        totalEvents?: number;
+        batchSize?: number;
+        dryRunOnly?: boolean;
+        reason?: string;
+        activeRunId?: string;
+    }> => {
+        const runId = `timeline-canonicalize-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const autoStart = args.autoStart ?? true;
+        const dryRunOnly = args.dryRunOnly ?? true;
+        const runRescoreAfter = args.runRescoreAfter ?? true;
+        const rescoreBatchSize = Math.max(20, Math.min(args.rescoreBatchSize ?? 60, 120));
+        const normalizedBatchSize = Math.max(20, Math.min(args.batchSize ?? 80, 150));
+
+        if (!dryRunOnly && !args.backupId) {
+            return {
+                started: false,
+                reason: "Applying canonicalization requires a backupId for rollback safety",
+            };
+        }
+
+        const allTimeline = await ctx.runQuery(internal.api.getAllTimelineEvents, {}) as ImpactRescoreEvent[];
+        if (allTimeline.length === 0) {
+            return { started: false, reason: "No timeline events found" };
+        }
+
+        allTimeline.sort((a, b) => {
+            const dateCompare = a.date.localeCompare(b.date);
+            if (dateCompare !== 0) return dateCompare;
+            const timeA = a.timeOfDay || "99:99";
+            const timeB = b.timeOfDay || "99:99";
+            if (timeA !== timeB) return timeA.localeCompare(timeB);
+            return (a.createdAt || 0) - (b.createdAt || 0);
+        });
+
+        const snapshotEventIds = allTimeline.map((event) => event._id);
+
+        const lock = await ctx.runMutation(internal.api.acquireTimelineCanonicalizationLock, {
+            runId,
+            batchSize: normalizedBatchSize,
+            totalEvents: allTimeline.length,
+            dryRunOnly,
+            runRescoreAfter,
+            rescoreBatchSize,
+            snapshotEventIds,
+            backupId: args.backupId,
+        });
+
+        if (!lock.acquired) {
+            return {
+                started: false,
+                reason: "Another canonicalization run is already active",
+                activeRunId: lock.activeRunId,
+            };
+        }
+
+        if (autoStart) {
+            await ctx.scheduler.runAfter(0, internal.historian.runTimelineCanonicalizationBatch, {
+                runId,
+                applyChanges: !dryRunOnly,
+                scheduleNext: true,
+            });
+        }
+
+        return {
+            started: true,
+            runId,
+            totalEvents: allTimeline.length,
+            batchSize: normalizedBatchSize,
+            dryRunOnly,
+        };
+    },
+});
+
+export const runTimelineCanonicalizationBatch = internalAction({
+    args: {
+        runId: v.string(),
+        applyChanges: v.boolean(),
+        scheduleNext: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args): Promise<{
+        continued: boolean;
+        done: boolean;
+        processedInBatch?: number;
+        processedTotal?: number;
+        totalEvents?: number;
+        findingsInBatch?: number;
+        updatesAppliedInBatch?: number;
+        mergesAppliedInBatch?: number;
+        deletesAppliedInBatch?: number;
+        noActionInBatch?: number;
+        actionPreview?: Array<{
+            action: string;
+            eventId?: string;
+            sourceEventId?: string;
+            targetEventId?: string;
+            confidence?: string;
+            reasoning?: string;
+        }>;
+        rescoreStarted?: {
+            started: boolean;
+            runId?: string;
+            totalEvents?: number;
+            batchSize?: number;
+            estimatedTokensPerEvent?: number;
+            eventsPer100kPrompt?: number;
+            reason?: string;
+            activeRunId?: string;
+            totalEventsInDatabase?: number;
+            unprocessedEvents?: number;
+        };
+        error?: string;
+    }> => {
+        try {
+            const state = await ctx.runQuery(internal.api.getTimelineCanonicalizationState, {});
+            if (!state || !state.isRunning || state.runId !== args.runId) {
+                return { continued: false, done: false, error: "Run is not active" };
+            }
+
+            if (args.applyChanges && !state.dryRunOnly && !state.backupId) {
+                throw new Error("Refusing to apply canonicalization without backupId");
+            }
+
+            const snapshotIds = state.snapshotEventIds || [];
+            const totalEvents = state.totalEvents || snapshotIds.length;
+            const nextIndex = state.nextIndex || 0;
+            const batchSize = state.batchSize || 80;
+            const scheduleNext = args.scheduleNext ?? true;
+
+            if (snapshotIds.length === 0 || nextIndex >= totalEvents) {
+                await ctx.runMutation(internal.api.completeTimelineCanonicalizationRun, {
+                    runId: args.runId,
+                    progress: `Completed ${nextIndex}/${totalEvents}`,
+                });
+                return { continued: false, done: true, processedTotal: totalEvents, totalEvents };
+            }
+
+            const batchIds = snapshotIds.slice(nextIndex, nextIndex + batchSize);
+            const batchEventsRaw = await ctx.runQuery(internal.api.getTimelineEventsByIds, { eventIds: batchIds });
+            const batchEvents = (batchEventsRaw as ImpactRescoreEvent[]).map((event) => ({
+                _id: event._id,
+                date: event.date,
+                timeOfDay: event.timeOfDay,
+                title: event.title,
+                description: event.description,
+                category: event.category,
+                importance: event.importance,
+                status: event.status,
+                createdAt: event.createdAt,
+                sources: event.sources,
+            }));
+
+            const aiResult = await runCanonicalizationAiBatch(batchEvents);
+            if (!aiResult || !Array.isArray(aiResult.actions)) {
+                throw new Error("AI did not return valid canonicalization actions");
+            }
+
+            const batchIdSet = new Set(batchEvents.map((event) => String(event._id)));
+            const actions: CanonicalizationAction[] = [];
+
+            for (const action of aiResult.actions) {
+                if (action.action !== "no_action" && action.action !== "merge_events") {
+                    // Merge-only canonicalization mode.
+                    continue;
+                }
+
+                if (action.action === "merge_events") {
+                    const sourceId = String(action.sourceEventId || "").trim();
+                    const targetId = String(action.targetEventId || "").trim();
+                    if (!sourceId || !targetId) continue;
+                    if (!batchIdSet.has(sourceId) || !batchIdSet.has(targetId)) continue;
+                    actions.push(action);
+                    continue;
+                }
+
+                const eventId = String(action.eventId || "").trim();
+                if (!eventId || !batchIdSet.has(eventId)) continue;
+                actions.push(action);
+            }
+
+            const actionPreview = actions
+                .filter((action) => action.action !== "no_action")
+                .slice(0, 30)
+                .map((action) => ({
+                    action: action.action,
+                    eventId: action.eventId,
+                    sourceEventId: action.sourceEventId,
+                    targetEventId: action.targetEventId,
+                    confidence: action.confidence,
+                    reasoning: action.reasoning,
+                }));
+
+            const shouldApply = args.applyChanges && !state.dryRunOnly;
+            const deletedIds = new Set<string>();
+            let findingsInBatch = 0;
+            const updatesAppliedInBatch = 0;
+            let mergesAppliedInBatch = 0;
+            const deletesAppliedInBatch = 0;
+            let noActionInBatch = 0;
+
+            for (const action of actions) {
+                if (action.action === "no_action") {
+                    noActionInBatch++;
+                    continue;
+                }
+
+                findingsInBatch++;
+                if (!shouldApply) continue;
+
+                if (action.action === "merge_events") {
+                    if (action.confidence !== "high") continue;
+                    const sourceEventId = action.sourceEventId as Id<"timelineEvents"> | undefined;
+                    const targetEventId = action.targetEventId as Id<"timelineEvents"> | undefined;
+                    if (!sourceEventId || !targetEventId) continue;
+                    if (deletedIds.has(String(sourceEventId)) || deletedIds.has(String(targetEventId))) continue;
+
+                    const merged = await ctx.runMutation(internal.api.mergeTimelineEventsById, {
+                        sourceEventId,
+                        targetEventId,
+                        reason: action.reasoning || "Canonicalization merge",
+                    });
+
+                    if (merged.merged) {
+                        mergesAppliedInBatch++;
+                        deletedIds.add(String(sourceEventId));
+                    }
+                    continue;
+                }
+
+                // Merge-only mode: no update/delete branches.
+            }
+
+            const processedTotal = Math.min(totalEvents, nextIndex + batchIds.length);
+            const totalBatches = Math.max(1, Math.ceil(totalEvents / batchSize));
+            const completedBatchNumber = Math.ceil(processedTotal / batchSize);
+            const progress = `batch ${completedBatchNumber}/${totalBatches} (${processedTotal}/${totalEvents})`;
+
+            await ctx.runMutation(internal.api.updateTimelineCanonicalizationProgress, {
+                runId: args.runId,
+                processedEvents: processedTotal,
+                nextIndex: processedTotal,
+                findings: (state.findings || 0) + findingsInBatch,
+                updatesApplied: (state.updatesApplied || 0) + updatesAppliedInBatch,
+                mergesApplied: (state.mergesApplied || 0) + mergesAppliedInBatch,
+                deletesApplied: (state.deletesApplied || 0) + deletesAppliedInBatch,
+                noActionCount: (state.noActionCount || 0) + noActionInBatch,
+                progress,
+            });
+
+            if (processedTotal >= totalEvents) {
+                let rescoreStarted: {
+                    started: boolean;
+                    runId?: string;
+                    totalEvents?: number;
+                    batchSize?: number;
+                    estimatedTokensPerEvent?: number;
+                    eventsPer100kPrompt?: number;
+                    reason?: string;
+                    activeRunId?: string;
+                    totalEventsInDatabase?: number;
+                    unprocessedEvents?: number;
+                } | undefined;
+
+                if (args.applyChanges && !state.dryRunOnly && state.runRescoreAfter) {
+                    await ctx.runMutation(internal.api.cancelTimelineImpactRescoreRun, {
+                        reason: "Preparing post-canonicalization rescore",
+                    });
+                    await Promise.all([
+                        ctx.runMutation(internal.api.clearTimelineImpactRescoreFlags, {}),
+                        ctx.runMutation(internal.api.resetTimelineImpactRescoreState, {}),
+                    ]);
+
+                    rescoreStarted = await ctx.runAction(internal.historian.startTimelineImpactRescore, {
+                        batchSize: state.rescoreBatchSize,
+                    });
+                }
+
+                await ctx.runMutation(internal.api.completeTimelineCanonicalizationRun, {
+                    runId: args.runId,
+                    progress: `Completed ${processedTotal}/${totalEvents}`,
+                });
+
+                return {
+                    continued: false,
+                    done: true,
+                    processedInBatch: batchEvents.length,
+                    processedTotal,
+                    totalEvents,
+                    findingsInBatch,
+                    updatesAppliedInBatch,
+                    mergesAppliedInBatch,
+                    deletesAppliedInBatch,
+                    noActionInBatch,
+                    actionPreview,
+                    rescoreStarted,
+                };
+            }
+
+            if (scheduleNext) {
+                await ctx.scheduler.runAfter(0, internal.historian.runTimelineCanonicalizationBatch, {
+                    runId: args.runId,
+                    applyChanges: args.applyChanges,
+                    scheduleNext,
+                });
+            }
+
+            return {
+                continued: true,
+                done: false,
+                processedInBatch: batchEvents.length,
+                processedTotal,
+                totalEvents,
+                findingsInBatch,
+                updatesAppliedInBatch,
+                mergesAppliedInBatch,
+                deletesAppliedInBatch,
+                noActionInBatch,
+                actionPreview,
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            await ctx.runMutation(internal.api.failTimelineCanonicalizationRun, {
+                runId: args.runId,
+                error: message,
+            });
+            return { continued: false, done: true, error: message };
+        }
+    },
+});
+
+// =============================================================================
+// LEGACY TIMELINE CLEANUP ACTION
+// Deprecated to prevent accidental update/delete flows.
+// Use runTimelineCanonicalizationLoop / startTimelineCanonicalizationAsync.
+// =============================================================================
 
 export const runTimelineCleanup = internalAction({
     args: {
-        date: v.optional(v.string()),  // Single date: "2025-12-12"
-        startDate: v.optional(v.string()),  // Range start: "2025-12-11"
-        endDate: v.optional(v.string()),    // Range end: "2025-12-12"
+        date: v.optional(v.string()),
+        startDate: v.optional(v.string()),
+        endDate: v.optional(v.string()),
     },
-    handler: async (ctx, args): Promise<{
+    handler: async (): Promise<{
         eventsUpdated: number;
         eventsDeleted: number;
         summary: string;
     }> => {
-        console.log("═══════════════════════════════════════════════════════════════");
-        console.log("🧹 TIMELINE CLEANUP STARTED");
-        console.log("═══════════════════════════════════════════════════════════════");
-
-        // Get existing timeline with full details
-        // 300 events sufficient for finding recent duplicates
-        const allTimeline = await ctx.runQuery(internal.api.getRecentTimeline, {
-            limit: 150  // Recent events for cleanup
-        });
-
-        // Filter by date or date range if provided
-        let timeline = allTimeline;
-
-        if (args.date) {
-            // Single date filter
-            timeline = allTimeline.filter((e: any) => e.date === args.date);
-            console.log(`📅 Filtering to date: ${args.date} `);
-            console.log(`   Found ${timeline.length} events on this date(out of ${allTimeline.length} total)`);
-        } else if (args.startDate && args.endDate) {
-            // Date range filter
-            timeline = allTimeline.filter((e: any) => e.date >= args.startDate! && e.date <= args.endDate!);
-            console.log(`📅 Filtering to range: ${args.startDate} to ${args.endDate} `);
-            console.log(`   Found ${timeline.length} events in range(out of ${allTimeline.length} total)`);
-        } else if (args.startDate) {
-            // From start date onwards
-            timeline = allTimeline.filter((e: any) => e.date >= args.startDate!);
-            console.log(`📅 Filtering from: ${args.startDate} onwards`);
-            console.log(`   Found ${timeline.length} events(out of ${allTimeline.length} total)`);
-        } else if (args.endDate) {
-            // Up to end date
-            timeline = allTimeline.filter((e: any) => e.date <= args.endDate!);
-            console.log(`📅 Filtering up to: ${args.endDate} `);
-            console.log(`   Found ${timeline.length} events(out of ${allTimeline.length} total)`);
-        }
-
-        console.log(`📜 Reviewing ${timeline.length} timeline events for merges...`);
-
-        // Build timeline context using shared helper (with numbered index)
-        const timelineContext = timeline.map((e: any, idx: number) => formatTimelineEvent(e, idx)).join("\n\n");
-
-        const prompt = `${CLEANUP_PROMPT}
-
-═══════════════════════════════════════════════════════════════
-📜 CURRENT TIMELINE(${timeline.length} events):
-${timelineContext}
-═══════════════════════════════════════════════════════════════
-
-Find duplicate or related events that should be merged.Output JSON with your merge actions.`;
-
-        const response = await callGeminiStudioWithFallback(prompt, FALLBACK_CHAINS.critical, 2, "CLEANUP");
-
-        // Extract JSON
-        const jsonMatch = response.match(/```json\s * ([\s\S] *?) \s * ```/i) ||
-            response.match(/\{[\s\S]*"mergeActions"[\s\S]*\}/);
-
-        if (!jsonMatch) {
-            console.log("❌ [CLEANUP] No JSON found in API response");
-            console.log("ℹ️ [CLEANUP] No changes will be made - existing timeline preserved");
-            return { eventsUpdated: 0, eventsDeleted: 0, summary: "AI returned no actions" };
-        }
-
-        let result: CleanupResult;
-        try {
-            const jsonStr = jsonMatch[1] || jsonMatch[0];
-            result = JSON.parse(jsonStr.trim());
-        } catch (e) {
-            console.log(`❌[CLEANUP] JSON parse error: ${e} `);
-            console.log("ℹ️ [CLEANUP] No changes will be made - existing timeline preserved");
-            return { eventsUpdated: 0, eventsDeleted: 0, summary: "Failed to parse AI response" };
-        }
-
-        console.log(`📊 AI Analysis: ${result.analysis} `);
-        console.log(`🎯 Found ${result.mergeActions?.length || 0} merge actions`);
-
-        let eventsUpdated = 0;
-        let eventsDeleted = 0;
-
-        // Execute merge actions
-        for (const action of result.mergeActions || []) {
-            if (action.action === "no_action") continue;
-
-            if (action.action === "update_event" && action.eventUpdates) {
-                // Only allow valid fields - filter out anything the AI added that isn't in the validator
-                const validFields = ['title', 'titleTh', 'titleKh', 'description', 'descriptionTh', 'descriptionKh', 'date', 'timeOfDay', 'category', 'importance', 'status'];
-                const updates: any = {};
-                for (const field of validFields) {
-                    if ((action.eventUpdates as any)[field] !== undefined) {
-                        updates[field] = (action.eventUpdates as any)[field];
-                    }
-                }
-
-                if (Object.keys(updates).length === 0) {
-                    console.log(`⚠️ No valid updates for: "${action.targetEventTitle}"`);
-                    continue;
-                }
-
-                await ctx.runMutation(internal.api.updateTimelineEvent, {
-                    eventTitle: action.targetEventTitle,
-                    updates,
-                    reason: action.reasoning || "Timeline cleanup merge",
-                });
-                console.log(`✏️ Updated: "${action.targetEventTitle}"`);
-                eventsUpdated++;
-            }
-
-            if (action.action === "delete_event") {
-                await ctx.runMutation(internal.api.deleteTimelineEvent, {
-                    eventTitle: action.targetEventTitle,
-                    reason: action.reasoning || "Merged with another event",
-                });
-                console.log(`🗑️ Deleted: "${action.targetEventTitle}"`);
-                eventsDeleted++;
-            }
-        }
-
-        const summary = result.summary || `Updated ${eventsUpdated}, deleted ${eventsDeleted} `;
-
-        console.log("═══════════════════════════════════════════════════════════════");
-        console.log(`🧹 TIMELINE CLEANUP COMPLETE`);
-        console.log(`   Events updated: ${eventsUpdated} `);
-        console.log(`   Events deleted: ${eventsDeleted} `);
-        console.log(`   Summary: ${summary} `);
-        console.log("═══════════════════════════════════════════════════════════════");
-
-        return { eventsUpdated, eventsDeleted, summary };
+        return {
+            eventsUpdated: 0,
+            eventsDeleted: 0,
+            summary: "Deprecated: use timeline canonicalization loop (merge-only with backup safety).",
+        };
     },
 });

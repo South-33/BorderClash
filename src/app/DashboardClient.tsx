@@ -1993,6 +1993,20 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     political: 'bg-purple-500',
   };
 
+  const categoryImportantCardBorders: Record<string, string> = {
+    military: 'border-red-500/70',
+    diplomatic: 'border-blue-500/70',
+    humanitarian: 'border-yellow-500/70',
+    political: 'border-purple-500/70',
+  };
+
+  const categoryImportantNodeRings: Record<string, string> = {
+    military: 'ring-red-500/70',
+    diplomatic: 'ring-blue-500/70',
+    humanitarian: 'ring-yellow-500/70',
+    political: 'ring-purple-500/70',
+  };
+
   // Show error state if server-side fetching failed and we have no fallback data
   // FIXED: If we have cached data (neutralMeta), we show that instead of the error screen
   if (serverError && !hasServerData && !neutralMeta) {
@@ -2635,8 +2649,11 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                           } else {
                             // Event Card
                             const event = item.event;
+                            const categoryKey = event?.category?.toLowerCase();
                             const isRight = (item.eventIndex ?? 0) % 2 === 0;
                             const isImportant = (event?.importance || 0) > 75;
+                            const importantCardBorder = categoryImportantCardBorders[categoryKey] || 'border-riso-accent';
+                            const importantNodeRing = categoryImportantNodeRings[categoryKey] || 'ring-riso-accent';
 
                             return (
                               <div
@@ -2654,8 +2671,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                   <div className="absolute left-[-2.25rem] md:left-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 md:w-8 md:h-8 md:-translate-x-1/2 z-10">
                                     <div
                                       className={`rounded-full border-2 border-riso-paper shadow-sm cursor-pointer
-                                        ${categoryColors[event?.category?.toLowerCase()] || 'bg-gray-500'}
-                                        ${isImportant ? 'animate-pulse ring-2 ring-offset-1 md:ring-offset-2 ring-riso-accent' : ''}
+                                        ${categoryColors[categoryKey] || 'bg-gray-500'}
+                                        ${isImportant ? `animate-pulse ring-2 ring-offset-1 md:ring-offset-2 ${importantNodeRing}` : ''}
                                         w-6 h-6 md:w-8 md:h-8 flex items-center justify-center`}
                                       onClick={() => setSelectedEvent(event)}
                                     >
@@ -2678,7 +2695,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                   <div className={`flex-1 ${isRight ? 'md:pl-12' : 'md:pr-12'}`}>
                                     <div
                                       className={`relative bg-riso-paper p-3 rounded-sm border cursor-pointer group
-                                        ${isImportant ? 'border-riso-accent border-2' : 'border-riso-ink/20 dashed-border-sm'}`}
+                                        ${isImportant ? `${importantCardBorder} border-2` : 'border-riso-ink/20 dashed-border-sm'}`}
                                       onClick={() => setSelectedEvent(event)}
                                     >
                                       <div className="flex justify-between items-start mb-1">
