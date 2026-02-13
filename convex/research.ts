@@ -1882,13 +1882,11 @@ export const step3_historian = internalAction({
         let historianLoops = 0;
         const MAX_HISTORIAN_LOOPS = 10; // User requested limit
 
-        // ═══ CACHE TIMELINE + NEWS CONTEXT ONCE ═══
-        // These rarely change within the loop, so fetch once to save bandwidth
-        // Note: If Historian creates new events, they won't appear in cache until next cycle
-        // This is acceptable since new events are unlikely to be duplicated by different articles
-        const cachedTimeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 150 });
+        // ═══ CACHE NEWS CONTEXT ONCE ═══
+        // News context is used for broad situational awareness and can be reused.
+        // Timeline context is refreshed each iteration to reduce duplicate event creation.
         const cachedNewsContext = await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
-        console.log(`📦 [CACHE] Timeline: ${cachedTimeline.length} events, News: TH=${cachedNewsContext.TH.length}, KH=${cachedNewsContext.KH.length}, INT=${cachedNewsContext.INT.length}`);
+        console.log(`📦 [CACHE] News: TH=${cachedNewsContext.TH.length}, KH=${cachedNewsContext.KH.length}, INT=${cachedNewsContext.INT.length}`);
 
         try {
             while (historianLoops < MAX_HISTORIAN_LOOPS) {
@@ -1901,8 +1899,10 @@ export const step3_historian = internalAction({
                 historianLoops++;
                 console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
 
+                const latestTimeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 150 });
+
                 const result = await ctx.runAction(internal.historian.runHistorianCycle, {
-                    cachedTimeline,
+                    cachedTimeline: latestTimeline,
                     cachedNewsContext,
                 });
 

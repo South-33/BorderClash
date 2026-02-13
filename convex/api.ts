@@ -94,6 +94,81 @@ export const getStats = query({
     },
 });
 
+// Public status for timeline impact rescore progress
+export const getTimelineImpactRescoreStatus = query({
+    args: {},
+    handler: async (ctx) => {
+        const allEvents = await ctx.db.query("timelineEvents").collect();
+        const processedEventsCount = allEvents.filter((event) => event.impactRescoreProcessed === true).length;
+        const unprocessedEventsCount = allEvents.length - processedEventsCount;
+
+        const state = await ctx.db.query("timelineImpactRescoreState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state) {
+            return {
+                isRunning: false,
+                progress: "idle",
+                totalEvents: 0,
+                processedEvents: 0,
+                updatedEvents: 0,
+                failedEvents: 0,
+                batchSize: 0,
+                processedEventsCount,
+                unprocessedEventsCount,
+                startedAt: undefined,
+                completedAt: undefined,
+                estimatedTokensPerEvent: undefined,
+                eventsPer100kPrompt: undefined,
+                lastError: undefined,
+            };
+        }
+
+        return {
+            isRunning: state.isRunning,
+            runId: state.runId,
+            progress: state.progress,
+            totalEvents: state.totalEvents,
+            processedEvents: state.processedEvents,
+            updatedEvents: state.updatedEvents,
+            failedEvents: state.failedEvents,
+            batchSize: state.batchSize,
+            processedEventsCount,
+            unprocessedEventsCount,
+            startedAt: state.startedAt,
+            completedAt: state.completedAt,
+            estimatedTokensPerEvent: state.estimatedTokensPerEvent,
+            eventsPer100kPrompt: state.eventsPer100kPrompt,
+            lastError: state.lastError,
+        };
+    },
+});
+
+// List latest timeline importance backups for restore safety
+export const getTimelineImportanceBackups = query({
+    args: {
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const limit = Math.max(1, Math.min(args.limit ?? 20, 100));
+        const backups = await ctx.db
+            .query("timelineImportanceBackups")
+            .withIndex("by_createdAt")
+            .order("desc")
+            .take(limit);
+
+        return backups.map((backup) => ({
+            _id: backup._id,
+            createdAt: backup.createdAt,
+            label: backup.label,
+            source: backup.source,
+            totalEvents: backup.totalEvents,
+            avgImportance: backup.avgImportance,
+        }));
+    },
+});
+
 export const getSystemStatsInternal = internalQuery({
     args: {},
     handler: async (ctx) => {
@@ -589,6 +664,330 @@ export const forceReleaseSourceVerificationLock = internalMutation({
             return { released: true, wasHeldBy: existing.runId };
         }
         return { released: false, message: "No lock found" };
+    },
+});
+
+// =============================================================================
+// TIMELINE IMPACT RESCORE STATE (retroactive importance recalibration)
+// =============================================================================
+
+export const getTimelineImpactRescoreState = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        return await ctx.db.query("timelineImpactRescoreState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+    },
+});
+
+export const acquireTimelineImpactRescoreLock = internalMutation({
+    args: {
+        runId: v.string(),
+        batchSize: v.number(),
+        totalEvents: v.number(),
+        snapshotEventIds: v.array(v.id("timelineEvents")),
+        estimatedTokensPerEvent: v.number(),
+        eventsPer100kPrompt: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const existing = await ctx.db.query("timelineImpactRescoreState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        const now = Date.now();
+        const ZOMBIE_TIMEOUT = 20 * 60 * 1000; // 20 minutes
+
+        if (existing && existing.isRunning) {
+            const lastActivity = existing.lastHeartbeat || existing.startedAt || 0;
+            if (now - lastActivity <= ZOMBIE_TIMEOUT) {
+                return { acquired: false, activeRunId: existing.runId };
+            }
+            console.log(`🧟 [IMPACT-RESCORE] Taking over zombie run ${existing.runId}`);
+        }
+
+        const patch = {
+            key: "main" as const,
+            isRunning: true,
+            runId: args.runId,
+            startedAt: now,
+            completedAt: undefined,
+            lastHeartbeat: now,
+            progress: "starting...",
+            totalEvents: args.totalEvents,
+            processedEvents: 0,
+            updatedEvents: 0,
+            failedEvents: 0,
+            nextIndex: 0,
+            batchSize: args.batchSize,
+            estimatedTokensPerEvent: args.estimatedTokensPerEvent,
+            eventsPer100kPrompt: args.eventsPer100kPrompt,
+            snapshotEventIds: args.snapshotEventIds,
+            lastError: undefined,
+        };
+
+        if (existing) {
+            await ctx.db.patch(existing._id, patch);
+        } else {
+            await ctx.db.insert("timelineImpactRescoreState", patch);
+        }
+
+        return { acquired: true as const };
+    },
+});
+
+export const updateTimelineImpactRescoreProgress = internalMutation({
+    args: {
+        runId: v.string(),
+        processedEvents: v.number(),
+        nextIndex: v.number(),
+        updatedEvents: v.number(),
+        failedEvents: v.number(),
+        progress: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const state = await ctx.db.query("timelineImpactRescoreState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state || state.runId !== args.runId || !state.isRunning) return;
+
+        await ctx.db.patch(state._id, {
+            processedEvents: args.processedEvents,
+            nextIndex: args.nextIndex,
+            updatedEvents: args.updatedEvents,
+            failedEvents: args.failedEvents,
+            progress: args.progress,
+            lastHeartbeat: Date.now(),
+        });
+    },
+});
+
+export const completeTimelineImpactRescoreRun = internalMutation({
+    args: {
+        runId: v.string(),
+        progress: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const state = await ctx.db.query("timelineImpactRescoreState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state || state.runId !== args.runId) return { completed: false };
+
+        await ctx.db.patch(state._id, {
+            isRunning: false,
+            runId: undefined,
+            completedAt: Date.now(),
+            lastHeartbeat: undefined,
+            progress: args.progress,
+            snapshotEventIds: undefined,
+            nextIndex: undefined,
+            lastError: undefined,
+        });
+
+        return { completed: true };
+    },
+});
+
+export const failTimelineImpactRescoreRun = internalMutation({
+    args: {
+        runId: v.string(),
+        error: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const state = await ctx.db.query("timelineImpactRescoreState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state || state.runId !== args.runId) return { failed: false };
+
+        const clippedError = args.error.length > 1800
+            ? `${args.error.substring(0, 1800)}...`
+            : args.error;
+
+        await ctx.db.patch(state._id, {
+            isRunning: false,
+            runId: undefined,
+            completedAt: Date.now(),
+            lastHeartbeat: undefined,
+            progress: "failed",
+            lastError: clippedError,
+        });
+
+        return { failed: true };
+    },
+});
+
+export const cancelTimelineImpactRescoreRun = internalMutation({
+    args: {
+        reason: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const state = await ctx.db.query("timelineImpactRescoreState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state) {
+            return { cancelled: false, reason: "No state record" };
+        }
+
+        if (!state.isRunning) {
+            return { cancelled: false, reason: "No active run" };
+        }
+
+        await ctx.db.patch(state._id, {
+            isRunning: false,
+            runId: undefined,
+            completedAt: Date.now(),
+            lastHeartbeat: undefined,
+            progress: "cancelled",
+            lastError: args.reason,
+        });
+
+        return { cancelled: true };
+    },
+});
+
+export const clearTimelineImpactRescoreFlags = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const events = await ctx.db.query("timelineEvents").collect();
+        let resetCount = 0;
+
+        for (const event of events) {
+            if (
+                event.impactRescoreProcessed !== undefined ||
+                event.impactRescoreProcessedAt !== undefined ||
+                event.impactRescoreRunId !== undefined
+            ) {
+                await ctx.db.patch(event._id, {
+                    impactRescoreProcessed: undefined,
+                    impactRescoreProcessedAt: undefined,
+                    impactRescoreRunId: undefined,
+                });
+                resetCount++;
+            }
+        }
+
+        return { resetCount, totalEvents: events.length };
+    },
+});
+
+export const resetTimelineImpactRescoreState = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const state = await ctx.db.query("timelineImpactRescoreState")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (!state) {
+            return { reset: false, reason: "No state record" };
+        }
+
+        await ctx.db.patch(state._id, {
+            isRunning: false,
+            runId: undefined,
+            startedAt: undefined,
+            completedAt: undefined,
+            lastHeartbeat: undefined,
+            progress: "idle",
+            totalEvents: 0,
+            processedEvents: 0,
+            updatedEvents: 0,
+            failedEvents: 0,
+            nextIndex: 0,
+            batchSize: undefined,
+            estimatedTokensPerEvent: undefined,
+            eventsPer100kPrompt: undefined,
+            snapshotEventIds: undefined,
+            lastError: undefined,
+        });
+
+        return { reset: true };
+    },
+});
+
+export const createTimelineImportanceBackup = internalMutation({
+    args: {
+        label: v.optional(v.string()),
+        source: v.union(v.literal("manual"), v.literal("pre_rescore")),
+    },
+    handler: async (ctx, args) => {
+        const events = await ctx.db.query("timelineEvents").collect();
+        const entries = events.map((event) => ({
+            eventId: event._id,
+            importance: event.importance,
+        }));
+
+        const importanceSum = entries.reduce((sum, entry) => sum + entry.importance, 0);
+        const avgImportance = entries.length > 0 ? Math.round(importanceSum / entries.length) : 0;
+
+        const backupId = await ctx.db.insert("timelineImportanceBackups", {
+            createdAt: Date.now(),
+            label: args.label,
+            source: args.source,
+            totalEvents: entries.length,
+            avgImportance,
+            entries,
+        });
+
+        return {
+            backupId,
+            totalEvents: entries.length,
+            avgImportance,
+        };
+    },
+});
+
+export const restoreTimelineImportanceBackup = internalMutation({
+    args: {
+        backupId: v.id("timelineImportanceBackups"),
+    },
+    handler: async (ctx, args) => {
+        const backup = await ctx.db.get(args.backupId);
+        if (!backup) {
+            return { restored: false, reason: "Backup not found" };
+        }
+
+        const now = Date.now();
+        let restoredCount = 0;
+
+        for (const entry of backup.entries) {
+            const event = await ctx.db.get(entry.eventId);
+            if (!event) continue;
+
+            await ctx.db.patch(entry.eventId, {
+                importance: entry.importance,
+                lastUpdatedAt: now,
+            });
+            restoredCount++;
+        }
+
+        const refreshedEvents = await ctx.db.query("timelineEvents").collect();
+        const refreshedSum = refreshedEvents.reduce((sum, event) => sum + event.importance, 0);
+        const refreshedAvg = refreshedEvents.length > 0
+            ? Math.round(refreshedSum / refreshedEvents.length)
+            : 0;
+
+        const stats = await ctx.db.query("timelineStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        if (stats) {
+            await ctx.db.patch(stats._id, {
+                totalEvents: refreshedEvents.length,
+                importanceSum: refreshedSum,
+                avgImportance: refreshedAvg,
+                lastUpdatedAt: now,
+            });
+        }
+
+        return {
+            restored: true,
+            restoredCount,
+            totalEvents: refreshedEvents.length,
+            avgImportance: refreshedAvg,
+        };
     },
 });
 
@@ -1623,6 +2022,244 @@ export const runHistorian = action({
     },
 });
 
+// Recompute timeline importance for all events in tracked batches
+export const runTimelineImpactRescore = action({
+    args: {
+        batchSize: v.optional(v.number()),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        console.log("🎚️ Starting timeline impact rescore...");
+        try {
+            const result = await ctx.runAction(internal.historian.startTimelineImpactRescore, {
+                batchSize: args.batchSize,
+            });
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Create a manual snapshot of all timeline importance scores for rollback safety
+export const backupTimelineImportanceScores = action({
+    args: {
+        label: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const timestamp = new Date().toISOString();
+            const result = await ctx.runMutation(internal.api.createTimelineImportanceBackup, {
+                label: args.label ?? `manual-${timestamp}`,
+                source: "manual",
+            });
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Restore timeline importance scores from a previous backup snapshot
+export const restoreTimelineImportanceScores = action({
+    args: {
+        backupId: v.id("timelineImportanceBackups"),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const result = await ctx.runMutation(internal.api.restoreTimelineImportanceBackup, {
+                backupId: args.backupId,
+            });
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Run impact rescore in synchronous chunks.
+// Safe for CLI time limits: rerun to continue from the last checkpoint.
+export const runTimelineImpactRescoreLoop = action({
+    args: {
+        batchSize: v.optional(v.number()),
+        maxBatches: v.optional(v.number()),
+        runId: v.optional(v.string()),
+        resumeIfRunning: v.optional(v.boolean()),
+        createBackup: v.optional(v.boolean()),
+        backupLabel: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const maxBatches = Math.max(1, Math.min(args.maxBatches ?? 6, 200));
+            const shouldBackup = args.createBackup ?? true;
+            let backupId: unknown = undefined;
+            let runId: string | undefined;
+            let startedNewRun = false;
+
+            const existingState = await ctx.runQuery(internal.api.getTimelineImpactRescoreState, {});
+
+            if (args.runId) {
+                if (!existingState || !existingState.isRunning || existingState.runId !== args.runId) {
+                    return {
+                        success: false,
+                        result: {
+                            reason: "Requested runId is not currently active",
+                            requestedRunId: args.runId,
+                            activeRunId: existingState?.isRunning ? existingState.runId : undefined,
+                        },
+                    };
+                }
+                runId = args.runId;
+            } else if ((args.resumeIfRunning ?? true) && existingState?.isRunning && existingState.runId) {
+                runId = existingState.runId;
+            }
+
+            if (!runId) {
+                if (shouldBackup) {
+                    const timestamp = new Date().toISOString();
+                    const backup = await ctx.runMutation(internal.api.createTimelineImportanceBackup, {
+                        label: args.backupLabel ?? `pre-loop-${timestamp}`,
+                        source: "pre_rescore",
+                    });
+                    backupId = backup.backupId;
+                }
+
+                const start = await ctx.runAction(internal.historian.startTimelineImpactRescore, {
+                    batchSize: args.batchSize,
+                    autoStart: false,
+                });
+
+                if (!start.started || !start.runId) {
+                    return {
+                        success: false,
+                        result: {
+                            ...start,
+                            backupId,
+                        },
+                    };
+                }
+
+                runId = start.runId;
+                startedNewRun = true;
+            }
+
+            let batchesProcessed = 0;
+            let finalStep: {
+                continued: boolean;
+                done: boolean;
+                processedInBatch?: number;
+                processedTotal?: number;
+                totalEvents?: number;
+                error?: string;
+            } | null = null;
+
+            for (let i = 0; i < maxBatches; i++) {
+                finalStep = await ctx.runAction(internal.historian.runTimelineImpactRescoreBatch, {
+                    runId,
+                    scheduleNext: false,
+                });
+                batchesProcessed++;
+
+                if (finalStep.done || !finalStep.continued) {
+                    break;
+                }
+            }
+
+            const state = await ctx.runQuery(internal.api.getTimelineImpactRescoreState, {});
+
+            return {
+                success: true,
+                result: {
+                    runId,
+                    backupId,
+                    startedNewRun,
+                    resumedExistingRun: !startedNewRun,
+                    maxBatches,
+                    batchesProcessed,
+                    finalStep,
+                    canContinue: finalStep ? !finalStep.done : false,
+                    status: state ? {
+                        isRunning: state.isRunning,
+                        progress: state.progress,
+                        processedEvents: state.processedEvents,
+                        totalEvents: state.totalEvents,
+                        updatedEvents: state.updatedEvents,
+                        failedEvents: state.failedEvents,
+                        lastError: state.lastError,
+                    } : null,
+                },
+            };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Preview one impact-rescore batch (no DB writes) for prompt quality review
+export const previewTimelineImpactRescoreBatch = action({
+    args: {
+        batchSize: v.optional(v.number()),
+        startIndex: v.optional(v.number()),
+        includeProcessed: v.optional(v.boolean()),
+        lookbackSize: v.optional(v.number()),
+    },
+    handler: async (ctx, args): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const result = await ctx.runAction(internal.historian.previewTimelineImpactRescoreBatch, {
+                batchSize: args.batchSize,
+                startIndex: args.startIndex,
+                includeProcessed: args.includeProcessed,
+                lookbackSize: args.lookbackSize,
+            });
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Cancel an active timeline impact rescore run
+export const cancelTimelineImpactRescore = action({
+    args: {},
+    handler: async (ctx): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            const result = await ctx.runMutation(internal.api.cancelTimelineImpactRescoreRun, {
+                reason: "Cancelled by operator",
+            });
+            return { success: true, result };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
+// Reset per-event impact rescore flags so all events can be rescored again
+export const resetTimelineImpactRescore = action({
+    args: {},
+    handler: async (ctx): Promise<{ success: boolean; result?: unknown; error?: string }> => {
+        try {
+            await ctx.runMutation(internal.api.cancelTimelineImpactRescoreRun, {
+                reason: "Reset requested by operator",
+            });
+
+            const [flags, state] = await Promise.all([
+                ctx.runMutation(internal.api.clearTimelineImpactRescoreFlags, {}),
+                ctx.runMutation(internal.api.resetTimelineImpactRescoreState, {}),
+            ]);
+
+            return {
+                success: true,
+                result: {
+                    resetCount: flags.resetCount,
+                    totalEvents: flags.totalEvents,
+                    stateReset: state.reset,
+                },
+            };
+        } catch (error) {
+            return { success: false, error: String(error) };
+        }
+    },
+});
+
 // Reset processedToTimeline flag on all articles so Historian can reprocess them
 export const resetHistorianFlags = action({
     args: {},
@@ -2333,6 +2970,78 @@ export const getAllTimelineEvents = internalQuery({
 });
 
 /**
+ * Get specific timeline events by IDs, preserving requested order
+ */
+export const getTimelineEventsByIds = internalQuery({
+    args: {
+        eventIds: v.array(v.id("timelineEvents")),
+    },
+    handler: async (ctx, args) => {
+        const docs = await Promise.all(
+            args.eventIds.map((eventId) => ctx.db.get(eventId))
+        );
+
+        return docs.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
+    },
+});
+
+/**
+ * Bulk rewrite timeline importance values and keep timeline stats in sync
+ */
+export const bulkUpdateTimelineImportance = internalMutation({
+    args: {
+        runId: v.string(),
+        updates: v.array(v.object({
+            eventId: v.id("timelineEvents"),
+            importance: v.number(),
+        })),
+    },
+    handler: async (ctx, args) => {
+        if (args.updates.length === 0) {
+            return { updated: 0, delta: 0 };
+        }
+
+        let updated = 0;
+        let importanceDelta = 0;
+        const now = Date.now();
+
+        for (const update of args.updates) {
+            const event = await ctx.db.get(update.eventId);
+            if (!event) continue;
+
+            const nextImportance = Math.max(0, Math.min(100, Math.round(update.importance)));
+            importanceDelta += (nextImportance - event.importance);
+
+            await ctx.db.patch(update.eventId, {
+                importance: nextImportance,
+                lastUpdatedAt: now,
+                impactRescoreProcessed: true,
+                impactRescoreProcessedAt: now,
+                impactRescoreRunId: args.runId,
+            });
+            updated++;
+        }
+
+        if (updated > 0 && importanceDelta !== 0) {
+            const stats = await ctx.db.query("timelineStats")
+                .withIndex("by_key", q => q.eq("key", "main"))
+                .first();
+
+            if (stats) {
+                const newSum = stats.importanceSum + importanceDelta;
+                await ctx.db.patch(stats._id, {
+                    importanceSum: newSum,
+                    avgImportance: stats.totalEvents > 0 ? Math.round(newSum / stats.totalEvents) : 0,
+                    lastUpdatedAt: now,
+                });
+            }
+        }
+
+        return { updated, delta: importanceDelta };
+    },
+});
+
+/**
  * Get recent timeline events for synthesis context
  * Returns events sorted CHRONOLOGICALLY by date + timeOfDay (oldest first)
  * This ensures AI receives events in proper historical order
@@ -2354,11 +3063,12 @@ export const getRecentTimeline = internalQuery({
         const bufferMultiplier = hasFilters ? 3 : 2;  // Larger buffer if filters are active
         const fetchLimit = Math.min(args.limit * bufferMultiplier, 1000);  // Cap at 1000 to prevent huge fetches
 
-        // Use by_date index for pre-sorted results (oldest first = ascending)
+        // Use by_date index and fetch newest slice first, then sort chronologically.
+        // This ensures "recent" context actually reflects latest events.
         const events = await ctx.db
             .query("timelineEvents")
             .withIndex("by_date")
-            .order("asc")  // Oldest first for chronological order
+            .order("desc")
             .take(fetchLimit);
 
         // Apply filters on the smaller dataset
@@ -2372,10 +3082,8 @@ export const getRecentTimeline = internalQuery({
             filtered = filtered.filter(e => e.category === args.category);
         }
 
-        // Secondary sort by timeOfDay within same date
-        // (The index sorts by date, but we also need timeOfDay ordering)
+        // Sort selected recent events into chronological order for model context.
         filtered.sort((a, b) => {
-            // First compare by date (should already be sorted, but ensure stability)
             const dateCompare = a.date.localeCompare(b.date);
             if (dateCompare !== 0) return dateCompare;
 
@@ -2406,13 +3114,42 @@ export const findEventByTitleAndDate = internalQuery({
             .query("timelineEvents")
             .withIndex("by_createdAt")
             .order("desc")
-            .take(100);  // Search recent events
+            .take(300);  // Wider search window for better merge recall
+
+        const normalize = (text: string) => text
+            .toLowerCase()
+            .replace(/&quot;/g, '"')
+            .replace(/[^a-z0-9\s]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const toTokens = (text: string) => new Set(
+            normalize(text)
+                .split(" ")
+                .filter((token) => token.length > 2)
+        );
+
+        const jaccard = (a: string, b: string) => {
+            const tokensA = toTokens(a);
+            const tokensB = toTokens(b);
+            if (tokensA.size === 0 || tokensB.size === 0) return 0;
+
+            let intersection = 0;
+            for (const token of tokensA) {
+                if (tokensB.has(token)) intersection++;
+            }
+            const union = tokensA.size + tokensB.size - intersection;
+            return union > 0 ? intersection / union : 0;
+        };
 
         // Simple case-insensitive title search
-        const searchLower = args.title.toLowerCase();
+        const searchLower = normalize(args.title);
         const matches = events.filter(e => {
-            const titleMatch = e.title.toLowerCase().includes(searchLower) ||
-                searchLower.includes(e.title.toLowerCase());
+            const titleLower = normalize(e.title);
+            const titleSimilarity = jaccard(titleLower, searchLower);
+            const titleMatch = titleLower.includes(searchLower) ||
+                searchLower.includes(titleLower) ||
+                titleSimilarity >= 0.45;
 
             // Optional date range filter
             if (args.dateRange) {
@@ -2423,6 +3160,14 @@ export const findEventByTitleAndDate = internalQuery({
             }
 
             return titleMatch;
+        });
+
+        // Rank strongest textual matches first
+        matches.sort((a, b) => {
+            const scoreA = jaccard(a.title, args.title);
+            const scoreB = jaccard(b.title, args.title);
+            if (scoreA !== scoreB) return scoreB - scoreA;
+            return (b.createdAt || 0) - (a.createdAt || 0);
         });
 
         return matches;

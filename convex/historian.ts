@@ -3,6 +3,7 @@
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { MODELS, FALLBACK_CHAINS } from "./config";
 import { callGeminiStudio, callGeminiStudioWithFallback, formatTimelineEvent } from "./ai_utils";
 
@@ -67,12 +68,19 @@ You don't take sides. You take notes.
    
    If something is a REACTION to an event, archive it. The event itself is what matters.
 
-📊 IMPORTANCE SCALE (0-100):
-- 90-100: War-level events. Peace treaties. Mass casualties.
-- 70-89: Major military action. Diplomatic breakthroughs.
-- 50-69: Significant developments. Confirmed incidents.
-- 30-49: Minor but real → ARCHIVE (too granular for main timeline)
-- 0-29: Not timeline-worthy → ARCHIVE.
+📊 IMPORTANCE SCALE (0-100) — USE THIS STRICTLY:
+- 90-100: Conflict-defining turning points. Major battles, treaty signing, regime-level shifts.
+- 80-89: Major strategic shifts. New front opened/closed, large force moves, formal high-stakes state decisions.
+- 70-79: Story-critical state changes. Important but not decisive milestones readers MUST know.
+- 60-69: Real and useful updates, but supporting detail (usually not key-event material).
+- 40-59: Minor/redundant/reactive updates. Usually archive unless needed to preserve chronology.
+- 0-39: Noise, weakly evidenced claims, or repetitive commentary → ARCHIVE/DISCARD.
+
+⚠️ HIGH-IMPACT DISCIPLINE (CRITICAL):
+- 70+ is RESERVED for events that materially change the conflict story.
+- If this article is just a small update to an existing thread, prefer merge_source/update_event and keep importance below 70.
+- Repeated reports on the same incident should trend DOWN in importance unless they add decisive new facts.
+- For running totals (displaced/casualties), only assign 70+ when a major milestone is crossed or policy/operational reality changes.
 
 📅 DATES & TIMES:
 - Published dates are often WRONG. Find the actual event date from the article.
@@ -771,9 +779,22 @@ export const runHistorianCycle = internalAction({
 
                 case "merge_source":
                     if (action.targetEventTitle) {
+                        const articleDate = article.publishedAt
+                            ? new Date(article.publishedAt).toISOString().split('T')[0]
+                            : new Date().toISOString().split('T')[0];
+
+                        const startDate = new Date(articleDate);
+                        startDate.setDate(startDate.getDate() - 7);
+                        const endDate = new Date(articleDate);
+                        endDate.setDate(endDate.getDate() + 7);
+
                         // Find the event to merge into
                         const matchingEvents = await ctx.runQuery(internal.api.findEventByTitleAndDate, {
                             title: action.targetEventTitle,
+                            dateRange: {
+                                start: startDate.toISOString().split('T')[0],
+                                end: endDate.toISOString().split('T')[0],
+                            },
                         });
 
                         if (matchingEvents.length > 0) {
@@ -943,6 +964,634 @@ export const runHistorianCycle = internalAction({
             discarded,
             credibilityUpdated,
         };
+    },
+});
+
+// =============================================================================
+// TIMELINE IMPORTANCE RESCORE (RETROACTIVE)
+// Rewrites importance values for all timeline events in tracked batches
+// =============================================================================
+
+type ImpactRescoreEvent = {
+    _id: Id<"timelineEvents">;
+    date: string;
+    timeOfDay?: string;
+    title: string;
+    description: string;
+    category: "military" | "diplomatic" | "humanitarian" | "political";
+    importance: number;
+    status: "confirmed" | "disputed" | "debunked";
+    createdAt?: number;
+    impactRescoreProcessed?: boolean;
+    sources?: Array<{
+        name: string;
+        country: string;
+        credibility: number;
+    }>;
+};
+
+type ImpactRescoreDecision = {
+    eventId: string;
+    importance: number;
+    reason?: string;
+};
+
+type ImpactRescoreResult = {
+    scores: ImpactRescoreDecision[];
+    reasoning?: string;
+    summary?: string;
+};
+
+const IMPACT_RESCORE_PROMPT = `You are recalibrating timeline importance scores for BorderClash.
+
+Goal: make importance useful for "Key events only" filtering where key = importance >= 70.
+You are NOT creating, deleting, or merging events. Only rescore importance.
+
+OPERATING STANCE:
+- Be neutral and evidence-first.
+- Avoid favoring any country, institution, or narrative style.
+- Prefer conservative scoring when evidence is weak or one-sided.
+
+INPUT ASSUMPTIONS:
+- Events and source metadata are already pre-processed by a prior verification pipeline.
+- You should not re-verify URLs or invent missing evidence.
+- Use provided source credibility and source diversity as confidence signals.
+
+SCORING RUBRIC (STRICT):
+- 90-100: Rare, conflict-defining transitions that materially change trajectory.
+- 80-89: Major strategic shifts with clear cross-domain consequences.
+- 70-79: Story-critical state changes required for coherent understanding.
+- 60-69: Meaningful supporting developments.
+- 40-59: Minor, repetitive, or mostly reactive developments.
+- 0-39: Low-signal, weakly evidenced, or non-substantive items.
+
+RULES:
+1) Score every event in CURRENT BATCH.
+2) Use only factual impact, not writing style.
+3) Repeated updates on the same issue should usually score lower unless they add decisive new facts.
+4) Running totals (displaced/casualties) get 70+ only when they reflect major milestone/state change.
+5) Be internally consistent with the LOOKBACK CONTEXT (already rescored chronological history).
+6) Stay neutral across all sides; treat official claims from every country with equal skepticism.
+7) Use source quality signals: broader high-credibility corroboration can raise confidence; disputed/debunked events should usually score lower unless strongly evidenced.
+
+CALIBRATION GUARDRAILS:
+- 70+ should usually be a minority of events in a batch. Use 70+ only when loss of that event would break the conflict narrative.
+- If uncertain between two ranges, choose the lower range.
+- Do not use 70 as a default compromise score. If borderline, prefer 66-69.
+- For 70+, require clear narrative necessity: a strategic state change, a formal state-level decision/action with real downstream effects, or a major verified humanitarian/military milestone.
+- Milestone novelty rule: the FIRST report of a major milestone may be 70+, but follow-up confirmations of the same milestone should usually be 55-69 unless they introduce a materially new consequence.
+- Avoid milestone duplication inflation: repeated percentage/total updates (returns, displacement, casualties) should score lower unless magnitude, policy, or operational reality clearly changes.
+- Post-ceasefire/stabilization phases should be scored more conservatively: routine inspections, repeated protests, and recurring advisories are usually supporting context unless they trigger a new strategic state.
+- Single-source or one-sided allegation events should usually stay below 70 unless independently corroborated or directly evidenced.
+- Disputed events should usually remain below 70 unless there is strong multi-source confirmation of core facts.
+- Debunked events should be low (typically 0-25).
+- Repeated tactical updates in the same area/time window should usually sit in 50-69 unless they create a clear new strategic state.
+
+EVIDENCE WEIGHTING (SOFT):
+- No fixed ceilings; use judgment with consistency.
+- Weigh source quality and diversity more than rhetorical intensity.
+- Lower confidence and one-sided reporting should reduce score ambition.
+- Reserve 85+ for events with strong corroboration or clearly verifiable formal state actions.
+
+OUTPUT ONLY valid JSON wrapped in <json> tags:
+<json>
+{
+  "scores": [
+    { "eventId": "exact id", "importance": 0-100, "reason": "short reason" }
+  ],
+  "reasoning": "brief batch-level rationale"
+}
+</json>
+
+REQUIREMENTS:
+- Include every eventId from CURRENT BATCH exactly once.
+- importance must be integer 0-100.
+- Do not include events outside CURRENT BATCH.
+`;
+
+function tryParseImpactRescoreJson(raw: string): ImpactRescoreResult | null {
+    const tagMatch = raw.match(/<json>([\s\S]*?)<\/json>/i);
+    const jsonCandidate = tagMatch ? tagMatch[1].trim() : raw.trim();
+
+    const attempts = [
+        jsonCandidate,
+        jsonCandidate
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+            .replace(/,\s*([\]\}])/g, "$1"),
+    ];
+
+    for (const attempt of attempts) {
+        try {
+            const parsed = JSON.parse(attempt) as ImpactRescoreResult;
+            if (parsed && Array.isArray(parsed.scores)) {
+                return parsed;
+            }
+        } catch {
+            // Keep trying fallback parse variants.
+        }
+    }
+
+    return null;
+}
+
+async function rescoreImpactBatch(
+    batchEvents: ImpactRescoreEvent[],
+    lookbackEvents: ImpactRescoreEvent[]
+): Promise<ImpactRescoreResult | null> {
+    const lookbackContext = lookbackEvents.length > 0
+        ? lookbackEvents.map((event) =>
+            `- [${event.date}${event.timeOfDay ? ` ${event.timeOfDay}` : ""}] id:${event._id} | ${event.category} | status:${event.status} | imp:${event.importance}\n  ${event.title}`
+        ).join("\n")
+        : "(none)";
+
+    const batchContext = batchEvents.map((event, index) =>
+        {
+            const sourceSignals = [...(event.sources || [])]
+                .sort((a, b) => b.credibility - a.credibility)
+                .slice(0, 2)
+                .map((source) => `${source.name}(${source.country},${source.credibility})`)
+                .join(" | ") || "(none)";
+
+            const sourceCountryCount = new Set((event.sources || []).map((source) => source.country)).size;
+            const sourceCount = (event.sources || []).length;
+
+            return (
+        `${index + 1}. id:${event._id}\n` +
+        `   Date: ${event.date}${event.timeOfDay ? ` ${event.timeOfDay}` : ""}\n` +
+        `   Category: ${event.category} | Status: ${event.status} | Current importance: ${event.importance}\n` +
+        `   Source coverage: ${sourceCount} sources across ${sourceCountryCount} country groups\n` +
+        `   Source signals: ${sourceSignals}\n` +
+        `   Title: ${event.title}\n` +
+        `   Description: ${event.description}`
+            );
+        }
+    ).join("\n\n");
+
+    const prompt = `${IMPACT_RESCORE_PROMPT}
+
+═══════════════════════════════════════════════════════════════
+LOOKBACK CONTEXT (already rescored, chronological):
+${lookbackContext}
+
+CURRENT BATCH (${batchEvents.length} events):
+${batchContext}
+═══════════════════════════════════════════════════════════════
+
+Return rescored importance for every event in CURRENT BATCH.`;
+
+    const maxRetries = 3;
+    let currentPrompt = prompt;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        console.log(`🎚️ [IMPACT-RESCORE] Attempt ${attempt}/${maxRetries} for ${batchEvents.length} events...`);
+
+        try {
+            const response = await callGeminiStudioWithFallback(
+                currentPrompt,
+                FALLBACK_CHAINS.critical,
+                1,
+                "IMPACT-RESCORE"
+            );
+
+            const parsed = tryParseImpactRescoreJson(response);
+            if (parsed && Array.isArray(parsed.scores)) {
+                return parsed;
+            }
+
+            if (attempt < maxRetries) {
+                currentPrompt = `${prompt}\n\nYour previous response was invalid. Re-output now using ONLY valid JSON wrapped in <json> tags. Include every eventId from CURRENT BATCH exactly once.`;
+            }
+        } catch (error) {
+            console.log(`❌ [IMPACT-RESCORE] Attempt ${attempt} failed: ${error}`);
+            if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                currentPrompt = prompt;
+            }
+        }
+    }
+
+    return null;
+}
+
+export const previewTimelineImpactRescoreBatch = internalAction({
+    args: {
+        batchSize: v.optional(v.number()),
+        startIndex: v.optional(v.number()),
+        includeProcessed: v.optional(v.boolean()),
+        lookbackSize: v.optional(v.number()),
+    },
+    handler: async (ctx, args): Promise<{
+        success: boolean;
+        error?: string;
+        meta?: {
+            totalEventsInDb: number;
+            candidateEvents: number;
+            includeProcessed: boolean;
+            startIndex: number;
+            batchSize: number;
+            lookbackSize: number;
+            modelChain: readonly string[];
+        };
+        summary?: {
+            total: number;
+            avgOldImportance: number;
+            avgNewImportance: number;
+            movedUp: number;
+            movedDown: number;
+            unchanged: number;
+            crossedToKey70: number;
+            crossedFromKey70: number;
+        };
+        events?: Array<{
+            eventId: Id<"timelineEvents">;
+            date: string;
+            timeOfDay?: string;
+            category: "military" | "diplomatic" | "humanitarian" | "political";
+            status: "confirmed" | "disputed" | "debunked";
+            title: string;
+            description: string;
+            oldImportance: number;
+            newImportance: number;
+            delta: number;
+            reason?: string;
+            sourceSignals: string[];
+        }>;
+        modelReasoning?: string;
+    }> => {
+        const allTimeline = await ctx.runQuery(internal.api.getAllTimelineEvents, {}) as ImpactRescoreEvent[];
+
+        if (allTimeline.length === 0) {
+            return { success: false, error: "No timeline events found" };
+        }
+
+        const includeProcessed = args.includeProcessed ?? false;
+        const candidates = includeProcessed
+            ? [...allTimeline]
+            : allTimeline.filter((event) => event.impactRescoreProcessed !== true);
+
+        if (candidates.length === 0) {
+            return {
+                success: false,
+                error: "No candidate events found. If all are already processed, run resetTimelineImpactRescore first.",
+            };
+        }
+
+        candidates.sort((a, b) => {
+            const dateCompare = a.date.localeCompare(b.date);
+            if (dateCompare !== 0) return dateCompare;
+            const timeA = a.timeOfDay || "99:99";
+            const timeB = b.timeOfDay || "99:99";
+            if (timeA !== timeB) return timeA.localeCompare(timeB);
+            return (a.createdAt || 0) - (b.createdAt || 0);
+        });
+
+        const startIndex = Math.max(0, Math.min(args.startIndex ?? 0, Math.max(0, candidates.length - 1)));
+        const batchSize = Math.max(5, Math.min(args.batchSize ?? 20, 80));
+        const lookbackSize = Math.max(0, Math.min(args.lookbackSize ?? 15, 50));
+
+        const batchEvents = candidates.slice(startIndex, startIndex + batchSize);
+        const lookbackStart = Math.max(0, startIndex - lookbackSize);
+        const lookbackEvents = candidates.slice(lookbackStart, startIndex);
+
+        if (batchEvents.length === 0) {
+            return { success: false, error: "No events in selected batch range" };
+        }
+
+        const modelResult = await rescoreImpactBatch(batchEvents, lookbackEvents);
+        if (!modelResult || !Array.isArray(modelResult.scores)) {
+            return { success: false, error: "Model failed to produce valid preview scores" };
+        }
+
+        const decisions = new Map<string, ImpactRescoreDecision>();
+        for (const score of modelResult.scores) {
+            const key = String(score.eventId || "").trim();
+            if (!key) continue;
+            decisions.set(key, {
+                eventId: key,
+                importance: Math.max(0, Math.min(100, Math.round(score.importance))),
+                reason: score.reason,
+            });
+        }
+
+        const previewEvents = batchEvents.map((event) => {
+            const key = String(event._id);
+            const decision = decisions.get(key);
+            const newImportance = decision ? decision.importance : event.importance;
+            return {
+                eventId: event._id,
+                date: event.date,
+                timeOfDay: event.timeOfDay,
+                category: event.category,
+                status: event.status,
+                title: event.title,
+                description: event.description,
+                oldImportance: event.importance,
+                newImportance,
+                delta: newImportance - event.importance,
+                reason: decision?.reason,
+                sourceSignals: [...(event.sources || [])]
+                    .sort((a, b) => b.credibility - a.credibility)
+                    .slice(0, 3)
+                    .map((source) => `${source.name} (${source.country}, ${source.credibility})`),
+            };
+        });
+
+        const total = previewEvents.length;
+        const movedUp = previewEvents.filter((event) => event.delta > 0).length;
+        const movedDown = previewEvents.filter((event) => event.delta < 0).length;
+        const unchanged = total - movedUp - movedDown;
+        const crossedToKey70 = previewEvents.filter((event) => event.oldImportance < 70 && event.newImportance >= 70).length;
+        const crossedFromKey70 = previewEvents.filter((event) => event.oldImportance >= 70 && event.newImportance < 70).length;
+
+        const avgOldImportance = Math.round(
+            previewEvents.reduce((sum, event) => sum + event.oldImportance, 0) / total
+        );
+        const avgNewImportance = Math.round(
+            previewEvents.reduce((sum, event) => sum + event.newImportance, 0) / total
+        );
+
+        return {
+            success: true,
+            meta: {
+                totalEventsInDb: allTimeline.length,
+                candidateEvents: candidates.length,
+                includeProcessed,
+                startIndex,
+                batchSize: batchEvents.length,
+                lookbackSize,
+                modelChain: FALLBACK_CHAINS.critical,
+            },
+            summary: {
+                total,
+                avgOldImportance,
+                avgNewImportance,
+                movedUp,
+                movedDown,
+                unchanged,
+                crossedToKey70,
+                crossedFromKey70,
+            },
+            events: previewEvents,
+            modelReasoning: modelResult.reasoning ?? modelResult.summary,
+        };
+    },
+});
+
+export const startTimelineImpactRescore = internalAction({
+    args: {
+        batchSize: v.optional(v.number()),
+        autoStart: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args): Promise<{
+        started: boolean;
+        runId?: string;
+        totalEvents?: number;
+        batchSize?: number;
+        estimatedTokensPerEvent?: number;
+        eventsPer100kPrompt?: number;
+        reason?: string;
+        activeRunId?: string;
+        totalEventsInDatabase?: number;
+        unprocessedEvents?: number;
+    }> => {
+        const runId = `impact-rescore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const autoStart = args.autoStart ?? true;
+
+        const allTimeline = await ctx.runQuery(internal.api.getAllTimelineEvents, {}) as ImpactRescoreEvent[];
+        if (allTimeline.length === 0) {
+            return { started: false, reason: "No timeline events found" };
+        }
+
+        const pendingTimeline = allTimeline.filter((event) => event.impactRescoreProcessed !== true);
+        if (pendingTimeline.length === 0) {
+            return {
+                started: false,
+                reason: "All timeline events are already impact-rescored. Run resetTimelineImpactRescore to reprocess all.",
+                totalEventsInDatabase: allTimeline.length,
+                unprocessedEvents: 0,
+            };
+        }
+
+        pendingTimeline.sort((a, b) => {
+            const dateCompare = a.date.localeCompare(b.date);
+            if (dateCompare !== 0) return dateCompare;
+            const timeA = a.timeOfDay || "99:99";
+            const timeB = b.timeOfDay || "99:99";
+            if (timeA !== timeB) return timeA.localeCompare(timeB);
+            return (a.createdAt || 0) - (b.createdAt || 0);
+        });
+
+        const snapshotEventIds = pendingTimeline.map((event) => event._id);
+
+        const totalChars = pendingTimeline.reduce((sum: number, event) => {
+            const compact = `[${event.date}${event.timeOfDay ? ` ${event.timeOfDay}` : ""}] ${event.category} imp:${event.importance}\nTITLE: ${event.title}\nDESC: ${event.description}\n`;
+            return sum + compact.length;
+        }, 0);
+
+        const estimatedTokensPerEvent = Math.max(1, Math.round((totalChars / pendingTimeline.length) / 4));
+        const eventsPer100kPrompt = Math.max(1, Math.floor(100000 / estimatedTokensPerEvent));
+
+        const autoBatchSize = Math.max(20, Math.min(80, Math.floor((100000 * 0.65) / estimatedTokensPerEvent)));
+        const normalizedBatchSize = Math.max(10, Math.min(args.batchSize ?? Math.min(60, autoBatchSize), 80));
+
+        const lock = await ctx.runMutation(internal.api.acquireTimelineImpactRescoreLock, {
+            runId,
+            batchSize: normalizedBatchSize,
+            totalEvents: pendingTimeline.length,
+            snapshotEventIds,
+            estimatedTokensPerEvent,
+            eventsPer100kPrompt,
+        });
+
+        if (!lock.acquired) {
+            return {
+                started: false,
+                reason: "Another impact rescore run is already active",
+                activeRunId: lock.activeRunId,
+            };
+        }
+
+        if (autoStart) {
+            await ctx.scheduler.runAfter(0, internal.historian.runTimelineImpactRescoreBatch, { runId });
+        }
+
+        console.log(`🎚️ [IMPACT-RESCORE] Started run ${runId}`);
+        console.log(`   Events queued: ${pendingTimeline.length}/${allTimeline.length}, batchSize: ${normalizedBatchSize}, estTokens/event: ~${estimatedTokensPerEvent}, estEvents/100k: ~${eventsPer100kPrompt}`);
+
+        return {
+            started: true,
+            runId,
+            totalEvents: pendingTimeline.length,
+            batchSize: normalizedBatchSize,
+            estimatedTokensPerEvent,
+            eventsPer100kPrompt,
+            totalEventsInDatabase: allTimeline.length,
+            unprocessedEvents: pendingTimeline.length,
+        };
+    },
+});
+
+export const runTimelineImpactRescoreBatch = internalAction({
+    args: {
+        runId: v.string(),
+        scheduleNext: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args): Promise<{
+        continued: boolean;
+        done: boolean;
+        processedInBatch?: number;
+        processedTotal?: number;
+        totalEvents?: number;
+        error?: string;
+    }> => {
+        try {
+            const scheduleNext = args.scheduleNext ?? true;
+            const state = await ctx.runQuery(internal.api.getTimelineImpactRescoreState, {});
+            if (!state || !state.isRunning || state.runId !== args.runId) {
+                return { continued: false, done: false, error: "Run is not active" };
+            }
+
+            const snapshotIds = state.snapshotEventIds || [];
+            const totalEvents = state.totalEvents || snapshotIds.length;
+            const nextIndex = state.nextIndex || 0;
+            const batchSize = state.batchSize || 40;
+
+            if (snapshotIds.length === 0 || nextIndex >= totalEvents) {
+                await ctx.runMutation(internal.api.completeTimelineImpactRescoreRun, {
+                    runId: args.runId,
+                    progress: `Completed 0/${totalEvents}`,
+                });
+                return { continued: false, done: true, processedTotal: totalEvents, totalEvents };
+            }
+
+            const batchIds = snapshotIds.slice(nextIndex, nextIndex + batchSize);
+            const lookbackStart = Math.max(0, nextIndex - 15);
+            const lookbackIds = snapshotIds.slice(lookbackStart, nextIndex);
+
+            const [batchEventsRaw, lookbackEventsRaw] = await Promise.all([
+                ctx.runQuery(internal.api.getTimelineEventsByIds, { eventIds: batchIds }),
+                ctx.runQuery(internal.api.getTimelineEventsByIds, { eventIds: lookbackIds }),
+            ]);
+
+            const batchEvents: ImpactRescoreEvent[] = (batchEventsRaw as ImpactRescoreEvent[]).map((event) => ({
+                _id: event._id,
+                date: event.date,
+                timeOfDay: event.timeOfDay,
+                title: event.title,
+                description: event.description,
+                category: event.category,
+                importance: event.importance,
+                status: event.status,
+                createdAt: event.createdAt,
+                impactRescoreProcessed: event.impactRescoreProcessed,
+                sources: event.sources?.map((source) => ({
+                    name: source.name,
+                    country: source.country,
+                    credibility: source.credibility,
+                })),
+            }));
+
+            const lookbackEvents: ImpactRescoreEvent[] = (lookbackEventsRaw as ImpactRescoreEvent[]).map((event) => ({
+                _id: event._id,
+                date: event.date,
+                timeOfDay: event.timeOfDay,
+                title: event.title,
+                description: event.description,
+                category: event.category,
+                importance: event.importance,
+                status: event.status,
+                createdAt: event.createdAt,
+                impactRescoreProcessed: event.impactRescoreProcessed,
+            }));
+
+            const modelResult = await rescoreImpactBatch(batchEvents, lookbackEvents);
+            if (!modelResult || !Array.isArray(modelResult.scores)) {
+                throw new Error("AI did not return valid impact scores");
+            }
+
+            const batchIdSet = new Set(batchEvents.map((event) => String(event._id)));
+            const decisionById = new Map<string, ImpactRescoreDecision>();
+
+            for (const decision of modelResult.scores) {
+                const eventId = String(decision.eventId || "").trim();
+                if (!eventId || !batchIdSet.has(eventId)) continue;
+                const clamped = Math.max(0, Math.min(100, Math.round(decision.importance)));
+                decisionById.set(eventId, {
+                    eventId,
+                    importance: clamped,
+                    reason: decision.reason,
+                });
+            }
+
+            let missingScores = 0;
+            const updates = batchEvents.map((event) => {
+                const key = String(event._id);
+                const decision = decisionById.get(key);
+                if (!decision) missingScores++;
+                return {
+                    eventId: event._id,
+                    importance: decision ? decision.importance : event.importance,
+                };
+            });
+
+            const bulkResult = await ctx.runMutation(internal.api.bulkUpdateTimelineImportance, {
+                runId: args.runId,
+                updates,
+            });
+
+            const processedTotal = Math.min(totalEvents, nextIndex + batchIds.length);
+            const totalBatches = Math.max(1, Math.ceil(totalEvents / batchSize));
+            const completedBatchNumber = Math.ceil(processedTotal / batchSize);
+            const progress = `batch ${completedBatchNumber}/${totalBatches} (${processedTotal}/${totalEvents})`;
+
+            await ctx.runMutation(internal.api.updateTimelineImpactRescoreProgress, {
+                runId: args.runId,
+                processedEvents: processedTotal,
+                nextIndex: processedTotal,
+                updatedEvents: (state.updatedEvents || 0) + (bulkResult.updated || 0),
+                failedEvents: (state.failedEvents || 0) + missingScores + Math.max(0, batchIds.length - batchEvents.length),
+                progress,
+            });
+
+            if (processedTotal >= totalEvents) {
+                await ctx.runMutation(internal.api.completeTimelineImpactRescoreRun, {
+                    runId: args.runId,
+                    progress: `Completed ${processedTotal}/${totalEvents}`,
+                });
+                console.log(`✅ [IMPACT-RESCORE] Run ${args.runId} complete (${processedTotal}/${totalEvents})`);
+                return {
+                    continued: false,
+                    done: true,
+                    processedInBatch: batchEvents.length,
+                    processedTotal,
+                    totalEvents,
+                };
+            }
+
+            if (scheduleNext) {
+                await ctx.scheduler.runAfter(0, internal.historian.runTimelineImpactRescoreBatch, {
+                    runId: args.runId,
+                });
+            }
+
+            return {
+                continued: true,
+                done: false,
+                processedInBatch: batchEvents.length,
+                processedTotal,
+                totalEvents,
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`❌ [IMPACT-RESCORE] Batch failed for run ${args.runId}: ${message}`);
+
+            await ctx.runMutation(internal.api.failTimelineImpactRescoreRun, {
+                runId: args.runId,
+                error: message,
+            });
+
+            return { continued: false, done: true, error: message };
+        }
     },
 });
 

@@ -315,6 +315,42 @@ export default defineSchema({
     })
         .index("by_key", ["key"]),
 
+    // Track timeline impact rescore state (retroactive importance recalibration)
+    timelineImpactRescoreState: defineTable({
+        key: v.literal("main"),
+        isRunning: v.boolean(),
+        runId: v.optional(v.string()),
+        startedAt: v.optional(v.number()),
+        completedAt: v.optional(v.number()),
+        lastHeartbeat: v.optional(v.number()),
+        progress: v.optional(v.string()),
+        totalEvents: v.optional(v.number()),
+        processedEvents: v.optional(v.number()),
+        updatedEvents: v.optional(v.number()),
+        failedEvents: v.optional(v.number()),
+        nextIndex: v.optional(v.number()),
+        batchSize: v.optional(v.number()),
+        estimatedTokensPerEvent: v.optional(v.number()),
+        eventsPer100kPrompt: v.optional(v.number()),
+        snapshotEventIds: v.optional(v.array(v.id("timelineEvents"))),
+        lastError: v.optional(v.string()),
+    })
+        .index("by_key", ["key"]),
+
+    // Backup snapshots for timeline importance scores (manual restore safety)
+    timelineImportanceBackups: defineTable({
+        createdAt: v.number(),
+        label: v.optional(v.string()),
+        source: v.union(v.literal("manual"), v.literal("pre_rescore")),
+        totalEvents: v.number(),
+        avgImportance: v.number(),
+        entries: v.array(v.object({
+            eventId: v.id("timelineEvents"),
+            importance: v.number(),
+        })),
+    })
+        .index("by_createdAt", ["createdAt"]),
+
     // ==================== TIMELINE EVENTS ====================
     // The "memory" of the system - key historical events extracted from news
     // This is what the AI synthesizes from, NOT raw articles
@@ -363,6 +399,11 @@ export default defineSchema({
         // Metadata
         createdAt: v.number(),
         lastUpdatedAt: v.number(),
+
+        // Impact rescore tracking (retroactive recalibration runs)
+        impactRescoreProcessed: v.optional(v.boolean()),
+        impactRescoreProcessedAt: v.optional(v.number()),
+        impactRescoreRunId: v.optional(v.string()),
     })
         .index("by_date", ["date"])
         .index("by_importance", ["importance"])
