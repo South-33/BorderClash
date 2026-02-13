@@ -1012,6 +1012,43 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [isViewTransitioning, setIsViewTransitioning] = useState(false);
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
+  const fadeShellRef = useRef<HTMLDivElement>(null);
+
+  const waitForCascadeFadeOut = useCallback(() => {
+    const shell = fadeShellRef.current;
+    if (!shell) return Promise.resolve();
+
+    return new Promise<void>((resolve) => {
+      let settled = false;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        shell.removeEventListener('transitionend', onTransitionEnd);
+        clearTimeout(timeoutId);
+        resolve();
+      };
+
+      const onTransitionEnd = (event: TransitionEvent) => {
+        if (event.target !== shell || event.propertyName !== 'opacity') return;
+        const opacity = Number.parseFloat(getComputedStyle(shell).opacity || '1');
+        if (opacity <= 0.01) finish();
+      };
+
+      const timeoutId = window.setTimeout(finish, 300);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const opacity = Number.parseFloat(getComputedStyle(shell).opacity || '1');
+          if (opacity <= 0.01) {
+            finish();
+            return;
+          }
+          shell.addEventListener('transitionend', onTransitionEnd);
+        });
+      });
+    });
+  }, []);
 
   // Animated view mode switch - fade out, switch, fade in
   const setViewMode = useCallback((mode: 'ANALYSIS' | 'TIMELINE' | 'GUIDE') => {
@@ -1058,19 +1095,6 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       setIsModalClosing(false);
     }, 300); // Give animation time to complete (200ms transition + buffer)
   };
-
-  // Lock body scroll when modal is open
-  useEffect(() => {
-    if (selectedEvent) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [selectedEvent]);
-
 
   // Sidebar ref and height sync
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -1333,11 +1357,24 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     setLang
   } = useCascadeLayout({
     viewMode: viewMode.toLowerCase() as 'analysis' | 'timeline' | 'guide',
-    isLoading: neutralMetaLoading
+    isLoading: neutralMetaLoading,
+    awaitBeforeMeasure: waitForCascadeFadeOut
   });
 
   // Get translations for current lang
   const t = TRANSLATIONS[lang as Lang];
+
+  // Lock root-page scroll during modal open and cascade fade/recalc.
+  useLayoutEffect(() => {
+    const shouldLockPageScroll = Boolean(selectedEvent) || !isLayoutReady;
+    const root = document.documentElement;
+
+    root.style.overflowY = shouldLockPageScroll ? 'hidden' : '';
+
+    return () => {
+      root.style.overflowY = '';
+    };
+  }, [selectedEvent, isLayoutReady]);
 
   // Helper to get narrative based on language
   const getNarrative = (meta: any) => {
@@ -1776,36 +1813,51 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const virtualItems = useMemo(() => {
     const items: Array<{ type: 'header' | 'event'; date: string; event?: any; eventIndex?: number; eventsInDate?: number; estimatedSize: number }> = [];
     let globalEventIndex = 0; // Running counter across all dates
+
     timelineDates.forEach(date => {
       const events = groupedEvents[date] || [];
       items.push({ type: 'header', date, eventsInDate: events.length, estimatedSize: 60 });
       events.forEach((event) => {
         // Smart Estimation Logic for Event Height
-        // Tight estimates for mobile
-        let height = 85; // Base: wrapper py-3 + card padding + category badge
+        const isThai = lang === 'th';
+        const isKhmer = lang === 'kh';
 
-        const titleLen = (event.title || event.titleTh || '').length;
-        const descLen = (event.description || event.descriptionTh || '').length;
+        const titleText = isThai
+          ? (event.titleTh || event.title || event.titleKh || '')
+          : isKhmer
+            ? (event.titleKh || event.title || event.titleTh || '')
+            : (event.title || event.titleTh || event.titleKh || '');
+        const descriptionText = isThai
+          ? (event.descriptionTh || event.description || event.descriptionKh || '')
+          : isKhmer
+            ? (event.descriptionKh || event.description || event.descriptionTh || '')
+            : (event.description || event.descriptionTh || event.descriptionKh || '');
         const hasSources = event.sources && event.sources.length > 0;
 
-        // Title estimation (avg 40 chars per line on mobile)
-        if (titleLen > 80) height += 50; // 3 lines
-        else if (titleLen > 40) height += 35; // 2 lines
-        else height += 20; // 1 line
+        const titleLen = titleText.length;
+        const descLen = descriptionText.length;
 
-        // Description (line-clamp-2, avg 60 chars per line)
-        if (descLen > 60) height += 35; // 2 lines
-        else if (descLen > 0) height += 20; // 1 line
+        let height = 85;
 
-        // Sources row
-        if (hasSources) height += 24;
+        const titleOneLineLimit = isKhmer ? 34 : isThai ? 38 : 40;
+        if (titleLen > titleOneLineLimit * 2) height += isKhmer ? 52 : isThai ? 46 : 50;
+        else if (titleLen > titleOneLineLimit) height += isKhmer ? 38 : isThai ? 33 : 35;
+        else height += isKhmer ? 28 : isThai ? 24 : 20;
+
+        const descOneLineLimit = isKhmer ? 42 : isThai ? 50 : 60;
+        if (descLen > descOneLineLimit) height += isKhmer ? 40 : isThai ? 36 : 35;
+        else if (descLen > 0) height += isKhmer ? 24 : isThai ? 22 : 20;
+
+        if (hasSources) {
+          height += isKhmer ? 28 : 24;
+        }
 
         items.push({ type: 'event', date, event, eventIndex: globalEventIndex, estimatedSize: height });
         globalEventIndex++;
       });
     });
     return items;
-  }, [timelineDates, groupedEvents]);
+  }, [timelineDates, groupedEvents, lang]);
 
   // Date-to-index mapping for scrollToDate
   const dateToVirtualIndex = useMemo(() => {
@@ -1822,18 +1874,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const rowVirtualizer = useVirtualizer({
     count: virtualItems.length,
     getScrollElement: () => timelineScrollRef.current,
+    useFlushSync: false,
     estimateSize: (index) => virtualItems[index]?.estimatedSize || 180,
     overscan: 15, // Buffer items above/below viewport
   });
-
-  // Force virtualizer to recalculate when filter changes (fixes spacing after toggle)
-  useEffect(() => {
-    // Small delay to ensure DOM has updated
-    const timer = setTimeout(() => {
-      rowVirtualizer.measure();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [showMinorEvents]);
 
   // Scroll to selected date section (uses virtualizer for smooth navigation)
   const scrollToDate = useCallback((date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
@@ -2064,9 +2108,11 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   // Language class for font-size boost (Thai/Khmer need larger text)
   const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
+  const timelineToggleTextSizeClass = lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]';
 
   return (
     <div
+      ref={fadeShellRef}
       className={`min-h-screen grid grid-rows-[1fr_auto_1fr] transition-opacity duration-[150ms] ease-out ${langClass} ${(!isDesktop || forceMobile) ? 'force-mobile' : ''}`}
       style={{ opacity: isLayoutReady ? 1 : 0 }}
     >
@@ -2297,7 +2343,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
           {/* ANALYSIS VIEW - Always render during measuring phase for overflow measurement */}
           <div className={`xl:col-span-3 ${(isMeasuring || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
-            <div className="flex flex-col gap-4" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="flex flex-col gap-4" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
                 <Card title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
@@ -2509,8 +2555,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           </div>
 
           {/* LOSSES VIEW */}
-          <div className={`xl:col-span-3 ${viewMode !== 'TIMELINE' ? 'hidden' : ''}`}>
-            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+          <div className={`xl:col-span-3 ${(viewMode !== 'TIMELINE' || isMeasuring) ? 'hidden' : ''}`}>
+            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
@@ -2520,19 +2566,19 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                   <div className="flex items-stretch">
                     <button
                       onClick={() => setShowMinorEvents(false)}
-                      className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2
-                        ${!showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20 border-r-0'}`}
+                      className={`px-3 py-1.5 ${timelineToggleTextSizeClass} font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2 border-r-0
+                        ${!showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20'}`}
                     >
                       {t.hidingMinor}
                     </button>
                     <button
                       onClick={() => setShowMinorEvents(true)}
-                      className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2 border-l-0
+                      className={`px-3 py-1.5 ${timelineToggleTextSizeClass} font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2
                         ${showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20'}`}
                     >
                       {t.showAllEvents}
                     </button>
-                    <span className="px-3 py-1.5 text-[10px] font-mono text-riso-ink/50 tabular-nums whitespace-nowrap border-2 border-l-0 border-riso-ink/20">
+                    <span className="px-3 py-1.5 inline-flex items-center justify-center leading-none text-[10px] font-mono text-riso-ink/50 tabular-nums whitespace-nowrap border-2 border-l-0 border-riso-ink/20">
                       {filteredEventsCount}/{totalEventsCount}
                     </span>
                   </div>
@@ -2601,7 +2647,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                     {/* --- VIRTUALIZED TIMELINE --- */}
                     <div
                       ref={timelineScrollRef}
-                      className={`flex-1 overflow-y-auto min-h-0 bg-[url('/grid.svg')] bg-[length:20px_20px] transition-opacity duration-200 ${isScrollJump ? 'opacity-0' : 'opacity-100'}`}
+                      className={`flex-1 overflow-y-auto min-h-0 transition-opacity duration-200 ${isScrollJump ? 'opacity-0' : 'opacity-100'}`}
                       style={{
                         overflowAnchor: 'none',
                         transform: 'translate3d(0,0,0)',
@@ -2996,8 +3042,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
           </div>
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
-          <div className={`xl:col-span-3 ${viewMode !== 'GUIDE' ? 'hidden' : ''}`}>
-            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)] xl:h-auto" style={{ height: (isDesktop && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+          <div className={`xl:col-span-3 ${(viewMode !== 'GUIDE' || isMeasuring) ? 'hidden' : ''}`}>
+            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
                 <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">

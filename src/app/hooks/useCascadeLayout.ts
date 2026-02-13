@@ -39,9 +39,10 @@ export interface CascadeLayoutResult {
 export interface CascadeLayoutOptions {
     viewMode?: 'analysis' | 'timeline' | 'guide';
     isLoading?: boolean;
+    awaitBeforeMeasure?: () => Promise<void>;
 }
 
-export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: CascadeLayoutOptions = {}): CascadeLayoutResult {
+export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awaitBeforeMeasure }: CascadeLayoutOptions = {}): CascadeLayoutResult {
     // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const neutralCardRef = useRef<HTMLDivElement>(null);
@@ -83,6 +84,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         isTransitioning.current = true;
 
         const langToUse = newLang ?? lang;
+        const isLanguageSwitchOutsideAnalysis = Boolean(newLang) && viewMode !== 'analysis';
         const windowWidth = window.innerWidth;
         const isDesktopNow = windowWidth >= MOBILE_BREAKPOINT;
 
@@ -93,7 +95,20 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
 
         // 0. FADE OUT & RESET
         updateState({ isLayoutReady: false });
-        await new Promise(r => setTimeout(r, FADE_MS));
+        if (awaitBeforeMeasure) {
+            await awaitBeforeMeasure();
+        } else {
+            await new Promise(r => setTimeout(r, FADE_MS));
+        }
+
+        // In TIMELINE/GUIDE language switches, keep existing layout mode stable.
+        // This avoids force-mobile <-> desktop probing flicker while preserving cascade fade.
+        if (isLanguageSwitchOutsideAnalysis) {
+            setLangState(langToUse);
+            updateState({ isLayoutReady: true });
+            isTransitioning.current = false;
+            return;
+        }
 
         // Now that we're faded out, enable measuring mode (shows ANALYSIS view for measurements)
         updateState({ isMeasuring: true });
@@ -218,7 +233,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false }: C
         });
         isTransitioning.current = false;
 
-    }, [lang, checkOverflow]);
+    }, [lang, checkOverflow, awaitBeforeMeasure, viewMode]);
 
     // === HANDLERS ===
     useEffect(() => {

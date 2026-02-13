@@ -78,6 +78,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
+        suppressHydrationWarning
         className={`${anton.variable} ${jetbrainsMono.variable} ${inter.variable} ${chakraPetch.variable} ${ibmPlexThai.variable} ${moul.variable} ${kantumruy.variable} antialiased`}
         style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
       >
