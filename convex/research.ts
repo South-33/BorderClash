@@ -1976,10 +1976,22 @@ export const step4_synthesis = internalAction({
 
         // ═══ ADAPTIVE SCHEDULING with scheduler.runAt ═══
         // Schedule exact next run time (no more heartbeat polling!)
-        const nextHours = schedulingResult?.nextCycleHours || 12;
+        const DEFAULT_INTERVAL_HOURS = 12;
+        const SYNTHESIS_FALLBACK_INTERVAL_HOURS = 24;
+        const aiSuggestedHours = schedulingResult?.nextCycleHours;
+        const hasValidAiInterval = typeof aiSuggestedHours === "number" && Number.isFinite(aiSuggestedHours);
+        const isSynthesisFallback = !hasValidAiInterval && !synthesisSucceeded;
+        const nextHours = hasValidAiInterval
+            ? aiSuggestedHours
+            : isSynthesisFallback
+                ? SYNTHESIS_FALLBACK_INTERVAL_HOURS
+                : DEFAULT_INTERVAL_HOURS;
         const clampedHours = Math.max(4, Math.min(48, nextHours)); // Clamp to 4-48 range
         const nextRunAt = Date.now() + (clampedHours * 60 * 60 * 1000);
-        const reason = schedulingResult?.reason || "Default scheduling (synthesis did not return decision)";
+        const reason = schedulingResult?.reason
+            || (isSynthesisFallback
+                ? "Fallback scheduling (synthesis failed or returned no result); retrying in 24h"
+                : "Default scheduling (synthesis did not return decision)");
 
         console.log(`📅 AI scheduling decision: ${clampedHours}h - ${reason}`);
 
@@ -2005,13 +2017,24 @@ export const step4_synthesis = internalAction({
         }
 
         // Schedule the exact next run time
-        const scheduledRunId = await ctx.scheduler.runAt(
-            nextRunAt,
-            internal.research.runResearchCycle,
-            {}
-        );
-        console.log(`📅 [SCHEDULER] Scheduled next run for ${new Date(nextRunAt).toLocaleString()} (${clampedHours}h from now)`);
-        console.log(`   Job ID: ${scheduledRunId}`);
+        const scheduledRunId = await (async () => {
+            try {
+                const jobId = await ctx.scheduler.runAt(
+                    nextRunAt,
+                    internal.research.runResearchCycle,
+                    {}
+                );
+                console.log(`📅 [SCHEDULER] Scheduled next run for ${new Date(nextRunAt).toLocaleString()} (${clampedHours}h from now)`);
+                console.log(`   Job ID: ${jobId}`);
+                return jobId;
+            } catch (e) {
+                const scheduleError = `Scheduler runAt failed: ${String(e)}`;
+                stepErrors.push(scheduleError);
+                console.error(`❌ [SCHEDULER] ${scheduleError}`);
+                console.log("⏰ [SCHEDULER] Cron safety net will retry within 24h if no job exists");
+                return undefined;
+            }
+        })();
 
         // Store scheduling info for frontend display and tracking
         await ctx.runMutation(internal.api.setNextRunAt, {
