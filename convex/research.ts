@@ -1331,16 +1331,16 @@ RULES:
 7. FOG OF WAR: If information is genuinely unclear/conflicting, say so. "Insufficient verified information" is a valid answer.
 
 📅 ADAPTIVE SCHEDULING DECISION:
-Based on your analysis, decide when the system should run the next intelligence cycle.
-This controls monitoring frequency - more active situations need more frequent updates.
+Decide when the next intelligence cycle should run. Pick any value between 4 and 48 hours. If the border is quiet and news is just repeating itself, don't be afraid to "sleep on it" for 24-48 hours. We don't need to burn cycles on stale news. 
 
-GUIDELINES (pick ONE):
-• 4 hours: AGGRESSIVE posture detected, active conflict, rapid developments
-• 8 hours: ESCALATED posture, elevated tension, multiple new developments  
-• 16 hours: DEFENSIVE posture, some activity, routine monitoring
-• 24-48 hours: PEACEFUL both sides, minimal changes, quiet period
+However, if bullets are flying or troops are moving, stay on top of it with a 4-8h window.
 
-Return your decision in the "scheduling" section of the JSON.`;
+THINK LIKE THIS:
+- "Is something actually moving?" -> 4-12 hours.
+- "Same old posturing/patrols?" -> 18-24 hours.
+- "Dead silence/Peace talks?" -> 36-48 hours.
+
+Return your hours and a brief reason in the "scheduling" section.`;
 
         try {
             // Use generic self-healing helper
