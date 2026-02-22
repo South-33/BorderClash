@@ -363,7 +363,15 @@ const useCachedQuery = <T,>(
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isHydrated, setIsHydrated] = useState(data !== undefined || skip);
   const lastFetchedAt = useRef<number | null>(null);
-  const hasDoneInitialFetch = useRef(skip);
+  const hasDoneInitialFetch = useRef(false);
+  const previousSkip = useRef(skip);
+
+  useEffect(() => {
+    if (previousSkip.current && !skip) {
+      hasDoneInitialFetch.current = false;
+    }
+    previousSkip.current = skip;
+  }, [skip]);
 
   // Use passed prop if available, otherwise fall back to global ref
   const effectiveLastResearchAt = lastResearchAt ?? globalLastResearchAt.current;
