@@ -112,6 +112,7 @@ If new evidence shows an old event was wrong, FIX IT. That's your job.
 🌐 LANGUAGE & TRANSLATION:
 - Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
 - Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
+- AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 
 📝 PROCESS:
@@ -1104,27 +1105,26 @@ async function rescoreImpactBatch(
         ).join("\n")
         : "(none)";
 
-    const batchContext = batchEvents.map((event, index) =>
-        {
-            const sourceSignals = [...(event.sources || [])]
-                .sort((a, b) => b.credibility - a.credibility)
-                .slice(0, 2)
-                .map((source) => `${source.name}(${source.country},${source.credibility})`)
-                .join(" | ") || "(none)";
+    const batchContext = batchEvents.map((event, index) => {
+        const sourceSignals = [...(event.sources || [])]
+            .sort((a, b) => b.credibility - a.credibility)
+            .slice(0, 2)
+            .map((source) => `${source.name}(${source.country},${source.credibility})`)
+            .join(" | ") || "(none)";
 
-            const sourceCountryCount = new Set((event.sources || []).map((source) => source.country)).size;
-            const sourceCount = (event.sources || []).length;
+        const sourceCountryCount = new Set((event.sources || []).map((source) => source.country)).size;
+        const sourceCount = (event.sources || []).length;
 
-            return (
-        `${index + 1}. id:${event._id}\n` +
-        `   Date: ${event.date}${event.timeOfDay ? ` ${event.timeOfDay}` : ""}\n` +
-        `   Category: ${event.category} | Status: ${event.status} | Current importance: ${event.importance}\n` +
-        `   Source coverage: ${sourceCount} sources across ${sourceCountryCount} country groups\n` +
-        `   Source signals: ${sourceSignals}\n` +
-        `   Title: ${event.title}\n` +
-        `   Description: ${event.description}`
-            );
-        }
+        return (
+            `${index + 1}. id:${event._id}\n` +
+            `   Date: ${event.date}${event.timeOfDay ? ` ${event.timeOfDay}` : ""}\n` +
+            `   Category: ${event.category} | Status: ${event.status} | Current importance: ${event.importance}\n` +
+            `   Source coverage: ${sourceCount} sources across ${sourceCountryCount} country groups\n` +
+            `   Source signals: ${sourceSignals}\n` +
+            `   Title: ${event.title}\n` +
+            `   Description: ${event.description}`
+        );
+    }
     ).join("\n\n");
 
     const prompt = `${IMPACT_RESCORE_PROMPT}

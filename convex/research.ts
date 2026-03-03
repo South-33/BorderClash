@@ -176,6 +176,7 @@ SCORING GUIDE:
 LANGUAGE & TRANSLATION:
 - Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
 - Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
+- AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
@@ -381,6 +382,7 @@ Don't just score based on source name. Analyze the CONTENT:
 LANGUAGE & TRANSLATION:
 - Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
 - Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
+- AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
@@ -591,7 +593,8 @@ SCORING GUIDE:
 LANGUAGE & TRANSLATION:
 - Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
 - Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
-- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២๣
+- AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
+- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 
 OUTPUT FORMAT - Wrap your JSON in <json> tags:
 <json>
