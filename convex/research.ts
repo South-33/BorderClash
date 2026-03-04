@@ -55,6 +55,96 @@ export const maybeRunCycle = internalAction({
     },
 });
 
+// Watchdog: recover from timed-out/stuck cycles that never reached scheduling/finalization.
+// If a cycle is still marked as syncing after 45 minutes, force a safe 24h fallback schedule,
+// clear the lock, and bring the system back online.
+export const recoverStuckCycle = internalAction({
+    args: {},
+    handler: async (ctx): Promise<{ recovered: boolean; reason: string; nextRunAt?: number }> => {
+        const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+        const now = Date.now();
+
+        if (!stats) {
+            return { recovered: false, reason: "no system stats record" };
+        }
+
+        if (stats.isPaused || stats.systemStatus === "stopped") {
+            return { recovered: false, reason: "system paused/stopped" };
+        }
+
+        if (stats.systemStatus !== "syncing" || !stats.cycleRunId || !stats.cycleStartedAt) {
+            return { recovered: false, reason: "no active syncing cycle" };
+        }
+
+        const ZOMBIE_TIMEOUT_MS = 45 * 60 * 1000;
+        const cycleAgeMs = now - stats.cycleStartedAt;
+        if (cycleAgeMs < ZOMBIE_TIMEOUT_MS) {
+            const mins = Math.round(cycleAgeMs / 60000);
+            return { recovered: false, reason: `cycle still active (${mins}m)` };
+        }
+
+        const FALLBACK_INTERVAL_HOURS = 24;
+        const nextRunAt = now + (FALLBACK_INTERVAL_HOURS * 60 * 60 * 1000);
+        const recoveryReason = "Automatic fallback scheduling after stuck/timed-out cycle; retrying in 24h";
+
+        // Cancel any pending cycle jobs so we don't stack duplicate runs.
+        try {
+            const pendingJobIds = await ctx.runQuery(internal.api.getPendingCycleJobs, {});
+            if (pendingJobIds.length > 0) {
+                console.log(`🗑️ [RECOVERY] Cancelling ${pendingJobIds.length} pending cycle job(s) before fallback scheduling...`);
+                for (const jobId of pendingJobIds) {
+                    try {
+                        await ctx.scheduler.cancel(jobId as any);
+                    } catch (cancelError) {
+                        console.log(`⚠️ [RECOVERY] Could not cancel ${jobId}: ${cancelError}`);
+                    }
+                }
+            }
+        } catch (pendingJobsError) {
+            console.log(`⚠️ [RECOVERY] Could not query pending jobs: ${pendingJobsError}`);
+        }
+
+        const scheduledRunId = await (async () => {
+            try {
+                const jobId = await ctx.scheduler.runAt(nextRunAt, internal.research.runResearchCycle, {});
+                console.log(`📅 [RECOVERY] Scheduled fallback run for ${new Date(nextRunAt).toLocaleString()} (24h)`);
+                console.log(`   Job ID: ${jobId}`);
+                return jobId;
+            } catch (scheduleError) {
+                console.error(`❌ [RECOVERY] Failed to schedule fallback runAt job: ${scheduleError}`);
+                console.log("⏰ [RECOVERY] 24h cron safety net will still retry if no runAt job exists");
+                return undefined;
+            }
+        })();
+
+        await ctx.runMutation(internal.api.setNextRunAt, {
+            nextRunAt,
+            lastCycleInterval: FALLBACK_INTERVAL_HOURS,
+            schedulingReason: recoveryReason,
+            scheduledRunId,
+        });
+
+        const lockPrefix = stats.cycleRunId.slice(0, 8);
+        const minsStuck = Math.round(cycleAgeMs / 60000);
+        const errorLog = `Recovery watchdog cleared stuck cycle ${lockPrefix} after ${minsStuck}m; fallback next run set to 24h.`;
+
+        await ctx.runMutation(internal.api.setStatus, {
+            status: "online",
+            errorLog,
+        });
+
+        await ctx.runMutation(internal.api.releaseCycleLock, { runId: stats.cycleRunId });
+
+        console.warn(`🧯 [RECOVERY] Cleared stuck cycle ${lockPrefix} (${minsStuck}m old), set fallback next run in 24h.`);
+
+        return {
+            recovered: true,
+            reason: errorLog,
+            nextRunAt,
+        };
+    },
+});
+
 export const curateCambodia = internalAction({
     args: {},
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
