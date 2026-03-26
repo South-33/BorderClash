@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local nested repo copy / generated output should not be linted by this workspace.
+    "borderclash/**",
   ]),
 ]);
 

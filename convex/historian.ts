@@ -728,6 +728,8 @@ export const runHistorianCycle = internalAction({
                 .replace(/&apos;/g, "'");
         };
 
+        const returnedTitles = new Set<string>();
+
         for (const action of historianResult.actions) {
             // Safety check for missing title
             if (!action.articleTitle) {
@@ -737,13 +739,15 @@ export const runHistorianCycle = internalAction({
 
             // Decode HTML entities in the article title from AI response
             const searchTitle = decodeHtmlEntities(action.articleTitle);
+            returnedTitles.add(searchTitle);
             const article = selectedArticles.find((a: any) => a.title === searchTitle);
             if (!article) {
                 console.log(`⚠️ Article not found: "${action.articleTitle}"`);
                 continue;
             }
 
-            switch (action.action) {
+            try {
+                switch (action.action) {
                 case "create_event":
                     if (action.eventData) {
                         // Validate category - AI might return invalid values
@@ -772,7 +776,7 @@ export const runHistorianCycle = internalAction({
                                 credibility: article.credibility,
                                 snippet: action.eventData.sourceSnippet,
                             }],
-                        });
+                            });
                         console.log(`📌 Created event: "${action.eventData.title}" (importance: ${action.eventData.importance})`);
                         eventsCreated++;
                     }
@@ -796,7 +800,7 @@ export const runHistorianCycle = internalAction({
                                 start: startDate.toISOString().split('T')[0],
                                 end: endDate.toISOString().split('T')[0],
                             },
-                        });
+                            });
 
                         if (matchingEvents.length > 0) {
                             await ctx.runMutation(internal.api.addSourceToEvent, {
@@ -808,7 +812,7 @@ export const runHistorianCycle = internalAction({
                                     credibility: article.credibility,
                                     snippet: action.sourceSnippet,
                                 },
-                            });
+                                });
                             console.log(`➕ Merged source into: "${action.targetEventTitle}"`);
                             sourcesMerged++;
                         } else {
@@ -820,10 +824,10 @@ export const runHistorianCycle = internalAction({
                 case "archive":
                     // Archive = mark as processed but not timeline-worthy
                     await ctx.runMutation(internal.api.flagArticle, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        title: article.title,
+                            country: article.country as "thailand" | "cambodia" | "international",
+                            title: article.title,
                         status: "archived",
-                    });
+                        });
                     console.log(`📦 Archived: "${article.title}"`);
                     archived++;
                     break;
@@ -831,10 +835,10 @@ export const runHistorianCycle = internalAction({
                 case "discard":
                     // Discard = mark as false (bad data)
                     await ctx.runMutation(internal.api.flagArticle, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        title: article.title,
+                            country: article.country as "thailand" | "cambodia" | "international",
+                            title: article.title,
                         status: "false",
-                    });
+                        });
                     console.log(`🗑️ Discarded: "${article.title}"`);
                     discarded++;
                     break;
@@ -870,7 +874,7 @@ export const runHistorianCycle = internalAction({
                             eventTitle: action.targetEventTitle,
                             updates,
                             reason: action.reasoning || "Updated by Historian based on new information",
-                        });
+                            });
                         console.log(`✏️ Updated event: "${action.targetEventTitle}" - ${action.reasoning || "no reason given"}`);
                         eventsUpdated++;
                     } else {
@@ -881,11 +885,11 @@ export const runHistorianCycle = internalAction({
                 case "flag_conflict":
                     // Mark for deeper investigation
                     await ctx.runMutation(internal.api.updateArticleValidation, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        title: article.title,
+                            country: article.country as "thailand" | "cambodia" | "international",
+                            title: article.title,
                         hasConflict: true,
                         conflictsWith: action.targetEventTitle,
-                    });
+                        });
                     console.log(`⚠️ Flagged conflict: "${article.title}" vs "${action.targetEventTitle}"`);
                     break;
 
@@ -895,7 +899,7 @@ export const runHistorianCycle = internalAction({
                         await ctx.runMutation(internal.api.deleteTimelineEvent, {
                             eventTitle: action.targetEventTitle,
                             reason: action.reasoning,
-                        });
+                            });
                         console.log(`🗑️ DELETED event: "${action.targetEventTitle}" - Reason: ${action.reasoning}`);
                         eventsDeleted++;
                     } else {
@@ -906,19 +910,22 @@ export const runHistorianCycle = internalAction({
 
             // UPDATE CREDIBILITY - Historian verifies and adjusts credibility for every article
             if (action.verifiedCredibility !== undefined) {
-                const oldCred = article.credibility || 50;
-                const newCred = Math.max(0, Math.min(100, action.verifiedCredibility));
-                const credDiff = newCred - oldCred;
+                try {
+                    const oldCred = article.credibility || 50;
+                    const newCred = Math.max(0, Math.min(100, action.verifiedCredibility));
+                    const credDiff = newCred - oldCred;
 
-                await ctx.runMutation(internal.api.updateArticleCredibility, {
-                    country: article.country as "thailand" | "cambodia" | "international",
-                    title: article.title,
-                    credibility: newCred,
-                });
-
-                const arrow = credDiff > 0 ? "↑" : credDiff < 0 ? "↓" : "→";
-                console.log(`   📊 Credibility: ${oldCred} ${arrow} ${newCred} | ${action.credibilityReason || ""}`);
-                credibilityUpdated++;
+                    await ctx.runMutation(internal.api.updateArticleCredibility, {
+                        country: article.country as "thailand" | "cambodia" | "international",
+                        title: article.title,
+                        credibility: newCred,
+                    });
+                    const arrow = credDiff > 0 ? "up" : credDiff < 0 ? "down" : "same";
+                    console.log(`   Credibility: ${oldCred} ${arrow} ${newCred} | ${action.credibilityReason || ""}`);
+                    credibilityUpdated++;
+                } catch (error) {
+                    console.error(`[HISTORIAN] Credibility update failed for "${article.title}":`, error);
+                }
             }
 
             // Mark article as processed by Historian (regardless of action taken)
@@ -926,21 +933,23 @@ export const runHistorianCycle = internalAction({
                 country: article.country as "thailand" | "cambodia" | "international",
                 title: article.title,
             });
+            } catch (error) {
+                console.error(`[HISTORIAN] Failed to apply action "${action.action}" for "${article.title}":`, error);
+                continue;
+            }
         }
 
         // IMPORTANT: Also mark any selected articles that the AI forgot to include in its response
         // This prevents "orphaned" articles from being reprocessed forever
         // Decode HTML entities to match consistently with the action processing above
-        const processedTitles = new Set(
-            historianResult.actions.map((a: HistorianAction) => decodeHtmlEntities(a.articleTitle))
-        );
+        const processedTitles = returnedTitles;
         for (const article of selectedArticles) {
             if (!processedTitles.has(article.title)) {
                 console.log(`⚠️ AI forgot to return action for "${article.title}" - marking as processed anyway`);
                 await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
-                    country: article.country as "thailand" | "cambodia" | "international",
-                    title: article.title,
-                });
+                        country: article.country as "thailand" | "cambodia" | "international",
+                        title: article.title,
+                    });
             }
         }
 
@@ -1460,7 +1469,7 @@ export const runTimelineImpactRescoreBatch = internalAction({
                 await ctx.runMutation(internal.api.completeTimelineImpactRescoreRun, {
                     runId: args.runId,
                     progress: `Completed 0/${totalEvents}`,
-                });
+                    });
                 return { continued: false, done: true, processedTotal: totalEvents, totalEvents };
             }
 
@@ -1520,7 +1529,7 @@ export const runTimelineImpactRescoreBatch = internalAction({
                     eventId,
                     importance: clamped,
                     reason: decision.reason,
-                });
+                    });
             }
 
             let missingScores = 0;
@@ -1557,7 +1566,7 @@ export const runTimelineImpactRescoreBatch = internalAction({
                 await ctx.runMutation(internal.api.completeTimelineImpactRescoreRun, {
                     runId: args.runId,
                     progress: `Completed ${processedTotal}/${totalEvents}`,
-                });
+                    });
                 console.log(`✅ [IMPACT-RESCORE] Run ${args.runId} complete (${processedTotal}/${totalEvents})`);
                 return {
                     continued: false,
@@ -1571,7 +1580,7 @@ export const runTimelineImpactRescoreBatch = internalAction({
             if (scheduleNext) {
                 await ctx.scheduler.runAfter(0, internal.historian.runTimelineImpactRescoreBatch, {
                     runId: args.runId,
-                });
+                    });
             }
 
             return {
@@ -1893,7 +1902,7 @@ export const runTimelineCanonicalizationBatch = internalAction({
                 await ctx.runMutation(internal.api.completeTimelineCanonicalizationRun, {
                     runId: args.runId,
                     progress: `Completed ${nextIndex}/${totalEvents}`,
-                });
+                    });
                 return { continued: false, done: true, processedTotal: totalEvents, totalEvents };
             }
 
@@ -1980,7 +1989,7 @@ export const runTimelineCanonicalizationBatch = internalAction({
                         sourceEventId,
                         targetEventId,
                         reason: action.reasoning || "Canonicalization merge",
-                    });
+                        });
 
                     if (merged.merged) {
                         mergesAppliedInBatch++;
@@ -2026,7 +2035,7 @@ export const runTimelineCanonicalizationBatch = internalAction({
                 if (args.applyChanges && !state.dryRunOnly && state.runRescoreAfter) {
                     await ctx.runMutation(internal.api.cancelTimelineImpactRescoreRun, {
                         reason: "Preparing post-canonicalization rescore",
-                    });
+                        });
                     await Promise.all([
                         ctx.runMutation(internal.api.clearTimelineImpactRescoreFlags, {}),
                         ctx.runMutation(internal.api.resetTimelineImpactRescoreState, {}),
@@ -2034,13 +2043,13 @@ export const runTimelineCanonicalizationBatch = internalAction({
 
                     rescoreStarted = await ctx.runAction(internal.historian.startTimelineImpactRescore, {
                         batchSize: state.rescoreBatchSize,
-                    });
+                        });
                 }
 
                 await ctx.runMutation(internal.api.completeTimelineCanonicalizationRun, {
                     runId: args.runId,
                     progress: `Completed ${processedTotal}/${totalEvents}`,
-                });
+                    });
 
                 return {
                     continued: false,
@@ -2063,7 +2072,7 @@ export const runTimelineCanonicalizationBatch = internalAction({
                     runId: args.runId,
                     applyChanges: args.applyChanges,
                     scheduleNext,
-                });
+                    });
             }
 
             return {

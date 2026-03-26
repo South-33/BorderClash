@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:pipeline": "node --test tests/pipeline/research-pipeline.test.mjs",
     "verify:gemini-headers": "node scripts/verify-gemini-headers.mjs"
   },
   "dependencies": {

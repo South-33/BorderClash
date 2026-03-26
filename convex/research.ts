@@ -2,6 +2,8 @@
 
 import { internalAction } from "./_generated/server";
 import { internal, api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 
 // Use gemini-studio-api helpers
@@ -12,6 +14,152 @@ import { callGeminiStudio, callGeminiStudioWithSelfHealing, callGeminiStudioWith
 // =============================================================================
 // SHARED UTILS (deprecated Ghost API endpoints removed)
 // =============================================================================
+
+const ACTION_RETRY_DELAYS_MS = [5000, 15000] as const;
+const CHAIN_SCHEDULER_RETRY_DELAYS_MS = [2000, 5000, 10000] as const;
+const STEP_RETRY_DELAYS_MS = [60_000, 5 * 60_000] as const;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+type SchedulableFunctionReference = FunctionReference<"mutation" | "action", "public" | "internal">;
+type SchedulerContext = {
+    scheduler: {
+        runAfter: (
+            delayMs: number,
+            functionReference: SchedulableFunctionReference,
+            args: Record<string, unknown>,
+        ) => Promise<Id<"_scheduled_functions">>;
+        runAt: (
+            timestamp: number,
+            functionReference: SchedulableFunctionReference,
+            args: Record<string, unknown>,
+        ) => Promise<Id<"_scheduled_functions">>;
+    };
+};
+
+const summarizeError = (error: unknown): string => {
+    if (error instanceof Error && error.message) return error.message;
+    return String(error);
+};
+
+const isRetryableActionError = (error: unknown): boolean => {
+    const message = summarizeError(error).toLowerCase();
+    const retryableNeedles = [
+        "performasyncsyscall",
+        "server error",
+        "network",
+        "fetch failed",
+        "timeout",
+        "timed out",
+        "abort",
+        "econnreset",
+        "etimedout",
+        "429",
+        "rate",
+        "quota",
+        "temporarily unavailable",
+        "bad gateway",
+        "gateway timeout",
+        "cloudflare",
+        "empty response",
+        "no json",
+        "invalid json",
+        "unexpected end of json",
+    ];
+    return retryableNeedles.some((needle) => message.includes(needle));
+};
+
+async function runWithRetries<T>(
+    label: string,
+    operation: () => Promise<T>,
+    retryDelaysMs: readonly number[] = ACTION_RETRY_DELAYS_MS,
+    shouldRetry: (error: unknown) => boolean = isRetryableActionError,
+): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            const canRetry = attempt < retryDelaysMs.length && shouldRetry(error);
+            console.warn(`[RETRY] ${label} failed on attempt ${attempt + 1}/${retryDelaysMs.length + 1}: ${summarizeError(error)}`);
+            if (!canRetry) {
+                throw error;
+            }
+
+            const delayMs = retryDelaysMs[attempt];
+            console.log(`[RETRY] ${label} retrying in ${Math.round(delayMs / 1000)}s...`);
+            await sleep(delayMs);
+        }
+    }
+
+    throw lastError;
+}
+
+async function scheduleRunAfterWithRetries(
+    ctx: SchedulerContext,
+    label: string,
+    delayMs: number,
+    actionReference: SchedulableFunctionReference,
+    args: Record<string, unknown>,
+): Promise<Id<"_scheduled_functions">> {
+    return runWithRetries(
+        `[SCHEDULER] ${label}`,
+        () => ctx.scheduler.runAfter(delayMs, actionReference, args),
+        CHAIN_SCHEDULER_RETRY_DELAYS_MS,
+        () => true,
+    );
+}
+
+async function scheduleRunAtWithRetries(
+    ctx: SchedulerContext,
+    label: string,
+    timestamp: number,
+    actionReference: SchedulableFunctionReference,
+    args: Record<string, unknown>,
+): Promise<Id<"_scheduled_functions">> {
+    return runWithRetries(
+        `[SCHEDULER] ${label}`,
+        () => ctx.scheduler.runAt(timestamp, actionReference, args),
+        CHAIN_SCHEDULER_RETRY_DELAYS_MS,
+        () => true,
+    );
+}
+
+async function scheduleStepRetry(
+    ctx: SchedulerContext,
+    {
+        stepName,
+        actionReference,
+        args,
+        attempt,
+    }: {
+        stepName: string;
+        actionReference: SchedulableFunctionReference;
+        args: Record<string, unknown>;
+        attempt: number;
+    },
+): Promise<boolean> {
+    if (attempt >= STEP_RETRY_DELAYS_MS.length) {
+        console.warn(`[${stepName}] Retry budget exhausted after ${attempt} scheduled retries`);
+        return false;
+    }
+
+    const delayMs = STEP_RETRY_DELAYS_MS[attempt];
+    const nextAttempt = attempt + 1;
+
+    await scheduleRunAfterWithRetries(
+        ctx,
+        `${stepName} retry`,
+        delayMs,
+        actionReference,
+        { ...args, attempt: nextAttempt },
+    );
+
+    console.warn(`[${stepName}] Scheduled retry ${nextAttempt}/${STEP_RETRY_DELAYS_MS.length} in ${Math.round(delayMs / 1000)}s`);
+    return true;
+}
 
 // =============================================================================
 // ADAPTIVE SCHEDULER: Heartbeat that checks if it's time to run
@@ -106,7 +254,13 @@ export const recoverStuckCycle = internalAction({
 
         const scheduledRunId = await (async () => {
             try {
-                const jobId = await ctx.scheduler.runAt(nextRunAt, internal.research.runResearchCycle, {});
+                const jobId = await scheduleRunAtWithRetries(
+                    ctx,
+                    "Next runResearchCycle",
+                    nextRunAt,
+                    internal.research.runResearchCycle,
+                    {},
+                );
                 console.log(`📅 [RECOVERY] Scheduled fallback run for ${new Date(nextRunAt).toLocaleString()} (24h)`);
                 console.log(`   Job ID: ${jobId}`);
                 return jobId;
@@ -1855,8 +2009,8 @@ RULES:
 
 // Step 1: Curation - Fetches news from all sources
 export const runResearchCycle = internalAction({
-    args: {},
-    handler: async (ctx) => {
+    args: { attempt: v.optional(v.number()) },
+    handler: async (ctx, { attempt = 0 }) => {
         // ═══ DEDUPLICATION: Acquire lock to prevent overlapping runs ═══
         const runId = crypto.randomUUID();
         const lockResult = await ctx.runMutation(internal.api.acquireCycleLock, { runId });
@@ -1890,35 +2044,55 @@ export const runResearchCycle = internalAction({
 
         try {
             console.log("   > Curating Cambodia...");
-            await ctx.runAction(internal.research.curateCambodia, {});
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await runWithRetries(
+                "[STEP 1] Cambodia curation",
+                () => ctx.runAction(internal.research.curateCambodia, {}),
+            );
+            await sleep(2000);
         } catch (e) {
             console.error("❌ [STEP 1] Cambodia Curation Failed:", e);
-            errors.push(`Cambodia: ${String(e)}`);
+            errors.push(`Cambodia: ${summarizeError(e)}`);
         }
 
         try {
             console.log("   > Curating Thailand...");
-            await ctx.runAction(internal.research.curateThailand, {});
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await runWithRetries(
+                "[STEP 1] Thailand curation",
+                () => ctx.runAction(internal.research.curateThailand, {}),
+            );
+            await sleep(2000);
         } catch (e) {
             console.error("❌ [STEP 1] Thailand Curation Failed:", e);
-            errors.push(`Thailand: ${String(e)}`);
+            errors.push(`Thailand: ${summarizeError(e)}`);
         }
 
         try {
             console.log("   > Curating International...");
-            await ctx.runAction(internal.research.curateInternational, {});
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await runWithRetries(
+                "[STEP 1] International curation",
+                () => ctx.runAction(internal.research.curateInternational, {}),
+            );
+            await sleep(2000);
         } catch (e) {
             console.error("❌ [STEP 1] International Curation Failed:", e);
-            errors.push(`International: ${String(e)}`);
+            errors.push(`International: ${summarizeError(e)}`);
         }
 
         // If all curation failed, abort the chain
         if (errors.length >= 3) {
             console.error("🛑 ALL CURATION STEPS FAILED. Aborting cycle.");
-            await ctx.runMutation(internal.api.setStatus, { status: "error", errorLog: "Curation failed completely" });
+            const scheduledRetry = await scheduleStepRetry(ctx, {
+                stepName: "STEP 1",
+                actionReference: internal.research.runResearchCycle,
+                args: {},
+                attempt,
+            });
+            await ctx.runMutation(internal.api.setStatus, {
+                status: scheduledRetry ? "online" : "error",
+                errorLog: scheduledRetry
+                    ? "Curation failed completely; retry scheduled with backoff"
+                    : "Curation failed completely",
+            });
             await ctx.runMutation(internal.api.releaseCycleLock, { runId });
             return;
         }
@@ -1926,44 +2100,90 @@ export const runResearchCycle = internalAction({
         console.log("✅ Step 1 complete. Scheduling Step 2...");
 
         // Chain to Step 2 (runs immediately with fresh 10-min timer)
-        await ctx.scheduler.runAfter(0, internal.research.step2_verification, {
-            errors: errors,
-            runId: runId
-        });
+        try {
+            await scheduleRunAfterWithRetries(ctx, "Step 2", 0, internal.research.step2_verification, {
+                errors,
+                runId,
+                attempt: 0,
+            });
+        } catch (e) {
+            console.error("[STEP 1] Failed to schedule Step 2:", e);
+            const scheduledRetry = await scheduleStepRetry(ctx, {
+                stepName: "STEP 1",
+                actionReference: internal.research.runResearchCycle,
+                args: {},
+                attempt,
+            });
+            await ctx.runMutation(internal.api.setStatus, {
+                status: scheduledRetry ? "online" : "error",
+                errorLog: scheduledRetry
+                    ? `Step 1 handoff failed; retry scheduled. ${summarizeError(e)}`
+                    : `Step 1 handoff failed: ${summarizeError(e)}`,
+            });
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+        }
     },
 });
 
 // Step 2: Source Verification
 export const step2_verification = internalAction({
-    args: { errors: v.array(v.string()), runId: v.string() },
-    handler: async (ctx, { errors, runId }) => {
+    args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
+    handler: async (ctx, { errors, runId, attempt = 0 }) => {
         console.log("\n── STEP 2: SOURCE VERIFICATION ──");
         const stepErrors = [...errors];
 
         try {
             console.log("   > Verifying article sources...");
-            const verifyResult = await ctx.runAction(internal.research.verifyAllSources, {});
+            const verifyResult = await runWithRetries(
+                "[STEP 2] Source verification",
+                () => ctx.runAction(internal.research.verifyAllSources, {}),
+            );
             console.log(`   ✅ Verified: ${verifyResult.verified}, Updated: ${verifyResult.updated}, Deleted: ${verifyResult.deleted}, Errors: ${verifyResult.errors}`);
         } catch (e) {
             console.error("❌ [STEP 2] Source Verification Failed:", e);
-            stepErrors.push(`Verification: ${String(e)}`);
-            // Non-fatal - continue with historian
+            const scheduledRetry = await scheduleStepRetry(ctx, {
+                stepName: "STEP 2",
+                actionReference: internal.research.step2_verification,
+                args: { errors: stepErrors, runId },
+                attempt,
+            });
+            if (scheduledRetry) return;
+            stepErrors.push(`Verification: ${summarizeError(e)}`);
+            console.warn("[STEP 2] Retry budget exhausted - continuing to historian with accumulated errors");
         }
 
         console.log("✅ Step 2 complete. Scheduling Step 3...");
 
         // Chain to Step 3 (fresh 10-min timer)
-        await ctx.scheduler.runAfter(0, internal.research.step3_historian, {
-            errors: stepErrors,
-            runId: runId
-        });
+        try {
+            await scheduleRunAfterWithRetries(ctx, "Step 3", 0, internal.research.step3_historian, {
+                errors: stepErrors,
+                runId,
+                attempt: 0,
+            });
+        } catch (e) {
+            console.error("[STEP 2] Failed to schedule Step 3:", e);
+            const scheduledRetry = await scheduleStepRetry(ctx, {
+                stepName: "STEP 2",
+                actionReference: internal.research.step2_verification,
+                args: { errors: stepErrors, runId },
+                attempt,
+            });
+            if (scheduledRetry) return;
+
+            await ctx.runMutation(internal.api.setStatus, {
+                status: "online",
+                errorLog: `Step 2 handoff failed after retries: ${summarizeError(e)}`.substring(0, 1900),
+            });
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+        }
     },
 });
 
 // Step 3: Historian Loop - Now has full 10 mins for processing articles
 export const step3_historian = internalAction({
-    args: { errors: v.array(v.string()), runId: v.string() },
-    handler: async (ctx, { errors, runId }) => {
+    args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
+    handler: async (ctx, { errors, runId, attempt = 0 }) => {
         console.log("\n── STEP 3: HISTORIAN LOOP ──");
         const stepErrors = [...errors];
 
@@ -1994,10 +2214,13 @@ export const step3_historian = internalAction({
 
                 const latestTimeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 150 });
 
-                const result = await ctx.runAction(internal.historian.runHistorianCycle, {
-                    cachedTimeline: latestTimeline,
-                    cachedNewsContext,
-                });
+                const result = await runWithRetries(
+                    `[STEP 3] Historian iteration ${historianLoops}`,
+                    () => ctx.runAction(internal.historian.runHistorianCycle, {
+                        cachedTimeline: latestTimeline,
+                        cachedNewsContext,
+                    }),
+                );
 
                 if (!result || result.processed === 0) {
                     console.log("   ✅ Historian complete - no more articles to process");
@@ -2015,23 +2238,49 @@ export const step3_historian = internalAction({
             console.log(`   📊 Historian completed after ${historianLoops} iterations`);
         } catch (e) {
             console.error("❌ [STEP 3] Historian Failed:", e);
-            stepErrors.push(`Historian: ${String(e)}`);
+            const scheduledRetry = await scheduleStepRetry(ctx, {
+                stepName: "STEP 3",
+                actionReference: internal.research.step3_historian,
+                args: { errors: stepErrors, runId },
+                attempt,
+            });
+            if (scheduledRetry) return;
+            stepErrors.push(`Historian: ${summarizeError(e)}`);
+            console.warn("[STEP 3] Retry budget exhausted - moving to synthesis");
         }
 
         console.log("✅ Step 3 complete. Scheduling Step 4...");
 
         // Chain to Step 4 (fresh 10-min timer for synthesis)
-        await ctx.scheduler.runAfter(0, internal.research.step4_synthesis, {
-            errors: stepErrors,
-            runId: runId
-        });
+        try {
+            await scheduleRunAfterWithRetries(ctx, "Step 4", 0, internal.research.step4_synthesis, {
+                errors: stepErrors,
+                runId,
+                attempt: 0,
+            });
+        } catch (e) {
+            console.error("[STEP 3] Failed to schedule Step 4:", e);
+            const scheduledRetry = await scheduleStepRetry(ctx, {
+                stepName: "STEP 3",
+                actionReference: internal.research.step3_historian,
+                args: { errors: stepErrors, runId },
+                attempt,
+            });
+            if (scheduledRetry) return;
+
+            await ctx.runMutation(internal.api.setStatus, {
+                status: "online",
+                errorLog: `Step 3 handoff failed after retries: ${summarizeError(e)}`.substring(0, 1900),
+            });
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+        }
     },
 });
 
 // Step 4: Synthesis - Final analysis (gets full 10 mins)
 export const step4_synthesis = internalAction({
-    args: { errors: v.array(v.string()), runId: v.string() },
-    handler: async (ctx, { errors, runId }) => {
+    args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
+    handler: async (ctx, { errors, runId, attempt = 0 }) => {
         console.log("\n── STEP 4: SYNTHESIS ──");
         const stepErrors = [...errors];
         let schedulingResult: { nextCycleHours: number; reason: string } | null = null;
@@ -2039,7 +2288,10 @@ export const step4_synthesis = internalAction({
         let dashboardUpdated = false;
 
         try {
-            const result = await ctx.runAction(internal.research.synthesizeAll, {});
+            const result = await runWithRetries(
+                "[STEP 4] Synthesis",
+                () => ctx.runAction(internal.research.synthesizeAll, {}),
+            );
             if (!result) {
                 console.warn("⚠️ [STEP 4] Synthesis returned no result; dashboard/analysis may be unchanged");
                 stepErrors.push("Synthesis: returned null result");
@@ -2064,7 +2316,15 @@ export const step4_synthesis = internalAction({
             }
         } catch (e) {
             console.error("❌ [STEP 4] Synthesis Failed:", e);
-            stepErrors.push(`Synthesis: ${String(e)}`);
+            const scheduledRetry = await scheduleStepRetry(ctx, {
+                stepName: "STEP 4",
+                actionReference: internal.research.step4_synthesis,
+                args: { errors: stepErrors, runId },
+                attempt,
+            });
+            if (scheduledRetry) return;
+            stepErrors.push(`Synthesis: ${summarizeError(e)}`);
+            console.warn("[STEP 4] Retry budget exhausted - falling back to conservative scheduling");
         }
 
         // ═══ ADAPTIVE SCHEDULING with scheduler.runAt ═══
@@ -2112,10 +2372,12 @@ export const step4_synthesis = internalAction({
         // Schedule the exact next run time
         const scheduledRunId = await (async () => {
             try {
-                const jobId = await ctx.scheduler.runAt(
+                const jobId = await scheduleRunAtWithRetries(
+                    ctx,
+                    "Next runResearchCycle",
                     nextRunAt,
                     internal.research.runResearchCycle,
-                    {}
+                    {},
                 );
                 console.log(`📅 [SCHEDULER] Scheduled next run for ${new Date(nextRunAt).toLocaleString()} (${clampedHours}h from now)`);
                 console.log(`   Job ID: ${jobId}`);
@@ -2542,7 +2804,8 @@ RULES:
                         processedIndices.add(batch.indexOf(article));
                         const status = r.status?.toUpperCase() || "UNKNOWN";
 
-                        switch (status) {
+                        try {
+                            switch (status) {
                             case "VERIFIED":
                                 // Mark as source-verified so it won't be re-checked
                                 await ctx.runMutation(internal.api.markSourceVerified, {
@@ -2712,6 +2975,10 @@ RULES:
                             default:
                                 console.log(`   ❓ Unknown status "${status}" for: "${article.title?.substring(0, 40)}..."`);
                                 errors++;
+                        }
+                        } catch (resultError) {
+                            console.log(`   Error processing verification result for "${article.title?.substring(0, 40)}...": ${resultError}`);
+                            errors++;
                         }
                     }
 
