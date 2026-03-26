@@ -29,6 +29,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+lint_output.txt
+lint_results.txt
 
 # local nested repo copy
 /borderclash/

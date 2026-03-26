@@ -423,8 +423,8 @@ LANGUAGE & TRANSLATION:
 - AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 
-OUTPUT FORMAT - Wrap your JSON in <json> tags:
-<json>
+OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "newArticles": [
     {
@@ -443,39 +443,26 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
   ],
   "flaggedTitles": []
 }
-</json>
+\`\`\`
 
 RULES:
-- You MUST include <json> and </json> tags
-- Inside the tags, output valid JSON only
+- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
+- Inside the fence, output valid JSON only
 - Use English numerals (0-9) only
-
-📝 IMPORTANT - LIST ARTICLES BEFORE JSON:
-Before outputting your JSON, you MUST first list each article you found in a numbered format.
-This helps you keep track and avoid mixing up URLs/titles/summaries between articles.
-
-Example format (put this BEFORE the <json> tags):
----
-ARTICLES FOUND:
-1. [Fresh News] "Hun Manet appeals to UN" - https://freshnewsasia.com/xxxxx
-   → About: Cambodia's PM asking UN for intervention
-   → Date: Dec 13, 2025
-
-2. [Khmer Times] "Border clashes continue" - https://khmertimes.com/yyyyy
-   → About: Fighting in Pursat province
-   → Date: Dec 13, 2025
-
-3. (none found that are new/relevant)
----
-<json>
-{ ... your JSON here, matching the list above ... }
-</json>
+- Do NOT include any prose before or after the JSON block
+- Do NOT apologize, explain your reasoning, or ask follow-up questions
+- Do NOT output "ARTICLES FOUND", bullet lists, markdown prose, or extra code fences
+- Do NOT use markdown links like [title](url) anywhere in the JSON
+- "sourceUrl" must be the raw canonical URL string only
 
 ⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
 Do NOT mix up Article 1's URL with Article 2's summary!
 
 ✅ IT IS OK TO RETURN ZERO ARTICLES:
-- If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
+- If you searched and found nothing relevant, return:
+\`\`\`json
+{"newArticles": [], "flaggedTitles": []}
+\`\`\`
 - This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
 - Do NOT feel pressured to fill the array - empty is fine!
 
@@ -494,7 +481,10 @@ For EACH article in your response, ask yourself:
 2. Does my summary match what the page actually says? If NO → remove it
 3. Is this about Thailand-Cambodia relations? If NO → remove it
 
-If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
+If no news found, return ONLY:
+\`\`\`json
+{"newArticles": [], "flaggedTitles": []}
+\`\`\``;
 
         return await processNewsResponse(ctx, prompt, "cambodia");
     },
@@ -629,8 +619,8 @@ LANGUAGE & TRANSLATION:
 - AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 
-OUTPUT FORMAT - Wrap your JSON in <json> tags:
-<json>
+OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "newArticles": [
     {
@@ -649,39 +639,26 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
   ],
   "flaggedTitles": []
 }
-</json>
+\`\`\`
 
 RULES:
-- You MUST include <json> and </json> tags
-- Inside the tags, output valid JSON only
+- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
+- Inside the fence, output valid JSON only
 - Use English numerals (0-9) only
-
-📝 IMPORTANT - LIST ARTICLES BEFORE JSON:
-Before outputting your JSON, you MUST first list each article you found in a numbered format.
-This helps you keep track and avoid mixing up URLs/titles/summaries between articles.
-
-Example format (put this BEFORE the <json> tags):
----
-ARTICLES FOUND:
-1. [Thai Rath] "ทภ.2 สรุปปะทะชายแดน" - https://thairath.co.th/xxxxx
-   → About: Army Region 2 reports on border clashes
-   → Date: Dec 13, 2025
-
-2. [Bangkok Post] "PM rejects ceasefire claims" - https://bangkokpost.com/yyyyy
-   → About: Thai PM denies Trump's ceasefire announcement
-   → Date: Dec 13, 2025
-
-3. (none found that are new/relevant)
----
-<json>
-{ ... your JSON here, matching the list above ... }
-</json>
+- Do NOT include any prose before or after the JSON block
+- Do NOT apologize, explain your reasoning, or ask follow-up questions
+- Do NOT output "ARTICLES FOUND", bullet lists, markdown prose, or extra code fences
+- Do NOT use markdown links like [title](url) anywhere in the JSON
+- "sourceUrl" must be the raw canonical URL string only
 
 ⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
 Do NOT mix up Article 1's URL with Article 2's summary!
 
 ✅ IT IS OK TO RETURN ZERO ARTICLES:
-- If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
+- If you searched and found nothing relevant, return:
+\`\`\`json
+{"newArticles": [], "flaggedTitles": []}
+\`\`\`
 - This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
 - Do NOT feel pressured to fill the array - empty is fine!
 
@@ -700,7 +677,10 @@ For EACH article in your response, ask yourself:
 2. Does my summary match what the page actually says? If NO → remove it
 3. Is this about Thailand-Cambodia relations? If NO → remove it
 
-If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
+If no news found, return ONLY:
+\`\`\`json
+{"newArticles": [], "flaggedTitles": []}
+\`\`\``;
 
         return await processNewsResponse(ctx, prompt, "thailand");
     },
@@ -840,8 +820,8 @@ LANGUAGE & TRANSLATION:
 - AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 
-OUTPUT FORMAT - Wrap your JSON in <json> tags:
-<json>
+OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "newArticles": [
     {
@@ -860,39 +840,26 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
   ],
   "flaggedTitles": []
 }
-</json>
+\`\`\`
 
 RULES:
-- You MUST include <json> and </json> tags
-- Inside the tags, output valid JSON only
+- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
+- Inside the fence, output valid JSON only
 - Use English numerals (0-9) only
-
-📝 IMPORTANT - LIST ARTICLES BEFORE JSON:
-Before outputting your JSON, you MUST first list each article you found in a numbered format.
-This helps you keep track and avoid mixing up URLs/titles/summaries between articles.
-
-Example format (put this BEFORE the <json> tags):
----
-ARTICLES FOUND:
-1. [Reuters] "Thailand-Cambodia clashes continue" - https://reuters.com/xxxxx
-   → About: Wire service report on ongoing border conflict
-   → Date: Dec 13, 2025
-
-2. [AP News] "UN calls for immediate ceasefire" - https://apnews.com/yyyyy
-   → About: UN Secretary-General's statement
-   → Date: Dec 13, 2025
-
-3. (none found that are new/relevant)
----
-<json>
-{ ... your JSON here, matching the list above ... }
-</json>
+- Do NOT include any prose before or after the JSON block
+- Do NOT apologize, explain your reasoning, or ask follow-up questions
+- Do NOT output "ARTICLES FOUND", bullet lists, markdown prose, or extra code fences
+- Do NOT use markdown links like [title](url) anywhere in the JSON
+- "sourceUrl" must be the raw canonical URL string only
 
 ⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
 Do NOT mix up Article 1's URL with Article 2's summary!
 
 ✅ IT IS OK TO RETURN ZERO ARTICLES:
-- If you searched and found nothing relevant, return: <json>{"newArticles": [], "flaggedTitles": []}</json>
+- If you searched and found nothing relevant, return:
+\`\`\`json
+{"newArticles": [], "flaggedTitles": []}
+\`\`\`
 - This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
 - Do NOT feel pressured to fill the array - empty is fine!
 
@@ -911,7 +878,10 @@ For EACH article in your response, ask yourself:
 2. Does my summary match what the page actually says? If NO → remove it
 3. Is this about Thailand-Cambodia relations? If NO → remove it
 
-If no news found: <json>{"newArticles": [], "flaggedTitles": []}</json>`;
+If no news found, return ONLY:
+\`\`\`json
+{"newArticles": [], "flaggedTitles": []}
+\`\`\``;
 
         return await processNewsResponse(ctx, prompt, "international");
     },
@@ -928,6 +898,78 @@ async function processNewsResponse(
 
     let currentPrompt = prompt;
 
+    const extractParseErrorPosition = (message: string): number | null => {
+        const match = message.match(/position\s+(\d+)/i);
+        return match ? Number(match[1]) : null;
+    };
+
+    const getJsonErrorSnippet = (input: string, position: number | null): string => {
+        if (position === null || !Number.isFinite(position)) return input.substring(0, 200);
+        const start = Math.max(0, position - 80);
+        const end = Math.min(input.length, position + 80);
+        return input.substring(start, end);
+    };
+
+    const unwrapJsonStringEnvelope = (input: string): string => {
+        const trimmed = input.trim();
+        if (!trimmed.startsWith("\"")) return input;
+
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (typeof parsed === "string") {
+                return parsed;
+            }
+        } catch {
+            // Fall through to normal cleanup path.
+        }
+
+        return input;
+    };
+
+    const normalizeJsonCandidate = (input: string): string => {
+        let normalized = unwrapJsonStringEnvelope(input).trim();
+
+        for (let i = 0; i < 2; i++) {
+            normalized = normalized
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                .replace(/\\<json>/gi, "<json>")
+                .replace(/\\<\/json>/gi, "</json>")
+                .replace(/"\[([^\]]*)\]\(([^)]+)\)"/g, '"$2"')
+                .replace(/,\s*([\]\}])/g, '$1')
+                .replace(/[\uFEFF\u200B\u200C\u200D]/g, '')
+                // Models sometimes invent escapes like \! or \&quot; which are illegal in JSON.
+                .replace(/\\(?=[!<>&`])/g, "")
+                // Any remaining invalid backslash escape should be treated as a literal backslash.
+                .replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
+        }
+
+        return normalized;
+    };
+
+    const extractJsonPayload = (input: string): string | null => {
+        const fencedMatch = input.match(/```json\s*([\s\S]*?)```/i);
+        if (fencedMatch) {
+            return fencedMatch[1].trim();
+        }
+
+        const tagMatch = input.match(/<json>([\s\S]*?)<\/json>/i);
+        if (tagMatch) {
+            return tagMatch[1].trim();
+        }
+
+        const cleanedResponse = input
+            .replace(/```json\s*/gi, "")
+            .replace(/```\s*/g, "")
+            .trim();
+        const firstOpen = cleanedResponse.indexOf("{");
+        const lastClose = cleanedResponse.lastIndexOf("}");
+        if (firstOpen !== -1 && lastClose !== -1) {
+            return cleanedResponse.substring(firstOpen, lastClose + 1);
+        }
+
+        return null;
+    };
+
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         let rawResponse = "";
 
@@ -936,51 +978,35 @@ async function processNewsResponse(
 
             // 1. CALL API - Using curation model mapping
             rawResponse = await callGeminiStudio(currentPrompt, MODELS.fast, 1);
+            rawResponse = rawResponse
+                .replace(/\\<json>/gi, "<json>")
+                .replace(/\\<\/json>/gi, "</json>");
 
-            // 2. EXTRACT JSON - Try <json> tags first, then fallback to regex
-            let jsonStr: string | null = null;
-
-            // Method 1: Look for <json>...</json> tags (preferred)
-            const tagMatch = rawResponse.match(/<json>([\s\S]*?)<\/json>/i);
-            if (tagMatch) {
-                jsonStr = tagMatch[1].trim();
-                console.log(`✅ [${country.toUpperCase()}] Extracted JSON from <json> tags`);
-            } else {
-                // Method 2: Fallback - strip markdown first, then find { to }
-                const cleanedResponse = rawResponse
-                    .replace(/```json\s*/g, "").replace(/```\s*/g, "")
-                    .trim();
-                const firstOpen = cleanedResponse.indexOf('{');
-                const lastClose = cleanedResponse.lastIndexOf('}');
-                if (firstOpen !== -1 && lastClose !== -1) {
-                    jsonStr = cleanedResponse.substring(firstOpen, lastClose + 1);
+            // 2. EXTRACT JSON - Prefer fenced json, then legacy tags, then raw braces
+            const extractedJson = extractJsonPayload(rawResponse);
+            if (extractedJson) {
+                if (/```json/i.test(rawResponse)) {
+                    console.log(`✅ [${country.toUpperCase()}] Extracted JSON from fenced code block`);
+                } else if (/<json>/i.test(rawResponse)) {
+                    console.log(`✅ [${country.toUpperCase()}] Extracted JSON from legacy <json> tags`);
+                } else {
+                    console.log(`✅ [${country.toUpperCase()}] Extracted JSON from raw object fallback`);
                 }
             }
 
-            if (!jsonStr) {
+            if (!extractedJson) {
                 throw new Error("No JSON object found in response");
             }
 
-            // MINIMAL JSON CLEANUP (don't break Thai/Khmer text!)
-            // 1. Remove control characters (except newline, tab, carriage return)
-            jsonStr = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-
-            // 2. Fix markdown-formatted URLs: "[text](url)" -> "url"
-            jsonStr = jsonStr.replace(/"\[([^\]]*)\]\(([^)]+)\)"/g, '"$2"');
-
-            // 3. Remove trailing commas before ] or }
-            jsonStr = jsonStr.replace(/,\s*([\]\}])/g, '$1');
-
-            // 4. Remove any BOM or zero-width characters
-            jsonStr = jsonStr.replace(/[\uFEFF\u200B\u200C\u200D]/g, '');
-
-            // NOTE: We intentionally do NOT replace curly quotes - they're valid in Thai/Khmer titles
+            const jsonStr = normalizeJsonCandidate(extractedJson);
 
             // 3. PARSE
             let result;
             try {
                 result = JSON.parse(jsonStr);
             } catch (parseError: any) {
+                const errorPosition = extractParseErrorPosition(parseError.message);
+                console.log(`⚠️ [${country.toUpperCase()}] Bad JSON snippet: ${getJsonErrorSnippet(jsonStr, errorPosition)}`);
                 console.log(`⚠️ [${country.toUpperCase()}] JSON Parse Error on attempt ${attempt}: ${parseError.message}`);
 
                 if (attempt < MAX_RETRIES) {
@@ -1000,10 +1026,17 @@ ${rawResponse.substring(0, 2000)}${rawResponse.length > 2000 ? '...(truncated)' 
 ${parseError.message}
 ---
 
-Please output the FIXED JSON wrapped in <json> tags:
-<json>
+Problematic JSON snippet:
+${getJsonErrorSnippet(jsonStr, errorPosition)}
+
+Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
+Inside the fence, output valid JSON only.
+Do NOT include prose, apologies, article lists, markdown links, or follow-up questions.
+
+Please output the FIXED JSON only:
+\`\`\`json
 {"newArticles": [...], "flaggedTitles": []}
-</json>`;
+\`\`\``;
 
                     continue; // Loop to next attempt with new prompt
                 } else {
@@ -1466,8 +1499,8 @@ Be CONCISE. Each event = 1 short line. No multi-clause sentences. Frame events N
 - SIDE CARDS (Cambodia/Thailand): COMPACT. 2-3 sentences, max 50 words. These cards have limited space. Report key claims CONCISELY - just the essence of what their media is saying.
 - CENTER CARD (Neutral): LONGEST but BOUNDED. 3-5 sentences, 50-80 words for summary. You are the REFEREE here - summarize BOTH sides' actions, call out discrepancies, give the full picture. Remember to balance with key events!
 
-ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
-<json>
+ANALYZE ALL PERSPECTIVES. Return EXACTLY one fenced \`\`\`json code block and NOTHING else:
+\`\`\`json
 {
   "cambodia": {
     "officialNarrative": "English (2-3 sentences, max 50 words). Key claims from Cambodian media only.",
@@ -1534,7 +1567,7 @@ ANALYZE ALL PERSPECTIVES. Wrap your JSON response in <json> tags:
     "changeReason": "Brief explanation of why stats changed or stayed same"
   }
 }
-</json>
+\`\`\`
 
 📊 DASHBOARD STATS RULES (in the "dashboard" section):
 These are the LIVE STATS shown on the dashboard. Be CONSERVATIVE - only change if you have NEW verified evidence.
@@ -1563,9 +1596,8 @@ PREVIOUS DASHBOARD VALUES (keep these if no new verified evidence):
 If timeline shows no new casualties/displacement events, KEEP THE SAME NUMBERS.
 
 RULES:
-- You MUST include <json> and </json> tags
-- Inside the tags, output valid JSON only
-- You can analyze/think before the tags
+- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
+- Inside the fence, output valid JSON only
 - Use English numerals (0-9) only
 
 🔍 MANDATORY SELF-CHECK (DO THIS BEFORE OUTPUTTING):
@@ -1861,8 +1893,8 @@ ${articlesList}
 • MARK OUTDATED if: Situation has changed significantly since publication
 • MARK DUPLICATE if: Same story already exists from another source
 
-RETURN YOUR ANALYSIS wrapped in <json> tags:
-<json>
+RETURN YOUR ANALYSIS as EXACTLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "actions": [
     {
@@ -1876,7 +1908,7 @@ RETURN YOUR ANALYSIS wrapped in <json> tags:
   "crossReferenceNotes": "Notes on how articles relate to each other",
   "summary": "Overall: X verified, Y suspicious, Z duplicates"
 }
-</json>
+\`\`\`
 
 ACTIONS:
 - update_credibility: Adjust 0-100 score (EXPLAIN why)
@@ -1888,9 +1920,8 @@ ACTIONS:
 - keep: Verified and fine as-is
 
 RULES:
-- You MUST include <json> and </json> tags
-- Inside the tags, output valid JSON only
-- You can think/analyze before the tags
+- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
+- Inside the fence, output valid JSON only
 - Use English numerals (0-9) only`;
 
         try {
@@ -2662,8 +2693,8 @@ For each article below, you MUST:
 📋 ARTICLES TO VERIFY:
 ${articlesToVerify}
 
-OUTPUT FORMAT - Wrap your JSON in <json> tags:
-<json>
+OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "results": [
     {
@@ -2685,7 +2716,7 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
     }
   ]
 }
-</json>
+\`\`\`
 
 🌐 TRANSLATION RULES (for correctData):
 - Translate the MEANING and INTENT, not literal word-for-word
@@ -2695,42 +2726,15 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 - Prioritize clear communication over literal accuracy
 
-📝 IMPORTANT - ANALYZE ARTICLES IN ORDER BEFORE JSON:
-Before outputting your JSON, you MUST first list each article with your findings.
-This helps you keep track and avoid mixing up URLs/results between articles.
-
-Example format (put this BEFORE the <json> tags):
----
-VERIFICATION RESULTS:
-1. URL: https://thairath.co.th/xxxxx
-   → Page loads? ✅ Yes, article page
-   → Headline on page: "ทบ.สรุปปะทะชายแดน..."
-   → Matches stored title? ✅ Yes
-   → Matches stored summary? ⚠️ Partial - summary overstates casualty claims
-   → Date on page: Dec 13, 2025
-   → About Thailand-Cambodia? ✅ Yes
-   → STATUS: NEEDS_UPDATE (date wrong)
-
-2. URL: https://freshnews.com/yyyyy
-   → Page loads? ❌ 404 Not Found
-   → STATUS: URL_DEAD
-
-3. URL: https://reuters.com/zzzzz
-   → Page loads? ✅ Yes
-   → Content matches? ✅ Yes
-   → STATUS: VERIFIED
----
-<json>
-{ ... your JSON results matching the analysis above ... }
-</json>
-
 ⚠️ DOUBLE-CHECK: Before outputting JSON, verify that:
 - Each result's articleIndex matches the article you analyzed
 - You haven't mixed up Article 1's URL with Article 2's result
-- The status matches your analysis above
+- The status matches what you actually found on the page
 
 RULES:
 - You MUST visit each URL - do not guess
+- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
+- Inside the fence, output valid JSON only
 - If you cannot access a URL, mark it URL_DEAD
 - matchScore: 0-100, how well the stored summary matches actual content
 - For NEEDS_UPDATE: only include fields that are WRONG in correctData!
@@ -2744,20 +2748,52 @@ RULES:
                     const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 2, "SOURCE-VERIFY");
 
                     // Extract JSON
-                    let jsonStr: string | null = null;
-                    const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
-                    if (tagMatch) {
-                        jsonStr = tagMatch[1].trim();
-                    } else {
-                        const cleanedResponse = response
-                            .replace(/```json\s*/g, "").replace(/```\s*/g, "")
+                    const extractJsonPayload = (input: string): string | null => {
+                        const fencedMatch = input.match(/```json\s*([\s\S]*?)```/i);
+                        if (fencedMatch) return fencedMatch[1].trim();
+
+                        const tagMatch = input.match(/<json>([\s\S]*?)<\/json>/i);
+                        if (tagMatch) return tagMatch[1].trim();
+
+                        const cleanedResponse = input
+                            .replace(/```json\s*/gi, "")
+                            .replace(/```\s*/g, "")
                             .trim();
-                        const firstOpen = cleanedResponse.indexOf('{');
-                        const lastClose = cleanedResponse.lastIndexOf('}');
+                        const firstOpen = cleanedResponse.indexOf("{");
+                        const lastClose = cleanedResponse.lastIndexOf("}");
                         if (firstOpen !== -1 && lastClose !== -1) {
-                            jsonStr = cleanedResponse.substring(firstOpen, lastClose + 1);
+                            return cleanedResponse.substring(firstOpen, lastClose + 1);
                         }
-                    }
+
+                        return null;
+                    };
+                    const unwrapJsonStringEnvelope = (input: string): string => {
+                        const trimmed = input.trim();
+                        if (!trimmed.startsWith("\"")) return input;
+
+                        try {
+                            const parsed = JSON.parse(trimmed);
+                            return typeof parsed === "string" ? parsed : input;
+                        } catch {
+                            return input;
+                        }
+                    };
+                    const normalizeJsonCandidate = (input: string): string => {
+                        let normalized = unwrapJsonStringEnvelope(input).trim();
+                        for (let j = 0; j < 2; j++) {
+                            normalized = normalized
+                                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+                                .replace(/\\<json>/gi, "<json>")
+                                .replace(/\\<\/json>/gi, "</json>")
+                                .replace(/"\[([^\]]*)\]\(([^)]+)\)"/g, "\"$2\"")
+                                .replace(/,\s*([\]\}])/g, "$1")
+                                .replace(/[\uFEFF\u200B\u200C\u200D]/g, "")
+                                .replace(/\\(?=[!<>&`])/g, "")
+                                .replace(/\\(?![\"\\/bfnrtu])/g, "\\\\");
+                        }
+                        return normalized;
+                    };
+                    const jsonStr = extractJsonPayload(response);
 
                     if (!jsonStr) {
                         console.log(`   ⚠️ No JSON in response, skipping batch`);
@@ -2768,7 +2804,7 @@ RULES:
                     // Parse JSON with error handling
                     let result;
                     try {
-                        result = JSON.parse(jsonStr);
+                        result = JSON.parse(normalizeJsonCandidate(jsonStr));
                     } catch (parseError: any) {
                         console.log(`   ⚠️ Failed to parse JSON: ${parseError.message}`);
                         console.log(`   Raw JSON (first 200 chars): ${jsonStr.substring(0, 200)}`);
@@ -3043,8 +3079,8 @@ export const verifySingleSource = internalAction({
    - Stored Summary: "${args.storedSummary}"
 4. DETERMINE if this is a valid article about Thailand-Cambodia relations
 
-OUTPUT FORMAT - Wrap your JSON in <json> tags:
-<json>
+OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "status": "VERIFIED|URL_DEAD|CONTENT_MISMATCH|OFF_TOPIC|HALLUCINATED",
   "actualTitle": "What the page actually says",
@@ -3052,10 +3088,12 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
   "matchScore": 85,
   "reason": "Detailed explanation of your determination"
 }
-</json>
+\`\`\`
 
 RULES:
 - You MUST visit the URL - do not guess
+- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
+- Inside the fence, output valid JSON only
 - If you cannot access it, mark it URL_DEAD
 - Be honest about whether the stored summary matches the actual content`;
 
@@ -3063,17 +3101,29 @@ RULES:
             const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 2, "VERIFY-SINGLE");
 
             // Extract JSON
-            let jsonStr: string | null = null;
+            const fencedMatch = response.match(/```json\s*([\s\S]*?)```/i);
             const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
-            if (tagMatch) {
-                jsonStr = tagMatch[1].trim();
-            }
+            const jsonStr = fencedMatch
+                ? fencedMatch[1].trim()
+                : tagMatch
+                    ? tagMatch[1].trim()
+                    : null;
 
             if (!jsonStr) {
                 return { status: "ERROR", reason: "Failed to parse AI response" };
             }
 
-            return JSON.parse(jsonStr);
+            const normalizedJson = jsonStr
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+                .replace(/\\<json>/gi, "<json>")
+                .replace(/\\<\/json>/gi, "</json>")
+                .replace(/"\[([^\]]*)\]\(([^)]+)\)"/g, "\"$2\"")
+                .replace(/,\s*([\]\}])/g, "$1")
+                .replace(/[\uFEFF\u200B\u200C\u200D]/g, "")
+                .replace(/\\(?=[!<>&`])/g, "")
+                .replace(/\\(?![\"\\/bfnrtu])/g, "\\\\");
+
+            return JSON.parse(normalizedJson);
 
         } catch (error: any) {
             console.log(`❌ Verification failed: ${error.message}`);
@@ -3249,8 +3299,8 @@ FOCUS:
 CREDIBILITY SCORING & SUMMARY RULES:
 (Same as standard curation - be critical, don't embellish)
 
-OUTPUT FORMAT - Wrap your JSON in <json> tags:
-<json>
+OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "newArticles": [
     {
@@ -3271,12 +3321,13 @@ OUTPUT FORMAT - Wrap your JSON in <json> tags:
   ],
   "flaggedTitles": []
 }
-</json>
+\`\`\`
 
 RULES:
-- INCLUDE <json> TAGS
+- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
+- Inside the fence, output valid JSON only
 - DATE MUST BE ${targetDate}
-- LIST ARTICLES BEFORE JSON`;
+- No prose before or after the JSON block`;
 
                 // Call the shared processor
                 const result = await processNewsResponse(ctx, prompt, country);

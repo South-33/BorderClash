@@ -115,17 +115,10 @@ If new evidence shows an old event was wrong, FIX IT. That's your job.
 - AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
 - ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
 
-📝 PROCESS:
-1. List each article with your analysis plan FIRST
-2. Then output JSON wrapped in <json> tags
+OUTPUT FORMAT:
+Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
 
-FORMAT:
----
-ARTICLE ANALYSIS:
-1. [COUNTRY] "Title" → Action: X | Credibility: Y | Reasoning
-2. [COUNTRY] "Title" → Action: X | Credibility: Y | Reasoning
----
-<json>
+\`\`\`json
 {
   "actions": [
     {
@@ -155,13 +148,13 @@ ARTICLE ANALYSIS:
   ],
   "summary": "Processed X: created Y, merged Z, archived W"
 }
-</json>
+\`\`\`
 
 RULES:
 - Every article MUST have an action
 - create_event/merge_source/update_event require visitedSourceUrl: true
 - update_event/delete_event require targetEventTitle + reasoning
-- Output valid JSON only inside the tags
+- Output valid JSON only inside the fence
 `;
 
 // =============================================================================
@@ -178,16 +171,64 @@ STRATEGY:
 PRIORITIZE: Breaking news, heavily corroborated events.
 SKIP FOR LATER: Low-value opinion pieces if you have better news.
 
-OUTPUT FORMAT (wrap in <json> tags):
-<json>
+OUTPUT FORMAT:
+Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
+
+\`\`\`json
 {
   "selectedArticles": ["Exact title 1", "Exact title 2", "..."],
   "reasoning": "Selected [Event A] cluster and [Event B] updates"
 }
-</json>
+\`\`\`
 
 Copy article titles EXACTLY from the input list.
 `;
+
+function extractJsonPayload(raw: string): string | null {
+    const fencedMatch = raw.match(/```json\s*([\s\S]*?)```/i);
+    if (fencedMatch) return fencedMatch[1].trim();
+
+    const tagMatch = raw.match(/<json>([\s\S]*?)<\/json>/i);
+    if (tagMatch) return tagMatch[1].trim();
+
+    const firstOpen = raw.indexOf("{");
+    const lastClose = raw.lastIndexOf("}");
+    if (firstOpen !== -1 && lastClose !== -1) {
+        return raw.substring(firstOpen, lastClose + 1).trim();
+    }
+
+    return null;
+}
+
+function normalizeJsonCandidate(input: string): string {
+    const trimmed = input.trim();
+    let normalized = trimmed;
+
+    if (trimmed.startsWith("\"")) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (typeof parsed === "string") {
+                normalized = parsed;
+            }
+        } catch {
+            normalized = trimmed;
+        }
+    }
+
+    for (let i = 0; i < 2; i++) {
+        normalized = normalized
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+            .replace(/\\<json>/gi, "<json>")
+            .replace(/\\<\/json>/gi, "</json>")
+            .replace(/"\[([^\]]*)\]\(([^)]+)\)"/g, "\"$2\"")
+            .replace(/,\s*([\]\}])/g, "$1")
+            .replace(/[\uFEFF\u200B\u200C\u200D]/g, "")
+            .replace(/\\(?=[!<>&`])/g, "")
+            .replace(/\\(?![\"\\/bfnrtu])/g, "\\\\");
+    }
+
+    return normalized.trim();
+}
 
 // =============================================================================
 // PLANNER RUNNER
@@ -234,9 +275,9 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): any => {
-        try { return JSON.parse(jsonStr); } catch { /* continue */ }
+        try { return JSON.parse(normalizeJsonCandidate(jsonStr)); } catch { /* continue */ }
         try {
-            const cleaned = jsonStr
+            const cleaned = normalizeJsonCandidate(jsonStr)
                 .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
                 .replace(/,\s*([\]\}])/g, '$1');
             return JSON.parse(cleaned);
@@ -255,18 +296,17 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
             const response = await callGeminiStudio(currentPrompt, MODELS.fast, 2);
 
             // Extract JSON
-            const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
-            if (!tagMatch) {
-                console.log(`❌ [PLANNER] Attempt ${attempt}: No <json> tags found`);
+            const jsonStr = extractJsonPayload(response);
+            if (!jsonStr) {
+                console.log(`❌ [PLANNER] Attempt ${attempt}: No JSON payload found`);
                 if (attempt < MAX_RETRIES) {
-                    // SHORT repair prompt - don't resend full article list
-                    currentPrompt = `Your response had no <json> tags. Output ONLY:\n<json>\n{"selectedArticles": ["Title 1", "Title 2", ...], "reasoning": "..."}\n</json>\n\nSelect 5-10 from the list you already saw.`;
+                    currentPrompt = "Your response had no valid JSON payload. Output ONLY one fenced ```json code block with {\"selectedArticles\": [\"Title 1\", \"Title 2\"], \"reasoning\": \"...\"}. Select 5-10 from the list you already saw.";
                     continue;
                 }
                 return null;
             }
 
-            const result = tryParseJson(tagMatch[1].trim());
+            const result = tryParseJson(jsonStr);
             if (result && result.selectedArticles && Array.isArray(result.selectedArticles)) {
                 console.log(`✅ [PLANNER] Selected ${result.selectedArticles.length} articles`);
                 if (result.reasoning) console.log(`   Reasoning: ${result.reasoning}`);
@@ -275,10 +315,9 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
 
             // Wrong structure - retry with feedback
             console.log(`❌ [PLANNER] Attempt ${attempt}: Wrong JSON structure (missing selectedArticles)`);
-            console.log(`   Got: ${tagMatch[1].substring(0, 150)}...`);
+            console.log(`   Got: ${jsonStr.substring(0, 150)}...`);
             if (attempt < MAX_RETRIES) {
-                // SHORT repair prompt - just tell it what was wrong
-                currentPrompt = `Wrong format. You returned: ${tagMatch[1].substring(0, 200)}...\n\nOutput ONLY:\n<json>\n{"selectedArticles": ["Exact Title 1", "Exact Title 2", ...]}\n</json>`;
+                currentPrompt = `Wrong format. You returned: ${jsonStr.substring(0, 200)}...\n\nOutput ONLY one fenced \`\`\`json code block with {"selectedArticles": ["Exact Title 1", "Exact Title 2", ...], "reasoning": "..."}.`;
             }
         } catch (error) {
             // Network error - wait before retry
@@ -435,9 +474,9 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): HistorianResult | null => {
-        try { return JSON.parse(jsonStr); } catch { /* continue */ }
+        try { return JSON.parse(normalizeJsonCandidate(jsonStr)); } catch { /* continue */ }
         try {
-            const cleaned = jsonStr
+            const cleaned = normalizeJsonCandidate(jsonStr)
                 .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
                 .replace(/,\s*([\]\}])/g, '$1');
             return JSON.parse(cleaned);
@@ -466,22 +505,12 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
             const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, 2, "HISTORIAN");
 
             // Extract JSON from response
-            const tagMatch = response.match(/<json>([\s\S]*?)<\/json>/i);
-            let jsonStr: string | null = null;
-
-            if (tagMatch) {
-                jsonStr = tagMatch[1].trim();
-            } else {
-                // Fallback: try to find raw JSON
-                const jsonMatch = response.match(/\{[\s\S]*\}/);
-                if (jsonMatch) jsonStr = jsonMatch[0];
-            }
+            const jsonStr = extractJsonPayload(response);
 
             if (!jsonStr) {
                 console.log(`❌ [HISTORIAN] Attempt ${attempt}: No JSON found`);
                 if (attempt < MAX_RETRIES) {
-                    // SHORT repair prompt
-                    currentPrompt = `Your response had no JSON. Output ONLY:\n<json>\n{"actions": [{"articleTitle": "...", "action": "create_event|archive|discard", ...}], "summary": "..."}\n</json>\n\nProcess the articles you already saw.`;
+                    currentPrompt = "Your response had no valid JSON. Output ONLY one fenced ```json code block with {\"actions\": [{\"articleTitle\": \"...\", \"action\": \"create_event|archive|discard\", \"eventData\": {...}}], \"summary\": \"...\"}. Process the articles you already saw.";
                     continue;
                 }
                 return null;
@@ -494,11 +523,11 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
             if (!result) {
                 console.log(`🔧 [HISTORIAN] Attempt ${attempt}: JSON parse failed, asking AI to repair...`);
                 try {
-                    const repairPrompt = `Fix this broken JSON and output ONLY valid JSON in <json> tags:\n\n${jsonStr.substring(0, 2000)}`;
+                    const repairPrompt = `Fix this broken JSON and output ONLY one fenced \`\`\`json code block:\n\n${jsonStr.substring(0, 2000)}`;
                     const repairResponse = await callGeminiStudio(repairPrompt, MODELS.fast, 1);
-                    const repairMatch = repairResponse.match(/<json>([\s\S]*?)<\/json>/i);
-                    if (repairMatch) {
-                        result = tryParseJson(repairMatch[1].trim());
+                    const repairedJson = extractJsonPayload(repairResponse);
+                    if (repairedJson) {
+                        result = tryParseJson(repairedJson);
                         if (result) console.log(`✅ [HISTORIAN] JSON repaired by AI`);
                     }
                 } catch (repairError) {
@@ -514,8 +543,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
 
             console.log(`❌ [HISTORIAN] Attempt ${attempt}: Invalid structure (missing actions array)`);
             if (attempt < MAX_RETRIES) {
-                // SHORT repair prompt
-                currentPrompt = `Wrong format. Output ONLY:\n<json>\n{"actions": [{"articleTitle": "...", "action": "...", "eventData": {...}}]}\n</json>`;
+                currentPrompt = "Wrong format. Output ONLY one fenced ```json code block with {\"actions\": [{\"articleTitle\": \"...\", \"action\": \"...\", \"eventData\": {...}}], \"summary\": \"...\"}.";
             }
         } catch (error) {
             // Network error - wait before retry
@@ -1063,15 +1091,15 @@ EVIDENCE WEIGHTING (SOFT):
 - Lower confidence and one-sided reporting should reduce score ambition.
 - Reserve 85+ for events with strong corroboration or clearly verifiable formal state actions.
 
-OUTPUT ONLY valid JSON wrapped in <json> tags:
-<json>
+OUTPUT ONLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "scores": [
     { "eventId": "exact id", "importance": 0-100, "reason": "short reason" }
   ],
   "reasoning": "brief batch-level rationale"
 }
-</json>
+\`\`\`
 
 REQUIREMENTS:
 - Include every eventId from CURRENT BATCH exactly once.
@@ -1080,12 +1108,11 @@ REQUIREMENTS:
 `;
 
 function tryParseImpactRescoreJson(raw: string): ImpactRescoreResult | null {
-    const tagMatch = raw.match(/<json>([\s\S]*?)<\/json>/i);
-    const jsonCandidate = tagMatch ? tagMatch[1].trim() : raw.trim();
+    const jsonCandidate = extractJsonPayload(raw) ?? raw.trim();
 
     const attempts = [
-        jsonCandidate,
-        jsonCandidate
+        normalizeJsonCandidate(jsonCandidate),
+        normalizeJsonCandidate(jsonCandidate)
             .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
             .replace(/,\s*([\]\}])/g, "$1"),
     ];
@@ -1168,7 +1195,7 @@ Return rescored importance for every event in CURRENT BATCH.`;
             }
 
             if (attempt < maxRetries) {
-                currentPrompt = `${prompt}\n\nYour previous response was invalid. Re-output now using ONLY valid JSON wrapped in <json> tags. Include every eventId from CURRENT BATCH exactly once.`;
+                currentPrompt = `${prompt}\n\nYour previous response was invalid. Re-output now as ONLY one fenced \`\`\`json code block. Include every eventId from CURRENT BATCH exactly once.`;
             }
         } catch (error) {
             console.log(`❌ [IMPACT-RESCORE] Attempt ${attempt} failed: ${error}`);
@@ -1648,8 +1675,8 @@ CANONICALIZATION PRINCIPLES:
 4) Avoid duplicate titles for the same date/time incident.
 5) If current scoring already fits narrative importance, do not change it.
 
-OUTPUT ONLY valid JSON wrapped in <json> tags:
-<json>
+OUTPUT ONLY one fenced \`\`\`json code block:
+\`\`\`json
 {
   "analysis": "brief",
   "reasoning": "batch rationale",
@@ -1664,7 +1691,7 @@ OUTPUT ONLY valid JSON wrapped in <json> tags:
     }
   ]
 }
-</json>
+\`\`\`
 
 REQUIREMENTS:
 - Every event in CURRENT BATCH must appear once in actions (usually as no_action unless change is needed).
@@ -1673,17 +1700,11 @@ REQUIREMENTS:
 `;
 
 function tryParseCanonicalizationJson(raw: string): CanonicalizationResult | null {
-    const tagMatch = raw.match(/<json>([\s\S]*?)<\/json>/i);
-    const fencedMatch = raw.match(/```json\s*([\s\S]*?)```/i);
-    const jsonCandidate = tagMatch
-        ? tagMatch[1].trim()
-        : fencedMatch
-            ? fencedMatch[1].trim()
-            : raw.trim();
+    const jsonCandidate = extractJsonPayload(raw) ?? raw.trim();
 
     const attempts = [
-        jsonCandidate,
-        jsonCandidate
+        normalizeJsonCandidate(jsonCandidate),
+        normalizeJsonCandidate(jsonCandidate)
             .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
             .replace(/,\s*([\]\}])/g, "$1"),
     ];
@@ -1744,7 +1765,7 @@ ${eventContext}
             }
 
             if (attempt < maxRetries) {
-                currentPrompt = `${prompt}\n\nYour previous output was invalid. Re-output valid JSON in <json> tags with one action per event id.`;
+                currentPrompt = `${prompt}\n\nYour previous output was invalid. Re-output valid JSON as ONLY one fenced \`\`\`json code block with one action per event id.`;
             }
         } catch (error) {
             console.log(`❌ [CANONICALIZE] Attempt ${attempt} failed: ${error}`);

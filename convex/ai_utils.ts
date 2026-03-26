@@ -194,7 +194,7 @@ export async function callGeminiStudioWithFallback(
 /**
  * GENERIC SELF-HEALING HELPER
  * Handles retry logic and JSON repair
- * Extracts JSON from <json> tags first, then falls back to regex
+ * Extracts JSON from fenced ```json blocks first, then falls back to legacy tags/raw braces
  * Uses model fallback for thinking model (critical chain: thinking → pro → fast)
  */
 export async function callGeminiStudioWithSelfHealing<T>(
@@ -204,6 +204,39 @@ export async function callGeminiStudioWithSelfHealing<T>(
     debugLabel: string = "AI"
 ): Promise<T | null> {
     let currentPrompt = prompt;
+    const unwrapJsonStringEnvelope = (input: string): string => {
+        const trimmed = input.trim();
+        if (!trimmed.startsWith("\"")) return input;
+
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (typeof parsed === "string") {
+                return parsed;
+            }
+        } catch {
+            // Fall through to normal cleanup path.
+        }
+
+        return input;
+    };
+
+    const normalizeJsonCandidate = (input: string): string => {
+        let normalized = unwrapJsonStringEnvelope(input).trim();
+
+        for (let i = 0; i < 2; i++) {
+            normalized = normalized
+                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+                .replace(/\\<json>/gi, "<json>")
+                .replace(/\\<\/json>/gi, "</json>")
+                .replace(/"\[([^\]]*)\]\(([^)]+)\)"/g, '"$2"')
+                .replace(/,\s*([\]\}])/g, '$1')
+                .replace(/[\uFEFF\u200B\u200C\u200D]/g, '')
+                .replace(/\\(?=[!<>&`])/g, "")
+                .replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
+        }
+
+        return normalized;
+    };
 
     // Use fallback chain for thinking model (critical tasks)
     const useFallback = modelType === "thinking";
@@ -221,6 +254,9 @@ export async function callGeminiStudioWithSelfHealing<T>(
                 } else {
                     rawResponse = await callGeminiStudio(currentPrompt, MODELS[modelType], 1);
                 }
+                rawResponse = rawResponse
+                    .replace(/\\<json>/gi, "<json>")
+                    .replace(/\\<\/json>/gi, "</json>");
             } catch (networkError: any) {
                 console.log(`⚠️ [${debugLabel}] API error: ${networkError.message}`);
                 throw networkError;
@@ -228,12 +264,15 @@ export async function callGeminiStudioWithSelfHealing<T>(
 
             // 2. EXTRACT JSON
             let jsonStr: string | null = null;
+            const fencedMatch = rawResponse.match(/```json\s*([\s\S]*?)```/i);
             const tagMatch = rawResponse.match(/<json>([\s\S]*?)<\/json>/i);
-            if (tagMatch) {
+            if (fencedMatch) {
+                jsonStr = fencedMatch[1].trim();
+            } else if (tagMatch) {
                 jsonStr = tagMatch[1].trim();
             } else {
                 const cleanedResponse = rawResponse
-                    .replace(/```json\s*/g, "").replace(/```\s*/g, "")
+                    .replace(/```json\s*/gi, "").replace(/```\s*/g, "")
                     .trim();
                 const firstOpen = cleanedResponse.indexOf('{');
                 const lastClose = cleanedResponse.lastIndexOf('}');
@@ -246,10 +285,19 @@ export async function callGeminiStudioWithSelfHealing<T>(
 
             // 3. PARSE
             try {
-                return JSON.parse(jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')) as T;
+                return JSON.parse(normalizeJsonCandidate(jsonStr)) as T;
             } catch (parseError: any) {
                 if (attempt < maxRetries) {
-                    currentPrompt = `Your previous response had invalid JSON. Please fix it and wrap in <json> tags.\n\nERROR: ${parseError.message}\n\nRESPONSE:\n${rawResponse.substring(0, 1000)}`;
+                    currentPrompt = `Your previous response had invalid JSON.
+
+Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
+Inside the fence, output valid JSON only.
+Do NOT include prose, apologies, markdown, or follow-up questions.
+
+ERROR: ${parseError.message}
+
+RESPONSE:
+${rawResponse.substring(0, 1000)}`;
                     continue;
                 } else throw parseError;
             }

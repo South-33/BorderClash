@@ -97,3 +97,24 @@ test("source verification batch isolates per-result failures", () => {
   assert.match(verify, /catch \(resultError\)/);
   assert.match(verify, /Error processing verification result for/);
 });
+
+test("curation prompts and parsers are hardened against prose and bad escapes", () => {
+  const research = read(researchPath);
+  const aiUtils = read(path.join(root, "convex", "ai_utils.ts"));
+  const historian = read(historianPath);
+
+  assert.doesNotMatch(research, /IMPORTANT - LIST ARTICLES BEFORE JSON/);
+  assert.match(research, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
+  assert.match(research, /Do NOT apologize, explain your reasoning, or ask follow-up questions/);
+  assert.match(research, /const unwrapJsonStringEnvelope = \(input: string\): string =>/);
+  assert.match(research, /replace\(\/\\\\\(\?=\[!<>&`\]\)\/g, ""\)/);
+  assert.match(research, /replace\(\/\\\\\(\?!\["\\\\\/bfnrtu\]\)\/g, "\\\\\\\\"/);
+  assert.match(research, /Extracted JSON from fenced code block/);
+  assert.match(research, /Extracted JSON from legacy <json> tags/);
+  assert.match(aiUtils, /const unwrapJsonStringEnvelope = \(input: string\): string =>/);
+  assert.match(aiUtils, /replace\(\/\\\\\(\?=\[!<>&`\]\)\/g, ""\)/);
+  assert.match(aiUtils, /replace\(\/\\\\\(\?!\["\\\\\/bfnrtu\]\)\/g, "\\\\\\\\"/);
+  assert.match(aiUtils, /fenced ```json blocks first/);
+  assert.doesNotMatch(historian, /List each article with your analysis plan FIRST/);
+  assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
+});
