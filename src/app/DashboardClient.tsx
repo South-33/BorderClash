@@ -12,6 +12,8 @@ import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
 
+type DashboardSnapshot = Omit<BorderClashData, 'fetchedAt'>;
+
 
 // --- Error Boundary for Convex Crashes ---
 // Catches API errors and shows maintenance page, auto-retries every 30s
@@ -1111,11 +1113,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // =============================================================================
   // ISR-AWARE DATA LOADING
   // If initialData is provided (from server-side ISR), we normally skip Convex calls.
-  // But if the ISR snapshot was degraded, we immediately refill from live Convex queries.
+  // Once a newer research cycle is detected, we switch to a single live snapshot query.
   // =============================================================================
 
   const hasServerData = initialData !== null;
-  const serverSnapshotDegraded = Boolean(initialData?.degraded);
 
   // =============================================================================
   // STALE LOCALSTORAGE CLEANUP
@@ -1123,7 +1124,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // This prevents showing stale cached data when fresh ISR data exists.
   // =============================================================================
   useEffect(() => {
-    if (!hasServerData || serverSnapshotDegraded || typeof window === 'undefined') return;
+    if (!hasServerData || typeof window === 'undefined') return;
 
     const isrLastResearchAt = initialData?.systemStats?.lastResearchAt;
     if (!isrLastResearchAt) return;
@@ -1147,7 +1148,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         localStorage.removeItem('borderclash_system_stats');
       }
     }
-  }, [hasServerData, serverSnapshotDegraded, initialData?.systemStats?.lastResearchAt]);
+  }, [hasServerData, initialData?.systemStats?.lastResearchAt]);
 
   const [forceClientMode, setForceClientMode] = useState(false);
   const [tabFocusKey, setTabFocusKey] = useState(0);
@@ -1207,7 +1208,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     false // ALWAYS subscribe to status to detect new research cycles
   ) as any;
 
-  const preferServerSnapshot = hasServerData && !forceClientMode && !serverSnapshotDegraded;
+  const preferServerSnapshot = hasServerData && !forceClientMode;
 
   // Use live client stats when possible, but keep ISR stats as a fallback shell.
   const systemStats = preferServerSnapshot ? initialData.systemStats : (clientSystemStats ?? initialData?.systemStats);
@@ -1237,120 +1238,45 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // The 5th parameter is the skip flag
 
   const {
-    data: clientThailandNews,
-    isLoading: clientThNewsLoading,
-    isRefreshing: thNewsRefreshing
-  } = useCachedQuery<any[]>(
-    api.api.getNewsSlim,
-    { country: "thailand", limit: 20 },
-    "borderclash_th_news_v2",
-    systemStats?.lastResearchAt,
-    shouldSkip
-  );
-
-  const {
-    data: clientCambodiaNews,
-    isLoading: clientKhNewsLoading,
-    isRefreshing: khNewsRefreshing
-  } = useCachedQuery<any[]>(
-    api.api.getNewsSlim,
-    { country: "cambodia", limit: 20 },
-    "borderclash_kh_news_v2",
-    systemStats?.lastResearchAt,
-    shouldSkip
-  );
-
-  const {
-    data: clientThailandMeta,
-    isLoading: clientThMetaLoading,
-    isRefreshing: thMetaRefreshing
-  } = useCachedQuery<any>(
-    api.api.getAnalysis,
-    { target: "thailand" },
-    "borderclash_th_meta_v2",
-    systemStats?.lastResearchAt,
-    shouldSkip
-  );
-
-  const {
-    data: clientCambodiaMeta,
-    isLoading: clientKhMetaLoading,
-    isRefreshing: khMetaRefreshing
-  } = useCachedQuery<any>(
-    api.api.getAnalysis,
-    { target: "cambodia" },
-    "borderclash_kh_meta_v2",
-    systemStats?.lastResearchAt,
-    shouldSkip
-  );
-
-  const {
-    data: clientNeutralMeta,
-    isLoading: clientNeutralMetaLoading,
-    isRefreshing: neutralMetaRefreshing
-  } = useCachedQuery<any>(
-    api.api.getAnalysis,
-    { target: "neutral" },
-    "borderclash_neutral_meta_v2",
-    systemStats?.lastResearchAt,
-    shouldSkip
-  );
-
-  const {
-    data: clientDashboardStats,
-    isLoading: clientDashboardLoading,
-    isRefreshing: dashboardRefreshing
-  } = useCachedQuery<any>(
-    api.api.getDashboardStats,
+    data: clientSnapshot,
+    isLoading: clientSnapshotLoading,
+    isRefreshing: snapshotRefreshing
+  } = useCachedQuery<DashboardSnapshot>(
+    api.api.getDashboardSnapshot,
     {},
-    "borderclash_dashboard_stats_v2",
-    systemStats?.lastResearchAt,
-    shouldSkip
-  );
-
-  const {
-    data: clientArticleCounts,
-    isLoading: clientCountsLoading
-  } = useCachedQuery<any>(
-    api.api.getArticleCounts,
-    {},
-    "borderclash_article_counts_v2",
-    systemStats?.lastResearchAt,
-    shouldSkip
-  );
-
-  const {
-    data: clientTimelineEvents,
-    isLoading: clientTimelineLoading,
-    isRefreshing: timelineRefreshing
-  } = useCachedQuery<any>(
-    api.api.getTimeline,
-    {},
-    "borderclash_timeline_v2",
+    "borderclash_dashboard_snapshot_v1",
     systemStats?.lastResearchAt,
     shouldSkip
   );
 
   // Final data: prefer server data if skipping, otherwise use client data WITH fallback to server
   // This ensures we never show empty/placeholder states when valid cached data exists
-  const thailandNews = shouldSkip ? initialData.thailandNews : (clientThailandNews ?? initialData?.thailandNews ?? []);
-  const cambodiaNews = shouldSkip ? initialData.cambodiaNews : (clientCambodiaNews ?? initialData?.cambodiaNews ?? []);
-  const thailandMeta = shouldSkip ? initialData.thailandAnalysis : (clientThailandMeta ?? initialData?.thailandAnalysis);
-  const cambodiaMeta = shouldSkip ? initialData.cambodiaAnalysis : (clientCambodiaMeta ?? initialData?.cambodiaAnalysis);
-  const neutralMeta = shouldSkip ? initialData.neutralAnalysis : (clientNeutralMeta ?? initialData?.neutralAnalysis);
-  const dashboardStats = shouldSkip ? initialData.dashboardStats : (clientDashboardStats ?? initialData?.dashboardStats);
-  const articleCounts = shouldSkip ? initialData.articleCounts : (clientArticleCounts ?? initialData?.articleCounts);
-  const timelineEvents = shouldSkip ? initialData.timelineEvents : (clientTimelineEvents ?? initialData?.timelineEvents ?? []);
+  const activeSnapshot = shouldSkip ? initialData : (clientSnapshot ?? initialData);
+  const thailandNews = activeSnapshot?.thailandNews ?? [];
+  const cambodiaNews = activeSnapshot?.cambodiaNews ?? [];
+  const thailandMeta = activeSnapshot?.thailandAnalysis;
+  const cambodiaMeta = activeSnapshot?.cambodiaAnalysis;
+  const neutralMeta = activeSnapshot?.neutralAnalysis;
+  const dashboardStats = activeSnapshot?.dashboardStats;
+  const articleCounts = activeSnapshot?.articleCounts;
+  const timelineEvents = activeSnapshot?.timelineEvents ?? [];
 
   // Loading states: if we have server data, we're never "loading"
-  const thNewsLoading = hasServerData ? false : clientThNewsLoading;
-  const khNewsLoading = hasServerData ? false : clientKhNewsLoading;
-  const thMetaLoading = hasServerData ? false : clientThMetaLoading;
-  const khMetaLoading = hasServerData ? false : clientKhMetaLoading;
-  const neutralMetaLoading = hasServerData ? false : clientNeutralMetaLoading;
-  const dashboardLoading = hasServerData ? false : clientDashboardLoading;
-  const countsLoading = hasServerData ? false : clientCountsLoading;
-  const timelineLoading = hasServerData ? false : clientTimelineLoading;
+  const thNewsLoading = hasServerData ? false : clientSnapshotLoading;
+  const khNewsLoading = hasServerData ? false : clientSnapshotLoading;
+  const thMetaLoading = hasServerData ? false : clientSnapshotLoading;
+  const khMetaLoading = hasServerData ? false : clientSnapshotLoading;
+  const neutralMetaLoading = hasServerData ? false : clientSnapshotLoading;
+  const dashboardLoading = hasServerData ? false : clientSnapshotLoading;
+  const countsLoading = hasServerData ? false : clientSnapshotLoading;
+  const timelineLoading = hasServerData ? false : clientSnapshotLoading;
+  const thNewsRefreshing = snapshotRefreshing;
+  const khNewsRefreshing = snapshotRefreshing;
+  const thMetaRefreshing = snapshotRefreshing;
+  const khMetaRefreshing = snapshotRefreshing;
+  const neutralMetaRefreshing = snapshotRefreshing;
+  const dashboardRefreshing = snapshotRefreshing;
+  const timelineRefreshing = snapshotRefreshing;
 
 
   // --- CASCADE LAYOUT CONTROL ---
@@ -2481,7 +2407,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                               <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
                                 "{getNarrative(cambodiaMeta)}"
                               </p>
-                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta.narrativeSource || t.aiAnalysis}</p>
+                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta?.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2528,7 +2454,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                               <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
                                 "{getNarrative(thailandMeta)}"
                               </p>
-                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta.narrativeSource || t.aiAnalysis}</p>
+                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta?.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>

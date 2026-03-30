@@ -565,444 +565,455 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
 // Two-phase approach: Planner picks, Historian processes
 // =============================================================================
 
+export type HistorianCycleResult = {
+    processed: number;
+    eventsCreated: number;
+    eventsUpdated?: number;
+    eventsDeleted?: number;
+    sourcesMerged?: number;
+    archived: number;
+    discarded?: number;
+    credibilityUpdated?: number;
+};
+
+export async function runHistorianCycleInternal(
+    ctx: any,
+    { cachedTimeline, cachedNewsContext }: {
+        cachedTimeline?: any[];
+        cachedNewsContext?: any;
+    },
+): Promise<HistorianCycleResult> {
+    console.log("═══════════════════════════════════════════════════════════════");
+    console.log("📜 HISTORIAN CYCLE STARTED (Two-Phase)");
+    console.log("═══════════════════════════════════════════════════════════════");
+
+    // 1. Get ALL unprocessed articles (not just 10)
+    const allArticles = await ctx.runQuery(internal.api.getUnprocessedForTimeline, {
+        batchSize: 200,  // Get all of them
+    });
+
+    if (allArticles.length === 0) {
+        console.log("✅ No unprocessed articles. Historian is idle.");
+        return { processed: 0, eventsCreated: 0, archived: 0 };
+    }
+
+    console.log(`📰 Found ${allArticles.length} unprocessed articles total`);
+
+    // 2. Get existing timeline for context (use cache if provided)
+    const timeline = cachedTimeline ?? await ctx.runQuery(internal.api.getRecentTimeline, {
+        limit: 150  // Recent events only - older events rarely need updates
+    });
+    console.log(`📜 Timeline context: ${timeline.length} recent events${cachedTimeline ? " (cached)" : ""}`);
+
+    // 3. Get timeline stats (always fresh - small query)
+    const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
+    console.log(`📊 Timeline stats: ${timelineStats.totalEvents} events, avg importance: ${timelineStats.avgImportance}`);
+
+    // 4. Get recent news context (use cache if provided)
+    // This gives the Historian situational awareness without processing overhead
+    const newsContext = cachedNewsContext ?? await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
+    console.log(`📰 News context: TH=${newsContext.TH.length}, KH=${newsContext.KH.length}, INT=${newsContext.INT.length}${cachedNewsContext ? " (cached)" : ""}`);
+
+    // ====================================================================
+    // PHASE 1: PLANNER - Pick up to 10 most important articles
+    // ====================================================================
+    console.log("\n🧠 [PHASE 1] PLANNER - Selecting best articles to process...");
+
+    let selectedTitles: string[];
+
+    if (allArticles.length <= 10) {
+        // If 10 or fewer, process all
+        console.log(`   Only ${allArticles.length} articles - processing all`);
+        selectedTitles = allArticles.map((a: any) => a.title);
+    } else {
+        // Pre-filter to top 50 by credibility to avoid overwhelming the Planner
+        const maxPlannerArticles = 50;
+        const articlesForPlanner = allArticles.length > maxPlannerArticles
+            ? allArticles.slice(0, maxPlannerArticles)
+            : allArticles;
+
+        if (allArticles.length > maxPlannerArticles) {
+            console.log(`   ⚠️ ${allArticles.length} articles too many - sending top ${maxPlannerArticles} to Planner`);
+        }
+
+        // Run Planner to pick 5-10
+        const plannerSelection = await runPlanner(
+            articlesForPlanner.map((a: any) => ({
+                title: a.title,
+                country: a.country,
+                source: a.source,
+                credibility: a.credibility,
+                summary: a.summary || a.summaryEn,
+            })),
+            timeline.map((t: any) => ({
+                date: t.date,
+                title: t.title,
+                description: t.description,
+                importance: t.importance,
+            }))
+        );
+
+        if (!plannerSelection || plannerSelection.length === 0) {
+            console.log("⚠️ Planner failed, falling back to first 10 by credibility");
+            selectedTitles = allArticles.slice(0, 10).map((a: any) => a.title);
+        } else {
+            selectedTitles = plannerSelection;
+        }
+    }
+
+    // Helper for fuzzy title matching (AI often returns slightly different titles)
+    const normalizeTitle = (title: string) =>
+        title.toLowerCase().trim()
+            .replace(/[""'']/g, '"')  // Normalize quotes
+            .replace(/\s+/g, ' ')      // Normalize whitespace
+            .substring(0, 50);         // Compare first 50 chars
+
+    // Filter to selected articles with FUZZY matching
+    let selectedArticles = allArticles.filter((a: any) => {
+        const normalizedDbTitle = normalizeTitle(a.title);
+        return selectedTitles.some(plannerTitle => {
+            const normalizedPlannerTitle = normalizeTitle(plannerTitle);
+            // Exact match OR first 50 chars match OR one contains the other
+            return normalizedDbTitle === normalizedPlannerTitle ||
+                normalizedDbTitle.includes(normalizedPlannerTitle) ||
+                normalizedPlannerTitle.includes(normalizedDbTitle);
+        });
+    });
+
+    // If fuzzy matching found nothing, log what planner returned vs what we have
+    if (selectedArticles.length === 0 && selectedTitles.length > 0) {
+        console.log("⚠️ [PLANNER] No titles matched! Planner returned:");
+        selectedTitles.slice(0, 3).forEach(t => console.log(`   → "${t.substring(0, 60)}..."`));
+        console.log("   DB has titles like:");
+        allArticles.slice(0, 3).forEach((a: any) => console.log(`   → "${a.title.substring(0, 60)}..."`));
+
+        // Fallback: just use first 10 articles
+        console.log("   → Falling back to first 10 articles by credibility");
+        selectedArticles = allArticles.slice(0, 10);
+    }
+
+    console.log(`\n✅ [PHASE 1 COMPLETE] Selected ${selectedArticles.length} articles to process`);
+
+    // ====================================================================
+    // PHASE 2: HISTORIAN - Process the selected articles
+    // ====================================================================
+    console.log("\n📜 [PHASE 2] HISTORIAN - Processing selected articles...");
+
+    const historianResult = await runHistorian(
+        selectedArticles.map((a: any) => ({
+            title: a.title,
+            country: a.country,
+            source: a.source,
+            sourceUrl: a.sourceUrl,
+            summary: a.summary || a.summaryEn,
+            credibility: a.credibility,
+            publishedAt: a.publishedAt,
+        })),
+        timeline.map((t: any) => ({
+            date: t.date,
+            timeOfDay: t.timeOfDay,  // For chronological display
+            title: t.title,
+            description: t.description,
+            category: t.category,
+            importance: t.importance,
+            status: t.status,
+            sources: t.sources.map((s: any) => ({
+                url: s.url,
+                name: s.name,
+                country: s.country,
+                credibility: s.credibility,  // For sorting top sources
+                snippet: s.snippet,
+            })),
+        })),
+        newsContext  // Pass recent news context for situational awareness
+    );
+
+
+    if (!historianResult || !historianResult.actions) {
+        console.log("❌ [HISTORIAN] No valid result from AI");
+        console.log("ℹ️ [HISTORIAN] No timeline changes will be made - existing events preserved");
+        return { processed: 0, eventsCreated: 0, eventsUpdated: 0, sourcesMerged: 0, archived: 0, discarded: 0 };
+    }
+
+    console.log(`🎯 Historian returned ${historianResult.actions.length} actions`);
+
+    // 5. Execute actions
+    let eventsCreated = 0;
+    let eventsUpdated = 0;
+    let eventsDeleted = 0;
+    let sourcesMerged = 0;
+    let archived = 0;
+    let discarded = 0;
+    let credibilityUpdated = 0;
+
+    // Helper to decode HTML entities (AI sometimes returns &quot; instead of ")
+    const decodeHtmlEntities = (str: string) => {
+        if (!str) return "";
+        return str
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&#39;/g, "'")
+            .replace(/&apos;/g, "'");
+    };
+
+    const returnedTitles = new Set<string>();
+
+    for (const action of historianResult.actions) {
+        // Safety check for missing title
+        if (!action.articleTitle) {
+            console.log(`⚠️ Unprocessable action (missing articleTitle): ${JSON.stringify(action)}`);
+            continue;
+        }
+
+        // Decode HTML entities in the article title from AI response
+        const searchTitle = decodeHtmlEntities(action.articleTitle);
+        returnedTitles.add(searchTitle);
+        const article = selectedArticles.find((a: any) => a.title === searchTitle);
+        if (!article) {
+            console.log(`⚠️ Article not found: "${action.articleTitle}"`);
+            continue;
+        }
+
+        try {
+            switch (action.action) {
+            case "create_event":
+                if (action.eventData) {
+                    // Validate category - AI might return invalid values
+                    const validCategories = ["military", "diplomatic", "humanitarian", "political"] as const;
+                    const rawCategory = action.eventData.category?.toLowerCase() || "political";
+                    const category = validCategories.includes(rawCategory as typeof validCategories[number])
+                        ? rawCategory as typeof validCategories[number]
+                        : "political";  // fallback for invalid categories like "cultural"
+
+                    // Create new timeline event with translations
+                    await ctx.runMutation(internal.api.createTimelineEvent, {
+                        date: action.eventData.date || new Date().toISOString().split('T')[0],
+                        timeOfDay: action.eventData.timeOfDay || "12:00",  // Default to midday if not specified
+                        title: action.eventData.title,
+                        titleTh: action.eventData.titleTh,
+                        titleKh: action.eventData.titleKh,
+                        description: action.eventData.description,
+                        descriptionTh: action.eventData.descriptionTh,
+                        descriptionKh: action.eventData.descriptionKh,
+                        category,
+                        importance: action.eventData.importance || 50,
+                        sources: [{
+                            url: article.sourceUrl,
+                            name: article.source,
+                            country: article.country,
+                            credibility: article.credibility,
+                            snippet: action.eventData.sourceSnippet,
+                        }],
+                        });
+                    console.log(`📌 Created event: "${action.eventData.title}" (importance: ${action.eventData.importance})`);
+                    eventsCreated++;
+                }
+                break;
+
+            case "merge_source":
+                if (action.targetEventTitle) {
+                    const articleDate = article.publishedAt
+                        ? new Date(article.publishedAt).toISOString().split('T')[0]
+                        : new Date().toISOString().split('T')[0];
+
+                    const startDate = new Date(articleDate);
+                    startDate.setDate(startDate.getDate() - 7);
+                    const endDate = new Date(articleDate);
+                    endDate.setDate(endDate.getDate() + 7);
+
+                    // Find the event to merge into
+                    const matchingEvents = await ctx.runQuery(internal.api.findEventByTitleAndDate, {
+                        title: action.targetEventTitle,
+                        dateRange: {
+                            start: startDate.toISOString().split('T')[0],
+                            end: endDate.toISOString().split('T')[0],
+                        },
+                        });
+
+                    if (matchingEvents.length > 0) {
+                        await ctx.runMutation(internal.api.addSourceToEvent, {
+                            eventId: matchingEvents[0]._id,
+                            source: {
+                                url: article.sourceUrl,
+                                name: article.source,
+                                country: article.country,
+                                credibility: article.credibility,
+                                snippet: action.sourceSnippet,
+                            },
+                            });
+                        console.log(`➕ Merged source into: "${action.targetEventTitle}"`);
+                        sourcesMerged++;
+                    } else {
+                        console.log(`⚠️ Target event not found: "${action.targetEventTitle}"`);
+                    }
+                }
+                break;
+
+            case "archive":
+                // Archive = mark as processed but not timeline-worthy
+                await ctx.runMutation(internal.api.flagArticle, {
+                        country: article.country as "thailand" | "cambodia" | "international",
+                        title: article.title,
+                    status: "archived",
+                    });
+                console.log(`📦 Archived: "${article.title}"`);
+                archived++;
+                break;
+
+            case "discard":
+                // Discard = mark as false (bad data)
+                await ctx.runMutation(internal.api.flagArticle, {
+                        country: article.country as "thailand" | "cambodia" | "international",
+                        title: article.title,
+                    status: "false",
+                    });
+                console.log(`🗑️ Discarded: "${article.title}"`);
+                discarded++;
+                break;
+
+            case "update_event":
+                // Update an existing timeline event with new info
+                if (action.targetEventTitle && action.eventUpdates) {
+                    // ONLY allow fields that are in the validator - strip everything else
+                    // This prevents AI from breaking the mutation with extra fields like 'sourceSnippet'
+                    const validFields = ['title', 'titleTh', 'titleKh', 'description', 'descriptionTh', 'descriptionKh', 'date', 'timeOfDay', 'category', 'importance', 'status'];
+                    const updates: any = {};
+                    for (const field of validFields) {
+                        if ((action.eventUpdates as any)[field] !== undefined) {
+                            updates[field] = (action.eventUpdates as any)[field];
+                        }
+                    }
+
+                    // Validate category if provided
+                    if (updates.category) {
+                        const validCategories = ["military", "diplomatic", "humanitarian", "political"];
+                        if (!validCategories.includes(updates.category)) {
+                            updates.category = undefined; // Invalid, don't update
+                        }
+                    }
+                    if (updates.status) {
+                        const validStatuses = ["confirmed", "disputed", "debunked"];
+                        if (!validStatuses.includes(updates.status)) {
+                            updates.status = undefined; // Invalid, don't update
+                        }
+                    }
+
+                    await ctx.runMutation(internal.api.updateTimelineEvent, {
+                        eventTitle: action.targetEventTitle,
+                        updates,
+                        reason: action.reasoning || "Updated by Historian based on new information",
+                        });
+                    console.log(`✏️ Updated event: "${action.targetEventTitle}" - ${action.reasoning || "no reason given"}`);
+                    eventsUpdated++;
+                } else {
+                    console.log(`⚠️ update_event missing targetEventTitle or eventUpdates`);
+                }
+                break;
+
+            case "flag_conflict":
+                // Mark for deeper investigation
+                await ctx.runMutation(internal.api.updateArticleValidation, {
+                        country: article.country as "thailand" | "cambodia" | "international",
+                        title: article.title,
+                    hasConflict: true,
+                    conflictsWith: action.targetEventTitle,
+                    });
+                console.log(`⚠️ Flagged conflict: "${article.title}" vs "${action.targetEventTitle}"`);
+                break;
+
+            case "delete_event":
+                // DELETE an existing timeline event - USE EXTREMELY RARELY
+                if (action.targetEventTitle && action.reasoning) {
+                    await ctx.runMutation(internal.api.deleteTimelineEvent, {
+                        eventTitle: action.targetEventTitle,
+                        reason: action.reasoning,
+                        });
+                    console.log(`🗑️ DELETED event: "${action.targetEventTitle}" - Reason: ${action.reasoning}`);
+                    eventsDeleted++;
+                } else {
+                    console.log(`⚠️ delete_event missing targetEventTitle or reasoning`);
+                }
+                break;
+        }
+
+        // UPDATE CREDIBILITY - Historian verifies and adjusts credibility for every article
+        if (action.verifiedCredibility !== undefined) {
+            try {
+                const oldCred = article.credibility || 50;
+                const newCred = Math.max(0, Math.min(100, action.verifiedCredibility));
+                const credDiff = newCred - oldCred;
+
+                await ctx.runMutation(internal.api.updateArticleCredibility, {
+                    country: article.country as "thailand" | "cambodia" | "international",
+                    title: article.title,
+                    credibility: newCred,
+                });
+                const arrow = credDiff > 0 ? "up" : credDiff < 0 ? "down" : "same";
+                console.log(`   Credibility: ${oldCred} ${arrow} ${newCred} | ${action.credibilityReason || ""}`);
+                credibilityUpdated++;
+            } catch (error) {
+                console.error(`[HISTORIAN] Credibility update failed for "${article.title}":`, error);
+            }
+        }
+
+        // Mark article as processed by Historian (regardless of action taken)
+        await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
+            country: article.country as "thailand" | "cambodia" | "international",
+            title: article.title,
+        });
+        } catch (error) {
+            console.error(`[HISTORIAN] Failed to apply action "${action.action}" for "${article.title}":`, error);
+            continue;
+        }
+    }
+
+    // IMPORTANT: Also mark any selected articles that the AI forgot to include in its response
+    // This prevents "orphaned" articles from being reprocessed forever
+    // Decode HTML entities to match consistently with the action processing above
+    const processedTitles = returnedTitles;
+    for (const article of selectedArticles) {
+        if (!processedTitles.has(article.title)) {
+            console.log(`⚠️ AI forgot to return action for "${article.title}" - marking as processed anyway`);
+            await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
+                    country: article.country as "thailand" | "cambodia" | "international",
+                    title: article.title,
+                });
+        }
+    }
+
+    console.log("\n═══════════════════════════════════════════════════════════════");
+    console.log(`📜 HISTORIAN CYCLE COMPLETE`);
+    console.log(`   Events created: ${eventsCreated}`);
+    console.log(`   Events updated: ${eventsUpdated}`);
+    console.log(`   Events deleted: ${eventsDeleted}`);
+    console.log(`   Sources merged: ${sourcesMerged}`);
+    console.log(`   Articles archived: ${archived}`);
+    console.log(`   Articles discarded: ${discarded}`);
+    console.log(`   Credibility updated: ${credibilityUpdated}`);
+    console.log("═══════════════════════════════════════════════════════════════");
+
+    return {
+        processed: selectedArticles.length,  // Return actual selected count, not just AI response count
+        eventsCreated,
+        eventsUpdated,
+        eventsDeleted,
+        sourcesMerged,
+        archived,
+        discarded,
+        credibilityUpdated,
+    };
+
+}
+
 export const runHistorianCycle = internalAction({
     args: {
         // Optional cached data to reduce bandwidth when called in a loop
         cachedTimeline: v.optional(v.array(v.any())),
         cachedNewsContext: v.optional(v.any()),
     },
-    handler: async (ctx, { cachedTimeline, cachedNewsContext }): Promise<{
-        processed: number;
-        eventsCreated: number;
-        eventsUpdated?: number;
-        eventsDeleted?: number;
-        sourcesMerged?: number;
-        archived: number;
-        discarded?: number;
-        credibilityUpdated?: number;
-    }> => {
-        console.log("═══════════════════════════════════════════════════════════════");
-        console.log("📜 HISTORIAN CYCLE STARTED (Two-Phase)");
-        console.log("═══════════════════════════════════════════════════════════════");
-
-        // 1. Get ALL unprocessed articles (not just 10)
-        const allArticles = await ctx.runQuery(internal.api.getUnprocessedForTimeline, {
-            batchSize: 200,  // Get all of them
-        });
-
-        if (allArticles.length === 0) {
-            console.log("✅ No unprocessed articles. Historian is idle.");
-            return { processed: 0, eventsCreated: 0, archived: 0 };
-        }
-
-        console.log(`📰 Found ${allArticles.length} unprocessed articles total`);
-
-        // 2. Get existing timeline for context (use cache if provided)
-        const timeline = cachedTimeline ?? await ctx.runQuery(internal.api.getRecentTimeline, {
-            limit: 150  // Recent events only - older events rarely need updates
-        });
-        console.log(`📜 Timeline context: ${timeline.length} recent events${cachedTimeline ? " (cached)" : ""}`);
-
-        // 3. Get timeline stats (always fresh - small query)
-        const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
-        console.log(`📊 Timeline stats: ${timelineStats.totalEvents} events, avg importance: ${timelineStats.avgImportance}`);
-
-        // 4. Get recent news context (use cache if provided)
-        // This gives the Historian situational awareness without processing overhead
-        const newsContext = cachedNewsContext ?? await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
-        console.log(`📰 News context: TH=${newsContext.TH.length}, KH=${newsContext.KH.length}, INT=${newsContext.INT.length}${cachedNewsContext ? " (cached)" : ""}`);
-
-        // ====================================================================
-        // PHASE 1: PLANNER - Pick up to 10 most important articles
-        // ====================================================================
-        console.log("\n🧠 [PHASE 1] PLANNER - Selecting best articles to process...");
-
-        let selectedTitles: string[];
-
-        if (allArticles.length <= 10) {
-            // If 10 or fewer, process all
-            console.log(`   Only ${allArticles.length} articles - processing all`);
-            selectedTitles = allArticles.map((a: any) => a.title);
-        } else {
-            // Pre-filter to top 50 by credibility to avoid overwhelming the Planner
-            const maxPlannerArticles = 50;
-            const articlesForPlanner = allArticles.length > maxPlannerArticles
-                ? allArticles.slice(0, maxPlannerArticles)
-                : allArticles;
-
-            if (allArticles.length > maxPlannerArticles) {
-                console.log(`   ⚠️ ${allArticles.length} articles too many - sending top ${maxPlannerArticles} to Planner`);
-            }
-
-            // Run Planner to pick 5-10
-            const plannerSelection = await runPlanner(
-                articlesForPlanner.map((a: any) => ({
-                    title: a.title,
-                    country: a.country,
-                    source: a.source,
-                    credibility: a.credibility,
-                    summary: a.summary || a.summaryEn,
-                })),
-                timeline.map((t: any) => ({
-                    date: t.date,
-                    title: t.title,
-                    description: t.description,
-                    importance: t.importance,
-                }))
-            );
-
-            if (!plannerSelection || plannerSelection.length === 0) {
-                console.log("⚠️ Planner failed, falling back to first 10 by credibility");
-                selectedTitles = allArticles.slice(0, 10).map((a: any) => a.title);
-            } else {
-                selectedTitles = plannerSelection;
-            }
-        }
-
-        // Helper for fuzzy title matching (AI often returns slightly different titles)
-        const normalizeTitle = (title: string) =>
-            title.toLowerCase().trim()
-                .replace(/[""'']/g, '"')  // Normalize quotes
-                .replace(/\s+/g, ' ')      // Normalize whitespace
-                .substring(0, 50);         // Compare first 50 chars
-
-        // Filter to selected articles with FUZZY matching
-        let selectedArticles = allArticles.filter((a: any) => {
-            const normalizedDbTitle = normalizeTitle(a.title);
-            return selectedTitles.some(plannerTitle => {
-                const normalizedPlannerTitle = normalizeTitle(plannerTitle);
-                // Exact match OR first 50 chars match OR one contains the other
-                return normalizedDbTitle === normalizedPlannerTitle ||
-                    normalizedDbTitle.includes(normalizedPlannerTitle) ||
-                    normalizedPlannerTitle.includes(normalizedDbTitle);
-            });
-        });
-
-        // If fuzzy matching found nothing, log what planner returned vs what we have
-        if (selectedArticles.length === 0 && selectedTitles.length > 0) {
-            console.log("⚠️ [PLANNER] No titles matched! Planner returned:");
-            selectedTitles.slice(0, 3).forEach(t => console.log(`   → "${t.substring(0, 60)}..."`));
-            console.log("   DB has titles like:");
-            allArticles.slice(0, 3).forEach((a: any) => console.log(`   → "${a.title.substring(0, 60)}..."`));
-
-            // Fallback: just use first 10 articles
-            console.log("   → Falling back to first 10 articles by credibility");
-            selectedArticles = allArticles.slice(0, 10);
-        }
-
-        console.log(`\n✅ [PHASE 1 COMPLETE] Selected ${selectedArticles.length} articles to process`);
-
-        // ====================================================================
-        // PHASE 2: HISTORIAN - Process the selected articles
-        // ====================================================================
-        console.log("\n📜 [PHASE 2] HISTORIAN - Processing selected articles...");
-
-        const historianResult = await runHistorian(
-            selectedArticles.map((a: any) => ({
-                title: a.title,
-                country: a.country,
-                source: a.source,
-                sourceUrl: a.sourceUrl,
-                summary: a.summary || a.summaryEn,
-                credibility: a.credibility,
-                publishedAt: a.publishedAt,
-            })),
-            timeline.map((t: any) => ({
-                date: t.date,
-                timeOfDay: t.timeOfDay,  // For chronological display
-                title: t.title,
-                description: t.description,
-                category: t.category,
-                importance: t.importance,
-                status: t.status,
-                sources: t.sources.map((s: any) => ({
-                    url: s.url,
-                    name: s.name,
-                    country: s.country,
-                    credibility: s.credibility,  // For sorting top sources
-                    snippet: s.snippet,
-                })),
-            })),
-            newsContext  // Pass recent news context for situational awareness
-        );
-
-
-        if (!historianResult || !historianResult.actions) {
-            console.log("❌ [HISTORIAN] No valid result from AI");
-            console.log("ℹ️ [HISTORIAN] No timeline changes will be made - existing events preserved");
-            return { processed: 0, eventsCreated: 0, eventsUpdated: 0, sourcesMerged: 0, archived: 0, discarded: 0 };
-        }
-
-        console.log(`🎯 Historian returned ${historianResult.actions.length} actions`);
-
-        // 5. Execute actions
-        let eventsCreated = 0;
-        let eventsUpdated = 0;
-        let eventsDeleted = 0;
-        let sourcesMerged = 0;
-        let archived = 0;
-        let discarded = 0;
-        let credibilityUpdated = 0;
-
-        // Helper to decode HTML entities (AI sometimes returns &quot; instead of ")
-        const decodeHtmlEntities = (str: string) => {
-            if (!str) return "";
-            return str
-                .replace(/&quot;/g, '"')
-                .replace(/&amp;/g, '&')
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>')
-                .replace(/&#39;/g, "'")
-                .replace(/&apos;/g, "'");
-        };
-
-        const returnedTitles = new Set<string>();
-
-        for (const action of historianResult.actions) {
-            // Safety check for missing title
-            if (!action.articleTitle) {
-                console.log(`⚠️ Unprocessable action (missing articleTitle): ${JSON.stringify(action)}`);
-                continue;
-            }
-
-            // Decode HTML entities in the article title from AI response
-            const searchTitle = decodeHtmlEntities(action.articleTitle);
-            returnedTitles.add(searchTitle);
-            const article = selectedArticles.find((a: any) => a.title === searchTitle);
-            if (!article) {
-                console.log(`⚠️ Article not found: "${action.articleTitle}"`);
-                continue;
-            }
-
-            try {
-                switch (action.action) {
-                case "create_event":
-                    if (action.eventData) {
-                        // Validate category - AI might return invalid values
-                        const validCategories = ["military", "diplomatic", "humanitarian", "political"] as const;
-                        const rawCategory = action.eventData.category?.toLowerCase() || "political";
-                        const category = validCategories.includes(rawCategory as typeof validCategories[number])
-                            ? rawCategory as typeof validCategories[number]
-                            : "political";  // fallback for invalid categories like "cultural"
-
-                        // Create new timeline event with translations
-                        await ctx.runMutation(internal.api.createTimelineEvent, {
-                            date: action.eventData.date || new Date().toISOString().split('T')[0],
-                            timeOfDay: action.eventData.timeOfDay || "12:00",  // Default to midday if not specified
-                            title: action.eventData.title,
-                            titleTh: action.eventData.titleTh,
-                            titleKh: action.eventData.titleKh,
-                            description: action.eventData.description,
-                            descriptionTh: action.eventData.descriptionTh,
-                            descriptionKh: action.eventData.descriptionKh,
-                            category,
-                            importance: action.eventData.importance || 50,
-                            sources: [{
-                                url: article.sourceUrl,
-                                name: article.source,
-                                country: article.country,
-                                credibility: article.credibility,
-                                snippet: action.eventData.sourceSnippet,
-                            }],
-                            });
-                        console.log(`📌 Created event: "${action.eventData.title}" (importance: ${action.eventData.importance})`);
-                        eventsCreated++;
-                    }
-                    break;
-
-                case "merge_source":
-                    if (action.targetEventTitle) {
-                        const articleDate = article.publishedAt
-                            ? new Date(article.publishedAt).toISOString().split('T')[0]
-                            : new Date().toISOString().split('T')[0];
-
-                        const startDate = new Date(articleDate);
-                        startDate.setDate(startDate.getDate() - 7);
-                        const endDate = new Date(articleDate);
-                        endDate.setDate(endDate.getDate() + 7);
-
-                        // Find the event to merge into
-                        const matchingEvents = await ctx.runQuery(internal.api.findEventByTitleAndDate, {
-                            title: action.targetEventTitle,
-                            dateRange: {
-                                start: startDate.toISOString().split('T')[0],
-                                end: endDate.toISOString().split('T')[0],
-                            },
-                            });
-
-                        if (matchingEvents.length > 0) {
-                            await ctx.runMutation(internal.api.addSourceToEvent, {
-                                eventId: matchingEvents[0]._id,
-                                source: {
-                                    url: article.sourceUrl,
-                                    name: article.source,
-                                    country: article.country,
-                                    credibility: article.credibility,
-                                    snippet: action.sourceSnippet,
-                                },
-                                });
-                            console.log(`➕ Merged source into: "${action.targetEventTitle}"`);
-                            sourcesMerged++;
-                        } else {
-                            console.log(`⚠️ Target event not found: "${action.targetEventTitle}"`);
-                        }
-                    }
-                    break;
-
-                case "archive":
-                    // Archive = mark as processed but not timeline-worthy
-                    await ctx.runMutation(internal.api.flagArticle, {
-                            country: article.country as "thailand" | "cambodia" | "international",
-                            title: article.title,
-                        status: "archived",
-                        });
-                    console.log(`📦 Archived: "${article.title}"`);
-                    archived++;
-                    break;
-
-                case "discard":
-                    // Discard = mark as false (bad data)
-                    await ctx.runMutation(internal.api.flagArticle, {
-                            country: article.country as "thailand" | "cambodia" | "international",
-                            title: article.title,
-                        status: "false",
-                        });
-                    console.log(`🗑️ Discarded: "${article.title}"`);
-                    discarded++;
-                    break;
-
-                case "update_event":
-                    // Update an existing timeline event with new info
-                    if (action.targetEventTitle && action.eventUpdates) {
-                        // ONLY allow fields that are in the validator - strip everything else
-                        // This prevents AI from breaking the mutation with extra fields like 'sourceSnippet'
-                        const validFields = ['title', 'titleTh', 'titleKh', 'description', 'descriptionTh', 'descriptionKh', 'date', 'timeOfDay', 'category', 'importance', 'status'];
-                        const updates: any = {};
-                        for (const field of validFields) {
-                            if ((action.eventUpdates as any)[field] !== undefined) {
-                                updates[field] = (action.eventUpdates as any)[field];
-                            }
-                        }
-
-                        // Validate category if provided
-                        if (updates.category) {
-                            const validCategories = ["military", "diplomatic", "humanitarian", "political"];
-                            if (!validCategories.includes(updates.category)) {
-                                updates.category = undefined; // Invalid, don't update
-                            }
-                        }
-                        if (updates.status) {
-                            const validStatuses = ["confirmed", "disputed", "debunked"];
-                            if (!validStatuses.includes(updates.status)) {
-                                updates.status = undefined; // Invalid, don't update
-                            }
-                        }
-
-                        await ctx.runMutation(internal.api.updateTimelineEvent, {
-                            eventTitle: action.targetEventTitle,
-                            updates,
-                            reason: action.reasoning || "Updated by Historian based on new information",
-                            });
-                        console.log(`✏️ Updated event: "${action.targetEventTitle}" - ${action.reasoning || "no reason given"}`);
-                        eventsUpdated++;
-                    } else {
-                        console.log(`⚠️ update_event missing targetEventTitle or eventUpdates`);
-                    }
-                    break;
-
-                case "flag_conflict":
-                    // Mark for deeper investigation
-                    await ctx.runMutation(internal.api.updateArticleValidation, {
-                            country: article.country as "thailand" | "cambodia" | "international",
-                            title: article.title,
-                        hasConflict: true,
-                        conflictsWith: action.targetEventTitle,
-                        });
-                    console.log(`⚠️ Flagged conflict: "${article.title}" vs "${action.targetEventTitle}"`);
-                    break;
-
-                case "delete_event":
-                    // DELETE an existing timeline event - USE EXTREMELY RARELY
-                    if (action.targetEventTitle && action.reasoning) {
-                        await ctx.runMutation(internal.api.deleteTimelineEvent, {
-                            eventTitle: action.targetEventTitle,
-                            reason: action.reasoning,
-                            });
-                        console.log(`🗑️ DELETED event: "${action.targetEventTitle}" - Reason: ${action.reasoning}`);
-                        eventsDeleted++;
-                    } else {
-                        console.log(`⚠️ delete_event missing targetEventTitle or reasoning`);
-                    }
-                    break;
-            }
-
-            // UPDATE CREDIBILITY - Historian verifies and adjusts credibility for every article
-            if (action.verifiedCredibility !== undefined) {
-                try {
-                    const oldCred = article.credibility || 50;
-                    const newCred = Math.max(0, Math.min(100, action.verifiedCredibility));
-                    const credDiff = newCred - oldCred;
-
-                    await ctx.runMutation(internal.api.updateArticleCredibility, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        title: article.title,
-                        credibility: newCred,
-                    });
-                    const arrow = credDiff > 0 ? "up" : credDiff < 0 ? "down" : "same";
-                    console.log(`   Credibility: ${oldCred} ${arrow} ${newCred} | ${action.credibilityReason || ""}`);
-                    credibilityUpdated++;
-                } catch (error) {
-                    console.error(`[HISTORIAN] Credibility update failed for "${article.title}":`, error);
-                }
-            }
-
-            // Mark article as processed by Historian (regardless of action taken)
-            await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
-                country: article.country as "thailand" | "cambodia" | "international",
-                title: article.title,
-            });
-            } catch (error) {
-                console.error(`[HISTORIAN] Failed to apply action "${action.action}" for "${article.title}":`, error);
-                continue;
-            }
-        }
-
-        // IMPORTANT: Also mark any selected articles that the AI forgot to include in its response
-        // This prevents "orphaned" articles from being reprocessed forever
-        // Decode HTML entities to match consistently with the action processing above
-        const processedTitles = returnedTitles;
-        for (const article of selectedArticles) {
-            if (!processedTitles.has(article.title)) {
-                console.log(`⚠️ AI forgot to return action for "${article.title}" - marking as processed anyway`);
-                await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        title: article.title,
-                    });
-            }
-        }
-
-        console.log("\n═══════════════════════════════════════════════════════════════");
-        console.log(`📜 HISTORIAN CYCLE COMPLETE`);
-        console.log(`   Events created: ${eventsCreated}`);
-        console.log(`   Events updated: ${eventsUpdated}`);
-        console.log(`   Events deleted: ${eventsDeleted}`);
-        console.log(`   Sources merged: ${sourcesMerged}`);
-        console.log(`   Articles archived: ${archived}`);
-        console.log(`   Articles discarded: ${discarded}`);
-        console.log(`   Credibility updated: ${credibilityUpdated}`);
-        console.log("═══════════════════════════════════════════════════════════════");
-
-        return {
-            processed: selectedArticles.length,  // Return actual selected count, not just AI response count
-            eventsCreated,
-            eventsUpdated,
-            eventsDeleted,
-            sourcesMerged,
-            archived,
-            discarded,
-            credibilityUpdated,
-        };
-    },
+    handler: async (ctx, args): Promise<HistorianCycleResult> => await runHistorianCycleInternal(ctx, args),
 });
 
 // =============================================================================
@@ -2144,3 +2155,4 @@ export const runTimelineCleanup = internalAction({
         };
     },
 });
+

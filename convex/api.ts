@@ -3,6 +3,175 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
+const isVisibleNewsStatus = (status: string) => status === "active" || status === "unverified";
+
+async function getNewsSlimData(ctx: any, country: "thailand" | "cambodia", limit?: number) {
+    const table = country === "thailand" ? "thailandNews" : "cambodiaNews";
+    const targetLimit = Math.min(limit ?? 20, 100);
+    const articles = await ctx.db
+        .query(table)
+        .order("desc")
+        .take(targetLimit);
+
+    return articles
+        .filter((article: any) => isVisibleNewsStatus(article.status))
+        .map((article: any) => ({
+            _id: article._id,
+            title: article.title,
+            titleEn: article.titleEn,
+            titleTh: article.titleTh,
+            titleKh: article.titleKh,
+            publishedAt: article.publishedAt,
+            fetchedAt: article.fetchedAt,
+            source: article.source,
+            sourceUrl: article.sourceUrl,
+            category: article.category,
+            credibility: article.credibility,
+            status: article.status,
+        }));
+}
+
+async function getAnalysisData(ctx: any, target: "thailand" | "cambodia" | "neutral") {
+    if (target === "neutral") {
+        return await ctx.db.query("neutralAnalysis").order("desc").first();
+    }
+
+    const table = target === "thailand" ? "thailandAnalysis" : "cambodiaAnalysis";
+    return await ctx.db.query(table).order("desc").first();
+}
+
+async function getStatsData(ctx: any) {
+    const stats = await ctx.db.query("systemStats")
+        .withIndex("by_key", (q: any) => q.eq("key", "main"))
+        .first();
+
+    return stats ? {
+        lastResearchAt: stats.lastResearchAt,
+        systemStatus: stats.systemStatus,
+        isPaused: stats.isPaused,
+        nextRunAt: stats.nextRunAt,
+        lastCycleInterval: stats.lastCycleInterval,
+        schedulingReason: stats.schedulingReason,
+    } : null;
+}
+
+async function getDashboardStatsData(ctx: any) {
+    return await ctx.db.query("dashboardStats")
+        .withIndex("by_key", (q: any) => q.eq("key", "main"))
+        .first();
+}
+
+async function getArticleCountsData(ctx: any) {
+    const cached = await ctx.db.query("articleCounts")
+        .withIndex("by_key", (q: any) => q.eq("key", "main"))
+        .first();
+
+    if (cached) {
+        const total = cached.thailand + cached.cambodia + cached.international;
+
+        if (total < 50) {
+            const spotCheck = await ctx.db
+                .query("thailandNews")
+                .withIndex("by_status", (q: any) => q.eq("status", "active"))
+                .take(100);
+
+            if (spotCheck.length <= cached.thailand + 10) {
+                return {
+                    thailand: cached.thailand,
+                    cambodia: cached.cambodia,
+                    international: cached.international,
+                    total,
+                };
+            }
+
+            console.log(`⚠️ [COUNTS] Cache seems stale (${total} cached, but TH alone has ${spotCheck.length}+). Falling back to recount.`);
+        } else {
+            return {
+                thailand: cached.thailand,
+                cambodia: cached.cambodia,
+                international: cached.international,
+                total,
+            };
+        }
+    }
+
+    const countTable = async (tableName: "thailandNews" | "cambodiaNews" | "internationalNews") => {
+        const active = await ctx.db
+            .query(tableName)
+            .withIndex("by_status", (q: any) => q.eq("status", "active"))
+            .take(10000);
+
+        const unverified = await ctx.db
+            .query(tableName)
+            .withIndex("by_status", (q: any) => q.eq("status", "unverified"))
+            .take(10000);
+
+        return active.length + unverified.length;
+    };
+
+    const [thailand, cambodia, international] = await Promise.all([
+        countTable("thailandNews"),
+        countTable("cambodiaNews"),
+        countTable("internationalNews"),
+    ]);
+
+    return {
+        thailand,
+        cambodia,
+        international,
+        total: thailand + cambodia + international,
+    };
+}
+
+async function getTimelineData(ctx: any, limit?: number) {
+    const timelineQuery = ctx.db
+        .query("timelineEvents")
+        .withIndex("by_date")
+        .order("desc");
+
+    if (limit) {
+        return await timelineQuery.take(limit);
+    }
+
+    return await timelineQuery.collect();
+}
+
+async function getDashboardSnapshotData(ctx: any) {
+    const [
+        thailandNews,
+        cambodiaNews,
+        thailandAnalysis,
+        cambodiaAnalysis,
+        neutralAnalysis,
+        dashboardStats,
+        timelineEvents,
+        systemStats,
+        articleCounts,
+    ] = await Promise.all([
+        getNewsSlimData(ctx, "thailand", 20),
+        getNewsSlimData(ctx, "cambodia", 20),
+        getAnalysisData(ctx, "thailand"),
+        getAnalysisData(ctx, "cambodia"),
+        getAnalysisData(ctx, "neutral"),
+        getDashboardStatsData(ctx),
+        getTimelineData(ctx),
+        getStatsData(ctx),
+        getArticleCountsData(ctx),
+    ]);
+
+    return {
+        thailandNews,
+        cambodiaNews,
+        thailandAnalysis,
+        cambodiaAnalysis,
+        neutralAnalysis,
+        dashboardStats,
+        timelineEvents,
+        systemStats,
+        articleCounts,
+    };
+}
+
 // =============================================================================
 // PUBLIC QUERIES (Frontend)
 // =============================================================================
@@ -31,68 +200,19 @@ export const getNewsSlim = query({
         country: v.union(v.literal("thailand"), v.literal("cambodia")),
         limit: v.optional(v.number()),
     },
-    handler: async (ctx, args) => {
-        const table = args.country === "thailand" ? "thailandNews" : "cambodiaNews";
-        const limit = Math.min(args.limit ?? 20, 100);
-        const articles = await ctx.db
-            .query(table)
-            .order("desc")
-            .take(limit);
-
-        // Map to slim object
-        return articles
-            .filter(a => a.status === "active" || a.status === "unverified")
-            .map(a => ({
-                _id: a._id,
-                title: a.title,
-                titleEn: a.titleEn,
-                titleTh: a.titleTh,
-                titleKh: a.titleKh,
-                publishedAt: a.publishedAt,
-                fetchedAt: a.fetchedAt,
-                source: a.source,
-                sourceUrl: a.sourceUrl,
-                category: a.category,
-                credibility: a.credibility,
-                status: a.status,
-                // Exclude: summary, summaryEn/Th/Kh, keyPoints, entities
-            }));
-    },
+    handler: async (ctx, args) => await getNewsSlimData(ctx, args.country, args.limit),
 });
 
 export const getAnalysis = query({
     args: {
         target: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("neutral")),
     },
-    handler: async (ctx, args) => {
-        if (args.target === "neutral") {
-            return await ctx.db.query("neutralAnalysis").order("desc").first();
-        }
-        const table = args.target === "thailand" ? "thailandAnalysis" : "cambodiaAnalysis";
-        return await ctx.db.query(table).order("desc").first();
-    },
+    handler: async (ctx, args) => await getAnalysisData(ctx, args.target),
 });
 
 export const getStats = query({
     args: {},
-    handler: async (ctx) => {
-        const stats = await ctx.db.query("systemStats")
-            .withIndex("by_key", (q) => q.eq("key", "main"))
-            .first();
-
-        // Bandwidth Optimization: Only return fields that trigger UI updates (status/timer)
-        // We EXCLUDE "totalArticlesFetched" because it changes constantly and triggers
-        // a websocket push to ALL clients for every single article found.
-        return stats ? {
-            lastResearchAt: stats.lastResearchAt,
-            systemStatus: stats.systemStatus,
-            isPaused: stats.isPaused,
-            // Adaptive scheduling fields
-            nextRunAt: stats.nextRunAt,
-            lastCycleInterval: stats.lastCycleInterval,
-            schedulingReason: stats.schedulingReason,
-        } : null;
-    },
+    handler: async (ctx) => await getStatsData(ctx),
 });
 
 // Public status for timeline impact rescore progress
@@ -271,83 +391,12 @@ export const getSystemStatsInternal = internalQuery({
 // This returns live stats from synthesizeAll (casualties, displaced, etc.)
 export const getDashboardStats = query({
     args: {},
-    handler: async (ctx) => {
-        return await ctx.db.query("dashboardStats")
-            .withIndex("by_key", (q) => q.eq("key", "main"))
-            .first();
-    },
+    handler: async (ctx) => await getDashboardStatsData(ctx),
 });
 
 export const getArticleCounts = query({
     args: {},
-    handler: async (ctx) => {
-        // OPTIMIZED: Read from singleton cache instead of scanning all tables
-        // This reduces bandwidth from ~65 MB to ~100 bytes (99.9% reduction)
-        const cached = await ctx.db.query("articleCounts")
-            .withIndex("by_key", q => q.eq("key", "main"))
-            .first();
-
-        if (cached) {
-            const total = cached.thailand + cached.cambodia + cached.international;
-
-            // SANITY CHECK: If total is suspiciously low (<50), verify against actual count
-            // This prevents displaying stale/wrong cache values
-            if (total < 50) {
-                // Quick spot-check: count just one table to see if cache is stale
-                const spotCheck = await ctx.db
-                    .query("thailandNews")
-                    .withIndex("by_status", q => q.eq("status", "active"))
-                    .take(100);
-
-                // If spot check shows more than cache claims, fall through to full recount
-                if (spotCheck.length > cached.thailand + 10) {
-                    console.log(`⚠️ [COUNTS] Cache seems stale (${total} cached, but TH alone has ${spotCheck.length}+). Falling back to recount.`);
-                    // Fall through to recount below
-                } else {
-                    return {
-                        thailand: cached.thailand,
-                        cambodia: cached.cambodia,
-                        international: cached.international,
-                        total,
-                    };
-                }
-            } else {
-                return {
-                    thailand: cached.thailand,
-                    cambodia: cached.cambodia,
-                    international: cached.international,
-                    total,
-                };
-            }
-        }
-
-        // Fallback for first run, cache doesn't exist, or cache seems stale
-        // This will be expensive but only happens once per issue
-        const countTable = async (tableName: "thailandNews" | "cambodiaNews" | "internationalNews") => {
-            const active = await ctx.db
-                .query(tableName)
-                .withIndex("by_status", q => q.eq("status", "active"))
-                .take(10000);
-
-            const unverified = await ctx.db
-                .query(tableName)
-                .withIndex("by_status", q => q.eq("status", "unverified"))
-                .take(10000);
-
-            return active.length + unverified.length;
-        };
-
-        const thailand = await countTable("thailandNews");
-        const cambodia = await countTable("cambodiaNews");
-        const international = await countTable("internationalNews");
-
-        return {
-            thailand,
-            cambodia,
-            international,
-            total: thailand + cambodia + international,
-        };
-    },
+    handler: async (ctx) => await getArticleCountsData(ctx),
 });
 
 // Timeline events for frontend display
@@ -356,19 +405,12 @@ export const getTimeline = query({
     args: {
         limit: v.optional(v.number()),
     },
-    handler: async (ctx, args) => {
-        const query = ctx.db
-            .query("timelineEvents")
-            .withIndex("by_date")
-            .order("desc");
+    handler: async (ctx, args) => await getTimelineData(ctx, args.limit),
+});
 
-        if (args.limit) {
-            return await query.take(args.limit);
-        }
-
-        // Full history for timeline display (ISR caches this)
-        return await query.collect();
-    },
+export const getDashboardSnapshot = query({
+    args: {},
+    handler: async (ctx) => await getDashboardSnapshotData(ctx),
 });
 
 // =============================================================================

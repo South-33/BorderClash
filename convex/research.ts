@@ -5,6 +5,7 @@ import { internal, api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
+import { runHistorianCycleInternal } from "./historian";
 
 // Use gemini-studio-api helpers
 import { MODELS, FALLBACK_CHAINS } from "./config";
@@ -2253,7 +2254,7 @@ export const step3_historian = internalAction({
 
                 const result = await runWithRetries(
                     `[STEP 3] Historian iteration ${historianLoops}`,
-                    () => ctx.runAction(internal.historian.runHistorianCycle, {
+                    () => runHistorianCycleInternal(ctx, {
                         cachedTimeline: latestTimeline,
                         cachedNewsContext,
                     }),

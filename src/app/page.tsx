@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   // Let unrecoverable fetch errors throw during revalidation so Next.js keeps serving
   // the last successful ISR snapshot instead of caching an error shell.
   const initialData: BorderClashData = await fetchBorderClashData();
-  console.log(`[ISR] Data fetched at ${new Date().toISOString()}, fetchedAt: ${initialData.fetchedAt}, degraded=${initialData.degraded}`);
+  console.log(`[ISR] Data fetched at ${new Date().toISOString()}, fetchedAt: ${initialData.fetchedAt}`);
 
   return <DashboardClient initialData={initialData} />;
 }
