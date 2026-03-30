@@ -19,19 +19,10 @@ import { DashboardClient } from './DashboardClient';
 export const revalidate = 86400; // 24 hours fallback
 
 export default async function DashboardPage() {
-  // This runs at build time and during ISR revalidation
-  // NOT on every user request!
-  let initialData: BorderClashData | null = null;
-  let error: string | null = null;
+  // Let unrecoverable fetch errors throw during revalidation so Next.js keeps serving
+  // the last successful ISR snapshot instead of caching an error shell.
+  const initialData: BorderClashData = await fetchBorderClashData();
+  console.log(`[ISR] Data fetched at ${new Date().toISOString()}, fetchedAt: ${initialData.fetchedAt}, degraded=${initialData.degraded}`);
 
-  try {
-    initialData = await fetchBorderClashData();
-    console.log(`[ISR] Data fetched at ${new Date().toISOString()}, fetchedAt: ${initialData.fetchedAt}`);
-  } catch (e) {
-    console.error('[ISR] Failed to fetch data:', e);
-    error = e instanceof Error ? e.message : 'Failed to load data. Please refresh the page.';
-  }
-
-  // Pass server-fetched data to client component
-  return <DashboardClient initialData={initialData} serverError={error} />;
+  return <DashboardClient initialData={initialData} />;
 }

@@ -2226,13 +2226,16 @@ export const step3_historian = internalAction({
         let historianLoops = 0;
         const MAX_HISTORIAN_LOOPS = 10; // User requested limit
 
-        // ═══ CACHE NEWS CONTEXT ONCE ═══
-        // News context is used for broad situational awareness and can be reused.
-        // Timeline context is refreshed each iteration to reduce duplicate event creation.
-        const cachedNewsContext = await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
-        console.log(`📦 [CACHE] News: TH=${cachedNewsContext.TH.length}, KH=${cachedNewsContext.KH.length}, INT=${cachedNewsContext.INT.length}`);
-
+        let cachedNewsContext: any = null;
         try {
+            // Cache the news context once, but keep it inside the guarded retry path so
+            // transient Convex query failures do not bypass step-level retries/finalization.
+            cachedNewsContext = await runWithRetries(
+                "[STEP 3] Historian news context",
+                () => ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {}),
+            );
+            console.log(`📦 [CACHE] News: TH=${cachedNewsContext.TH.length}, KH=${cachedNewsContext.KH.length}, INT=${cachedNewsContext.INT.length}`);
+
             while (historianLoops < MAX_HISTORIAN_LOOPS) {
                 const timeRemaining = getTimeRemaining();
                 if (timeRemaining < 90 * 1000) { // 90s minimum
@@ -2243,7 +2246,10 @@ export const step3_historian = internalAction({
                 historianLoops++;
                 console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
 
-                const latestTimeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 150 });
+                const latestTimeline = await runWithRetries(
+                    `[STEP 3] Timeline refresh iteration ${historianLoops}`,
+                    () => ctx.runQuery(internal.api.getRecentTimeline, { limit: 150 }),
+                );
 
                 const result = await runWithRetries(
                     `[STEP 3] Historian iteration ${historianLoops}`,

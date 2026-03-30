@@ -1110,11 +1110,12 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   // =============================================================================
   // ISR-AWARE DATA LOADING
-  // If initialData is provided (from server-side ISR), we SKIP all Convex calls.
-  // This means ZERO Convex bandwidth per user - data comes from Vercel's cache!
+  // If initialData is provided (from server-side ISR), we normally skip Convex calls.
+  // But if the ISR snapshot was degraded, we immediately refill from live Convex queries.
   // =============================================================================
 
   const hasServerData = initialData !== null;
+  const serverSnapshotDegraded = Boolean(initialData?.degraded);
 
   // =============================================================================
   // STALE LOCALSTORAGE CLEANUP
@@ -1122,7 +1123,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // This prevents showing stale cached data when fresh ISR data exists.
   // =============================================================================
   useEffect(() => {
-    if (!hasServerData || typeof window === 'undefined') return;
+    if (!hasServerData || serverSnapshotDegraded || typeof window === 'undefined') return;
 
     const isrLastResearchAt = initialData?.systemStats?.lastResearchAt;
     if (!isrLastResearchAt) return;
@@ -1146,7 +1147,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         localStorage.removeItem('borderclash_system_stats');
       }
     }
-  }, [hasServerData, initialData?.systemStats?.lastResearchAt]);
+  }, [hasServerData, serverSnapshotDegraded, initialData?.systemStats?.lastResearchAt]);
 
   const [forceClientMode, setForceClientMode] = useState(false);
   const [tabFocusKey, setTabFocusKey] = useState(0);
@@ -1206,9 +1207,11 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     false // ALWAYS subscribe to status to detect new research cycles
   ) as any;
 
-  // Use server data if available, unless fresh client stats detect a newer update
-  const systemStats = (hasServerData && !forceClientMode) ? initialData.systemStats : clientSystemStats;
-  const sysStatsLoading = (hasServerData && !forceClientMode) ? false : clientSysStatsLoading;
+  const preferServerSnapshot = hasServerData && !forceClientMode && !serverSnapshotDegraded;
+
+  // Use live client stats when possible, but keep ISR stats as a fallback shell.
+  const systemStats = preferServerSnapshot ? initialData.systemStats : (clientSystemStats ?? initialData?.systemStats);
+  const sysStatsLoading = hasServerData ? false : clientSysStatsLoading;
 
   // Detect when new research data exists on the server compared to our static ISR load
   useEffect(() => {
@@ -1221,7 +1224,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   }, [clientSystemStats?.lastResearchAt, hasServerData, forceClientMode, initialData?.systemStats?.lastResearchAt]);
 
   // All other queries - skip if we have valid server data AND no newer cycle has been detected
-  const shouldSkip = hasServerData && !forceClientMode;
+  const shouldSkip = preferServerSnapshot;
 
   // Update global ref so any remaining cached queries can access it
   useEffect(() => {

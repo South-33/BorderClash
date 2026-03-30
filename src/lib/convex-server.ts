@@ -8,6 +8,8 @@
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
 
+const SERVER_QUERY_RETRY_DELAYS_MS = [750, 2000] as const;
+
 // Create a singleton HTTP client for server-side queries
 const getConvexClient = () => {
     const deploymentUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
@@ -118,6 +120,83 @@ export interface BorderClashData {
     systemStats: SystemStats | null;
     articleCounts: ArticleCounts | null;
     fetchedAt: number;
+    degraded: boolean;
+    fetchWarnings: string[];
+}
+
+const summarizeError = (error: unknown): string => {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return String(error);
+};
+
+const isRetryableServerQueryError = (error: unknown): boolean => {
+    const message = summarizeError(error).toLowerCase();
+    return [
+        "fetch failed",
+        "network",
+        "timeout",
+        "timed out",
+        "abort",
+        "econnreset",
+        "etimedout",
+        "enotfound",
+        "429",
+        "rate",
+        "quota",
+        "temporarily unavailable",
+        "bad gateway",
+        "gateway timeout",
+        "cloudflare",
+        "server error",
+    ].some((needle) => message.includes(needle));
+};
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function queryWithRetries<T>(
+    label: string,
+    operation: () => Promise<T>,
+    retryDelaysMs: readonly number[] = SERVER_QUERY_RETRY_DELAYS_MS,
+): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            const canRetry = attempt < retryDelaysMs.length && isRetryableServerQueryError(error);
+            console.warn(`[ISR] ${label} failed on attempt ${attempt + 1}/${retryDelaysMs.length + 1}: ${summarizeError(error)}`);
+            if (!canRetry) {
+                throw error;
+            }
+
+            await sleep(retryDelaysMs[attempt]);
+        }
+    }
+
+    throw lastError;
+}
+
+async function queryWithFallback<T>(
+    label: string,
+    operation: () => Promise<T>,
+    fallback: T,
+): Promise<{ value: T; warning?: string }> {
+    try {
+        return {
+            value: await queryWithRetries(label, operation),
+        };
+    } catch (error) {
+        const warning = `${label}: ${summarizeError(error)}`;
+        console.warn(`[ISR] ${warning}. Using fallback data for this section.`);
+        return {
+            value: fallback,
+            warning,
+        };
+    }
 }
 
 /**
@@ -127,7 +206,7 @@ export interface BorderClashData {
 export async function fetchBorderClashData(): Promise<BorderClashData> {
     const client = getConvexClient();
 
-    // Fetch all data in parallel for speed
+    // Fetch all data in parallel, but let individual sections degrade gracefully.
     const [
         thailandNews,
         cambodiaNews,
@@ -139,27 +218,102 @@ export async function fetchBorderClashData(): Promise<BorderClashData> {
         systemStats,
         articleCounts,
     ] = await Promise.all([
-        client.query(api.api.getNewsSlim, { country: "thailand", limit: 20 }),
-        client.query(api.api.getNewsSlim, { country: "cambodia", limit: 20 }),
-        client.query(api.api.getAnalysis, { target: "thailand" }),
-        client.query(api.api.getAnalysis, { target: "cambodia" }),
-        client.query(api.api.getAnalysis, { target: "neutral" }),
-        client.query(api.api.getDashboardStats, {}),
-        client.query(api.api.getTimeline, {}),
-        client.query(api.api.getStats, {}),
-        client.query(api.api.getArticleCounts, {}),
+        queryWithFallback<NewsArticle[]>(
+            "Thailand news",
+            () => client.query(api.api.getNewsSlim, { country: "thailand", limit: 20 }) as Promise<NewsArticle[]>,
+            [],
+        ),
+        queryWithFallback<NewsArticle[]>(
+            "Cambodia news",
+            () => client.query(api.api.getNewsSlim, { country: "cambodia", limit: 20 }) as Promise<NewsArticle[]>,
+            [],
+        ),
+        queryWithFallback<Analysis | null>(
+            "Thailand analysis",
+            () => client.query(api.api.getAnalysis, { target: "thailand" }) as Promise<Analysis | null>,
+            null,
+        ),
+        queryWithFallback<Analysis | null>(
+            "Cambodia analysis",
+            () => client.query(api.api.getAnalysis, { target: "cambodia" }) as Promise<Analysis | null>,
+            null,
+        ),
+        queryWithFallback<Analysis | null>(
+            "Neutral analysis",
+            () => client.query(api.api.getAnalysis, { target: "neutral" }) as Promise<Analysis | null>,
+            null,
+        ),
+        queryWithFallback<DashboardStats | null>(
+            "Dashboard stats",
+            () => client.query(api.api.getDashboardStats, {}) as Promise<DashboardStats | null>,
+            null,
+        ),
+        queryWithFallback<TimelineEvent[]>(
+            "Timeline",
+            () => client.query(api.api.getTimeline, {}) as Promise<TimelineEvent[]>,
+            [],
+        ),
+        queryWithFallback<SystemStats | null>(
+            "System stats",
+            () => client.query(api.api.getStats, {}) as Promise<SystemStats | null>,
+            null,
+        ),
+        queryWithFallback<ArticleCounts | null>(
+            "Article counts",
+            () => client.query(api.api.getArticleCounts, {}) as Promise<ArticleCounts | null>,
+            null,
+        ),
     ]);
 
+    const queryResults = [
+        thailandNews,
+        cambodiaNews,
+        thailandAnalysis,
+        cambodiaAnalysis,
+        neutralAnalysis,
+        dashboardStats,
+        timelineEvents,
+        systemStats,
+        articleCounts,
+    ];
+    const fetchWarnings = queryResults
+        .map((result) => result.warning)
+        .filter((warning): warning is string => Boolean(warning));
+    const degraded = fetchWarnings.length > 0;
+    const hasRenderableData = Boolean(
+        thailandNews.value.length > 0 ||
+        cambodiaNews.value.length > 0 ||
+        thailandAnalysis.value ||
+        cambodiaAnalysis.value ||
+        neutralAnalysis.value ||
+        dashboardStats.value ||
+        timelineEvents.value.length > 0 ||
+        systemStats.value ||
+        articleCounts.value,
+    );
+
+    if (!hasRenderableData) {
+        throw new Error(
+            `BorderClash ISR data fetch failed for every section: ${fetchWarnings.join(" | ") || "unknown error"}`,
+        );
+    }
+
+    if (degraded) {
+        console.warn(`[ISR] Proceeding with partial snapshot (${fetchWarnings.length} degraded section(s))`);
+    }
+
     return {
-        thailandNews: thailandNews as NewsArticle[],
-        cambodiaNews: cambodiaNews as NewsArticle[],
-        thailandAnalysis: thailandAnalysis as Analysis | null,
-        cambodiaAnalysis: cambodiaAnalysis as Analysis | null,
-        neutralAnalysis: neutralAnalysis as Analysis | null,
-        dashboardStats: dashboardStats as DashboardStats | null,
-        timelineEvents: (timelineEvents || []) as TimelineEvent[],
-        systemStats: systemStats as SystemStats | null,
-        articleCounts: articleCounts as ArticleCounts | null,
+        thailandNews: thailandNews.value as NewsArticle[],
+        cambodiaNews: cambodiaNews.value as NewsArticle[],
+        thailandAnalysis: thailandAnalysis.value as Analysis | null,
+        cambodiaAnalysis: cambodiaAnalysis.value as Analysis | null,
+        neutralAnalysis: neutralAnalysis.value as Analysis | null,
+        dashboardStats: dashboardStats.value as DashboardStats | null,
+        timelineEvents: timelineEvents.value as TimelineEvent[],
+        systemStats: systemStats.value as SystemStats | null,
+        articleCounts: articleCounts.value as ArticleCounts | null,
         fetchedAt: Date.now(),
+        degraded,
+        fetchWarnings,
     };
 }

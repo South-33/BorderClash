@@ -5,4 +5,5 @@ BorderClash is a real-time conflict monitoring dashboard for the Thailand-Cambod
 
 ## 2. Notes
 - Convex `runResearchCycle` can time out before Step 4, leaving `systemStatus=syncing` and stale `nextRunAt` -> run `recoverStuckCycle` watchdog (10m cron) to force 24h fallback schedule, release lock, and return UI to online.
-- Research pipeline resilience lives in `convex/research.ts` + `convex/historian.ts` -> keep bounded step retries/scheduler handoff retries and only auto-mark historian articles processed when AI omitted them, or transient Gemini/syscall failures will silently drop work.
+- Research pipeline resilience lives in `convex/research.ts` + `convex/historian.ts` -> keep bounded step retries/scheduler handoff retries, including Step 3 pre-loop context fetches, and only auto-mark historian articles processed when AI omitted them, or transient Gemini/syscall failures will silently drop work.
+- ISR resilience lives in `src/lib/convex-server.ts` + `src/app/page.tsx` -> tolerate per-query Convex read failures but throw on total snapshot outage, or one bad read can stale the whole page or cache an error shell.

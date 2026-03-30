@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 const root = process.cwd();
 const researchPath = path.join(root, "convex", "research.ts");
 const historianPath = path.join(root, "convex", "historian.ts");
+const convexServerPath = path.join(root, "src", "lib", "convex-server.ts");
+const pagePath = path.join(root, "src", "app", "page.tsx");
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -64,6 +66,8 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step2, /scheduleRunAfterWithRetries\(ctx, "Step 3"/);
 
   const step3 = section(source, "export const step3_historian", "export const step4_synthesis");
+  assert.match(step3, /runWithRetries\(\s*"\[STEP 3\] Historian news context"/s);
+  assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Timeline refresh iteration \$\{historianLoops\}`/s);
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Historian iteration \$\{historianLoops\}`/s);
   assert.match(step3, /scheduleStepRetry\(/);
   assert.match(step3, /scheduleRunAfterWithRetries\(ctx, "Step 4"/);
@@ -117,4 +121,22 @@ test("curation prompts and parsers are hardened against prose and bad escapes", 
   assert.match(aiUtils, /fenced ```json blocks first/);
   assert.doesNotMatch(historian, /List each article with your analysis plan FIRST/);
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
+});
+
+test("ISR server fetch tolerates partial query failures and throws only on total outage", () => {
+  const convexServer = read(convexServerPath);
+  const page = read(pagePath);
+
+  assert.match(convexServer, /const SERVER_QUERY_RETRY_DELAYS_MS = \[750, 2000\]/);
+  assert.match(convexServer, /async function queryWithRetries/);
+  assert.match(convexServer, /async function queryWithFallback/);
+  assert.match(convexServer, /const fetchWarnings = queryResults/);
+  assert.match(convexServer, /const hasRenderableData = Boolean\(/);
+  assert.match(convexServer, /throw new Error\(\s*`BorderClash ISR data fetch failed for every section:/s);
+  assert.match(convexServer, /degraded: boolean/);
+  assert.match(convexServer, /fetchWarnings: string\[]/);
+
+  assert.match(page, /const initialData: BorderClashData = await fetchBorderClashData\(\)/);
+  assert.doesNotMatch(page, /catch\s*\(/);
+  assert.doesNotMatch(page, /serverError/);
 });
