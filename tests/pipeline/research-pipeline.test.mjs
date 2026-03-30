@@ -78,6 +78,7 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step4, /runWithRetries\(\s*"\[STEP 4\] Synthesis"/s);
   assert.match(step4, /scheduleStepRetry\(/);
   assert.match(step4, /scheduleRunAtWithRetries\(\s*ctx,\s*"Next runResearchCycle"/s);
+  assert.match(source, /ctx\.runMutation\(internal\.api\.publishDashboardSnapshot, \{\}\)/);
 });
 
 test("historian action loop isolates item failures instead of aborting the batch", () => {
@@ -127,6 +128,7 @@ test("curation prompts and parsers are hardened against prose and bad escapes", 
 
 test("ISR server fetch uses a retried dashboard snapshot and lets page errors bubble to ISR", () => {
   const convexServer = read(convexServerPath);
+  const api = read(path.join(root, "convex", "api.ts"));
   const page = read(pagePath);
 
   assert.match(convexServer, /const SERVER_QUERY_RETRY_DELAYS_MS = \[750, 2000\]/);
@@ -136,6 +138,9 @@ test("ISR server fetch uses a retried dashboard snapshot and lets page errors bu
   assert.doesNotMatch(convexServer, /async function queryWithFallback/);
   assert.doesNotMatch(convexServer, /degraded: boolean/);
   assert.doesNotMatch(convexServer, /fetchWarnings: string\[]/);
+  assert.match(api, /\.query\("dashboardSnapshots"\)/);
+  assert.match(api, /return await assembleDashboardSnapshotData\(ctx\)/);
+  assert.match(api, /export const publishDashboardSnapshot = internalMutation/);
 
   assert.match(page, /const initialData: BorderClashData = await fetchBorderClashData\(\)/);
   assert.doesNotMatch(page, /catch\s*\(/);

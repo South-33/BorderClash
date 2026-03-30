@@ -1813,6 +1813,14 @@ Return your hours and a brief reason in the "scheduling" section.`;
                 console.error(`❌ [SYNTHESIS] ${message}`);
             }
 
+            try {
+                await ctx.runMutation(internal.api.publishDashboardSnapshot, {});
+            } catch (error) {
+                const message = `Dashboard snapshot publish failed: ${String(error)}`;
+                writeErrors.push(message);
+                console.error(`❌ [SYNTHESIS] ${message}`);
+            }
+
             if (writeErrors.length > 0) {
                 console.warn(`⚠️ [SYNTHESIS] Completed with ${writeErrors.length} write issue(s)`);
             }

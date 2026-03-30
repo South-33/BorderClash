@@ -5,6 +5,47 @@ import type { Id } from "./_generated/dataModel";
 
 const isVisibleNewsStatus = (status: string) => status === "active" || status === "unverified";
 
+const serializeTimelineEvent = (event: any) => ({
+    ...event,
+    _id: String(event._id),
+});
+
+async function assembleDashboardSnapshotData(ctx: any) {
+    const [
+        thailandNews,
+        cambodiaNews,
+        thailandAnalysis,
+        cambodiaAnalysis,
+        neutralAnalysis,
+        dashboardStats,
+        timelineEvents,
+        systemStats,
+        articleCounts,
+    ] = await Promise.all([
+        getNewsSlimData(ctx, "thailand", 20),
+        getNewsSlimData(ctx, "cambodia", 20),
+        getAnalysisData(ctx, "thailand"),
+        getAnalysisData(ctx, "cambodia"),
+        getAnalysisData(ctx, "neutral"),
+        getDashboardStatsData(ctx),
+        getTimelineData(ctx),
+        getStatsData(ctx),
+        getArticleCountsData(ctx),
+    ]);
+
+    return {
+        thailandNews,
+        cambodiaNews,
+        thailandAnalysis,
+        cambodiaAnalysis,
+        neutralAnalysis,
+        dashboardStats,
+        timelineEvents,
+        systemStats,
+        articleCounts,
+    };
+}
+
 async function getNewsSlimData(ctx: any, country: "thailand" | "cambodia", limit?: number) {
     const table = country === "thailand" ? "thailandNews" : "cambodiaNews";
     const targetLimit = Math.min(limit ?? 20, 100);
@@ -16,7 +57,7 @@ async function getNewsSlimData(ctx: any, country: "thailand" | "cambodia", limit
     return articles
         .filter((article: any) => isVisibleNewsStatus(article.status))
         .map((article: any) => ({
-            _id: article._id,
+            _id: String(article._id),
             title: article.title,
             titleEn: article.titleEn,
             titleTh: article.titleTh,
@@ -130,46 +171,35 @@ async function getTimelineData(ctx: any, limit?: number) {
         .order("desc");
 
     if (limit) {
-        return await timelineQuery.take(limit);
+        const events = await timelineQuery.take(limit);
+        return events.map(serializeTimelineEvent);
     }
 
-    return await timelineQuery.collect();
+    const events = await timelineQuery.collect();
+    return events.map(serializeTimelineEvent);
 }
 
 async function getDashboardSnapshotData(ctx: any) {
-    const [
-        thailandNews,
-        cambodiaNews,
-        thailandAnalysis,
-        cambodiaAnalysis,
-        neutralAnalysis,
-        dashboardStats,
-        timelineEvents,
-        systemStats,
-        articleCounts,
-    ] = await Promise.all([
-        getNewsSlimData(ctx, "thailand", 20),
-        getNewsSlimData(ctx, "cambodia", 20),
-        getAnalysisData(ctx, "thailand"),
-        getAnalysisData(ctx, "cambodia"),
-        getAnalysisData(ctx, "neutral"),
-        getDashboardStatsData(ctx),
-        getTimelineData(ctx),
-        getStatsData(ctx),
-        getArticleCountsData(ctx),
-    ]);
+    const snapshot = await ctx.db
+        .query("dashboardSnapshots")
+        .withIndex("by_key", (q: any) => q.eq("key", "main"))
+        .first();
 
-    return {
-        thailandNews,
-        cambodiaNews,
-        thailandAnalysis,
-        cambodiaAnalysis,
-        neutralAnalysis,
-        dashboardStats,
-        timelineEvents,
-        systemStats,
-        articleCounts,
-    };
+    if (snapshot) {
+        return {
+            thailandNews: snapshot.thailandNews,
+            cambodiaNews: snapshot.cambodiaNews,
+            thailandAnalysis: snapshot.thailandAnalysis,
+            cambodiaAnalysis: snapshot.cambodiaAnalysis,
+            neutralAnalysis: snapshot.neutralAnalysis,
+            dashboardStats: snapshot.dashboardStats,
+            timelineEvents: snapshot.timelineEvents,
+            systemStats: snapshot.systemStats,
+            articleCounts: snapshot.articleCounts,
+        };
+    }
+
+    return await assembleDashboardSnapshotData(ctx);
 }
 
 // =============================================================================
@@ -2061,6 +2091,33 @@ export const upsertDashboardStats = internalMutation({
         });
 
         console.log(`📊 [DASHBOARD] Updated stats + added history entry`);
+    },
+});
+
+export const publishDashboardSnapshot = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const snapshot = await assembleDashboardSnapshotData(ctx);
+        const now = Date.now();
+        const existing = await ctx.db
+            .query("dashboardSnapshots")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+
+        const data = {
+            key: "main" as const,
+            ...snapshot,
+            publishedAt: now,
+        };
+
+        if (existing) {
+            await ctx.db.patch(existing._id, data);
+        } else {
+            await ctx.db.insert("dashboardSnapshots", data);
+        }
+
+        console.log(`📦 [SNAPSHOT] Published dashboard snapshot at ${new Date(now).toISOString()}`);
+        return { publishedAt: now };
     },
 });
 

@@ -57,6 +57,25 @@ export interface Analysis {
     lastUpdatedAt: number;
 }
 
+export interface NeutralAnalysis {
+    generalSummary: string;
+    generalSummaryEn?: string;
+    generalSummaryTh?: string;
+    generalSummaryKh?: string;
+    conflictLevel: string;
+    keyEvents: string[];
+    keyEventsEn?: string[];
+    keyEventsTh?: string[];
+    keyEventsKh?: string[];
+    displacedCount?: number;
+    displacedTrend?: number;
+    civilianInjuredCount?: number;
+    militaryInjuredCount?: number;
+    injuredCount?: number;
+    casualtyCount?: number;
+    lastUpdatedAt: number;
+}
+
 export interface DashboardStats {
     conflictLevel: string;
     displacedCount: number;
@@ -115,7 +134,7 @@ export interface BorderClashData {
     cambodiaNews: NewsArticle[];
     thailandAnalysis: Analysis | null;
     cambodiaAnalysis: Analysis | null;
-    neutralAnalysis: Analysis | null;
+    neutralAnalysis: NeutralAnalysis | null;
     dashboardStats: DashboardStats | null;
     timelineEvents: TimelineEvent[];
     systemStats: SystemStats | null;

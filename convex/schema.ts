@@ -1,6 +1,140 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+const categoryValidator = v.union(
+    v.literal("military"),
+    v.literal("political"),
+    v.literal("humanitarian"),
+    v.literal("diplomatic")
+);
+
+const militaryPostureValidator = v.union(
+    v.literal("PEACEFUL"),
+    v.literal("DEFENSIVE"),
+    v.literal("ESCALATED"),
+    v.literal("AGGRESSIVE")
+);
+
+const territorialContextValidator = v.union(
+    v.literal("OWN_TERRITORY"),
+    v.literal("DISPUTED_ZONE"),
+    v.literal("FOREIGN_TERRITORY"),
+    v.literal("BORDER_ZONE")
+);
+
+const timelineStatusValidator = v.union(
+    v.literal("confirmed"),
+    v.literal("disputed"),
+    v.literal("debunked")
+);
+
+const newsSnapshotValidator = v.object({
+    _id: v.string(),
+    title: v.string(),
+    titleEn: v.optional(v.string()),
+    titleTh: v.optional(v.string()),
+    titleKh: v.optional(v.string()),
+    publishedAt: v.number(),
+    fetchedAt: v.number(),
+    source: v.string(),
+    sourceUrl: v.string(),
+    category: categoryValidator,
+    credibility: v.number(),
+    status: v.union(v.literal("active"), v.literal("unverified")),
+});
+
+const perspectiveAnalysisSnapshotValidator = v.object({
+    officialNarrative: v.string(),
+    officialNarrativeEn: v.optional(v.string()),
+    officialNarrativeTh: v.optional(v.string()),
+    officialNarrativeKh: v.optional(v.string()),
+    narrativeSource: v.optional(v.string()),
+    militaryIntensity: v.number(),
+    militaryPosture: militaryPostureValidator,
+    postureLabel: v.optional(v.string()),
+    postureLabelTh: v.optional(v.string()),
+    postureLabelKh: v.optional(v.string()),
+    postureRationale: v.optional(v.string()),
+    postureRationaleTh: v.optional(v.string()),
+    postureRationaleKh: v.optional(v.string()),
+    territorialContext: v.optional(territorialContextValidator),
+    lastUpdatedAt: v.number(),
+});
+
+const neutralAnalysisSnapshotValidator = v.object({
+    generalSummary: v.string(),
+    generalSummaryEn: v.optional(v.string()),
+    generalSummaryTh: v.optional(v.string()),
+    generalSummaryKh: v.optional(v.string()),
+    conflictLevel: v.string(),
+    keyEvents: v.array(v.string()),
+    keyEventsEn: v.optional(v.array(v.string())),
+    keyEventsTh: v.optional(v.array(v.string())),
+    keyEventsKh: v.optional(v.array(v.string())),
+    displacedCount: v.optional(v.number()),
+    displacedTrend: v.optional(v.number()),
+    civilianInjuredCount: v.optional(v.number()),
+    militaryInjuredCount: v.optional(v.number()),
+    injuredCount: v.optional(v.number()),
+    casualtyCount: v.optional(v.number()),
+    lastUpdatedAt: v.number(),
+});
+
+const dashboardStatsSnapshotValidator = v.object({
+    conflictLevel: v.string(),
+    displacedCount: v.number(),
+    displacedTrend: v.number(),
+    civilianInjuredCount: v.number(),
+    militaryInjuredCount: v.number(),
+    casualtyCount: v.number(),
+    summary: v.optional(v.string()),
+    lastUpdatedAt: v.number(),
+});
+
+const timelineSourceSnapshotValidator = v.object({
+    url: v.string(),
+    name: v.string(),
+    country: v.string(),
+    credibility: v.number(),
+    snippet: v.optional(v.string()),
+});
+
+const timelineEventSnapshotValidator = v.object({
+    _id: v.string(),
+    date: v.string(),
+    timeOfDay: v.optional(v.string()),
+    title: v.string(),
+    titleTh: v.optional(v.string()),
+    titleKh: v.optional(v.string()),
+    description: v.string(),
+    descriptionTh: v.optional(v.string()),
+    descriptionKh: v.optional(v.string()),
+    category: categoryValidator,
+    importance: v.number(),
+    status: timelineStatusValidator,
+    sources: v.array(timelineSourceSnapshotValidator),
+    createdAt: v.number(),
+    lastUpdatedAt: v.number(),
+});
+
+const systemStatsSnapshotValidator = v.object({
+    lastResearchAt: v.number(),
+    nextRunAt: v.optional(v.number()),
+    lastCycleInterval: v.optional(v.number()),
+    schedulingReason: v.optional(v.string()),
+    totalArticlesFetched: v.optional(v.number()),
+    systemStatus: v.union(v.literal("online"), v.literal("syncing"), v.literal("error"), v.literal("stopped")),
+    isPaused: v.optional(v.boolean()),
+    skipNextCycle: v.optional(v.boolean()),
+});
+
+const articleCountsSnapshotValidator = v.object({
+    thailand: v.number(),
+    cambodia: v.number(),
+    international: v.number(),
+    total: v.number(),
+});
+
 export default defineSchema({
     // ==================== NEWS TABLES ====================
     // Managed by Ghost API (Scout + Validation)
@@ -234,6 +368,23 @@ export default defineSchema({
         recordedAt: v.number(),                 // Timestamp when this snapshot was taken
     })
         .index("by_recorded_at", ["recordedAt"]),
+
+    // Canonical published dashboard payload for ISR and live-mode consumers.
+    // Written after synthesis so reads can fetch one coherent document.
+    dashboardSnapshots: defineTable({
+        key: v.literal("main"),
+        thailandNews: v.array(newsSnapshotValidator),
+        cambodiaNews: v.array(newsSnapshotValidator),
+        thailandAnalysis: v.union(v.null(), perspectiveAnalysisSnapshotValidator),
+        cambodiaAnalysis: v.union(v.null(), perspectiveAnalysisSnapshotValidator),
+        neutralAnalysis: v.union(v.null(), neutralAnalysisSnapshotValidator),
+        dashboardStats: v.union(v.null(), dashboardStatsSnapshotValidator),
+        timelineEvents: v.array(timelineEventSnapshotValidator),
+        systemStats: v.union(v.null(), systemStatsSnapshotValidator),
+        articleCounts: v.union(v.null(), articleCountsSnapshotValidator),
+        publishedAt: v.number(),
+    })
+        .index("by_key", ["key"]),
 
     // ==================== ARTICLE COUNTS CACHE ====================
     // Singleton for O(1) article count reads (bandwidth optimization)
