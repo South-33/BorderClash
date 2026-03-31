@@ -2858,6 +2858,30 @@ RULES:
                         try {
                             switch (status) {
                             case "VERIFIED":
+                                {
+                                    const duplicate = await ctx.runQuery(internal.api.findVerifiedArticleDuplicate, {
+                                        country: article.country,
+                                        currentTitle: article.title,
+                                        candidateTitle: r.actualTitle || article.title,
+                                        candidateUrl: article.sourceUrl,
+                                        candidatePublishedAt: article.publishedAt,
+                                    });
+
+                                    if (duplicate) {
+                                        await ctx.runMutation(internal.api.flagArticle, {
+                                            title: article.title,
+                                            country: article.country,
+                                            status: "archived",
+                                        });
+                                        flagged++;
+                                        console.log(`   🔄 DUPLICATE (verified match)`);
+                                        console.log(`      Current: "${article.title}"`);
+                                        console.log(`      Existing: "${duplicate.duplicateTitle}"`);
+                                        console.log(`      Reason: ${duplicate.reason}`);
+                                        break;
+                                    }
+                                }
+
                                 // Mark as source-verified so it won't be re-checked
                                 await ctx.runMutation(internal.api.markSourceVerified, {
                                     title: article.title,
@@ -2968,6 +2992,28 @@ RULES:
                                 }
 
                                 try {
+                                    const duplicate = await ctx.runQuery(internal.api.findVerifiedArticleDuplicate, {
+                                        country: article.country,
+                                        currentTitle: article.title,
+                                        candidateTitle: updateData.newTitle || r.actualTitle || article.title,
+                                        candidateUrl: updateData.newUrl || article.sourceUrl,
+                                        candidatePublishedAt: updateData.publishedAt || article.publishedAt,
+                                    });
+
+                                    if (duplicate) {
+                                        await ctx.runMutation(internal.api.flagArticle, {
+                                            title: article.title,
+                                            country: article.country,
+                                            status: "archived",
+                                        });
+                                        flagged++;
+                                        console.log(`   🔄 DUPLICATE (verified update match)`);
+                                        console.log(`      Current: "${article.title}"`);
+                                        console.log(`      Existing: "${duplicate.duplicateTitle}"`);
+                                        console.log(`      Reason: ${duplicate.reason}`);
+                                        break;
+                                    }
+
                                     await ctx.runMutation(internal.api.updateArticleContent, updateData);
                                     flagged++; // Count as "fixed"
 

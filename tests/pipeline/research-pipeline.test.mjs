@@ -97,12 +97,16 @@ test("historian action loop isolates item failures instead of aborting the batch
 
 test("source verification batch isolates per-result failures", () => {
   const source = read(researchPath);
+  const api = read(path.join(root, "convex", "api.ts"));
   const verify = section(source, "export const verifyAllSources", "export const verifySingleSource");
 
   assert.match(verify, /for \(const r of result\.results \|\| \[\]\)/);
+  assert.match(verify, /findVerifiedArticleDuplicate/);
   assert.match(verify, /try \{\s*switch \(status\)/s);
   assert.match(verify, /catch \(resultError\)/);
   assert.match(verify, /Error processing verification result for/);
+  assert.match(api, /const canonicalizeArticleUrl = \(rawUrl\?: string\): string =>/);
+  assert.match(api, /export const findVerifiedArticleDuplicate = internalQuery/);
 });
 
 test("curation prompts and parsers are hardened against prose and bad escapes", () => {
@@ -139,7 +143,10 @@ test("ISR server fetch uses a retried dashboard snapshot and lets page errors bu
   assert.doesNotMatch(convexServer, /degraded: boolean/);
   assert.doesNotMatch(convexServer, /fetchWarnings: string\[]/);
   assert.match(api, /\.query\("dashboardSnapshots"\)/);
-  assert.match(api, /return await assembleDashboardSnapshotData\(ctx\)/);
+  assert.match(api, /const \[thailandNews, cambodiaNews, timelineEvents, systemStats, articleCounts\] = await Promise\.all\(/);
+  assert.match(api, /thailandAnalysis: snapshot\.thailandAnalysis/);
+  assert.match(api, /timelineEvents,/);
+  assert.match(api, /const assembledSnapshot = await assembleDashboardSnapshotData\(ctx\)/);
   assert.match(api, /export const publishDashboardSnapshot = internalMutation/);
 
   assert.match(page, /const initialData: BorderClashData = await fetchBorderClashData\(\)/);

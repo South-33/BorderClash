@@ -4,6 +4,96 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 const isVisibleNewsStatus = (status: string) => status === "active" || status === "unverified";
+const ARTICLE_DEDUP_LOOKBACK_MS = 36 * 60 * 60 * 1000;
+const TRACKING_QUERY_PARAM_PREFIXES = ["utm_"];
+const TRACKING_QUERY_PARAMS = new Set([
+    "fbclid",
+    "gclid",
+    "igshid",
+    "mc_cid",
+    "mc_eid",
+    "srsltid",
+    "at_campaign",
+    "at_creation",
+    "at_format",
+    "at_medium",
+    "at_variant",
+    "at_channel",
+]);
+
+const normalizeTitleForDedup = (title: string): string =>
+    title
+        .toLowerCase()
+        .replace(/[""'']/g, "\"")
+        .replace(/[^a-z0-9\u0E00-\u0E7F\u1780-\u17FF\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+const getCanonicalSourceDomain = (rawUrl?: string): string | null => {
+    if (!rawUrl) return null;
+
+    try {
+        const url = new URL(rawUrl.trim());
+        return url.hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+        return null;
+    }
+};
+
+const canonicalizeArticleUrl = (rawUrl?: string): string => {
+    if (!rawUrl) return "";
+
+    try {
+        const url = new URL(rawUrl.trim());
+        url.hash = "";
+        url.hostname = url.hostname.toLowerCase();
+
+        if ((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80")) {
+            url.port = "";
+        }
+
+        const nextParams = new URLSearchParams();
+        for (const [key, value] of url.searchParams.entries()) {
+            const lowerKey = key.toLowerCase();
+            if (TRACKING_QUERY_PARAMS.has(lowerKey)) continue;
+            if (TRACKING_QUERY_PARAM_PREFIXES.some((prefix) => lowerKey.startsWith(prefix))) continue;
+            nextParams.append(key, value);
+        }
+        url.search = nextParams.toString() ? `?${nextParams.toString()}` : "";
+
+        if (url.pathname.length > 1) {
+            url.pathname = url.pathname.replace(/\/+$/, "");
+        }
+
+        return url.toString();
+    } catch {
+        return rawUrl.trim();
+    }
+};
+
+const arePublishedTimesClose = (lhs?: number, rhs?: number): boolean =>
+    typeof lhs === "number"
+    && Number.isFinite(lhs)
+    && typeof rhs === "number"
+    && Number.isFinite(rhs)
+    && Math.abs(lhs - rhs) <= ARTICLE_DEDUP_LOOKBACK_MS;
+
+async function getRecentArticlesForDedup(ctx: any, table: "thailandNews" | "cambodiaNews" | "internationalNews") {
+    const [activeArticles, unverifiedArticles] = await Promise.all([
+        ctx.db
+            .query(table)
+            .withIndex("by_status_publishedAt", (q: any) => q.eq("status", "active"))
+            .order("desc")
+            .take(150),
+        ctx.db
+            .query(table)
+            .withIndex("by_status_publishedAt", (q: any) => q.eq("status", "unverified"))
+            .order("desc")
+            .take(100),
+    ]);
+
+    return [...activeArticles, ...unverifiedArticles];
+}
 
 const serializeTimelineEvent = (event: any) => ({
     ...event,
@@ -12,37 +102,22 @@ const serializeTimelineEvent = (event: any) => ({
 
 async function assembleDashboardSnapshotData(ctx: any) {
     const [
-        thailandNews,
-        cambodiaNews,
         thailandAnalysis,
         cambodiaAnalysis,
         neutralAnalysis,
         dashboardStats,
-        timelineEvents,
-        systemStats,
-        articleCounts,
     ] = await Promise.all([
-        getNewsSlimData(ctx, "thailand", 20),
-        getNewsSlimData(ctx, "cambodia", 20),
         getAnalysisData(ctx, "thailand"),
         getAnalysisData(ctx, "cambodia"),
         getAnalysisData(ctx, "neutral"),
         getDashboardStatsData(ctx),
-        getTimelineData(ctx),
-        getStatsData(ctx),
-        getArticleCountsData(ctx),
     ]);
 
     return {
-        thailandNews,
-        cambodiaNews,
         thailandAnalysis,
         cambodiaAnalysis,
         neutralAnalysis,
         dashboardStats,
-        timelineEvents,
-        systemStats,
-        articleCounts,
     };
 }
 
@@ -185,21 +260,37 @@ async function getDashboardSnapshotData(ctx: any) {
         .withIndex("by_key", (q: any) => q.eq("key", "main"))
         .first();
 
+    const [thailandNews, cambodiaNews, timelineEvents, systemStats, articleCounts] = await Promise.all([
+        getNewsSlimData(ctx, "thailand", 20),
+        getNewsSlimData(ctx, "cambodia", 20),
+        getTimelineData(ctx),
+        getStatsData(ctx),
+        getArticleCountsData(ctx),
+    ]);
+
     if (snapshot) {
         return {
-            thailandNews: snapshot.thailandNews,
-            cambodiaNews: snapshot.cambodiaNews,
+            thailandNews,
+            cambodiaNews,
             thailandAnalysis: snapshot.thailandAnalysis,
             cambodiaAnalysis: snapshot.cambodiaAnalysis,
             neutralAnalysis: snapshot.neutralAnalysis,
             dashboardStats: snapshot.dashboardStats,
-            timelineEvents: snapshot.timelineEvents,
-            systemStats: snapshot.systemStats,
-            articleCounts: snapshot.articleCounts,
+            timelineEvents,
+            systemStats,
+            articleCounts,
         };
     }
 
-    return await assembleDashboardSnapshotData(ctx);
+    const assembledSnapshot = await assembleDashboardSnapshotData(ctx);
+    return {
+        thailandNews,
+        cambodiaNews,
+        timelineEvents,
+        systemStats,
+        articleCounts,
+        ...assembledSnapshot,
+    };
 }
 
 // =============================================================================
@@ -536,6 +627,57 @@ export const getNewsInternal = internalQuery({
                 return scoreB - scoreA; // Highest score first
             })
             .slice(0, targetLimit);
+    },
+});
+
+export const findVerifiedArticleDuplicate = internalQuery({
+    args: {
+        country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")),
+        currentTitle: v.string(),
+        candidateTitle: v.optional(v.string()),
+        candidateUrl: v.optional(v.string()),
+        candidatePublishedAt: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const table = args.country === "thailand" ? "thailandNews"
+            : args.country === "cambodia" ? "cambodiaNews"
+                : "internationalNews";
+
+        const candidateCanonicalUrl = canonicalizeArticleUrl(args.candidateUrl);
+        const candidateTitleKey = args.candidateTitle ? normalizeTitleForDedup(args.candidateTitle) : "";
+        const candidateDomain = getCanonicalSourceDomain(args.candidateUrl);
+        const recentArticles = await getRecentArticlesForDedup(ctx, table);
+
+        for (const article of recentArticles) {
+            if (article.title === args.currentTitle) continue;
+
+            const articleCanonicalUrl = canonicalizeArticleUrl(article.sourceUrl);
+            if (candidateCanonicalUrl && articleCanonicalUrl === candidateCanonicalUrl) {
+                return {
+                    duplicateTitle: article.title,
+                    duplicateUrl: article.sourceUrl,
+                    reason: "canonical_url",
+                };
+            }
+
+            if (!candidateTitleKey) continue;
+
+            const articleTitleKey = normalizeTitleForDedup(article.title);
+            if (articleTitleKey !== candidateTitleKey) continue;
+
+            const sameDomain = candidateDomain !== null && candidateDomain === getCanonicalSourceDomain(article.sourceUrl);
+            const closePublishTime = arePublishedTimesClose(args.candidatePublishedAt, article.publishedAt);
+
+            if (sameDomain || closePublishTime) {
+                return {
+                    duplicateTitle: article.title,
+                    duplicateUrl: article.sourceUrl,
+                    reason: sameDomain ? "verified_title_same_source" : "verified_title_same_time",
+                };
+            }
+        }
+
+        return null;
     },
 });
 
@@ -1626,6 +1768,7 @@ export const insertArticle = internalMutation({
         const table = args.perspective === "thailand" ? "thailandNews"
             : args.perspective === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
+        const canonicalSourceUrl = canonicalizeArticleUrl(args.sourceUrl);
 
         const existing = await ctx.db
             .query(table)
@@ -1634,6 +1777,28 @@ export const insertArticle = internalMutation({
 
         if (existing) {
             console.log(`Skipping duplicate (URL match): "${args.title}"`);
+            return null;
+        }
+
+        if (canonicalSourceUrl && canonicalSourceUrl !== args.sourceUrl) {
+            const canonicalExisting = await ctx.db
+                .query(table)
+                .withIndex("by_url", (q) => q.eq("sourceUrl", canonicalSourceUrl))
+                .first();
+
+            if (canonicalExisting) {
+                console.log(`Skipping duplicate (Canonical URL match): "${args.title}"`);
+                return null;
+            }
+        }
+
+        const recentArticles = await getRecentArticlesForDedup(ctx, table);
+        const canonicalUrlDuplicate = recentArticles.find((article: any) =>
+            canonicalizeArticleUrl(article.sourceUrl) === canonicalSourceUrl
+        );
+
+        if (canonicalUrlDuplicate) {
+            console.log(`Skipping duplicate (Normalized URL match): "${args.title}"`);
             return null;
         }
 
@@ -1654,7 +1819,7 @@ export const insertArticle = internalMutation({
             titleTh: args.titleTh,
             titleKh: args.titleKh,
             publishedAt: args.publishedAt,
-            sourceUrl: args.sourceUrl,
+            sourceUrl: canonicalSourceUrl || args.sourceUrl,
             source: args.source,
             category: args.category,
             credibility: args.credibility,
@@ -1876,6 +2041,7 @@ export const updateArticleContent = internalMutation({
         const table = args.country === "thailand" ? "thailandNews"
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
+        const canonicalNewUrl = args.newUrl !== undefined ? canonicalizeArticleUrl(args.newUrl) : undefined;
 
         const article = await ctx.db
             .query(table)
@@ -1895,7 +2061,7 @@ export const updateArticleContent = internalMutation({
                 ...(args.newSummaryTh !== undefined && { summaryTh: args.newSummaryTh }),
                 ...(args.newSummaryKh !== undefined && { summaryKh: args.newSummaryKh }),
                 // URL fix
-                ...(args.newUrl !== undefined && { sourceUrl: args.newUrl }),
+                ...(canonicalNewUrl !== undefined && { sourceUrl: canonicalNewUrl }),
                 // Other fields
                 ...(args.publishedAt !== undefined && { publishedAt: args.publishedAt }),
                 ...(args.credibility !== undefined && { credibility: args.credibility }),
@@ -1921,6 +2087,7 @@ export const updateArticleUrl = internalMutation({
         const table = args.country === "thailand" ? "thailandNews"
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
+        const canonicalNewUrl = canonicalizeArticleUrl(args.newUrl);
 
         const article = await ctx.db
             .query(table)
@@ -1929,10 +2096,10 @@ export const updateArticleUrl = internalMutation({
 
         if (article) {
             await ctx.db.patch(article._id, {
-                sourceUrl: args.newUrl,
+                sourceUrl: canonicalNewUrl,
                 sourceVerifiedAt: Date.now(),
             });
-            console.log(`🔗 Updated URL for "${args.oldTitle}": ${article.sourceUrl} → ${args.newUrl}`);
+            console.log(`🔗 Updated URL for "${args.oldTitle}": ${article.sourceUrl} → ${canonicalNewUrl}`);
         } else {
             console.log(`⚠️ Could not find article to update URL: "${args.oldTitle}"`);
         }

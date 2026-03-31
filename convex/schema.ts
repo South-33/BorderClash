@@ -373,15 +373,10 @@ export default defineSchema({
     // Written after synthesis so reads can fetch one coherent document.
     dashboardSnapshots: defineTable({
         key: v.literal("main"),
-        thailandNews: v.array(newsSnapshotValidator),
-        cambodiaNews: v.array(newsSnapshotValidator),
         thailandAnalysis: v.union(v.null(), perspectiveAnalysisSnapshotValidator),
         cambodiaAnalysis: v.union(v.null(), perspectiveAnalysisSnapshotValidator),
         neutralAnalysis: v.union(v.null(), neutralAnalysisSnapshotValidator),
         dashboardStats: v.union(v.null(), dashboardStatsSnapshotValidator),
-        timelineEvents: v.array(timelineEventSnapshotValidator),
-        systemStats: v.union(v.null(), systemStatsSnapshotValidator),
-        articleCounts: v.union(v.null(), articleCountsSnapshotValidator),
         publishedAt: v.number(),
     })
         .index("by_key", ["key"]),
