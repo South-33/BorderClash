@@ -600,7 +600,7 @@ export async function runHistorianCycleInternal(
     console.log(`📰 Found ${allArticles.length} unprocessed articles total`);
 
     // 2. Get existing timeline for context (use cache if provided)
-    const timeline = cachedTimeline ?? await ctx.runQuery(internal.api.getRecentTimeline, {
+    const timeline = cachedTimeline ?? await ctx.runQuery(internal.api.getRecentTimelineContextForHistorian, {
         limit: 150  // Recent events only - older events rarely need updates
     });
     console.log(`📜 Timeline context: ${timeline.length} recent events${cachedTimeline ? " (cached)" : ""}`);

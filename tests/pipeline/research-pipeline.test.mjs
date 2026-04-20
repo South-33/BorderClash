@@ -9,6 +9,7 @@ const researchPath = path.join(root, "convex", "research.ts");
 const historianPath = path.join(root, "convex", "historian.ts");
 const convexServerPath = path.join(root, "src", "lib", "convex-server.ts");
 const pagePath = path.join(root, "src", "app", "page.tsx");
+const dashboardClientPath = path.join(root, "src", "app", "DashboardClient.tsx");
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -69,6 +70,7 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step3, /runWithRetries\(\s*"\[STEP 3\] Historian news context"/s);
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Timeline refresh iteration \$\{historianLoops\}`/s);
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Historian iteration \$\{historianLoops\}`/s);
+  assert.match(step3, /getRecentTimelineContextForHistorian/);
   assert.match(step3, /runHistorianCycleInternal\(ctx, \{/);
   assert.doesNotMatch(step3, /ctx\.runAction\(internal\.historian\.runHistorianCycle/);
   assert.match(step3, /scheduleStepRetry\(/);
@@ -138,6 +140,7 @@ test("ISR server fetch uses a retried dashboard snapshot and lets page errors bu
   const convexServer = read(convexServerPath);
   const api = read(path.join(root, "convex", "api.ts"));
   const page = read(pagePath);
+  const dashboardClient = read(dashboardClientPath);
 
   assert.match(convexServer, /const SERVER_QUERY_RETRY_DELAYS_MS = \[750, 2000\]/);
   assert.match(convexServer, /async function queryWithRetries/);
@@ -148,12 +151,17 @@ test("ISR server fetch uses a retried dashboard snapshot and lets page errors bu
   assert.doesNotMatch(convexServer, /fetchWarnings: string\[]/);
   assert.match(api, /\.query\("dashboardSnapshots"\)/);
   assert.match(api, /const \[thailandNews, cambodiaNews, timelineEvents, systemStats, articleCounts\] = await Promise\.all\(/);
+  assert.match(api, /getTimelineData\(ctx, DASHBOARD_TIMELINE_PREVIEW_LIMIT\)/);
+  assert.match(api, /export const getRecentTimelineContextForHistorian = internalQuery/);
   assert.match(api, /thailandAnalysis: snapshot\.thailandAnalysis/);
   assert.match(api, /timelineEvents,/);
   assert.match(api, /const assembledSnapshot = await assembleDashboardSnapshotData\(ctx\)/);
   assert.match(api, /export const publishDashboardSnapshot = internalMutation/);
   assert.match(api, /withIndex\("by_status_publishedAt", \(q: any\) => q\.eq\("status", "active"\)\)/);
   assert.doesNotMatch(api, /\.query\(table\)\s*\.order\("desc"\)\s*\.take\(targetLimit\)/);
+  assert.match(dashboardClient, /api\.api\.getTimeline/);
+  assert.match(dashboardClient, /viewMode !== 'TIMELINE'/);
+  assert.match(dashboardClient, /clientTimelineEvents \?\? timelinePreviewEvents/);
 
   assert.match(page, /const initialData: BorderClashData = await fetchBorderClashData\(\)/);
   assert.doesNotMatch(page, /catch\s*\(/);

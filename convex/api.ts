@@ -5,10 +5,24 @@ import type { Id } from "./_generated/dataModel";
 import { canonicalizeArticleUrl } from "./dedupe";
 
 const isVisibleNewsStatus = (status: string) => status === "active" || status === "unverified";
+const DASHBOARD_TIMELINE_PREVIEW_LIMIT = 180;
 
 const serializeTimelineEvent = (event: any) => ({
     ...event,
     _id: String(event._id),
+});
+
+const serializeHistorianTimelineEvent = (event: any) => ({
+    date: event.date,
+    timeOfDay: event.timeOfDay,
+    title: event.title,
+    titleTh: event.titleTh,
+    titleKh: event.titleKh,
+    description: event.description,
+    category: event.category,
+    importance: event.importance,
+    status: event.status,
+    sources: event.sources,
 });
 
 async function getVisibleNewsDocs(
@@ -186,6 +200,42 @@ async function getTimelineData(ctx: any, limit?: number) {
     return events.map(serializeTimelineEvent);
 }
 
+async function getRecentTimelineWindow(
+    ctx: any,
+    args: { limit: number; minImportance?: number; category?: string },
+) {
+    const hasFilters = args.minImportance !== undefined || args.category !== undefined;
+    const bufferMultiplier = hasFilters ? 3 : 2;
+    const fetchLimit = Math.min(args.limit * bufferMultiplier, 1000);
+
+    const events = await ctx.db
+        .query("timelineEvents")
+        .withIndex("by_date")
+        .order("desc")
+        .take(fetchLimit);
+
+    let filtered = events.filter((e: any) => e.status !== "debunked");
+
+    if (args.minImportance !== undefined) {
+        filtered = filtered.filter((e: any) => e.importance >= args.minImportance!);
+    }
+
+    if (args.category) {
+        filtered = filtered.filter((e: any) => e.category === args.category);
+    }
+
+    filtered.sort((a: any, b: any) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+
+        const timeA = a.timeOfDay || "99:99";
+        const timeB = b.timeOfDay || "99:99";
+        return timeA.localeCompare(timeB);
+    });
+
+    return filtered.slice(0, args.limit);
+}
+
 async function getDashboardSnapshotData(ctx: any) {
     const snapshot = await ctx.db
         .query("dashboardSnapshots")
@@ -195,7 +245,7 @@ async function getDashboardSnapshotData(ctx: any) {
     const [thailandNews, cambodiaNews, timelineEvents, systemStats, articleCounts] = await Promise.all([
         getNewsSlimData(ctx, "thailand", 20),
         getNewsSlimData(ctx, "cambodia", 20),
-        getTimelineData(ctx),
+        getTimelineData(ctx, DASHBOARD_TIMELINE_PREVIEW_LIMIT),
         getStatsData(ctx),
         getArticleCountsData(ctx),
     ]);
@@ -4261,44 +4311,18 @@ export const getRecentTimeline = internalQuery({
         minImportance: v.optional(v.number()),  // Filter by minimum importance
         category: v.optional(v.string()),       // Filter by category
     },
+    handler: async (ctx, args) => await getRecentTimelineWindow(ctx, args),
+});
+
+export const getRecentTimelineContextForHistorian = internalQuery({
+    args: {
+        limit: v.number(),
+        minImportance: v.optional(v.number()),
+        category: v.optional(v.string()),
+    },
     handler: async (ctx, args) => {
-        // Calculate buffer size - fetch more than needed to account for filters
-        // Debunked events are rare, but minImportance/category filters may reduce results
-        const hasFilters = args.minImportance !== undefined || args.category !== undefined;
-        const bufferMultiplier = hasFilters ? 3 : 2;  // Larger buffer if filters are active
-        const fetchLimit = Math.min(args.limit * bufferMultiplier, 1000);  // Cap at 1000 to prevent huge fetches
-
-        // Use by_date index and fetch newest slice first, then sort chronologically.
-        // This ensures "recent" context actually reflects latest events.
-        const events = await ctx.db
-            .query("timelineEvents")
-            .withIndex("by_date")
-            .order("desc")
-            .take(fetchLimit);
-
-        // Apply filters on the smaller dataset
-        let filtered = events.filter(e => e.status !== "debunked");
-
-        if (args.minImportance !== undefined) {
-            filtered = filtered.filter(e => e.importance >= args.minImportance!);
-        }
-
-        if (args.category) {
-            filtered = filtered.filter(e => e.category === args.category);
-        }
-
-        // Sort selected recent events into chronological order for model context.
-        filtered.sort((a, b) => {
-            const dateCompare = a.date.localeCompare(b.date);
-            if (dateCompare !== 0) return dateCompare;
-
-            // Same date: compare by timeOfDay (events without time sort to end of day)
-            const timeA = a.timeOfDay || "99:99";
-            const timeB = b.timeOfDay || "99:99";
-            return timeA.localeCompare(timeB);
-        });
-
-        return filtered.slice(0, args.limit);
+        const events = await getRecentTimelineWindow(ctx, args);
+        return events.map(serializeHistorianTimelineEvent);
     },
 });
 

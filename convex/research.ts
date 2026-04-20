@@ -2261,7 +2261,7 @@ export const step3_historian = internalAction({
 
                 const latestTimeline = await runWithRetries(
                     `[STEP 3] Timeline refresh iteration ${historianLoops}`,
-                    () => ctx.runQuery(internal.api.getRecentTimeline, { limit: 150 }),
+                    () => ctx.runQuery(internal.api.getRecentTimelineContextForHistorian, { limit: 150 }),
                 );
 
                 const result = await runWithRetries(

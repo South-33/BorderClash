@@ -1249,6 +1249,18 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     shouldSkip
   );
 
+  const {
+    data: clientTimelineEvents,
+    isLoading: clientTimelineLoading,
+    isRefreshing: clientTimelineRefreshing
+  } = useCachedQuery<any[]>(
+    api.api.getTimeline,
+    {},
+    "borderclash_timeline_full_v1",
+    systemStats?.lastResearchAt,
+    viewMode !== 'TIMELINE'
+  );
+
   // Final data: prefer server data if skipping, otherwise use client data WITH fallback to server
   // This ensures we never show empty/placeholder states when valid cached data exists
   const activeSnapshot = shouldSkip ? initialData : (clientSnapshot ?? initialData);
@@ -1259,7 +1271,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const neutralMeta = activeSnapshot?.neutralAnalysis;
   const dashboardStats = activeSnapshot?.dashboardStats;
   const articleCounts = activeSnapshot?.articleCounts;
-  const timelineEvents = activeSnapshot?.timelineEvents ?? [];
+  const timelinePreviewEvents = activeSnapshot?.timelineEvents ?? [];
+  const timelineEvents = viewMode === 'TIMELINE'
+    ? (clientTimelineEvents ?? timelinePreviewEvents)
+    : timelinePreviewEvents;
 
   // Loading states: if we have server data, we're never "loading"
   const thNewsLoading = hasServerData ? false : clientSnapshotLoading;
@@ -1269,14 +1284,16 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const neutralMetaLoading = hasServerData ? false : clientSnapshotLoading;
   const dashboardLoading = hasServerData ? false : clientSnapshotLoading;
   const countsLoading = hasServerData ? false : clientSnapshotLoading;
-  const timelineLoading = hasServerData ? false : clientSnapshotLoading;
+  const timelineLoading = viewMode === 'TIMELINE'
+    ? (clientTimelineLoading && timelineEvents.length === 0)
+    : (hasServerData ? false : clientSnapshotLoading);
   const thNewsRefreshing = snapshotRefreshing;
   const khNewsRefreshing = snapshotRefreshing;
   const thMetaRefreshing = snapshotRefreshing;
   const khMetaRefreshing = snapshotRefreshing;
   const neutralMetaRefreshing = snapshotRefreshing;
   const dashboardRefreshing = snapshotRefreshing;
-  const timelineRefreshing = snapshotRefreshing;
+  const timelineRefreshing = viewMode === 'TIMELINE' ? clientTimelineRefreshing : false;
 
 
   // --- CASCADE LAYOUT CONTROL ---
