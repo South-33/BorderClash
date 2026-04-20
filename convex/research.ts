@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { runHistorianCycleInternal } from "./historian";
+import { findVerifiedDuplicateCandidate, type DuplicateCandidate } from "./dedupe";
 
 // Use gemini-studio-api helpers
 import { MODELS, FALLBACK_CHAINS } from "./config";
@@ -69,6 +70,9 @@ const isRetryableActionError = (error: unknown): boolean => {
     ];
     return retryableNeedles.some((needle) => message.includes(needle));
 };
+
+const isVisibleDuplicateCandidate = (candidate: { status?: string }) =>
+    candidate.status === "active" || candidate.status === "unverified";
 
 async function runWithRetries<T>(
     label: string,
@@ -2584,39 +2588,60 @@ export const verifyAllSources = internalAction({
 
         // Wrap in try/finally to ensure lock is always released
         try {
-            // Get all articles from all tables
-            const cambodiaArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "cambodia", limit: 500 });
-            const thailandArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "thailand", limit: 500 });
-            const internationalArticles: any[] = await ctx.runQuery(internal.api.getNewsInternal, { country: "international", limit: 500 });
+            const [
+                cambodiaArticles,
+                thailandArticles,
+                internationalArticles,
+                cambodiaDuplicateCandidates,
+                thailandDuplicateCandidates,
+                internationalDuplicateCandidates,
+            ]: [
+                any[],
+                any[],
+                any[],
+                DuplicateCandidate[],
+                DuplicateCandidate[],
+                DuplicateCandidate[],
+            ] = await Promise.all([
+                ctx.runQuery(internal.api.getArticlesNeedingVerification, { country: "cambodia", limit: 220 }),
+                ctx.runQuery(internal.api.getArticlesNeedingVerification, { country: "thailand", limit: 220 }),
+                ctx.runQuery(internal.api.getArticlesNeedingVerification, { country: "international", limit: 220 }),
+                ctx.runQuery(internal.api.getRecentDuplicateCandidates, { country: "cambodia", limit: 180 }),
+                ctx.runQuery(internal.api.getRecentDuplicateCandidates, { country: "thailand", limit: 180 }),
+                ctx.runQuery(internal.api.getRecentDuplicateCandidates, { country: "international", limit: 180 }),
+            ]);
 
-            const allArticlesRaw = [
+            const duplicateCandidatesByCountry = {
+                cambodia: cambodiaDuplicateCandidates,
+                thailand: thailandDuplicateCandidates,
+                international: internationalDuplicateCandidates,
+            } as const;
+
+            const allArticles = [
                 ...cambodiaArticles.map(a => ({ ...a, country: "cambodia" as const })),
                 ...thailandArticles.map(a => ({ ...a, country: "thailand" as const })),
                 ...internationalArticles.map(a => ({ ...a, country: "international" as const })),
             ];
 
-            // Filter out articles without URLs (can't verify without a URL)
-            const withUrls = allArticlesRaw.filter(a => a.sourceUrl && a.sourceUrl.length > 10);
-            const skippedNoUrl = allArticlesRaw.length - withUrls.length;
-
-            // Filter out already-verified articles (only check new/unverified)
-            const allArticles = withUrls.filter(a => !a.sourceVerifiedAt);
-            const alreadyVerified = withUrls.length - allArticles.length;
-
-            console.log(`📊 [SOURCE VERIFY] Found ${allArticlesRaw.length} total articles`);
+            console.log(`📊 [SOURCE VERIFY] Verification queue loaded`);
             console.log(`   Cambodia: ${cambodiaArticles.length}, Thailand: ${thailandArticles.length}, International: ${internationalArticles.length}`);
-            if (skippedNoUrl > 0) {
-                console.log(`   ⚠️ Skipping ${skippedNoUrl} articles without valid URLs`);
-            }
-            if (alreadyVerified > 0) {
-                console.log(`   ✅ Skipping ${alreadyVerified} already-verified articles`);
-            }
-            console.log(`   → Will verify: ${allArticles.length} NEW articles`);
+            console.log(`   → Will verify: ${allArticles.length} queued articles`);
 
             let verified = 0;
             let flagged = 0;
             let deleted = 0;
             let errors = 0;
+
+            const findDuplicateForArticle = (
+                article: { country: "cambodia" | "thailand" | "international"; title: string },
+                candidate: { title?: string; sourceUrl?: string; publishedAt?: number },
+            ) => findVerifiedDuplicateCandidate({
+                currentTitle: article.title,
+                candidateTitle: candidate.title,
+                candidateUrl: candidate.sourceUrl,
+                candidatePublishedAt: candidate.publishedAt,
+                candidates: duplicateCandidatesByCountry[article.country],
+            });
 
             // Early return if no articles to verify
             if (allArticles.length === 0) {
@@ -2859,12 +2884,10 @@ RULES:
                             switch (status) {
                             case "VERIFIED":
                                 {
-                                    const duplicate = await ctx.runQuery(internal.api.findVerifiedArticleDuplicate, {
-                                        country: article.country,
-                                        currentTitle: article.title,
-                                        candidateTitle: r.actualTitle || article.title,
-                                        candidateUrl: article.sourceUrl,
-                                        candidatePublishedAt: article.publishedAt,
+                                    const duplicate = findDuplicateForArticle(article, {
+                                        title: r.actualTitle || article.title,
+                                        sourceUrl: article.sourceUrl,
+                                        publishedAt: article.publishedAt,
                                     });
 
                                     if (duplicate) {
@@ -2873,6 +2896,7 @@ RULES:
                                             country: article.country,
                                             status: "archived",
                                         });
+                                        article.status = "archived";
                                         flagged++;
                                         console.log(`   🔄 DUPLICATE (verified match)`);
                                         console.log(`      Current: "${article.title}"`);
@@ -2887,6 +2911,8 @@ RULES:
                                     title: article.title,
                                     country: article.country,
                                 });
+                                article.sourceVerifiedAt = Date.now();
+                                article.status = "active";
                                 verified++;
                                 console.log(`   ✅ VERIFIED: "${article.title?.substring(0, 50)}..."`);
                                 console.log(`      URL: ${article.sourceUrl}`);
@@ -2992,12 +3018,10 @@ RULES:
                                 }
 
                                 try {
-                                    const duplicate = await ctx.runQuery(internal.api.findVerifiedArticleDuplicate, {
-                                        country: article.country,
-                                        currentTitle: article.title,
-                                        candidateTitle: updateData.newTitle || r.actualTitle || article.title,
-                                        candidateUrl: updateData.newUrl || article.sourceUrl,
-                                        candidatePublishedAt: updateData.publishedAt || article.publishedAt,
+                                    const duplicate = findDuplicateForArticle(article, {
+                                        title: updateData.newTitle || r.actualTitle || article.title,
+                                        sourceUrl: updateData.newUrl || article.sourceUrl,
+                                        publishedAt: updateData.publishedAt || article.publishedAt,
                                     });
 
                                     if (duplicate) {
@@ -3006,6 +3030,7 @@ RULES:
                                             country: article.country,
                                             status: "archived",
                                         });
+                                        article.status = "archived";
                                         flagged++;
                                         console.log(`   🔄 DUPLICATE (verified update match)`);
                                         console.log(`      Current: "${article.title}"`);
@@ -3015,6 +3040,11 @@ RULES:
                                     }
 
                                     await ctx.runMutation(internal.api.updateArticleContent, updateData);
+                                    if (updateData.newTitle) article.title = updateData.newTitle;
+                                    if (updateData.newUrl) article.sourceUrl = updateData.newUrl;
+                                    if (updateData.publishedAt) article.publishedAt = updateData.publishedAt;
+                                    article.sourceVerifiedAt = Date.now();
+                                    article.status = "active";
                                     flagged++; // Count as "fixed"
 
                                     // Smart logging - only show what actually changed

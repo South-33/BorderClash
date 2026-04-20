@@ -2,103 +2,41 @@ import { query, mutation, internalMutation, internalQuery, action } from "./_gen
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { canonicalizeArticleUrl } from "./dedupe";
 
 const isVisibleNewsStatus = (status: string) => status === "active" || status === "unverified";
-const ARTICLE_DEDUP_LOOKBACK_MS = 36 * 60 * 60 * 1000;
-const TRACKING_QUERY_PARAM_PREFIXES = ["utm_"];
-const TRACKING_QUERY_PARAMS = new Set([
-    "fbclid",
-    "gclid",
-    "igshid",
-    "mc_cid",
-    "mc_eid",
-    "srsltid",
-    "at_campaign",
-    "at_creation",
-    "at_format",
-    "at_medium",
-    "at_variant",
-    "at_channel",
-]);
-
-const normalizeTitleForDedup = (title: string): string =>
-    title
-        .toLowerCase()
-        .replace(/[""'']/g, "\"")
-        .replace(/[^a-z0-9\u0E00-\u0E7F\u1780-\u17FF\s]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-const getCanonicalSourceDomain = (rawUrl?: string): string | null => {
-    if (!rawUrl) return null;
-
-    try {
-        const url = new URL(rawUrl.trim());
-        return url.hostname.toLowerCase().replace(/^www\./, "");
-    } catch {
-        return null;
-    }
-};
-
-const canonicalizeArticleUrl = (rawUrl?: string): string => {
-    if (!rawUrl) return "";
-
-    try {
-        const url = new URL(rawUrl.trim());
-        url.hash = "";
-        url.hostname = url.hostname.toLowerCase();
-
-        if ((url.protocol === "https:" && url.port === "443") || (url.protocol === "http:" && url.port === "80")) {
-            url.port = "";
-        }
-
-        const nextParams = new URLSearchParams();
-        for (const [key, value] of url.searchParams.entries()) {
-            const lowerKey = key.toLowerCase();
-            if (TRACKING_QUERY_PARAMS.has(lowerKey)) continue;
-            if (TRACKING_QUERY_PARAM_PREFIXES.some((prefix) => lowerKey.startsWith(prefix))) continue;
-            nextParams.append(key, value);
-        }
-        url.search = nextParams.toString() ? `?${nextParams.toString()}` : "";
-
-        if (url.pathname.length > 1) {
-            url.pathname = url.pathname.replace(/\/+$/, "");
-        }
-
-        return url.toString();
-    } catch {
-        return rawUrl.trim();
-    }
-};
-
-const arePublishedTimesClose = (lhs?: number, rhs?: number): boolean =>
-    typeof lhs === "number"
-    && Number.isFinite(lhs)
-    && typeof rhs === "number"
-    && Number.isFinite(rhs)
-    && Math.abs(lhs - rhs) <= ARTICLE_DEDUP_LOOKBACK_MS;
-
-async function getRecentArticlesForDedup(ctx: any, table: "thailandNews" | "cambodiaNews" | "internationalNews") {
-    const [activeArticles, unverifiedArticles] = await Promise.all([
-        ctx.db
-            .query(table)
-            .withIndex("by_status_publishedAt", (q: any) => q.eq("status", "active"))
-            .order("desc")
-            .take(150),
-        ctx.db
-            .query(table)
-            .withIndex("by_status_publishedAt", (q: any) => q.eq("status", "unverified"))
-            .order("desc")
-            .take(100),
-    ]);
-
-    return [...activeArticles, ...unverifiedArticles];
-}
 
 const serializeTimelineEvent = (event: any) => ({
     ...event,
     _id: String(event._id),
 });
+
+async function getVisibleNewsDocs(
+    ctx: any,
+    country: "thailand" | "cambodia",
+    limit?: number,
+) {
+    const table = country === "thailand" ? "thailandNews" : "cambodiaNews";
+    const targetLimit = Math.min(limit ?? 20, 100);
+    const fetchBuffer = Math.min(Math.max(targetLimit * 2, 20), 120);
+
+    const [activeArticles, unverifiedArticles] = await Promise.all([
+        ctx.db
+            .query(table)
+            .withIndex("by_status_publishedAt", (q: any) => q.eq("status", "active"))
+            .order("desc")
+            .take(fetchBuffer),
+        ctx.db
+            .query(table)
+            .withIndex("by_status_publishedAt", (q: any) => q.eq("status", "unverified"))
+            .order("desc")
+            .take(fetchBuffer),
+    ]);
+
+    return [...activeArticles, ...unverifiedArticles]
+        .sort((a: any, b: any) => (b.publishedAt || b.fetchedAt || 0) - (a.publishedAt || a.fetchedAt || 0))
+        .slice(0, targetLimit);
+}
 
 async function assembleDashboardSnapshotData(ctx: any) {
     const [
@@ -122,15 +60,9 @@ async function assembleDashboardSnapshotData(ctx: any) {
 }
 
 async function getNewsSlimData(ctx: any, country: "thailand" | "cambodia", limit?: number) {
-    const table = country === "thailand" ? "thailandNews" : "cambodiaNews";
-    const targetLimit = Math.min(limit ?? 20, 100);
-    const articles = await ctx.db
-        .query(table)
-        .order("desc")
-        .take(targetLimit);
+    const articles = await getVisibleNewsDocs(ctx, country, limit);
 
     return articles
-        .filter((article: any) => isVisibleNewsStatus(article.status))
         .map((article: any) => ({
             _id: String(article._id),
             title: article.title,
@@ -303,15 +235,7 @@ export const getNews = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const table = args.country === "thailand" ? "thailandNews" : "cambodiaNews";
-        // Show both verified (active) and unverified articles
-        const limit = Math.min(args.limit ?? 50, 100);
-        const articles = await ctx.db
-            .query(table)
-            .order("desc")
-            .take(limit);
-        // Filter to only show active or unverified (not false, outdated, archived)
-        return articles.filter(a => a.status === "active" || a.status === "unverified");
+        return await getVisibleNewsDocs(ctx, args.country, args.limit ?? 50);
     },
 });
 
@@ -556,27 +480,28 @@ export const getExistingTitlesInternal = internalQuery({
         const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
         const cutoff = Date.now() - TWO_DAYS_MS;
 
-        // OPTIMIZED: Use indexed queries by status, fetch less, return only URL
-        // 225 active + 75 unverified = 300 total (insertArticle catches any duplicates at DB level)
-        const activeArticles = await ctx.db
-            .query(table)
-            .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
-            .order("desc")
-            .take(225);
+        const collectRecentUrls = async (status: "active" | "unverified", maxCount: number) => {
+            const urls: Array<{ sourceUrl: string }> = [];
+            const query = ctx.db
+                .query(table)
+                .withIndex("by_status_publishedAt", q => q.eq("status", status))
+                .order("desc");
 
-        const unverifiedArticles = await ctx.db
-            .query(table)
-            .withIndex("by_status_publishedAt", q => q.eq("status", "unverified"))
-            .order("desc")
-            .take(75);
+            for await (const article of query) {
+                if ((article.publishedAt || article.fetchedAt) <= cutoff) break;
+                urls.push({ sourceUrl: article.sourceUrl });
+                if (urls.length >= maxCount) break;
+            }
 
-        const all = [...activeArticles, ...unverifiedArticles];
+            return urls;
+        };
 
-        // OPTIMIZED: Return ONLY sourceUrl - that's all the curator uses
-        // The curator prompt does: existing.map(a => a.sourceUrl).join("\n")
-        return all
-            .filter(a => (a.publishedAt || a.fetchedAt) > cutoff)
-            .map(a => ({ sourceUrl: a.sourceUrl }));
+        const [activeUrls, unverifiedUrls] = await Promise.all([
+            collectRecentUrls("active", 120),
+            collectRecentUrls("unverified", 60),
+        ]);
+
+        return [...activeUrls, ...unverifiedUrls];
     },
 });
 
@@ -630,54 +555,84 @@ export const getNewsInternal = internalQuery({
     },
 });
 
-export const findVerifiedArticleDuplicate = internalQuery({
+export const getRecentDuplicateCandidates = internalQuery({
     args: {
         country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")),
-        currentTitle: v.string(),
-        candidateTitle: v.optional(v.string()),
-        candidateUrl: v.optional(v.string()),
-        candidatePublishedAt: v.optional(v.number()),
+        limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         const table = args.country === "thailand" ? "thailandNews"
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
+        const targetLimit = Math.min(args.limit ?? 120, 200);
+        const activeLimit = Math.min(Math.ceil(targetLimit * 0.65), 140);
+        const unverifiedLimit = Math.min(Math.ceil(targetLimit * 0.5), 100);
 
-        const candidateCanonicalUrl = canonicalizeArticleUrl(args.candidateUrl);
-        const candidateTitleKey = args.candidateTitle ? normalizeTitleForDedup(args.candidateTitle) : "";
-        const candidateDomain = getCanonicalSourceDomain(args.candidateUrl);
-        const recentArticles = await getRecentArticlesForDedup(ctx, table);
+        const [activeArticles, unverifiedArticles] = await Promise.all([
+            ctx.db
+                .query(table)
+                .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
+                .order("desc")
+                .take(activeLimit),
+            ctx.db
+                .query(table)
+                .withIndex("by_status_publishedAt", q => q.eq("status", "unverified"))
+                .order("desc")
+                .take(unverifiedLimit),
+        ]);
 
-        for (const article of recentArticles) {
-            if (article.title === args.currentTitle) continue;
+        return [...activeArticles, ...unverifiedArticles]
+            .sort((a, b) => (b.publishedAt || b.fetchedAt || 0) - (a.publishedAt || a.fetchedAt || 0))
+            .slice(0, targetLimit)
+            .map((article) => ({
+                title: article.title,
+                sourceUrl: article.sourceUrl,
+                publishedAt: article.publishedAt,
+                status: article.status,
+            }));
+    },
+});
 
-            const articleCanonicalUrl = canonicalizeArticleUrl(article.sourceUrl);
-            if (candidateCanonicalUrl && articleCanonicalUrl === candidateCanonicalUrl) {
-                return {
-                    duplicateTitle: article.title,
-                    duplicateUrl: article.sourceUrl,
-                    reason: "canonical_url",
-                };
-            }
+export const getArticlesNeedingVerification = internalQuery({
+    args: {
+        country: v.union(v.literal("thailand"), v.literal("cambodia"), v.literal("international")),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const table = args.country === "thailand" ? "thailandNews"
+            : args.country === "cambodia" ? "cambodiaNews"
+                : "internationalNews";
+        const targetLimit = Math.min(args.limit ?? 180, 240);
 
-            if (!candidateTitleKey) continue;
+        const [unverifiedArticles, recentActiveArticles] = await Promise.all([
+            ctx.db
+                .query(table)
+                .withIndex("by_status_publishedAt", q => q.eq("status", "unverified"))
+                .order("desc")
+                .take(targetLimit),
+            ctx.db
+                .query(table)
+                .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
+                .order("desc")
+                .take(Math.min(40, targetLimit)),
+        ]);
 
-            const articleTitleKey = normalizeTitleForDedup(article.title);
-            if (articleTitleKey !== candidateTitleKey) continue;
-
-            const sameDomain = candidateDomain !== null && candidateDomain === getCanonicalSourceDomain(article.sourceUrl);
-            const closePublishTime = arePublishedTimesClose(args.candidatePublishedAt, article.publishedAt);
-
-            if (sameDomain || closePublishTime) {
-                return {
-                    duplicateTitle: article.title,
-                    duplicateUrl: article.sourceUrl,
-                    reason: sameDomain ? "verified_title_same_source" : "verified_title_same_time",
-                };
-            }
-        }
-
-        return null;
+        return [...unverifiedArticles, ...recentActiveArticles.filter((article) => !article.sourceVerifiedAt)]
+            .filter((article) => article.sourceUrl && article.sourceUrl.length > 10)
+            .sort((a, b) => (b.publishedAt || b.fetchedAt || 0) - (a.publishedAt || a.fetchedAt || 0))
+            .slice(0, targetLimit)
+            .map((article) => ({
+                title: article.title,
+                summary: article.summary,
+                summaryEn: article.summaryEn,
+                source: article.source,
+                sourceUrl: article.sourceUrl,
+                credibility: article.credibility,
+                publishedAt: article.publishedAt,
+                fetchedAt: article.fetchedAt,
+                sourceVerifiedAt: article.sourceVerifiedAt,
+                status: article.status,
+            }));
     },
 });
 
@@ -1790,16 +1745,6 @@ export const insertArticle = internalMutation({
                 console.log(`Skipping duplicate (Canonical URL match): "${args.title}"`);
                 return null;
             }
-        }
-
-        const recentArticles = await getRecentArticlesForDedup(ctx, table);
-        const canonicalUrlDuplicate = recentArticles.find((article: any) =>
-            canonicalizeArticleUrl(article.sourceUrl) === canonicalSourceUrl
-        );
-
-        if (canonicalUrlDuplicate) {
-            console.log(`Skipping duplicate (Normalized URL match): "${args.title}"`);
-            return null;
         }
 
         // Secondary check by title if URL is different but title is identical

@@ -98,15 +98,19 @@ test("historian action loop isolates item failures instead of aborting the batch
 test("source verification batch isolates per-result failures", () => {
   const source = read(researchPath);
   const api = read(path.join(root, "convex", "api.ts"));
+  const dedupe = read(path.join(root, "convex", "dedupe.ts"));
   const verify = section(source, "export const verifyAllSources", "export const verifySingleSource");
 
   assert.match(verify, /for \(const r of result\.results \|\| \[\]\)/);
-  assert.match(verify, /findVerifiedArticleDuplicate/);
+  assert.match(verify, /const findDuplicateForArticle =/);
+  assert.match(verify, /findVerifiedDuplicateCandidate/);
   assert.match(verify, /try \{\s*switch \(status\)/s);
   assert.match(verify, /catch \(resultError\)/);
   assert.match(verify, /Error processing verification result for/);
-  assert.match(api, /const canonicalizeArticleUrl = \(rawUrl\?: string\): string =>/);
-  assert.match(api, /export const findVerifiedArticleDuplicate = internalQuery/);
+  assert.match(api, /export const getArticlesNeedingVerification = internalQuery/);
+  assert.match(api, /export const getRecentDuplicateCandidates = internalQuery/);
+  assert.match(dedupe, /export const canonicalizeArticleUrl = \(rawUrl\?: string\): string =>/);
+  assert.match(dedupe, /export function findVerifiedDuplicateCandidate/);
 });
 
 test("curation prompts and parsers are hardened against prose and bad escapes", () => {
@@ -148,6 +152,8 @@ test("ISR server fetch uses a retried dashboard snapshot and lets page errors bu
   assert.match(api, /timelineEvents,/);
   assert.match(api, /const assembledSnapshot = await assembleDashboardSnapshotData\(ctx\)/);
   assert.match(api, /export const publishDashboardSnapshot = internalMutation/);
+  assert.match(api, /withIndex\("by_status_publishedAt", \(q: any\) => q\.eq\("status", "active"\)\)/);
+  assert.doesNotMatch(api, /\.query\(table\)\s*\.order\("desc"\)\s*\.take\(targetLimit\)/);
 
   assert.match(page, /const initialData: BorderClashData = await fetchBorderClashData\(\)/);
   assert.doesNotMatch(page, /catch\s*\(/);
