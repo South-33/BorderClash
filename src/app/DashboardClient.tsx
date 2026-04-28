@@ -1022,6 +1022,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [isViewTransitioning, setIsViewTransitioning] = useState(false);
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
+  const timelineAutoScrollAnchorRef = useRef<string | null>(null);
   const fadeShellRef = useRef<HTMLDivElement>(null);
 
   const waitForCascadeFadeOut = useCallback(() => {
@@ -1272,8 +1273,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const dashboardStats = activeSnapshot?.dashboardStats;
   const articleCounts = activeSnapshot?.articleCounts;
   const timelinePreviewEvents = activeSnapshot?.timelineEvents ?? [];
+  const hasFullTimelineEvents = viewMode === 'TIMELINE' && Array.isArray(clientTimelineEvents);
   const timelineEvents = viewMode === 'TIMELINE'
-    ? (clientTimelineEvents ?? timelinePreviewEvents)
+    ? (hasFullTimelineEvents ? clientTimelineEvents : timelinePreviewEvents)
     : timelinePreviewEvents;
 
   // Loading states: if we have server data, we're never "loading"
@@ -1432,6 +1434,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   // Ref to remember date during filter toggle (for scroll restoration)
   const filterToggleDateRef = useRef<string | null>(null);
+  const timelineDataSourceRef = useRef<'preview' | 'full' | null>(null);
 
   // Animated filter toggle handler — fade out, remember date, update, fade in
   const setShowMinorEvents = useCallback((value: boolean) => {
@@ -1513,11 +1516,44 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       // Small delay to ensure the timeline container is rendered and height is calculated
       const timer = setTimeout(() => {
         scrollToDateRef.current(latestDate, 'auto');
+        timelineAutoScrollAnchorRef.current = latestDate;
         hasAutoScrolledTimeline.current = true;
       }, 150);
       return () => clearTimeout(timer);
     }
   }, [viewMode, timelineDates.length]);
+
+  // When entering timeline, we first render the ISR preview and then lazy-load the
+  // full timeline. Preserve the selected/latest date across that dataset swap so
+  // the virtualizer doesn't keep the old pixel offset and land months earlier.
+  useEffect(() => {
+    if (viewMode !== 'TIMELINE') {
+      timelineDataSourceRef.current = null;
+      return;
+    }
+
+    const currentSource = hasFullTimelineEvents ? 'full' : 'preview';
+    const previousSource = timelineDataSourceRef.current;
+    timelineDataSourceRef.current = currentSource;
+
+    if (previousSource !== 'preview' || currentSource !== 'full' || timelineDates.length === 0) {
+      return;
+    }
+
+    const autoAnchor = timelineAutoScrollAnchorRef.current;
+    const targetDate =
+      autoAnchor && timelineDates.includes(autoAnchor)
+        ? autoAnchor
+        : selectedTimelineDate && timelineDates.includes(selectedTimelineDate)
+          ? selectedTimelineDate
+          : timelineDates[timelineDates.length - 1];
+
+    const timer = setTimeout(() => {
+      scrollToDateRef.current(targetDate, 'auto');
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [viewMode, hasFullTimelineEvents, timelineDates, selectedTimelineDate]);
 
   // Restore scroll position after filter toggle completes
   useEffect(() => {
