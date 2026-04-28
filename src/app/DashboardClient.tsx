@@ -338,6 +338,8 @@ const useCachedQuery = <T,>(
   skip: boolean = false // When true, completely bypass all fetching
 ): { data: T | undefined; isLoading: boolean; isRefreshing: boolean } => {
   const convex = useConvex();
+  const effectiveLastResearchAt = lastResearchAt ?? globalLastResearchAt.current;
+  const initialCacheFetchedAt = useRef<number | null>(null);
 
   // Synchronous hydration (instant load)
   // Initializes state directly from localStorage if available, skipping the initial blank render.
@@ -348,8 +350,12 @@ const useCachedQuery = <T,>(
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          // Also optimistically set the ref so fetching logic knows we have data
-          // Note: refs set during render are safe here as they don't trigger re-renders
+          const cachedResearchAt = parsed.researchAt ?? parsed.fetchedAt ?? 0;
+          if (effectiveLastResearchAt !== null && cachedResearchAt < effectiveLastResearchAt) {
+            return undefined;
+          }
+
+          initialCacheFetchedAt.current = parsed.fetchedAt ?? cachedResearchAt;
           return parsed.data;
         } catch (e) {
           console.error("Failed to parse cache for", storageKey, e);
@@ -362,7 +368,7 @@ const useCachedQuery = <T,>(
   const [isLoading, setIsLoading] = useState(!skip && data === undefined);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isHydrated, setIsHydrated] = useState(data !== undefined || skip);
-  const lastFetchedAt = useRef<number | null>(null);
+  const lastFetchedAt = useRef<number | null>(initialCacheFetchedAt.current);
   const hasDoneInitialFetch = useRef(false);
   const previousSkip = useRef(skip);
 
@@ -373,9 +379,6 @@ const useCachedQuery = <T,>(
     previousSkip.current = skip;
   }, [skip]);
 
-  // Use passed prop if available, otherwise fall back to global ref
-  const effectiveLastResearchAt = lastResearchAt ?? globalLastResearchAt.current;
-
   // Fallback hydration (for SSR safety) - only runs if sync hydration failed/was skipped
   useEffect(() => {
     if (skip || isHydrated) return;
@@ -385,13 +388,19 @@ const useCachedQuery = <T,>(
       if (cached && data === undefined) {
         try {
           const parsed = JSON.parse(cached);
+          const cachedResearchAt = parsed.researchAt ?? parsed.fetchedAt ?? 0;
+          if (effectiveLastResearchAt !== null && cachedResearchAt < effectiveLastResearchAt) {
+            setIsHydrated(true);
+            return;
+          }
+
           setData(parsed.data);
           lastFetchedAt.current = parsed.fetchedAt || 0;
         } catch (e) { }
       }
       setIsHydrated(true);
     }
-  }, [storageKey, skip, isHydrated]);
+  }, [storageKey, skip, isHydrated, effectiveLastResearchAt]);
 
   // Fetch data function (skip if ISR provides data)
   const fetchData = useCallback(async () => {
@@ -423,15 +432,27 @@ const useCachedQuery = <T,>(
 
       // Save to localStorage with timestamp
       if (typeof window !== 'undefined') {
+        const now = Date.now();
         localStorage.setItem(storageKey, JSON.stringify({
           data: result,
-          fetchedAt: Date.now()
+          fetchedAt: now,
+          researchAt: effectiveLastResearchAt ?? now
         }));
       }
     } catch (error) {
       console.error("Failed to fetch data for", storageKey, error);
     }
-  }, [convex, queryFn, JSON.stringify(args), storageKey, skip]);
+  }, [convex, queryFn, JSON.stringify(args), storageKey, skip, effectiveLastResearchAt]);
+
+  useEffect(() => {
+    if (effectiveLastResearchAt === null || lastFetchedAt.current === null) return;
+    if (effectiveLastResearchAt > lastFetchedAt.current) {
+      setData(undefined);
+      lastFetchedAt.current = null;
+      hasDoneInitialFetch.current = false;
+      setIsHydrated(!skip);
+    }
+  }, [effectiveLastResearchAt, skip]);
 
   // Initial fetch after hydration (skip if ISR provides data)
   useEffect(() => {
