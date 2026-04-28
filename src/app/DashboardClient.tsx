@@ -339,12 +339,10 @@ const useCachedQuery = <T,>(
 ): { data: T | undefined; isLoading: boolean; isRefreshing: boolean } => {
   const convex = useConvex();
 
-  // When skip is true, return immediately without any operations
-  // This hook still needs to be called (React rules), but it does nothing
   // Synchronous hydration (instant load)
-  // Initializes state directly from localStorage if available, skipping the initial blank render
+  // Initializes state directly from localStorage if available, skipping the initial blank render.
+  // Even when network fetching is skipped, cached data can still be returned for instant view switches.
   const [data, setData] = useState<T | undefined>(() => {
-    if (skip) return undefined;
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(storageKey);
       if (cached) {
@@ -468,9 +466,9 @@ const useCachedQuery = <T,>(
     }
   }, [effectiveLastResearchAt, isHydrated, fetchData, storageKey, skip]);
 
-  // When skipped, return no-op values (caller uses ISR data instead)
+  // When skipped, avoid network work but keep locally cached data available.
   if (skip) {
-    return { data: undefined, isLoading: false, isRefreshing: false };
+    return { data, isLoading: false, isRefreshing: false };
   }
 
   return {
@@ -1020,9 +1018,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
   const [viewMode, setViewModeRaw] = useState<'ANALYSIS' | 'TIMELINE' | 'GUIDE'>('ANALYSIS');
   const [isViewTransitioning, setIsViewTransitioning] = useState(false);
+  const [shouldFetchFullTimeline, setShouldFetchFullTimeline] = useState(false);
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
-  const timelineAutoScrollAnchorRef = useRef<string | null>(null);
   const fadeShellRef = useRef<HTMLDivElement>(null);
 
   const waitForCascadeFadeOut = useCallback(() => {
@@ -1064,6 +1062,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // Animated view mode switch - fade out, switch, fade in
   const setViewMode = useCallback((mode: 'ANALYSIS' | 'TIMELINE' | 'GUIDE') => {
     if (mode === viewMode) return;
+    if (mode === 'TIMELINE') {
+      setShouldFetchFullTimeline(true);
+    }
     setIsViewTransitioning(true);
     setTimeout(() => {
       setViewModeRaw(mode);
@@ -1075,6 +1076,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   useEffect(() => {
     const hash = window.location.hash.toLowerCase().replace('#', '');
     if (hash === 'timeline' || hash === 'TIMELINE') {
+      setShouldFetchFullTimeline(true);
       setViewModeRaw('TIMELINE');
     } else if (hash === 'guide') {
       setViewModeRaw('GUIDE');
@@ -1259,7 +1261,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     {},
     "borderclash_timeline_full_v1",
     systemStats?.lastResearchAt,
-    viewMode !== 'TIMELINE'
+    !shouldFetchFullTimeline
   );
 
   // Final data: prefer server data if skipping, otherwise use client data WITH fallback to server
@@ -1275,7 +1277,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const timelinePreviewEvents = activeSnapshot?.timelineEvents ?? [];
   const hasFullTimelineEvents = viewMode === 'TIMELINE' && Array.isArray(clientTimelineEvents);
   const timelineEvents = viewMode === 'TIMELINE'
-    ? (hasFullTimelineEvents ? clientTimelineEvents : timelinePreviewEvents)
+    ? (hasFullTimelineEvents ? clientTimelineEvents : [])
     : timelinePreviewEvents;
 
   // Loading states: if we have server data, we're never "loading"
@@ -1434,7 +1436,6 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   // Ref to remember date during filter toggle (for scroll restoration)
   const filterToggleDateRef = useRef<string | null>(null);
-  const timelineDataSourceRef = useRef<'preview' | 'full' | null>(null);
 
   // Animated filter toggle handler — fade out, remember date, update, fade in
   const setShowMinorEvents = useCallback((value: boolean) => {
@@ -1509,51 +1510,17 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   }, [timelineDates, selectedTimelineDate]);
 
   // Handle auto-scroll to latest date on initial load or view switch (ONLY ONCE)
-  // Handle auto-scroll to latest date on initial load or view switch (ONLY ONCE)
   useEffect(() => {
     if (viewMode === 'TIMELINE' && timelineDates.length > 0 && !hasAutoScrolledTimeline.current) {
       const latestDate = timelineDates[timelineDates.length - 1];
       // Small delay to ensure the timeline container is rendered and height is calculated
       const timer = setTimeout(() => {
         scrollToDateRef.current(latestDate, 'auto');
-        timelineAutoScrollAnchorRef.current = latestDate;
         hasAutoScrolledTimeline.current = true;
       }, 150);
       return () => clearTimeout(timer);
     }
   }, [viewMode, timelineDates.length]);
-
-  // When entering timeline, we first render the ISR preview and then lazy-load the
-  // full timeline. Preserve the selected/latest date across that dataset swap so
-  // the virtualizer doesn't keep the old pixel offset and land months earlier.
-  useEffect(() => {
-    if (viewMode !== 'TIMELINE') {
-      timelineDataSourceRef.current = null;
-      return;
-    }
-
-    const currentSource = hasFullTimelineEvents ? 'full' : 'preview';
-    const previousSource = timelineDataSourceRef.current;
-    timelineDataSourceRef.current = currentSource;
-
-    if (previousSource !== 'preview' || currentSource !== 'full' || timelineDates.length === 0) {
-      return;
-    }
-
-    const autoAnchor = timelineAutoScrollAnchorRef.current;
-    const targetDate =
-      autoAnchor && timelineDates.includes(autoAnchor)
-        ? autoAnchor
-        : selectedTimelineDate && timelineDates.includes(selectedTimelineDate)
-          ? selectedTimelineDate
-          : timelineDates[timelineDates.length - 1];
-
-    const timer = setTimeout(() => {
-      scrollToDateRef.current(targetDate, 'auto');
-    }, 50);
-
-    return () => clearTimeout(timer);
-  }, [viewMode, hasFullTimelineEvents, timelineDates, selectedTimelineDate]);
 
   // Restore scroll position after filter toggle completes
   useEffect(() => {
@@ -1889,6 +1856,12 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     const index = dateToVirtualIndex[date];
 
     if (index !== undefined) {
+      if (behavior === 'auto') {
+        rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+        setIsScrollJump(false);
+        return;
+      }
+
       // Fade-Jump Logic:
       // Check if the target is currently visible (or very close)
       const items = rowVirtualizer.getVirtualItems();
@@ -2270,6 +2243,15 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
               ].map((mode) => (
                 <button
                   key={mode.id}
+                  onMouseEnter={() => {
+                    if (mode.id === 'TIMELINE') setShouldFetchFullTimeline(true);
+                  }}
+                  onFocus={() => {
+                    if (mode.id === 'TIMELINE') setShouldFetchFullTimeline(true);
+                  }}
+                  onTouchStart={() => {
+                    if (mode.id === 'TIMELINE') setShouldFetchFullTimeline(true);
+                  }}
                   onClick={() => setViewMode(mode.id as any)}
                   className={`
                     flex items-center gap-3 p-2.5 border-2 active:scale-[0.98]
@@ -2574,7 +2556,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                   </div>
                 </div>
 
-                {(!timelineEvents || timelineEvents.length === 0) ? (
+                {timelineLoading && timelineEvents.length === 0 ? (
+                  <div className="flex-1 min-h-0" />
+                ) : (!timelineEvents || timelineEvents.length === 0) ? (
                   <div className="text-center py-12 flex-1 flex flex-col justify-center items-center">
                     <p className="font-mono text-sm opacity-60">{t.noTimelineEvents}</p>
                     <p className="font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
