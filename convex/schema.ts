@@ -179,7 +179,8 @@ export default defineSchema({
         .index("by_status_credibility", ["status", "credibility"])
         .index("by_status_publishedAt", ["status", "publishedAt"])
         // Phase 3 bandwidth optimization: index for unprocessed article queries
-        .index("by_status_processed", ["status", "processedToTimeline"]),
+        .index("by_status_processed", ["status", "processedToTimeline"])
+        .index("by_status_processed_publishedAt", ["status", "processedToTimeline", "publishedAt"]),
 
     cambodiaNews: defineTable({
         title: v.string(),
@@ -220,7 +221,8 @@ export default defineSchema({
         .index("by_status_credibility", ["status", "credibility"])
         .index("by_status_publishedAt", ["status", "publishedAt"])
         // Phase 3 bandwidth optimization: index for unprocessed article queries
-        .index("by_status_processed", ["status", "processedToTimeline"]),
+        .index("by_status_processed", ["status", "processedToTimeline"])
+        .index("by_status_processed_publishedAt", ["status", "processedToTimeline", "publishedAt"]),
 
     // International/3rd party news (Reuters, AFP, BBC, Al Jazeera, etc.)
     internationalNews: defineTable({
@@ -262,7 +264,8 @@ export default defineSchema({
         .index("by_status_credibility", ["status", "credibility"])
         .index("by_status_publishedAt", ["status", "publishedAt"])
         // Phase 3 bandwidth optimization: index for unprocessed article queries
-        .index("by_status_processed", ["status", "processedToTimeline"]),
+        .index("by_status_processed", ["status", "processedToTimeline"])
+        .index("by_status_processed_publishedAt", ["status", "processedToTimeline", "publishedAt"]),
 
     // ==================== ANALYSIS TABLES ====================
     // Managed by Flash (Synthesizer) - Frontend display tables

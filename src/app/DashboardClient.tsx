@@ -1296,9 +1296,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const dashboardStats = activeSnapshot?.dashboardStats;
   const articleCounts = activeSnapshot?.articleCounts;
   const timelinePreviewEvents = activeSnapshot?.timelineEvents ?? [];
-  const hasFullTimelineEvents = viewMode === 'TIMELINE' && Array.isArray(clientTimelineEvents);
   const timelineEvents = viewMode === 'TIMELINE'
-    ? (hasFullTimelineEvents ? clientTimelineEvents : [])
+    ? (clientTimelineEvents ?? timelinePreviewEvents)
     : timelinePreviewEvents;
 
   // Loading states: if we have server data, we're never "loading"

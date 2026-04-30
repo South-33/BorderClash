@@ -205,8 +205,10 @@ async function getRecentTimelineWindow(
     args: { limit: number; minImportance?: number; category?: string },
 ) {
     const hasFilters = args.minImportance !== undefined || args.category !== undefined;
-    const bufferMultiplier = hasFilters ? 3 : 2;
-    const fetchLimit = Math.min(args.limit * bufferMultiplier, 1000);
+    const fetchLimit = Math.min(
+        hasFilters ? args.limit * 2 : args.limit + 50,
+        1000,
+    );
 
     const events = await ctx.db
         .query("timelineEvents")
@@ -814,14 +816,14 @@ export const getRecentNewsContextForHistorian = internalQuery({
             // Get recent processed articles, sorted by publishedAt DESC
             const articles = await ctx.db
                 .query(name)
-                .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
+                .withIndex("by_status_processed_publishedAt", q =>
+                    q.eq("status", "active").eq("processedToTimeline", true)
+                )
                 .order("desc")
-                .take(60); // Fetch extra to filter for processed
+                .take(20);
 
-            // Filter for processed articles and map to lean format
+            // Map to lean format after the index has already constrained processed articles.
             const processed = articles
-                .filter(a => a.processedToTimeline === true)
-                .slice(0, 20)
                 .map(a => ({
                     title: a.title,
                     summary: a.summaryEn || a.summary || "(no summary)",
@@ -4339,11 +4341,19 @@ export const findEventByTitleAndDate = internalQuery({
         })),
     },
     handler: async (ctx, args) => {
-        const events = await ctx.db
-            .query("timelineEvents")
-            .withIndex("by_createdAt")
-            .order("desc")
-            .take(300);  // Wider search window for better merge recall
+        const eventQuery = args.dateRange
+            ? ctx.db
+                .query("timelineEvents")
+                .withIndex("by_date", (q) =>
+                    q.gte("date", args.dateRange!.start).lte("date", args.dateRange!.end)
+                )
+                .order("desc")
+            : ctx.db
+                .query("timelineEvents")
+                .withIndex("by_createdAt")
+                .order("desc");
+
+        const events = await eventQuery.take(args.dateRange ? 200 : 300);
 
         const normalize = (text: string) => text
             .toLowerCase()
