@@ -492,9 +492,11 @@ const useCachedQuery = <T,>(
     return { data, isLoading: false, isRefreshing: false };
   }
 
+  const isAwaitingInitialFetch = data === undefined && !hasDoneInitialFetch.current;
+
   return {
     data,
-    isLoading: !isHydrated || (isLoading && data === undefined),
+    isLoading: !isHydrated || isAwaitingInitialFetch || (isLoading && data === undefined),
     isRefreshing,
   };
 };
@@ -1296,8 +1298,12 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const dashboardStats = activeSnapshot?.dashboardStats;
   const articleCounts = activeSnapshot?.articleCounts;
   const timelinePreviewEvents = activeSnapshot?.timelineEvents ?? [];
+  const isAwaitingInitialFullTimeline = viewMode === 'TIMELINE'
+    && shouldFetchFullTimeline
+    && clientTimelineEvents === undefined
+    && clientTimelineLoading;
   const timelineEvents = viewMode === 'TIMELINE'
-    ? (clientTimelineEvents ?? timelinePreviewEvents)
+    ? (isAwaitingInitialFullTimeline ? [] : (clientTimelineEvents ?? timelinePreviewEvents))
     : timelinePreviewEvents;
 
   // Loading states: if we have server data, we're never "loading"
@@ -1309,7 +1315,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const dashboardLoading = hasServerData ? false : clientSnapshotLoading;
   const countsLoading = hasServerData ? false : clientSnapshotLoading;
   const timelineLoading = viewMode === 'TIMELINE'
-    ? (clientTimelineLoading && timelineEvents.length === 0)
+    ? isAwaitingInitialFullTimeline
     : (hasServerData ? false : clientSnapshotLoading);
   const thNewsRefreshing = snapshotRefreshing;
   const khNewsRefreshing = snapshotRefreshing;
@@ -1317,7 +1323,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const khMetaRefreshing = snapshotRefreshing;
   const neutralMetaRefreshing = snapshotRefreshing;
   const dashboardRefreshing = snapshotRefreshing;
-  const timelineRefreshing = viewMode === 'TIMELINE' ? clientTimelineRefreshing : false;
+  const timelineRefreshing = viewMode === 'TIMELINE' && clientTimelineEvents !== undefined ? clientTimelineRefreshing : false;
 
 
   // --- CASCADE LAYOUT CONTROL ---
@@ -1598,11 +1604,14 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   useEffect(() => {
     if (viewMode !== 'TIMELINE' || !datePickerRef.current) return;
 
+    let lenis: Lenis | null = null;
+    let rafId: number | null = null;
+
     // Small delay to ensure render
     const timer = setTimeout(() => {
       if (!datePickerRef.current) return;
 
-      const lenis = new Lenis({
+      lenis = new Lenis({
         wrapper: datePickerRef.current,
         orientation: 'horizontal',
         gestureOrientation: 'both', // Allows vertical trackpad swipe to scroll horizontally if desired, or 'horizontal'
@@ -1612,25 +1621,25 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         // lerp: 0.1 
       });
 
-      let rafId: number;
       function raf(time: number) {
-        lenis.raf(time);
+        lenis?.raf(time);
         rafId = requestAnimationFrame(raf);
       }
       rafId = requestAnimationFrame(raf);
 
       (datePickerRef.current as any).lenis = lenis;
-
-      return () => {
-        lenis.destroy();
-        cancelAnimationFrame(rafId);
-        if (datePickerRef.current) {
-          delete (datePickerRef.current as any).lenis;
-        }
-      };
     }, 100);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      lenis?.destroy();
+      if (datePickerRef.current) {
+        delete (datePickerRef.current as any).lenis;
+      }
+    };
   }, [viewMode]);
 
   const scrollDatePicker = (direction: 'left' | 'right') => {

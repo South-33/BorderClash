@@ -1,218 +1,94 @@
+![BorderClash poster](Image/BorderClashPoster.webp)
+
 # BorderClash
 
-BorderClash was built to address misinformation, propaganda bias, and fragmented reporting during sensitive geopolitical conflicts.  
-The system prioritizes neutrality, verification, and multilingual accessibility for local populations.
+**A neutral intelligence dashboard for the Thailand-Cambodia border situation.**
 
-> Real-time intelligence dashboard tracking the Thailand-Cambodia border situation with multi-perspective news and AI-powered neutral analysis.
+[Visit the live dashboard](https://border-clash.vercel.app) | [View the repository](https://github.com/South-33/BorderClash)
 
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/South-33/BorderClash)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
-[![Convex](https://img.shields.io/badge/Convex-Backend-FF6B35?logo=convex)](https://convex.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
+BorderClash turns fragmented, multilingual conflict reporting into a single, readable dashboard built for context instead of panic. It tracks developments from Thai, Cambodian, and international sources, then organizes them into neutral summaries, source-backed timelines, and clear situational indicators.
+
+In a space where information can move faster than verification, BorderClash is designed to slow the reader down just enough to compare perspectives, check confidence, and understand what is known, disputed, or still emerging.
 
 ---
 
-## Features
+## What It Shows
 
-- **Trilingual UI** — English, Thai (ไทย), Khmer (ខ្មែរ) with casual/spoken translations
-- **Neutral AI Analysis** — Balanced perspective summaries with credibility scoring
-- **Multi-Perspective Views** — Thailand, Cambodia, and International viewpoints
-- **Interactive Timeline** — Chronological event display with swipe navigation
-- **Hierarchical AI System** — Scout → Source Verify → Historian → Synthesis pipeline
-- **Web Search Integration** — AI agents verify claims via live web search
+### Multi-Perspective Reporting
 
----
+BorderClash separates reporting streams by perspective so readers can see how the same situation is framed across Thailand, Cambodia, and international coverage. The goal is not to flatten disagreement, but to make the disagreement visible.
 
-## Screenshots
+### Neutral Situation Briefs
 
-*Coming soon*
+The dashboard synthesizes active reporting into concise, balanced summaries that highlight key developments, uncertainty, and competing claims without adopting a national narrative.
 
----
+### Conflict Timeline
 
-## Architecture
+Events are organized into a chronological timeline with source links, importance scoring, and status labels such as confirmed, disputed, or debunked. The timeline is built to help readers understand escalation, sequence, and context.
 
-```mermaid
-graph TB
-    subgraph "RESEARCH CYCLE"
-        ORCH[Orchestrator]
-        ORCH -->|step 1| S[SCOUTS]
-        ORCH -->|step 2| V[SOURCE VERIFY]
-        ORCH -->|step 3| H[HISTORIAN LOOP]
-        ORCH -->|step 4| SY[SYNTHESIS]
-    end
-    
-    subgraph "GEMINI STUDIO API"
-        W1[Browser Worker]
-        W1 --> GW[Gemini Web]
-    end
-    
-    S -.-> W1
-    H -.-> W1
-    SY -.-> W1
-    
-    S --> DB[(Convex DB)]
-    H --> DB
-    SY --> DB
-    DB --> FE[Frontend]
-```
+### Human Impact Indicators
 
-### AI Components
+BorderClash tracks high-level indicators such as conflict level, reported casualties, injuries, displacement, and recent changes. These figures are presented as monitored signals, not unquestionable final counts.
 
-| Component | Model | Role |
-|-----------|-------|------|
-| **SCOUT** | fast | Find new articles (isolated per country) |
-| **SOURCE VERIFY** | fast | Visit URLs to verify article accuracy |
-| **HISTORIAN** | thinking | Process articles → create/merge timeline events |
-| **DASHBOARD** | thinking | Update stats (casualties, displaced) with web verification |
-| **SYNTHESIS** | thinking | Generate multilingual narratives for frontend |
+### Trilingual Access
+
+The interface supports English, Thai, and Khmer so the dashboard is usable by the people closest to the issue, not only outside observers.
+
+### Media Literacy Guide
+
+The built-in guide helps readers evaluate conflict reporting: compare sources, look for evidence, check dates, and watch for emotional manipulation or propaganda framing.
 
 ---
 
-## Tech Stack
+## Why It Exists
+
+Border incidents are often reported through scattered posts, local outlets, official statements, and rapidly changing headlines. That makes it difficult for ordinary readers to know what changed, what is verified, and what may be narrative pressure.
+
+BorderClash was built as a public-facing monitor for that exact problem:
+
+- Bring competing reports into one place.
+- Preserve source context instead of hiding it.
+- Make uncertainty explicit.
+- Keep the interface readable across languages.
+- Reduce the cost of staying informed without rewarding outrage.
+
+---
+
+## How It Works
+
+BorderClash runs a research pipeline that searches for relevant reporting, verifies article links and topic fit, groups related reports into timeline events, and publishes a dashboard-ready snapshot.
+
+The system is intentionally structured around comparison:
+
+- **Scout** finds reporting from Thai, Cambodian, and international sources.
+- **Source Verify** checks whether links are real, relevant, and consistent with the stored article.
+- **Historian** turns verified reporting into deduplicated timeline events.
+- **Synthesis** creates neutral summaries and multilingual dashboard text.
+
+The live site is served through an ISR-style snapshot flow so readers get a fast dashboard without every page view creating fresh backend load.
+
+---
+
+## Built With
 
 | Layer | Technology |
-|-------|------------|
-| Frontend | Next.js 16 + Tailwind CSS |
-| Backend | Convex |
-| AI | Gemini |
+| --- | --- |
+| Frontend | Next.js 16, React 19, TypeScript |
+| Styling | Tailwind CSS 4, custom dashboard UI |
+| Backend & data | Convex |
+| AI workflow | Custom Gemini-compatible research and synthesis pipeline |
 | Hosting | Vercel |
 
 ---
 
-## Getting Started
+## Live Site
 
-### Prerequisites
+**BorderClash is live at [border-clash.vercel.app](https://border-clash.vercel.app).**
 
-- Node.js 18+
-- npm or pnpm
-- Convex account
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/your-username/borderclash.git
-cd borderclash
-
-# Install dependencies
-npm install
-
-# Set up Convex
-npx convex dev
-
-# Start development server
-npm run dev
-```
-
-### Environment Variables
-
-```bash
-npx convex env set GEMINI_STUDIO_API_URL "https://your-api-url.com"
-npx convex env set GEMINI_PROJECT_NAME "borderclash"
-npx convex env set GEMINI_CLIENT_NAME "borderclash-convex"
-```
-
-- `GEMINI_PROJECT_NAME` and `GEMINI_CLIENT_NAME` are sent as `X-Project-Name` and `X-Client-Name` on every Gemini Studio chat completion request for source attribution.
-- `X-Request-ID` is generated per request and mirrored in `request_id` body fields for traceability.
-
-### AI Backend
-
-This project uses a custom Gemini integration for the live deployment. If you want to run this yourself, you'll need to replace the AI layer with the [official Gemini API](https://ai.google.dev/). The prompts in `convex/research.ts` and `convex/historian.ts` are designed to be unbiased and can be audited directly in this repository.
-
-### Verify request source headers
-
-```bash
-pnpm verify:gemini-headers
-```
-
-The script sends a test `POST /v1/chat/completions` with attribution headers and then checks `GET /v1/diagnostics` for a matching `recent_requests` entry.
+Open the dashboard, switch perspectives, inspect the timeline, and compare the sources behind each event.
 
 ---
 
-## Database Schema
+## Project Status
 
-### News Tables
-`thailandNews`, `cambodiaNews`, `internationalNews`
-- Articles with `active`, `outdated`, `unverified`, `false`, or `archived` status
-- Multilingual titles/summaries (En, Th, Kh)
-- `sourceVerifiedAt` — When AI verified the URL/content
-- `processedToTimeline` — Tracks if Historian has processed this article
-
-### Timeline Events
-`timelineEvents`
-- `date`, `timeOfDay` (for same-day ordering)
-- `title`, `titleTh`, `titleKh` + descriptions
-- `importance` (0-100 — controls dot size)
-- `status` (confirmed/disputed/debunked)
-- `sources[]` array with credibility scores
-
-### Dashboard Stats
-`dashboardStats`
-- Displaced Count with last updated timestamp
-- Casualties (confirmed fatalities)
-- Civilian/Military Injured
-- Conflict Level (LOW/ELEVATED/CRITICAL)
-
----
-
-## CLI Commands
-
-```bash
-# Control automation
-npx convex run api:pauseTimer
-npx convex run api:resumeTimer
-npx convex run api:skipNextCycle
-
-# Manual triggers
-npx convex run api:runFullCycle
-npx convex run api:runHistorian
-npx convex run api:runDashboardUpdate
-
-# Data management
-npx convex run api:clearAllData
-
-# Maintenance (run once after fresh deploy)
-npx convex run api:initializeTimelineStats
-npx convex run api:cleanupOldArticles
-```
-
----
-
-## Autonomous Operation
-
-The system is designed to run indefinitely without maintenance:
-
-- **Adaptive Scheduling** — AI decides next run time (4-48h) based on conflict intensity
-- **Safety Net Cron** — 24h fallback if scheduler fails
-- **Monthly Cleanup** — Auto-deletes archived articles >1 year old
-- **Denormalized Stats** — O(1) reads for timeline statistics
-- **ISR Caching** — Frontend served from Vercel edge, minimizing Convex bandwidth
-
----
-
-## Translation Guidelines
-
-| Language | Style |
-|----------|-------|
-| Thai | ภาษาพูด (spoken Thai) — casual everyday language |
-| Khmer | ភាសាប្រចាំថ្ងៃ (everyday Khmer) — conversational tone |
-| Numerals | Always use English numerals (0-9) |
-
----
-
-## How it Works
-
-The system utilizes a **Hierarchical AI Agent Pipeline** to process information from raw news to a structured intelligence dashboard:
-
-1. **Scouts**: Multi-agent system that crawls news outlets from Thailand, Cambodia, and international sources. Each scout operates with a specific regional "bias" to capture the full spectrum of propaganda vs. journalism.
-2. **Source Verify**: Dedicated agents visit found URLs to verify content existence and score initial credibility based on language patterns and evidentiary claims.
-3. **Historian**: A "thinking" model that processes verified articles, cross-references dates, and manages the timeline database (merging duplicates, updating fatalities, etc.).
-4. **Synthesis**: The final stage where the dashboard narratives are generated in three languages, ensuring tone-perfect translations for local audiences.
-
----
-
-## Acknowledgments
-
-- [Convex] for the real-time backend
-- [Vercel] for hosting
-- [Gemini] for AI capabilities
+BorderClash is an active monitoring experiment. It is not an official government source, a substitute for professional journalism, or a final authority on casualty and displacement figures. It is a tool for making public information easier to compare, question, and understand.
