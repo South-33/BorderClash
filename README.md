@@ -4,7 +4,7 @@
 
 **A neutral intelligence dashboard for the Thailand-Cambodia border situation.**
 
-[Visit the live dashboard](https://border-clash.vercel.app) | [View the repository](https://github.com/South-33/BorderClash)
+[Visit the live dashboard](https://border-clash.vercel.app)
 
 BorderClash turns fragmented, multilingual conflict reporting into a single, readable dashboard built for context instead of panic. It tracks developments from Thai, Cambodian, and international sources, then organizes them into neutral summaries, source-backed timelines, and clear situational indicators.
 
