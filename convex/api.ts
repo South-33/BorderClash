@@ -1,7 +1,7 @@
 import { query, mutation, internalMutation, internalQuery, action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { canonicalizeArticleUrl } from "./dedupe";
 
 const isVisibleNewsStatus = (status: string) => status === "active" || status === "unverified";
@@ -24,6 +24,56 @@ const serializeHistorianTimelineEvent = (event: any) => ({
     status: event.status,
     sources: event.sources,
 });
+
+type PerspectiveAnalysisDoc = Doc<"thailandAnalysis"> | Doc<"cambodiaAnalysis">;
+
+const serializePerspectiveAnalysisSnapshot = (analysis: PerspectiveAnalysisDoc | null) => analysis ? ({
+    officialNarrative: analysis.officialNarrative,
+    officialNarrativeEn: analysis.officialNarrativeEn,
+    officialNarrativeTh: analysis.officialNarrativeTh,
+    officialNarrativeKh: analysis.officialNarrativeKh,
+    narrativeSource: analysis.narrativeSource,
+    militaryIntensity: analysis.militaryIntensity,
+    militaryPosture: analysis.militaryPosture,
+    postureLabel: analysis.postureLabel,
+    postureLabelTh: analysis.postureLabelTh,
+    postureLabelKh: analysis.postureLabelKh,
+    postureRationale: analysis.postureRationale,
+    postureRationaleTh: analysis.postureRationaleTh,
+    postureRationaleKh: analysis.postureRationaleKh,
+    territorialContext: analysis.territorialContext,
+    lastUpdatedAt: analysis.lastUpdatedAt,
+}) : null;
+
+const serializeNeutralAnalysisSnapshot = (analysis: Doc<"neutralAnalysis"> | null) => analysis ? ({
+    generalSummary: analysis.generalSummary,
+    generalSummaryEn: analysis.generalSummaryEn,
+    generalSummaryTh: analysis.generalSummaryTh,
+    generalSummaryKh: analysis.generalSummaryKh,
+    conflictLevel: analysis.conflictLevel,
+    keyEvents: analysis.keyEvents,
+    keyEventsEn: analysis.keyEventsEn,
+    keyEventsTh: analysis.keyEventsTh,
+    keyEventsKh: analysis.keyEventsKh,
+    displacedCount: analysis.displacedCount,
+    displacedTrend: analysis.displacedTrend,
+    civilianInjuredCount: analysis.civilianInjuredCount,
+    militaryInjuredCount: analysis.militaryInjuredCount,
+    injuredCount: analysis.injuredCount,
+    casualtyCount: analysis.casualtyCount,
+    lastUpdatedAt: analysis.lastUpdatedAt,
+}) : null;
+
+const serializeDashboardStatsSnapshot = (stats: Doc<"dashboardStats"> | null) => stats ? ({
+    conflictLevel: stats.conflictLevel,
+    displacedCount: stats.displacedCount,
+    displacedTrend: stats.displacedTrend,
+    civilianInjuredCount: stats.civilianInjuredCount,
+    militaryInjuredCount: stats.militaryInjuredCount,
+    casualtyCount: stats.casualtyCount,
+    summary: stats.summary,
+    lastUpdatedAt: stats.lastUpdatedAt,
+}) : null;
 
 async function getVisibleNewsDocs(
     ctx: any,
@@ -66,10 +116,10 @@ async function assembleDashboardSnapshotData(ctx: any) {
     ]);
 
     return {
-        thailandAnalysis,
-        cambodiaAnalysis,
-        neutralAnalysis,
-        dashboardStats,
+        thailandAnalysis: serializePerspectiveAnalysisSnapshot(thailandAnalysis),
+        cambodiaAnalysis: serializePerspectiveAnalysisSnapshot(cambodiaAnalysis),
+        neutralAnalysis: serializeNeutralAnalysisSnapshot(neutralAnalysis),
+        dashboardStats: serializeDashboardStatsSnapshot(dashboardStats),
     };
 }
 
