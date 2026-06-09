@@ -579,6 +579,11 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
   const expandedBg = perspective === 'thailand' ? 'bg-[#241D4F]/5' : 'bg-[#032EA1]/5';
 
   const t = TRANSLATIONS[lang as Lang] || TRANSLATIONS.en;
+  const titleClass = lang === 'kh'
+    ? 'font-mono font-[550] text-[16px] xl:text-[17px] leading-snug tracking-normal'
+    : lang === 'th'
+      ? 'font-mono font-[550] text-[15px] xl:text-[16px] leading-snug tracking-normal'
+      : 'font-bold text-[13px] xl:text-[15px] leading-tight tracking-tight';
 
   // Format relative time with fallback: if publishedAt is in the future or very recent, use fetchedAt
   const formatRelativeTime = (publishedAt: number | undefined, fetchedAt: number) => {
@@ -626,8 +631,8 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
             </span>
           </div>
 
-          {/* Headline - Standard Sentence Case, Slightly smaller */}
-          <h5 className={`font-bold text-[13px] xl:text-[15px] leading-tight text-riso-ink tracking-tight transition-colors ${lang === 'kh' ? 'font-mono' : lang === 'th' ? 'font-mono' : ''}`}>
+          {/* Headline */}
+          <h5 className={`text-riso-ink transition-colors ${titleClass}`}>
             {lang === 'th' && article.titleTh ? article.titleTh :
               lang === 'kh' && article.titleKh ? article.titleKh :
                 article.titleEn || article.title}
@@ -1826,9 +1831,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         let height = 85;
 
         const titleOneLineLimit = isKhmer ? 34 : isThai ? 38 : 40;
-        if (titleLen > titleOneLineLimit * 2) height += isKhmer ? 52 : isThai ? 46 : 50;
-        else if (titleLen > titleOneLineLimit) height += isKhmer ? 38 : isThai ? 33 : 35;
-        else height += isKhmer ? 28 : isThai ? 24 : 20;
+        if (titleLen > titleOneLineLimit * 2) height += isKhmer ? 62 : isThai ? 56 : 50;
+        else if (titleLen > titleOneLineLimit) height += isKhmer ? 46 : isThai ? 41 : 35;
+        else height += isKhmer ? 34 : isThai ? 30 : 20;
 
         const descOneLineLimit = isKhmer ? 42 : isThai ? 50 : 60;
         if (descLen > descOneLineLimit) height += isKhmer ? 40 : isThai ? 36 : 35;
@@ -2100,7 +2105,33 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
   // Language class for font-size boost (Thai/Khmer need larger text)
   const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
-  const timelineToggleTextSizeClass = lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[10px]';
+  const isLocalLang = lang === 'kh' || lang === 'th';
+  const timelineHeadingClass = isLocalLang
+    ? 'font-mono text-[22px] md:text-2xl font-medium tracking-normal text-riso-ink'
+    : 'font-display uppercase text-2xl tracking-wide text-riso-ink';
+  const timelineToggleTextClass = isLocalLang
+    ? 'text-[15px] font-medium normal-case tracking-normal'
+    : 'text-[10px] uppercase tracking-wide';
+  const timelineDateTextClass = isLocalLang
+    ? 'font-body font-[550] text-lg leading-relaxed py-0.5'
+    : 'font-display text-xl uppercase leading-none';
+  const timelineDateHeaderClass = isLocalLang
+    ? 'font-body font-[550] text-xl tracking-normal'
+    : 'font-display text-xl uppercase tracking-wide';
+  const timelineDateRangeClass = isLocalLang
+    ? 'font-body text-[13px] font-[550] tracking-normal text-riso-ink/40'
+    : 'font-mono text-[11px] font-bold uppercase tracking-widest text-riso-ink/40';
+  const timelineEventTitleClass = lang === 'kh'
+    ? 'font-mono font-[550] text-[18px] leading-relaxed tracking-normal'
+    : lang === 'th'
+      ? 'font-mono font-[550] text-[17px] leading-snug tracking-normal'
+      : 'font-[1] text-[16px] font-display uppercase tracking-wide leading-tight';
+  const timelineModalTitleClass = lang === 'kh'
+    ? 'font-mono font-[550] text-[26px] md:text-[30px] leading-relaxed tracking-normal'
+    : lang === 'th'
+      ? 'font-mono font-[550] text-[24px] md:text-[28px] leading-snug tracking-normal'
+      : 'font-display text-3xl leading-snug';
+  const timelineModalMetaDateClass = isLocalLang ? 'font-body font-[550]' : 'font-bold';
 
   return (
     <div
@@ -2561,20 +2592,20 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
               <Card loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
-                  <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{t.historicalTimeline}</h3>
+                  <h3 className={timelineHeadingClass}>{t.historicalTimeline}</h3>
 
                   {/* Simple box: 3 sections with 2 dividers */}
                   <div className="flex items-stretch">
                     <button
                       onClick={() => setShowMinorEvents(false)}
-                      className={`px-3 py-1.5 ${timelineToggleTextSizeClass} font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2 border-r-0
+                      className={`px-3 py-1.5 ${timelineToggleTextClass} font-mono transition-colors duration-200 cursor-pointer whitespace-nowrap border-2 border-r-0
                         ${!showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20'}`}
                     >
                       {t.hidingMinor}
                     </button>
                     <button
                       onClick={() => setShowMinorEvents(true)}
-                      className={`px-3 py-1.5 ${timelineToggleTextSizeClass} font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2
+                      className={`px-3 py-1.5 ${timelineToggleTextClass} font-mono transition-colors duration-200 cursor-pointer whitespace-nowrap border-2
                         ${showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20'}`}
                     >
                       {t.showAllEvents}
@@ -2599,11 +2630,11 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
                       {/* Date Range Header */}
                       <div className="flex justify-between items-center mb-2 px-1">
-                        <span className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} font-bold uppercase tracking-widest text-riso-ink/40`}>
+                        <span className={timelineDateRangeClass}>
                           {timelineDates.length > 0 ? formatDate(timelineDates[0], 'short') : '-'}
                         </span>
                         <div className="h-px flex-1 bg-riso-ink/10 mx-4"></div>
-                        <span className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} font-bold uppercase tracking-widest text-riso-ink/40`}>
+                        <span className={timelineDateRangeClass}>
                           {timelineDates.length > 0 ? formatDate(timelineDates[timelineDates.length - 1], 'short') : '-'}
                         </span>
                       </div>
@@ -2635,7 +2666,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                               <span className={`font-mono text-[10px] uppercase tracking-wider mb-1 ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
                                 {new Date(date).getFullYear()}
                               </span>
-                              <span className={`font-display text-xl uppercase ${lang === 'kh' || lang === 'th' ? 'leading-relaxed py-0.5' : 'leading-none'}`}>
+                              <span className={timelineDateTextClass}>
                                 {formatDate(date, 'short')}
                               </span>
                               <span className={`text-[9px] font-mono mt-1 px-1.5 rounded-full ${isSelected ? 'bg-riso-paper text-riso-ink' : 'bg-riso-ink/10 text-riso-ink'}`}>
@@ -2685,7 +2716,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                   <div className="flex items-center justify-between max-w-2xl mx-auto">
                                     <div className="flex items-center gap-3">
                                       <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
-                                      <h3 className="font-display text-xl uppercase tracking-wide">
+                                      <h3 className={timelineDateHeaderClass}>
                                         <span className="md:hidden">{formatDate(item.date, 'weekday-short')}</span>
                                         <span className="hidden md:inline">{formatDate(item.date, 'weekday')}</span>
                                       </h3>
@@ -2756,7 +2787,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                         </span>
                                       </div>
 
-                                      <h4 className={`leading-tight mb-1 ${lang === 'kh' ? 'font-bold text-base font-mono leading-relaxed' : lang === 'th' ? 'font-bold text-base font-mono leading-tight' : 'font-[1] text-[16px] font-display uppercase tracking-wide'}`}>
+                                      <h4 className={`mb-1 ${timelineEventTitleClass}`}>
                                         {(() => {
                                           if (lang === 'th' && event?.titleTh) return event.titleTh;
                                           if (lang === 'kh' && event?.titleKh) return event.titleKh;
@@ -2849,7 +2880,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                               {evtIndex + 1} / {sortedEvents.length}
                             </span>
                           </div>
-                          <h3 className={`font-display text-xl md:text-2xl leading-snug ${lang === 'th' ? 'font-bold' : ''} ${lang === 'en' ? 'text-3xl' : ''}`}>
+                          <h3 className={timelineModalTitleClass}>
                             {getEventTitle(evt)}
                           </h3>
                         </div>
@@ -2868,7 +2899,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                         <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
                           <div>
                             <p className="opacity-50 uppercase tracking-wider mb-1">{t.date}</p>
-                            <p className="font-bold">{formatDate(evt.date, 'long')}</p>
+                            <p className={timelineModalMetaDateClass}>{formatDate(evt.date, 'long')}</p>
                             {evt.timeOfDay && (
                               <p className="text-[10px] opacity-60 mt-0.5">{evt.timeOfDay}</p>
                             )}

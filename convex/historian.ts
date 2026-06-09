@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { MODELS, FALLBACK_CHAINS } from "./config";
-import { callGeminiStudio, callGeminiStudioWithFallback, formatTimelineEvent } from "./ai_utils";
+import { callGeminiStudio, callGeminiStudioWithFallback, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
 
 
 // =============================================================================
@@ -109,11 +109,7 @@ If new evidence shows an old event was wrong, FIX IT. That's your job.
 | discard | Broken links, spam, gibberish |
 | flag_conflict | Contradicts timeline, needs investigation |
 
-🌐 LANGUAGE & TRANSLATION:
-- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
-- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
-- AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
-- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
+${TRANSLATION_STYLE_GUIDE}
 
 OUTPUT FORMAT:
 Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
@@ -132,11 +128,11 @@ Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
         "date": "YYYY-MM-DD",
         "timeOfDay": "HH:MM",
         "title": "English title (max 10 words)",
-        "titleTh": "Thai translation",
-        "titleKh": "Khmer translation",
+        "titleTh": "Thai local headline, plain and concise",
+        "titleKh": "Khmer local headline, plain and concise",
         "description": "2-3 sentences",
-        "descriptionTh": "Thai translation",
-        "descriptionKh": "Khmer translation",
+        "descriptionTh": "Thai local description, short everyday sentences",
+        "descriptionKh": "Khmer local description, short everyday sentences",
         "category": "military|diplomatic|humanitarian|political",
         "importance": 0-100,
         "sourceSnippet": "Key quote"

@@ -134,6 +134,13 @@ test("curation prompts and parsers are hardened against prose and bad escapes", 
   assert.match(aiUtils, /replace\(\/\\\\\(\?=\[!<>&`\]\)\/g, ""\)/);
   assert.match(aiUtils, /replace\(\/\\\\\(\?!\["\\\\\/bfnrtu\]\)\/g, "\\\\\\\\"/);
   assert.match(aiUtils, /fenced ```json blocks first/);
+  assert.match(aiUtils, /export const TRANSLATION_STYLE_GUIDE/);
+  assert.match(aiUtils, /LANGUAGE & TRANSLATION VOICE/);
+  assert.match(aiUtils, /careful local translator/);
+  assert.match(aiUtils, /normal Thai\/Khmer/);
+  assert.match(aiUtils, /Use English numerals \(0-9\)/);
+  assert.match(research, /\$\{TRANSLATION_STYLE_GUIDE\}/);
+  assert.match(historian, /\$\{TRANSLATION_STYLE_GUIDE\}/);
   assert.doesNotMatch(historian, /List each article with your analysis plan FIRST/);
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
 });

@@ -10,7 +10,7 @@ import { findVerifiedDuplicateCandidate, type DuplicateCandidate } from "./dedup
 
 // Use gemini-studio-api helpers
 import { MODELS, FALLBACK_CHAINS } from "./config";
-import { callGeminiStudio, callGeminiStudioWithSelfHealing, callGeminiStudioWithFallback, formatTimelineEvent } from "./ai_utils";
+import { callGeminiStudio, callGeminiStudioWithSelfHealing, callGeminiStudioWithFallback, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
 
 
 // =============================================================================
@@ -418,11 +418,7 @@ SCORING GUIDE:
 - DO NOT INFER or EXTRAPOLATE beyond what's written
 - If unsure, keep summary SHORTER and more conservative
 
-LANGUAGE & TRANSLATION:
-- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
-- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
-- AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
-- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
+${TRANSLATION_STYLE_GUIDE}
 
 OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
 \`\`\`json
@@ -430,16 +426,16 @@ OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
   "newArticles": [
     {
       "title": "English headline",
-      "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
-      "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
+      "titleTh": "Thai local headline, plain and concise",
+      "titleKh": "Khmer local headline, plain and concise",
       "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time as shown on the page - Thailand/Cambodia are both UTC+7)",
       "sourceUrl": "https://actual-url.com/path",
       "source": "Publication Name",
       "category": "military|political|humanitarian|diplomatic",
       "credibility": 60,
       "summary": "English summary",
-      "summaryTh": "สรุปข่าวภาษาไทย",
-      "summaryKh": "សង្ខេបជាភាសាខ្មែរ"
+      "summaryTh": "Thai local summary, 1-2 short sentences",
+      "summaryKh": "Khmer local summary, 1-2 short sentences"
     }
   ],
   "flaggedTitles": []
@@ -614,11 +610,7 @@ Don't just score based on source name. Analyze the CONTENT:
 - DO NOT INFER or EXTRAPOLATE beyond what's written
 - If unsure, keep summary SHORTER and more conservative
 
-LANGUAGE & TRANSLATION:
-- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
-- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
-- AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
-- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
+${TRANSLATION_STYLE_GUIDE}
 
 OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
 \`\`\`json
@@ -626,16 +618,16 @@ OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
   "newArticles": [
     {
       "title": "English headline",
-      "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
-      "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
+      "titleTh": "Thai local headline, plain and concise",
+      "titleKh": "Khmer local headline, plain and concise",
       "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time as shown on the page - Thailand is UTC+7)",
       "sourceUrl": "https://actual-url.com/path",
       "source": "Publication Name",
       "category": "military|political|humanitarian|diplomatic",
       "credibility": 60,
       "summary": "English summary",
-      "summaryTh": "สรุปข่าวภาษาไทย",
-      "summaryKh": "សង្ខេបជាភាសាខ្មែរ"
+      "summaryTh": "Thai local summary, 1-2 short sentences",
+      "summaryKh": "Khmer local summary, 1-2 short sentences"
     }
   ],
   "flaggedTitles": []
@@ -815,11 +807,7 @@ SCORING GUIDE:
 - DO NOT INFER or EXTRAPOLATE beyond what's written
 - If unsure, keep summary SHORTER and more conservative
 
-LANGUAGE & TRANSLATION:
-- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
-- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
-- AVOID literal translations of Western political jargon (e.g., "gray zone", "container diplomacy"). Instead, describe the physical action clearly (e.g., "blocking the border with containers") so average civilians understand perfectly.
-- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
+${TRANSLATION_STYLE_GUIDE}
 
 OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
 \`\`\`json
@@ -827,16 +815,16 @@ OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
   "newArticles": [
     {
       "title": "English headline",
-      "titleTh": "Thai translation: หัวข้อข่าวภาษาไทย",
-      "titleKh": "Khmer translation: ចំណងជើងជាភាសាខ្មែរ",
+      "titleTh": "Thai local headline, plain and concise",
+      "titleKh": "Khmer local headline, plain and concise",
       "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time - convert to Thailand/Cambodia time UTC+7)",
       "sourceUrl": "https://actual-url.com/path",
       "source": "Publication Name",
       "category": "military|political|humanitarian|diplomatic",
       "credibility": 85,
       "summary": "English summary",
-      "summaryTh": "สรุปข่าวภาษาไทย",
-      "summaryKh": "សង្ខេបជាភាសាខ្មែរ"
+      "summaryTh": "Thai local summary, 1-2 short sentences",
+      "summaryKh": "Khmer local summary, 1-2 short sentences"
     }
   ],
   "flaggedTitles": []
@@ -1398,10 +1386,7 @@ Each article has a credibility score. Weight your analysis accordingly:
 - cred:0-19: UNRELIABLE - do not use as basis for facts, only note the narrative exists
 If high-cred and low-cred articles conflict, TRUST THE HIGH-CRED SOURCE.
 
-🌐 LANGUAGE & TRANSLATION:
-- Write for a GENERAL AUDIENCE. If a teenager wouldn't understand a word, use a simpler one.
-- Thai/Khmer: Don't translate. RE-TELL the story as if you ARE a Thai/Cambodian person explaining the news to your friend over coffee. Use the words THEY would use, not dictionary equivalents.
-- ALWAYS use English numerals (0-9) in translations - NEVER Thai ๑๒๓ or Khmer ១២៣
+${TRANSLATION_STYLE_GUIDE}
 
 ═══════════════════════════════════════════════════════════════
 🔶 LOW-CREDIBILITY / UNVERIFIED ARTICLES (analyze for spin & framing):
@@ -1499,42 +1484,42 @@ ANALYZE ALL PERSPECTIVES. Return EXACTLY one fenced \`\`\`json code block and NO
 {
   "cambodia": {
     "officialNarrative": "English (2-3 sentences, max 50 words). Key claims from Cambodian media only.",
-    "officialNarrativeTh": "Thai translation",
-    "officialNarrativeKh": "Khmer translation",
+    "officialNarrativeTh": "Thai local wording (2 short sentences, plain everyday words)",
+    "officialNarrativeKh": "Khmer local wording (2 short sentences, plain everyday words)",
     "narrativeSource": "Primary source(s)",
     "militaryIntensity": 50,
     "militaryPosture": "PEACEFUL|DEFENSIVE|ESCALATED|AGGRESSIVE",
     "postureLabel": "Short phrase (max 4 words)",
-    "postureLabelTh": "Thai translation",
-    "postureLabelKh": "Khmer translation",
+    "postureLabelTh": "Thai plain label (max 4 words)",
+    "postureLabelKh": "Khmer plain label (max 4 words)",
     "postureRationale": "English 1-2 sentences. WHY this posture? Focus on actions, not sources.",
-    "postureRationaleTh": "Thai translation",
-    "postureRationaleKh": "Khmer translation",
+    "postureRationaleTh": "Thai local wording (1-2 short sentences; explain jargon simply)",
+    "postureRationaleKh": "Khmer local wording (1-2 short sentences; explain jargon simply)",
     "biasNotes": "Key themes emphasized",
     "confidence": 75,
     "confidenceRationale": "Brief justification"
   },
   "thailand": {
     "officialNarrative": "English (2-3 sentences, max 50 words). Key claims from Thai media only.",
-    "officialNarrativeTh": "Thai translation",
-    "officialNarrativeKh": "Khmer translation",
+    "officialNarrativeTh": "Thai local wording (2 short sentences, plain everyday words)",
+    "officialNarrativeKh": "Khmer local wording (2 short sentences, plain everyday words)",
     "narrativeSource": "Primary source(s)",
     "militaryIntensity": 50,
     "militaryPosture": "PEACEFUL|DEFENSIVE|ESCALATED|AGGRESSIVE",
     "postureLabel": "Short phrase (max 4 words)",
-    "postureLabelTh": "Thai translation",
-    "postureLabelKh": "Khmer translation",
+    "postureLabelTh": "Thai plain label (max 4 words)",
+    "postureLabelKh": "Khmer plain label (max 4 words)",
     "postureRationale": "English 1-2 sentences. WHY this posture? Focus on actions, not sources.",
-    "postureRationaleTh": "Thai translation",
-    "postureRationaleKh": "Khmer translation",
+    "postureRationaleTh": "Thai local wording (1-2 short sentences; explain jargon simply)",
+    "postureRationaleKh": "Khmer local wording (1-2 short sentences; explain jargon simply)",
     "biasNotes": "Key themes emphasized",
     "confidence": 75,
     "confidenceRationale": "Brief justification"
   },
   "neutral": {
     "generalSummary": "English (3-5 sentences, 50-80 words). Summarize BOTH sides' key actions, humanitarian impact, diplomatic developments. Compare claims. Note where sources agree/disagree. Be the impartial commentator giving the full picture.",
-    "generalSummaryTh": "Thai translation",
-    "generalSummaryKh": "Khmer translation",
+    "generalSummaryTh": "Thai local summary (3-5 short sentences, plain everyday words, explain hard terms)",
+    "generalSummaryKh": "Khmer local summary (3-5 short sentences, plain everyday words, explain hard terms)",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
     "keyEvents": [
       "2-5 SHORT English headlines (adjust based on summary length!)",
@@ -2753,13 +2738,12 @@ OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
 }
 \`\`\`
 
-🌐 TRANSLATION RULES (for correctData):
-- Translate the MEANING and INTENT, not literal word-for-word
-- Understand the context first, then express the same idea naturally in the target language
-- Thai: natural, conversational everyday language - how a regular Thai person would explain to a friend
-- Khmer: natural, conversational everyday language - how a Cambodian would explain to family
-- ALWAYS use English numerals (0-9) - NEVER Thai ๑๒๓ or Khmer ១២៣
-- Prioritize clear communication over literal accuracy
+${TRANSLATION_STYLE_GUIDE}
+
+For correctData translation fields:
+- Only include translated title/summary fields when you are correcting them.
+- Titles should be clear local headlines, usually 8-14 words.
+- Summaries should be 1-2 short sentences. If the English source uses jargon, explain it in plain local words.
 
 ⚠️ DOUBLE-CHECK: Before outputting JSON, verify that:
 - Each result's articleIndex matches the article you analyzed
@@ -3385,6 +3369,8 @@ FOCUS:
 CREDIBILITY SCORING & SUMMARY RULES:
 (Same as standard curation - be critical, don't embellish)
 
+${TRANSLATION_STYLE_GUIDE}
+
 OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
 \`\`\`json
 {
@@ -3392,8 +3378,8 @@ OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
     {
       "title": "Headline",
       "titleEn": "English Headline",
-      "titleTh": "Thai Headline",
-      "titleKh": "Khmer Headline",
+      "titleTh": "Thai local headline, plain and concise",
+      "titleKh": "Khmer local headline, plain and concise",
       "publishedAt": "${targetDate}THH:mm:ss+07:00 (Estimate time if unknown, but KEEP DATE CORRECT)",
       "sourceUrl": "https://...",
       "source": "Publication Name",
@@ -3401,8 +3387,8 @@ OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
       "credibility": 80,
       "summary": "Summary of event on ${targetDate}...",
       "summaryEn": "Summary in English",
-      "summaryTh": "Summary in Thai",
-      "summaryKh": "Summary in Khmer"
+      "summaryTh": "Thai local summary, 1-2 short sentences",
+      "summaryKh": "Khmer local summary, 1-2 short sentences"
     }
   ],
   "flaggedTitles": []

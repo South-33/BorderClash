@@ -46,6 +46,16 @@ export function resolveGeminiModel(model: string): { model: string; thinkingLeve
     return { model };
 }
 
+export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
+- Write like a careful local translator, not a literal dictionary. Understand the event first, then retell it in normal Thai/Khmer.
+- Keep it short and clear for a broad local audience, but never compress meaning until it becomes vague.
+- Prefer everyday concrete words. When a legal, military, or diplomatic term matters, keep the meaning and add a short plain explanation in the sentence.
+- Use technical terms and acronyms only when they genuinely help accuracy. Otherwise, say what the thing means or why it matters in simple words.
+- Choose the natural local phrase a thoughtful news editor would use in daily speech. Avoid textbook-style abstractions, word-for-word calques, and dramatic partisan wording.
+- Preserve official names and place names when known; keep the same name consistent across Thai and Khmer fields.
+- Use English numerals (0-9), not Thai or Khmer numerals.
+- Prefer short sentences. One idea per sentence.`;
+
 function buildGeminiStudioRequest(model: string, content: string, existingRequestId?: string): GeminiRequestInit {
     const requestId = existingRequestId || randomUUID();
     const projectName = GEMINI_PROJECT_NAME;

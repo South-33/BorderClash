@@ -230,7 +230,7 @@ export const TRANSLATIONS = {
         sourcesTracked: "แหล่งข่าว",
         viewMode: "โหมดดูข้อมูล",
         analysis: "วิเคราะห์",
-        timeline: "ไทม์ไลน์",
+        timeline: "ปฏิทิน",
         losses: "ความสูญเสีย",
         guide: "คู่มือ",
         language: "ภาษา",
@@ -322,7 +322,7 @@ export const TRANSLATIONS = {
         territoryForeign: "ในเขตเพื่อนบ้าน",
         postureRationale: "ทำไม?",
         // Timeline & Map
-        historicalTimeline: "ลำดับเหตุการณ์ยุทธการ", // Operational Timeline
+        historicalTimeline: "เหตุการณ์ตามวันที่", // Events by date
         noTimelineEvents: "ยังไม่มีรายงานข่าวกรอง",
         runHistorian: "ระบบกำลังรวบรวมข้อมูลเหตุการณ์...",
         impact: "ผลกระทบ",
@@ -414,7 +414,7 @@ export const TRANSLATIONS = {
         sourcesTracked: "ប្រភពព័ត៌មាន",
         viewMode: "មើលជា",
         analysis: "ការវិភាគ",
-        timeline: "កាលប្បវត្តិ",
+        timeline: "ប្រតិទិន",
         losses: "ការខូចខាត",
         guide: "ការណែនាំ",
         language: "ភាសា",
@@ -506,7 +506,7 @@ export const TRANSLATIONS = {
         territoryForeign: "ទឹកដីគេ",
         postureRationale: "ហេតុអ្វី?",
         // Timeline & Map
-        historicalTimeline: "កាលប្បវត្តិប្រតិបត្តិការ", // Operational Timeline
+        historicalTimeline: "ព្រឹត្តិការណ៍តាមថ្ងៃ", // Events by day
         noTimelineEvents: "មិនទាន់មានរបាយការណ៍ចារកម្ម",
         runHistorian: "កំពុងប្រមូលទិន្នន័យ...",
         impact: "សារៈសំខាន់",
