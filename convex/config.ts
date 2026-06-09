@@ -9,17 +9,20 @@ export const GEMINI_STUDIO_API_URL = process.env.GEMINI_STUDIO_API_URL || "http:
 export const GEMINI_PROJECT_NAME = process.env.GEMINI_PROJECT_NAME || "borderclash";
 export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash-convex";
 
-// Model roles - change the values here to swap models across the entire app
+// Model roles - suffixes are resolved by ai_utils into model + thinking_level.
+// "*-high" maps to Gemini Studio Extended thinking.
 export const MODELS = {
-    fast: "fast",         // Used for: news curation, quick tasks
-    thinking: "thinking", // Used for: synthesis, historian, verification, analysis
-    pro: "pro",           // Used for: fallback when thinking is rate limited
-};
+    curation: "fast-high",     // Gemini Flash Lite with Extended thinking
+    fast: "fast-high",         // Back-compat alias for quick/curation work
+    thinking: "thinking-high", // Gemini 3.5 Flash with Extended thinking
+    pro: "pro-high",           // Pro fallback with Extended thinking
+} as const;
 
 // Fallback chains for rate limit recovery
-// Critical tasks try thinking → pro → fast
-// Standard tasks just use fast (infinite rate limits)
+// Critical tasks prefer Gemini 3.5 Flash Extended, then fall back only if needed.
+// Curation uses Flash Lite Extended.
 export const FALLBACK_CHAINS = {
-    critical: ["thinking", "pro", "fast"],  // Agent/Historian/Synthesis
-    standard: ["fast"],                     // Planner, JSON repair, curation
+    critical: [MODELS.thinking, MODELS.pro, MODELS.curation], // Agent/Historian/Synthesis/verification
+    standard: [MODELS.thinking],                              // Planner, JSON repair, general tasks
+    curation: [MODELS.curation],
 } as const;

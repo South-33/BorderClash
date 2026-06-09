@@ -290,15 +290,17 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
     let currentPrompt = prompt;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        console.log(`🧠 [PLANNER] Attempt ${attempt}/${MAX_RETRIES}...`);
+        if (attempt > 1) {
+            console.log(`[PLANNER] retrying attempt=${attempt}/${MAX_RETRIES}`);
+        }
 
         try {
-            const response = await callGeminiStudio(currentPrompt, MODELS.fast, 2);
+            const response = await callGeminiStudio(currentPrompt, MODELS.thinking, 2);
 
             // Extract JSON
             const jsonStr = extractJsonPayload(response);
             if (!jsonStr) {
-                console.log(`❌ [PLANNER] Attempt ${attempt}: No JSON payload found`);
+                console.warn(`[PLANNER] no_json attempt=${attempt}/${MAX_RETRIES}`);
                 if (attempt < MAX_RETRIES) {
                     currentPrompt = "Your response had no valid JSON payload. Output ONLY one fenced ```json code block with {\"selectedArticles\": [\"Title 1\", \"Title 2\"], \"reasoning\": \"...\"}. Select 5-10 from the list you already saw.";
                     continue;
@@ -308,20 +310,17 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
 
             const result = tryParseJson(jsonStr);
             if (result && result.selectedArticles && Array.isArray(result.selectedArticles)) {
-                console.log(`✅ [PLANNER] Selected ${result.selectedArticles.length} articles`);
-                if (result.reasoning) console.log(`   Reasoning: ${result.reasoning}`);
                 return result.selectedArticles;
             }
 
             // Wrong structure - retry with feedback
-            console.log(`❌ [PLANNER] Attempt ${attempt}: Wrong JSON structure (missing selectedArticles)`);
-            console.log(`   Got: ${jsonStr.substring(0, 150)}...`);
+            console.warn(`[PLANNER] invalid_structure attempt=${attempt}/${MAX_RETRIES} sample=${jsonStr.substring(0, 150)}`);
             if (attempt < MAX_RETRIES) {
                 currentPrompt = `Wrong format. You returned: ${jsonStr.substring(0, 200)}...\n\nOutput ONLY one fenced \`\`\`json code block with {"selectedArticles": ["Exact Title 1", "Exact Title 2", ...], "reasoning": "..."}.`;
             }
         } catch (error) {
             // Network error - wait before retry
-            console.log(`❌ [PLANNER] Attempt ${attempt} network error: ${error}`);
+            console.warn(`[PLANNER] network_error attempt=${attempt}/${MAX_RETRIES} error=${error}`);
             if (attempt < MAX_RETRIES) {
                 await new Promise(r => setTimeout(r, 3000));
                 currentPrompt = prompt; // Reset to original prompt for network retries
@@ -329,7 +328,7 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
         }
     }
 
-    console.log("ℹ️ [PLANNER] All attempts failed - falling back to default article selection");
+    console.warn("[PLANNER] exhausted fallback=default_article_selection");
     return null;
 }
 
@@ -499,7 +498,9 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
     let currentPrompt = prompt;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        console.log(`📜 [HISTORIAN] Attempt ${attempt}/${MAX_RETRIES}...`);
+        if (attempt > 1) {
+            console.log(`[HISTORIAN] retrying attempt=${attempt}/${MAX_RETRIES}`);
+        }
 
         try {
             const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, 2, "HISTORIAN");
@@ -508,7 +509,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
             const jsonStr = extractJsonPayload(response);
 
             if (!jsonStr) {
-                console.log(`❌ [HISTORIAN] Attempt ${attempt}: No JSON found`);
+                console.warn(`[HISTORIAN] no_json attempt=${attempt}/${MAX_RETRIES}`);
                 if (attempt < MAX_RETRIES) {
                     currentPrompt = "Your response had no valid JSON. Output ONLY one fenced ```json code block with {\"actions\": [{\"articleTitle\": \"...\", \"action\": \"create_event|archive|discard\", \"eventData\": {...}}], \"summary\": \"...\"}. Process the articles you already saw.";
                     continue;
@@ -521,33 +522,32 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
 
             // If parse failed, try AI repair
             if (!result) {
-                console.log(`🔧 [HISTORIAN] Attempt ${attempt}: JSON parse failed, asking AI to repair...`);
+                console.warn(`[HISTORIAN] json_parse_failed attempt=${attempt}/${MAX_RETRIES} repair=true`);
                 try {
                     const repairPrompt = `Fix this broken JSON and output ONLY one fenced \`\`\`json code block:\n\n${jsonStr.substring(0, 2000)}`;
-                    const repairResponse = await callGeminiStudio(repairPrompt, MODELS.fast, 1);
+                    const repairResponse = await callGeminiStudio(repairPrompt, MODELS.thinking, 1);
                     const repairedJson = extractJsonPayload(repairResponse);
                     if (repairedJson) {
                         result = tryParseJson(repairedJson);
-                        if (result) console.log(`✅ [HISTORIAN] JSON repaired by AI`);
+                        if (result) console.log("[HISTORIAN] json_repaired=true");
                     }
                 } catch (repairError) {
-                    console.log(`❌ [HISTORIAN] AI repair failed: ${repairError}`);
+                    console.warn(`[HISTORIAN] json_repair_failed error=${repairError}`);
                 }
             }
 
             // Validate result structure
             if (result && result.actions && Array.isArray(result.actions)) {
-                console.log(`✅ [HISTORIAN] Got ${result.actions.length} actions`);
                 return result;
             }
 
-            console.log(`❌ [HISTORIAN] Attempt ${attempt}: Invalid structure (missing actions array)`);
+            console.warn(`[HISTORIAN] invalid_structure attempt=${attempt}/${MAX_RETRIES} missing=actions`);
             if (attempt < MAX_RETRIES) {
                 currentPrompt = "Wrong format. Output ONLY one fenced ```json code block with {\"actions\": [{\"articleTitle\": \"...\", \"action\": \"...\", \"eventData\": {...}}], \"summary\": \"...\"}.";
             }
         } catch (error) {
             // Network error - wait before retry
-            console.log(`❌ [HISTORIAN] Attempt ${attempt} network error: ${error}`);
+            console.warn(`[HISTORIAN] network_error attempt=${attempt}/${MAX_RETRIES} error=${error}`);
             if (attempt < MAX_RETRIES) {
                 await new Promise(r => setTimeout(r, 5000));
                 currentPrompt = prompt; // Reset to original for network retries
@@ -555,8 +555,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         }
     }
 
-    console.log("❌ [HISTORIAN] All attempts failed");
-    console.log("ℹ️ [HISTORIAN] No timeline changes will be made - existing events preserved");
+    console.warn("[HISTORIAN] exhausted preservedExisting=true");
     return null;
 }
 
@@ -574,6 +573,9 @@ export type HistorianCycleResult = {
     archived: number;
     discarded?: number;
     credibilityUpdated?: number;
+    conflictsFlagged?: number;
+    missingActions?: number;
+    actionWarnings?: number;
 };
 
 export async function runHistorianCycleInternal(
@@ -583,47 +585,36 @@ export async function runHistorianCycleInternal(
         cachedNewsContext?: any;
     },
 ): Promise<HistorianCycleResult> {
-    console.log("═══════════════════════════════════════════════════════════════");
-    console.log("📜 HISTORIAN CYCLE STARTED (Two-Phase)");
-    console.log("═══════════════════════════════════════════════════════════════");
-
     // 1. Get ALL unprocessed articles (not just 10)
     const allArticles = await ctx.runQuery(internal.api.getUnprocessedForTimeline, {
         batchSize: 200,  // Get all of them
     });
 
     if (allArticles.length === 0) {
-        console.log("✅ No unprocessed articles. Historian is idle.");
+        console.log("[HISTORIAN] idle unprocessed=0");
         return { processed: 0, eventsCreated: 0, archived: 0 };
     }
-
-    console.log(`📰 Found ${allArticles.length} unprocessed articles total`);
 
     // 2. Get existing timeline for context (use cache if provided)
     const timeline = cachedTimeline ?? await ctx.runQuery(internal.api.getRecentTimelineContextForHistorian, {
         limit: 150  // Recent events only - older events rarely need updates
     });
-    console.log(`📜 Timeline context: ${timeline.length} recent events${cachedTimeline ? " (cached)" : ""}`);
 
     // 3. Get timeline stats (always fresh - small query)
     const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
-    console.log(`📊 Timeline stats: ${timelineStats.totalEvents} events, avg importance: ${timelineStats.avgImportance}`);
 
     // 4. Get recent news context (use cache if provided)
     // This gives the Historian situational awareness without processing overhead
     const newsContext = cachedNewsContext ?? await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
-    console.log(`📰 News context: TH=${newsContext.TH.length}, KH=${newsContext.KH.length}, INT=${newsContext.INT.length}${cachedNewsContext ? " (cached)" : ""}`);
+    console.log(`[HISTORIAN] context unprocessed=${allArticles.length} timeline=${timeline.length} totalEvents=${timelineStats.totalEvents} avgImportance=${timelineStats.avgImportance} news=th:${newsContext.TH.length},kh:${newsContext.KH.length},int:${newsContext.INT.length} cachedTimeline=${cachedTimeline ? "true" : "false"} cachedNews=${cachedNewsContext ? "true" : "false"}`);
 
     // ====================================================================
     // PHASE 1: PLANNER - Pick up to 10 most important articles
     // ====================================================================
-    console.log("\n🧠 [PHASE 1] PLANNER - Selecting best articles to process...");
-
     let selectedTitles: string[];
 
     if (allArticles.length <= 10) {
         // If 10 or fewer, process all
-        console.log(`   Only ${allArticles.length} articles - processing all`);
         selectedTitles = allArticles.map((a: any) => a.title);
     } else {
         // Pre-filter to top 50 by credibility to avoid overwhelming the Planner
@@ -633,7 +624,7 @@ export async function runHistorianCycleInternal(
             : allArticles;
 
         if (allArticles.length > maxPlannerArticles) {
-            console.log(`   ⚠️ ${allArticles.length} articles too many - sending top ${maxPlannerArticles} to Planner`);
+            console.log(`[PLANNER] limited_input total=${allArticles.length} sent=${maxPlannerArticles}`);
         }
 
         // Run Planner to pick 5-10
@@ -654,7 +645,7 @@ export async function runHistorianCycleInternal(
         );
 
         if (!plannerSelection || plannerSelection.length === 0) {
-            console.log("⚠️ Planner failed, falling back to first 10 by credibility");
+            console.warn("[PLANNER] selection_failed fallback=first_10_by_credibility");
             selectedTitles = allArticles.slice(0, 10).map((a: any) => a.title);
         } else {
             selectedTitles = plannerSelection;
@@ -682,23 +673,17 @@ export async function runHistorianCycleInternal(
 
     // If fuzzy matching found nothing, log what planner returned vs what we have
     if (selectedArticles.length === 0 && selectedTitles.length > 0) {
-        console.log("⚠️ [PLANNER] No titles matched! Planner returned:");
-        selectedTitles.slice(0, 3).forEach(t => console.log(`   → "${t.substring(0, 60)}..."`));
-        console.log("   DB has titles like:");
-        allArticles.slice(0, 3).forEach((a: any) => console.log(`   → "${a.title.substring(0, 60)}..."`));
+        const plannerSamples = selectedTitles.slice(0, 3).map(t => t.substring(0, 60)).join(" | ");
+        const dbSamples = allArticles.slice(0, 3).map((a: any) => a.title.substring(0, 60)).join(" | ");
+        console.warn(`[PLANNER] no_title_matches fallback=first_10_by_credibility plannerSamples="${plannerSamples}" dbSamples="${dbSamples}"`);
 
         // Fallback: just use first 10 articles
-        console.log("   → Falling back to first 10 articles by credibility");
         selectedArticles = allArticles.slice(0, 10);
     }
-
-    console.log(`\n✅ [PHASE 1 COMPLETE] Selected ${selectedArticles.length} articles to process`);
 
     // ====================================================================
     // PHASE 2: HISTORIAN - Process the selected articles
     // ====================================================================
-    console.log("\n📜 [PHASE 2] HISTORIAN - Processing selected articles...");
-
     const historianResult = await runHistorian(
         selectedArticles.map((a: any) => ({
             title: a.title,
@@ -730,12 +715,9 @@ export async function runHistorianCycleInternal(
 
 
     if (!historianResult || !historianResult.actions) {
-        console.log("❌ [HISTORIAN] No valid result from AI");
-        console.log("ℹ️ [HISTORIAN] No timeline changes will be made - existing events preserved");
+        console.warn("[HISTORIAN] no_valid_result preservedExisting=true");
         return { processed: 0, eventsCreated: 0, eventsUpdated: 0, sourcesMerged: 0, archived: 0, discarded: 0 };
     }
-
-    console.log(`🎯 Historian returned ${historianResult.actions.length} actions`);
 
     // 5. Execute actions
     let eventsCreated = 0;
@@ -745,6 +727,9 @@ export async function runHistorianCycleInternal(
     let archived = 0;
     let discarded = 0;
     let credibilityUpdated = 0;
+    let conflictsFlagged = 0;
+    let missingActions = 0;
+    let actionWarnings = 0;
 
     // Helper to decode HTML entities (AI sometimes returns &quot; instead of ")
     const decodeHtmlEntities = (str: string) => {
@@ -763,7 +748,7 @@ export async function runHistorianCycleInternal(
     for (const action of historianResult.actions) {
         // Safety check for missing title
         if (!action.articleTitle) {
-            console.log(`⚠️ Unprocessable action (missing articleTitle): ${JSON.stringify(action)}`);
+            actionWarnings++;
             continue;
         }
 
@@ -772,7 +757,7 @@ export async function runHistorianCycleInternal(
         returnedTitles.add(searchTitle);
         const article = selectedArticles.find((a: any) => a.title === searchTitle);
         if (!article) {
-            console.log(`⚠️ Article not found: "${action.articleTitle}"`);
+            actionWarnings++;
             continue;
         }
 
@@ -807,7 +792,6 @@ export async function runHistorianCycleInternal(
                             snippet: action.eventData.sourceSnippet,
                         }],
                         });
-                    console.log(`📌 Created event: "${action.eventData.title}" (importance: ${action.eventData.importance})`);
                     eventsCreated++;
                 }
                 break;
@@ -843,10 +827,9 @@ export async function runHistorianCycleInternal(
                                 snippet: action.sourceSnippet,
                             },
                             });
-                        console.log(`➕ Merged source into: "${action.targetEventTitle}"`);
                         sourcesMerged++;
                     } else {
-                        console.log(`⚠️ Target event not found: "${action.targetEventTitle}"`);
+                        actionWarnings++;
                     }
                 }
                 break;
@@ -858,7 +841,6 @@ export async function runHistorianCycleInternal(
                         title: article.title,
                     status: "archived",
                     });
-                console.log(`📦 Archived: "${article.title}"`);
                 archived++;
                 break;
 
@@ -869,7 +851,6 @@ export async function runHistorianCycleInternal(
                         title: article.title,
                     status: "false",
                     });
-                console.log(`🗑️ Discarded: "${article.title}"`);
                 discarded++;
                 break;
 
@@ -905,10 +886,9 @@ export async function runHistorianCycleInternal(
                         updates,
                         reason: action.reasoning || "Updated by Historian based on new information",
                         });
-                    console.log(`✏️ Updated event: "${action.targetEventTitle}" - ${action.reasoning || "no reason given"}`);
                     eventsUpdated++;
                 } else {
-                    console.log(`⚠️ update_event missing targetEventTitle or eventUpdates`);
+                    actionWarnings++;
                 }
                 break;
 
@@ -920,7 +900,7 @@ export async function runHistorianCycleInternal(
                     hasConflict: true,
                     conflictsWith: action.targetEventTitle,
                     });
-                console.log(`⚠️ Flagged conflict: "${article.title}" vs "${action.targetEventTitle}"`);
+                conflictsFlagged++;
                 break;
 
             case "delete_event":
@@ -930,30 +910,30 @@ export async function runHistorianCycleInternal(
                         eventTitle: action.targetEventTitle,
                         reason: action.reasoning,
                         });
-                    console.log(`🗑️ DELETED event: "${action.targetEventTitle}" - Reason: ${action.reasoning}`);
                     eventsDeleted++;
                 } else {
-                    console.log(`⚠️ delete_event missing targetEventTitle or reasoning`);
+                    actionWarnings++;
                 }
+                break;
+
+            default:
+                actionWarnings++;
                 break;
         }
 
         // UPDATE CREDIBILITY - Historian verifies and adjusts credibility for every article
         if (action.verifiedCredibility !== undefined) {
             try {
-                const oldCred = article.credibility || 50;
                 const newCred = Math.max(0, Math.min(100, action.verifiedCredibility));
-                const credDiff = newCred - oldCred;
 
                 await ctx.runMutation(internal.api.updateArticleCredibility, {
                     country: article.country as "thailand" | "cambodia" | "international",
                     title: article.title,
                     credibility: newCred,
                 });
-                const arrow = credDiff > 0 ? "up" : credDiff < 0 ? "down" : "same";
-                console.log(`   Credibility: ${oldCred} ${arrow} ${newCred} | ${action.credibilityReason || ""}`);
                 credibilityUpdated++;
             } catch (error) {
+                actionWarnings++;
                 console.error(`[HISTORIAN] Credibility update failed for "${article.title}":`, error);
             }
         }
@@ -964,6 +944,7 @@ export async function runHistorianCycleInternal(
             title: article.title,
         });
         } catch (error) {
+            actionWarnings++;
             console.error(`[HISTORIAN] Failed to apply action "${action.action}" for "${article.title}":`, error);
             continue;
         }
@@ -975,7 +956,7 @@ export async function runHistorianCycleInternal(
     const processedTitles = returnedTitles;
     for (const article of selectedArticles) {
         if (!processedTitles.has(article.title)) {
-            console.log(`⚠️ AI forgot to return action for "${article.title}" - marking as processed anyway`);
+            missingActions++;
             await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
                     country: article.country as "thailand" | "cambodia" | "international",
                     title: article.title,
@@ -983,16 +964,7 @@ export async function runHistorianCycleInternal(
         }
     }
 
-    console.log("\n═══════════════════════════════════════════════════════════════");
-    console.log(`📜 HISTORIAN CYCLE COMPLETE`);
-    console.log(`   Events created: ${eventsCreated}`);
-    console.log(`   Events updated: ${eventsUpdated}`);
-    console.log(`   Events deleted: ${eventsDeleted}`);
-    console.log(`   Sources merged: ${sourcesMerged}`);
-    console.log(`   Articles archived: ${archived}`);
-    console.log(`   Articles discarded: ${discarded}`);
-    console.log(`   Credibility updated: ${credibilityUpdated}`);
-    console.log("═══════════════════════════════════════════════════════════════");
+    console.log(`[HISTORIAN] complete unprocessed=${allArticles.length} selected=${selectedArticles.length} actions=${historianResult.actions.length} created=${eventsCreated} updated=${eventsUpdated} deleted=${eventsDeleted} merged=${sourcesMerged} archived=${archived} discarded=${discarded} conflicts=${conflictsFlagged} credibilityUpdated=${credibilityUpdated} missingActions=${missingActions} warnings=${actionWarnings}`);
 
     return {
         processed: selectedArticles.length,  // Return actual selected count, not just AI response count
@@ -1003,6 +975,9 @@ export async function runHistorianCycleInternal(
         archived,
         discarded,
         credibilityUpdated,
+        conflictsFlagged,
+        missingActions,
+        actionWarnings,
     };
 
 }

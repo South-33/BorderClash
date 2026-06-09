@@ -173,20 +173,17 @@ async function scheduleStepRetry(
 export const maybeRunCycle = internalAction({
     args: {},
     handler: async (ctx): Promise<{ skipped: boolean; reason?: string; ran?: boolean }> => {
-        console.log("⏰ [SCHEDULER] Heartbeat check...");
-
         const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
         const now = Date.now();
 
         // If system is paused, skip
         if (stats?.isPaused) {
-            console.log("⏸️ [SCHEDULER] System is paused, skipping");
             return { skipped: true, reason: "paused" };
         }
 
         // If skipNextCycle is set, skip this one and clear the flag
         if (stats?.skipNextCycle) {
-            console.log("⏭️ [SCHEDULER] Skip flag set, skipping this cycle");
+            console.log("[SCHEDULER] skipped reason=skipNextCycle");
             await ctx.runMutation(internal.api.clearSkipNextCycle, {});
             return { skipped: true, reason: "skipNextCycle flag" };
         }
@@ -196,12 +193,11 @@ export const maybeRunCycle = internalAction({
 
         if (now < nextRunAt) {
             const hoursUntil = Math.round((nextRunAt - now) / 3600000 * 10) / 10;
-            console.log(`⏰ [SCHEDULER] Not yet time. Next run in ${hoursUntil}h (${new Date(nextRunAt).toLocaleString()})`);
             return { skipped: true, reason: `not yet time, ${hoursUntil}h remaining` };
         }
 
         // Time to run!
-        console.log("🚀 [SCHEDULER] Time to run! Triggering full research cycle...");
+        console.log("[SCHEDULER] due action=runResearchCycle");
         await ctx.runAction(internal.research.runResearchCycle, {});
 
         return { skipped: false, ran: true };
@@ -982,7 +978,7 @@ async function processNewsResponse(
             console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: curation)...`);
 
             // 1. CALL API - Using curation model mapping
-            rawResponse = await callGeminiStudio(currentPrompt, MODELS.fast, 1);
+            rawResponse = await callGeminiStudio(currentPrompt, MODELS.curation, 1);
             rawResponse = rawResponse
                 .replace(/\\<json>/gi, "<json>")
                 .replace(/\\<\/json>/gi, "</json>");
@@ -1210,14 +1206,10 @@ Please output the FIXED JSON only:
 export const synthesizeAll = internalAction({
     args: {},
     handler: async (ctx): Promise<any> => {
-        console.log("🧠 [SYNTHESIS] Running combined analysis via Ghost API...");
-
         // ==================== TIMELINE CONTEXT (PRIMARY SOURCE) ====================
         // Timeline events are the verified, structured "memory" of the conflict
         const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 100 });
         const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
-
-        console.log(`📜 Timeline: ${timeline.length} events (avg importance: ${timelineStats.avgImportance})`);
 
         // Build timeline context using shared helper
         const timelineContext = timeline.length > 0
@@ -1243,7 +1235,7 @@ export const synthesizeAll = internalAction({
         ]);
 
         if (cambodiaLowCred.length === 0 && thailandLowCred.length === 0 && internationalLowCred.length === 0 && timeline.length === 0) {
-            console.log("⚠️ [SYNTHESIS] No articles or timeline events to synthesize");
+            console.warn("[SYNTHESIS] skipped reason=no_articles_or_timeline");
             return null;
         }
 
@@ -1257,8 +1249,6 @@ export const synthesizeAll = internalAction({
         const thailandPropaganda = thailandLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
         const internationalPropaganda = internationalLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
 
-        console.log(`📰 [SYNTHESIS] Low-cred articles: Cambodia=${cambodiaLowCred.length}, Thailand=${thailandLowCred.length}, Intl=${internationalLowCred.length}`);
-
         // ==================== BREAKING NEWS (30 most recent across all) ====================
         // Use new indexed query that fetches from all tables and sorts by publishedAt
         const breakingNews: any[] = await ctx.runQuery(internal.api.getRecentBreakingNews, { limit: 30 });
@@ -1269,7 +1259,7 @@ export const synthesizeAll = internalAction({
    Summary: ${a.summary || "No summary"}`
         ).join("\n");
 
-        console.log(`⚡ [SYNTHESIS] Breaking news: ${breakingNews.length} articles`);
+        console.log(`[SYNTHESIS] context timeline=${timeline.length} avgImportance=${timelineStats.avgImportance} lowCred=kh:${cambodiaLowCred.length},th:${thailandLowCred.length},intl:${internationalLowCred.length} breaking=${breakingNews.length}`);
 
         // Get previous analysis for context (MEMORY)
         const prevCambodia = await ctx.runQuery(api.api.getAnalysis, { target: "cambodia" }) as any;
@@ -1645,8 +1635,7 @@ Return your hours and a brief reason in the "scheduling" section.`;
             }>(prompt, "thinking", 3, "SYNTHESIS");
 
             if (!result) {
-                console.log("❌ [SYNTHESIS] Invalid or missing JSON response from API");
-                console.log("ℹ️ [SYNTHESIS] Existing analysis data preserved - no updates will be made this cycle");
+                console.warn("[SYNTHESIS] skipped reason=invalid_or_missing_json preservedExisting=true");
                 // Return null to indicate failure, but existing analysis tables remain untouched
                 // This is intentional: we never overwrite good data with nothing
                 return null;
@@ -1689,6 +1678,11 @@ Return your hours and a brief reason in the "scheduling" section.`;
             };
 
             let dashboardUpdated = false;
+            let cambodiaSummary = "missing";
+            let thailandSummary = "missing";
+            let neutralSummary = "missing";
+            let dashboardSummary = "missing";
+            let snapshotPublished = false;
 
             // Save Cambodia analysis
             if (result.cambodia) {
@@ -1716,11 +1710,11 @@ Return your hours and a brief reason in the "scheduling" section.`;
                         postureRationaleKh: result.cambodia.postureRationaleKh,
                         territorialContext: territory,
                     });
-                    console.log(`✅[CAMBODIA] Posture: ${posture} (${result.cambodia.postureLabel || "N/A"}), Intensity: ${intensity}, Territory: ${territory || "N/A"}`);
+                    cambodiaSummary = `${posture}/${intensity}${territory ? `/${territory}` : ""}`;
                 } catch (error) {
                     const message = `Cambodia analysis upsert failed: ${String(error)}`;
                     writeErrors.push(message);
-                    console.error(`❌ [SYNTHESIS] ${message}`);
+                    console.error(`[SYNTHESIS] ${message}`);
                 }
             }
 
@@ -1750,11 +1744,11 @@ Return your hours and a brief reason in the "scheduling" section.`;
                         postureRationaleKh: result.thailand.postureRationaleKh,
                         territorialContext: territory,
                     });
-                    console.log(`✅[THAILAND] Posture: ${posture} (${result.thailand.postureLabel || "N/A"}), Intensity: ${intensity}, Territory: ${territory || "N/A"}`);
+                    thailandSummary = `${posture}/${intensity}${territory ? `/${territory}` : ""}`;
                 } catch (error) {
                     const message = `Thailand analysis upsert failed: ${String(error)}`;
                     writeErrors.push(message);
-                    console.error(`❌ [SYNTHESIS] ${message}`);
+                    console.error(`[SYNTHESIS] ${message}`);
                 }
             }
 
@@ -1773,25 +1767,18 @@ Return your hours and a brief reason in the "scheduling" section.`;
                         keyEventsTh: result.neutral.keyEventsTh,
                         keyEventsKh: result.neutral.keyEventsKh,
                     });
-                    console.log(`✅[NEUTRAL] Conflict Level: ${result.neutral.conflictLevel} `);
+                    neutralSummary = `${result.neutral.conflictLevel || "Low"}/events:${result.neutral.keyEvents?.length || 0}`;
                 } catch (error) {
                     const message = `Neutral analysis upsert failed: ${String(error)}`;
                     writeErrors.push(message);
-                    console.error(`❌ [SYNTHESIS] ${message}`);
+                    console.error(`[SYNTHESIS] ${message}`);
                 }
             }
 
             // Save Dashboard Stats (merged from updateDashboard)
             const dashboard = result.dashboard || {};
-            if (result.dashboard) {
-                // Log whether values changed or stayed the same
-                if (dashboard.unchanged) {
-                    console.log(`✅ [DASHBOARD] No changes needed: ${dashboard.changeReason || "values stable"}`);
-                } else {
-                    console.log(`📊 [DASHBOARD] Updating values: ${dashboard.changeReason || "new evidence found"}`);
-                }
-            } else {
-                console.log("⚠️ [DASHBOARD] No dashboard section in response - writing fallback values from previous stats");
+            if (!result.dashboard) {
+                console.warn("[DASHBOARD] response_missing_dashboard_section usingPreviousStats=true");
             }
 
             try {
@@ -1810,24 +1797,27 @@ Return your hours and a brief reason in the "scheduling" section.`;
                     militaryInjuredCount,
                 });
                 dashboardUpdated = true;
-                console.log(`✅ [DASHBOARD] Stats saved: casualties=${casualtyCount}, displaced=${displacedCount}`);
+                dashboardSummary = `${conflictLevel}/casualties:${casualtyCount}/displaced:${displacedCount}/civilianInjured:${civilianInjuredCount}/militaryInjured:${militaryInjuredCount}`;
             } catch (error) {
                 const message = `Dashboard upsert failed: ${String(error)}`;
                 writeErrors.push(message);
-                console.error(`❌ [SYNTHESIS] ${message}`);
+                console.error(`[SYNTHESIS] ${message}`);
             }
 
             try {
                 await ctx.runMutation(internal.api.publishDashboardSnapshot, {});
+                snapshotPublished = true;
             } catch (error) {
                 const message = `Dashboard snapshot publish failed: ${String(error)}`;
                 writeErrors.push(message);
-                console.error(`❌ [SYNTHESIS] ${message}`);
+                console.error(`[SYNTHESIS] ${message}`);
             }
 
             if (writeErrors.length > 0) {
-                console.warn(`⚠️ [SYNTHESIS] Completed with ${writeErrors.length} write issue(s)`);
+                console.warn(`[SYNTHESIS] write_issues count=${writeErrors.length}`);
             }
+
+            console.log(`[SYNTHESIS] wrote cambodia=${cambodiaSummary} thailand=${thailandSummary} neutral=${neutralSummary} dashboard=${dashboardSummary} snapshot=${snapshotPublished} writeErrors=${writeErrors.length}`);
 
             return {
                 ...result,
@@ -1835,7 +1825,7 @@ Return your hours and a brief reason in the "scheduling" section.`;
                 dashboardUpdated,
             };
         } catch (error) {
-            console.error("❌ [SYNTHESIS] Error:", error);
+            console.error("[SYNTHESIS] failed", error);
             return null;
         }
     },
@@ -2060,71 +2050,70 @@ export const runResearchCycle = internalAction({
         const lockResult = await ctx.runMutation(internal.api.acquireCycleLock, { runId });
 
         if (!lockResult.acquired) {
-            console.log(`🚫 [CYCLE] Aborting - ${lockResult.reason}`);
-            console.log("ℹ️ This happens when manual run overlaps with scheduled run. Only one cycle runs at a time.");
+            console.warn(`[CYCLE] skipped reason=lock_not_acquired detail=${lockResult.reason}`);
             return;
         }
 
         // Check if we should skip this cycle (one-time skip, auto-resets)
         const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
         if (stats?.skipNextCycle) {
-            console.log("⏭️ SKIPPING THIS CYCLE (skipNextCycle was set)");
+            console.log("[CYCLE] skipped reason=skipNextCycle");
             await ctx.runMutation(internal.api.setStatus, { status: "online" });
             await ctx.runMutation(internal.api.clearSkipNextCycle, {});
             await ctx.runMutation(internal.api.releaseCycleLock, { runId }); // Release lock when skipping
             return;
         }
 
-        console.log("═══════════════════════════════════════════════════════════════");
-        console.log("🔄 RESEARCH CYCLE STARTED (Chained Actions Mode)");
-        console.log("═══════════════════════════════════════════════════════════════");
+        console.log(`[CYCLE] started runId=${runId} mode=chained attempt=${attempt}`);
 
         await ctx.runMutation(internal.api.setStatus, { status: "syncing" });
 
         const errors: string[] = [];
+        let cambodiaResult: { newArticles: number; flagged: number; error?: string } | null = null;
+        let thailandResult: { newArticles: number; flagged: number; error?: string } | null = null;
+        let internationalResult: { newArticles: number; flagged: number; error?: string } | null = null;
+        const curationSummary = (result: { newArticles: number; flagged: number; error?: string } | null) =>
+            result ? `${result.newArticles}new/${result.flagged}flagged` : "failed";
 
         // ── STEP 1: NEWS CURATION ──
-        console.log("\n── STEP 1: NEWS CURATION ──");
-
         try {
-            console.log("   > Curating Cambodia...");
-            await runWithRetries(
+            cambodiaResult = await runWithRetries(
                 "[STEP 1] Cambodia curation",
                 () => ctx.runAction(internal.research.curateCambodia, {}),
             );
             await sleep(2000);
         } catch (e) {
-            console.error("❌ [STEP 1] Cambodia Curation Failed:", e);
+            console.error("[STEP 1] cambodia_curation_failed", e);
             errors.push(`Cambodia: ${summarizeError(e)}`);
         }
 
         try {
-            console.log("   > Curating Thailand...");
-            await runWithRetries(
+            thailandResult = await runWithRetries(
                 "[STEP 1] Thailand curation",
                 () => ctx.runAction(internal.research.curateThailand, {}),
             );
             await sleep(2000);
         } catch (e) {
-            console.error("❌ [STEP 1] Thailand Curation Failed:", e);
+            console.error("[STEP 1] thailand_curation_failed", e);
             errors.push(`Thailand: ${summarizeError(e)}`);
         }
 
         try {
-            console.log("   > Curating International...");
-            await runWithRetries(
+            internationalResult = await runWithRetries(
                 "[STEP 1] International curation",
                 () => ctx.runAction(internal.research.curateInternational, {}),
             );
             await sleep(2000);
         } catch (e) {
-            console.error("❌ [STEP 1] International Curation Failed:", e);
+            console.error("[STEP 1] international_curation_failed", e);
             errors.push(`International: ${summarizeError(e)}`);
         }
 
+        console.log(`[STEP 1] complete cambodia=${curationSummary(cambodiaResult)} thailand=${curationSummary(thailandResult)} international=${curationSummary(internationalResult)} errors=${errors.length}`);
+
         // If all curation failed, abort the chain
         if (errors.length >= 3) {
-            console.error("🛑 ALL CURATION STEPS FAILED. Aborting cycle.");
+            console.error("[STEP 1] all_curation_failed aborting=true");
             const scheduledRetry = await scheduleStepRetry(ctx, {
                 stepName: "STEP 1",
                 actionReference: internal.research.runResearchCycle,
@@ -2140,8 +2129,6 @@ export const runResearchCycle = internalAction({
             await ctx.runMutation(internal.api.releaseCycleLock, { runId });
             return;
         }
-
-        console.log("✅ Step 1 complete. Scheduling Step 2...");
 
         // Chain to Step 2 (runs immediately with fresh 10-min timer)
         try {
@@ -2173,18 +2160,18 @@ export const runResearchCycle = internalAction({
 export const step2_verification = internalAction({
     args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
     handler: async (ctx, { errors, runId, attempt = 0 }) => {
-        console.log("\n── STEP 2: SOURCE VERIFICATION ──");
         const stepErrors = [...errors];
+        let verificationSummary = "not_run";
 
         try {
-            console.log("   > Verifying article sources...");
             const verifyResult = await runWithRetries(
                 "[STEP 2] Source verification",
                 () => ctx.runAction(internal.research.verifyAllSources, {}),
             );
-            console.log(`   ✅ Verified: ${verifyResult.verified}, Updated: ${verifyResult.updated}, Deleted: ${verifyResult.deleted}, Errors: ${verifyResult.errors}`);
+            verificationSummary = `verified=${verifyResult.verified} updated=${verifyResult.updated} deleted=${verifyResult.deleted} errors=${verifyResult.errors}`;
         } catch (e) {
-            console.error("❌ [STEP 2] Source Verification Failed:", e);
+            verificationSummary = "failed";
+            console.error("[STEP 2] source_verification_failed", e);
             const scheduledRetry = await scheduleStepRetry(ctx, {
                 stepName: "STEP 2",
                 actionReference: internal.research.step2_verification,
@@ -2196,7 +2183,7 @@ export const step2_verification = internalAction({
             console.warn("[STEP 2] Retry budget exhausted - continuing to historian with accumulated errors");
         }
 
-        console.log("✅ Step 2 complete. Scheduling Step 3...");
+        console.log(`[STEP 2] complete ${verificationSummary} accumulatedErrors=${stepErrors.length}`);
 
         // Chain to Step 3 (fresh 10-min timer)
         try {
@@ -2228,7 +2215,6 @@ export const step2_verification = internalAction({
 export const step3_historian = internalAction({
     args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
     handler: async (ctx, { errors, runId, attempt = 0 }) => {
-        console.log("\n── STEP 3: HISTORIAN LOOP ──");
         const stepErrors = [...errors];
 
         // With chaining, we now have full 10 mins for historian
@@ -2238,6 +2224,15 @@ export const step3_historian = internalAction({
 
         let historianLoops = 0;
         const MAX_HISTORIAN_LOOPS = 10; // User requested limit
+        let historianStopReason = "complete";
+        let historianProcessed = 0;
+        let historianEventsCreated = 0;
+        let historianEventsUpdated = 0;
+        let historianEventsDeleted = 0;
+        let historianSourcesMerged = 0;
+        let historianArchived = 0;
+        let historianDiscarded = 0;
+        let historianCredibilityUpdated = 0;
 
         let cachedNewsContext: any = null;
         try {
@@ -2247,17 +2242,15 @@ export const step3_historian = internalAction({
                 "[STEP 3] Historian news context",
                 () => ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {}),
             );
-            console.log(`📦 [CACHE] News: TH=${cachedNewsContext.TH.length}, KH=${cachedNewsContext.KH.length}, INT=${cachedNewsContext.INT.length}`);
 
             while (historianLoops < MAX_HISTORIAN_LOOPS) {
                 const timeRemaining = getTimeRemaining();
                 if (timeRemaining < 90 * 1000) { // 90s minimum
-                    console.log(`   ⏰ Time budget low (${Math.round(timeRemaining / 1000)}s) - moving to synthesis`);
+                    historianStopReason = `time_budget_low:${Math.round(timeRemaining / 1000)}s`;
                     break;
                 }
 
                 historianLoops++;
-                console.log(`\n   📜 Historian iteration ${historianLoops}... (${Math.round(timeRemaining / 1000)}s remaining)`);
 
                 const latestTimeline = await runWithRetries(
                     `[STEP 3] Timeline refresh iteration ${historianLoops}`,
@@ -2273,21 +2266,28 @@ export const step3_historian = internalAction({
                 );
 
                 if (!result || result.processed === 0) {
-                    console.log("   ✅ Historian complete - no more articles to process");
+                    historianStopReason = "idle";
                     break;
                 }
 
-                console.log(`   Processed ${result.processed} articles, created ${result.eventsCreated} events`);
+                historianProcessed += result.processed;
+                historianEventsCreated += result.eventsCreated || 0;
+                historianEventsUpdated += result.eventsUpdated || 0;
+                historianEventsDeleted += result.eventsDeleted || 0;
+                historianSourcesMerged += result.sourcesMerged || 0;
+                historianArchived += result.archived || 0;
+                historianDiscarded += result.discarded || 0;
+                historianCredibilityUpdated += result.credibilityUpdated || 0;
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
 
             if (historianLoops >= MAX_HISTORIAN_LOOPS) {
-                console.warn(`   ⚠️ Historian reached max iterations (${MAX_HISTORIAN_LOOPS})`);
+                historianStopReason = "max_iterations";
+                console.warn(`[STEP 3] historian_reached_max_iterations limit=${MAX_HISTORIAN_LOOPS}`);
             }
-
-            console.log(`   📊 Historian completed after ${historianLoops} iterations`);
         } catch (e) {
-            console.error("❌ [STEP 3] Historian Failed:", e);
+            historianStopReason = "failed";
+            console.error("[STEP 3] historian_failed", e);
             const scheduledRetry = await scheduleStepRetry(ctx, {
                 stepName: "STEP 3",
                 actionReference: internal.research.step3_historian,
@@ -2299,7 +2299,7 @@ export const step3_historian = internalAction({
             console.warn("[STEP 3] Retry budget exhausted - moving to synthesis");
         }
 
-        console.log("✅ Step 3 complete. Scheduling Step 4...");
+        console.log(`[STEP 3] complete loops=${historianLoops} processed=${historianProcessed} created=${historianEventsCreated} updated=${historianEventsUpdated} deleted=${historianEventsDeleted} merged=${historianSourcesMerged} archived=${historianArchived} discarded=${historianDiscarded} credibilityUpdated=${historianCredibilityUpdated} stop=${historianStopReason} news=th:${cachedNewsContext?.TH?.length ?? 0},kh:${cachedNewsContext?.KH?.length ?? 0},int:${cachedNewsContext?.INT?.length ?? 0} accumulatedErrors=${stepErrors.length}`);
 
         // Chain to Step 4 (fresh 10-min timer for synthesis)
         try {
@@ -2331,11 +2331,11 @@ export const step3_historian = internalAction({
 export const step4_synthesis = internalAction({
     args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
     handler: async (ctx, { errors, runId, attempt = 0 }) => {
-        console.log("\n── STEP 4: SYNTHESIS ──");
         const stepErrors = [...errors];
         let schedulingResult: { nextCycleHours: number; reason: string } | null = null;
         let synthesisSucceeded = false;
         let dashboardUpdated = false;
+        let synthesisWriteErrors = 0;
 
         try {
             const result = await runWithRetries(
@@ -2343,29 +2343,27 @@ export const step4_synthesis = internalAction({
                 () => ctx.runAction(internal.research.synthesizeAll, {}),
             );
             if (!result) {
-                console.warn("⚠️ [STEP 4] Synthesis returned no result; dashboard/analysis may be unchanged");
+                console.warn("[STEP 4] synthesis_returned_no_result dashboardMayBeUnchanged=true");
                 stepErrors.push("Synthesis: returned null result");
             } else {
                 synthesisSucceeded = true;
                 dashboardUpdated = result.dashboardUpdated === true;
 
                 if (Array.isArray(result.writeErrors) && result.writeErrors.length > 0) {
+                    synthesisWriteErrors = result.writeErrors.length;
                     for (const writeError of result.writeErrors) {
                         stepErrors.push(`SynthesisWrite: ${String(writeError)}`);
                     }
                 }
-
-                console.log("   ✅ Synthesis complete");
             }
 
             // Extract scheduling decision from AI result
             if (result?.scheduling) {
                 const sched = result.scheduling;
                 schedulingResult = sched;
-                console.log(`   📅 AI scheduling decision: ${sched.nextCycleHours}h - ${sched.reason}`);
             }
         } catch (e) {
-            console.error("❌ [STEP 4] Synthesis Failed:", e);
+            console.error("[STEP 4] synthesis_failed", e);
             const scheduledRetry = await scheduleStepRetry(ctx, {
                 stepName: "STEP 4",
                 actionReference: internal.research.step4_synthesis,
@@ -2396,27 +2394,27 @@ export const step4_synthesis = internalAction({
                 ? "Fallback scheduling (synthesis failed or returned no result); retrying in 24h"
                 : "Default scheduling (synthesis did not return decision)");
 
-        console.log(`📅 AI scheduling decision: ${clampedHours}h - ${reason}`);
-
         // ═══ CANCEL ALL PENDING runResearchCycle JOBS ═══
         // This prevents duplicate stacking from manual runs + scheduled runs
+        let cancelledPendingJobs = 0;
+        let pendingCancelFailures = 0;
         try {
             const pendingJobIds = await ctx.runQuery(internal.api.getPendingCycleJobs, {});
             if (pendingJobIds.length > 0) {
-                console.log(`🗑️ Found ${pendingJobIds.length} pending runResearchCycle jobs - cancelling all...`);
                 for (const jobId of pendingJobIds) {
                     try {
                         await ctx.scheduler.cancel(jobId as any);
-                        console.log(`   ✓ Cancelled job ${jobId}`);
+                        cancelledPendingJobs++;
                     } catch (e) {
                         // Job might have already run or been cancelled
-                        console.log(`   ⚠️ Could not cancel ${jobId}: ${e}`);
+                        pendingCancelFailures++;
+                        console.warn(`[SCHEDULER] cancel_pending_failed jobId=${jobId} error=${summarizeError(e)}`);
                     }
                 }
             }
         } catch (e) {
             // Non-fatal - continue with scheduling
-            console.log(`⚠️ Could not query pending jobs: ${e}`);
+            console.warn(`[SCHEDULER] pending_jobs_query_failed error=${summarizeError(e)}`);
         }
 
         // Schedule the exact next run time
@@ -2429,14 +2427,12 @@ export const step4_synthesis = internalAction({
                     internal.research.runResearchCycle,
                     {},
                 );
-                console.log(`📅 [SCHEDULER] Scheduled next run for ${new Date(nextRunAt).toLocaleString()} (${clampedHours}h from now)`);
-                console.log(`   Job ID: ${jobId}`);
                 return jobId;
             } catch (e) {
                 const scheduleError = `Scheduler runAt failed: ${String(e)}`;
                 stepErrors.push(scheduleError);
-                console.error(`❌ [SCHEDULER] ${scheduleError}`);
-                console.log("⏰ [SCHEDULER] Cron safety net will retry within 24h if no job exists");
+                console.error(`[SCHEDULER] runAt_failed error=${summarizeError(e)}`);
+                console.warn("[SCHEDULER] fallback=cron_safety_net");
                 return undefined;
             }
         })();
@@ -2448,33 +2444,28 @@ export const step4_synthesis = internalAction({
             schedulingReason: reason,
             scheduledRunId,
         });
+        const shortReason = reason.substring(0, 160).replace(/"/g, "'");
+        console.log(`[STEP 4] complete synthesisOk=${synthesisSucceeded} dashboardUpdated=${dashboardUpdated} writeErrors=${synthesisWriteErrors} nextRunHours=${clampedHours} nextRunAt=${new Date(nextRunAt).toISOString()} scheduledRunId=${scheduledRunId ?? "none"} cancelledPendingJobs=${cancelledPendingJobs} cancelFailures=${pendingCancelFailures} reason="${shortReason}" accumulatedErrors=${stepErrors.length}`);
 
         // ═══ CYCLE COMPLETE ═══
         // Increment cycle counter and trigger dashboard (every cycle now, since cycles are 16h+)
         const cycleCount = await ctx.runMutation(internal.api.incrementResearchCycleCount, {});
+        const compactErrors = stepErrors.slice(0, 8).map((error) =>
+            error.length > 240 ? `${error.substring(0, 240)}...` : error
+        );
+        const hiddenErrorCount = stepErrors.length - compactErrors.length;
+        const errorLog = `${compactErrors.join(" | ")}${hiddenErrorCount > 0 ? ` | ...and ${hiddenErrorCount} more` : ""}`.substring(0, 1900);
 
         if (stepErrors.length === 0) {
-            console.log("═══════════════════════════════════════════════════════════════");
-            console.log(`✅ RESEARCH CYCLE #${cycleCount} COMPLETE (SUCCESS)`);
-            console.log("═══════════════════════════════════════════════════════════════");
             await ctx.runMutation(internal.api.setStatus, { status: "online" });
         } else {
-            const compactErrors = stepErrors.slice(0, 8).map((error) =>
-                error.length > 240 ? `${error.substring(0, 240)}...` : error
-            );
-            const hiddenErrorCount = stepErrors.length - compactErrors.length;
-            const errorLog = `${compactErrors.join(" | ")}${hiddenErrorCount > 0 ? ` | ...and ${hiddenErrorCount} more` : ""}`.substring(0, 1900);
-
-            console.log("═══════════════════════════════════════════════════════════════");
-            console.log(`⚠️ RESEARCH CYCLE #${cycleCount} COMPLETE (WITH ERRORS)`);
-            console.log("Errors encountered:", stepErrors);
-            console.log("═══════════════════════════════════════════════════════════════");
             await ctx.runMutation(internal.api.setStatus, { status: "online", errorLog });
+            console.warn(`[CYCLE] errors ${errorLog}`);
         }
 
         const verificationOk = !stepErrors.some((error) => error.startsWith("Verification:"));
         const historianOk = !stepErrors.some((error) => error.startsWith("Historian:"));
-        console.log(`📊 [CYCLE SUMMARY] verificationOk=${verificationOk} historianOk=${historianOk} synthesisOk=${synthesisSucceeded} dashboardUpdated=${dashboardUpdated} hadErrors=${stepErrors.length > 0} errorCount=${stepErrors.length}`);
+        let isrStatus = "skipped:no_site_url";
 
         // ═══ TRIGGER ISR REVALIDATION ═══
         // Purge Vercel's cache so the next user gets fresh data
@@ -2486,8 +2477,6 @@ export const step4_synthesis = internalAction({
                 const revalidateUrl = VERCEL_URL.startsWith('http')
                     ? `${VERCEL_URL}/api/revalidate`
                     : `https://${VERCEL_URL}/api/revalidate`;
-
-                console.log(`🔄 [ISR] Triggering cache revalidation at ${revalidateUrl}...`);
 
                 const headers: Record<string, string> = {
                     'Content-Type': 'application/json',
@@ -2512,16 +2501,19 @@ export const step4_synthesis = internalAction({
 
                         if (response.ok) {
                             const result = await response.json();
-                            console.log(`✅ [ISR] Cache revalidated successfully (attempt ${attempt}/${maxRevalidateAttempts}):`, result);
+                            isrStatus = `ok:attempt_${attempt}`;
+                            if (result?.revalidated === false) {
+                                isrStatus = `ok:attempt_${attempt}:not_revalidated`;
+                            }
                             revalidated = true;
                             clearTimeout(timeoutId);
                             break;
                         }
 
                         const responseText = (await response.text()).substring(0, 300);
-                        console.warn(`⚠️ [ISR] Revalidation attempt ${attempt}/${maxRevalidateAttempts} returned ${response.status}: ${responseText}`);
+                        console.warn(`[ISR] attempt_failed attempt=${attempt}/${maxRevalidateAttempts} status=${response.status} message=${responseText}`);
                     } catch (revalidateAttemptError) {
-                        console.warn(`⚠️ [ISR] Revalidation attempt ${attempt}/${maxRevalidateAttempts} failed: ${revalidateAttemptError}`);
+                        console.warn(`[ISR] attempt_failed attempt=${attempt}/${maxRevalidateAttempts} error=${summarizeError(revalidateAttemptError)}`);
                     } finally {
                         clearTimeout(timeoutId);
                     }
@@ -2532,15 +2524,18 @@ export const step4_synthesis = internalAction({
                 }
 
                 if (!revalidated) {
-                    console.warn(`⚠️ [ISR] Revalidation failed after ${maxRevalidateAttempts} attempts`);
+                    isrStatus = `failed:attempts_${maxRevalidateAttempts}`;
+                    console.warn(`[ISR] failed attempts=${maxRevalidateAttempts}`);
                 }
-            } else {
-                console.log("ℹ️ [ISR] No VERCEL_URL/SITE_URL set - skipping cache revalidation");
             }
         } catch (revalidateError) {
             // Non-fatal - don't fail the cycle just because revalidation failed
-            console.warn("⚠️ [ISR] Cache revalidation failed (non-fatal):", revalidateError);
+            isrStatus = `failed:${summarizeError(revalidateError)}`;
+            console.warn(`[ISR] failed nonFatal=true error=${summarizeError(revalidateError)}`);
         }
+
+        const cycleStatus = stepErrors.length === 0 ? "success" : "with_errors";
+        console.log(`[CYCLE] complete cycle=${cycleCount} status=${cycleStatus} verificationOk=${verificationOk} historianOk=${historianOk} synthesisOk=${synthesisSucceeded} dashboardUpdated=${dashboardUpdated} errorCount=${stepErrors.length} nextRunAt=${new Date(nextRunAt).toISOString()} intervalHours=${clampedHours} scheduledRunId=${scheduledRunId ?? "none"} isr=${isrStatus}`);
 
         // ═══ RELEASE CYCLE LOCK ═══
         // Always release at the very end of the cycle

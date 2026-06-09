@@ -18,6 +18,7 @@ const baseHeaders = {
 
 const body = {
   model: "fast",
+  thinking_level: "extended",
   messages: [{ role: "user", content: "Return exactly: ok" }],
   project: projectName,
   client: clientName,
@@ -75,6 +76,7 @@ async function run() {
       request_id: matched?.request_id,
       project: matched?.project,
       client: matched?.client,
+      thinkingLevel: matched?.thinking_level || matched?.body?.thinking_level,
       headerProject: matched?.headers?.["x-project-name"] || matched?.headers?.["X-Project-Name"],
       headerClient: matched?.headers?.["x-client-name"] || matched?.headers?.["X-Client-Name"],
       headerRequestId: matched?.headers?.["x-request-id"] || matched?.headers?.["X-Request-ID"],

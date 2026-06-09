@@ -44,3 +44,7 @@ lint_results.txt
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# RunLong CLI files
+.longrun/
+RUNLONG.md

@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 const root = process.cwd();
 const researchPath = path.join(root, "convex", "research.ts");
 const historianPath = path.join(root, "convex", "historian.ts");
+const aiUtilsPath = path.join(root, "convex", "ai_utils.ts");
+const configPath = path.join(root, "convex", "config.ts");
 const convexServerPath = path.join(root, "src", "lib", "convex-server.ts");
 const pagePath = path.join(root, "src", "app", "page.tsx");
 const dashboardClientPath = path.join(root, "src", "app", "DashboardClient.tsx");
@@ -117,7 +119,7 @@ test("source verification batch isolates per-result failures", () => {
 
 test("curation prompts and parsers are hardened against prose and bad escapes", () => {
   const research = read(researchPath);
-  const aiUtils = read(path.join(root, "convex", "ai_utils.ts"));
+  const aiUtils = read(aiUtilsPath);
   const historian = read(historianPath);
 
   assert.doesNotMatch(research, /IMPORTANT - LIST ARTICLES BEFORE JSON/);
@@ -134,6 +136,25 @@ test("curation prompts and parsers are hardened against prose and bad escapes", 
   assert.match(aiUtils, /fenced ```json blocks first/);
   assert.doesNotMatch(historian, /List each article with your analysis plan FIRST/);
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
+});
+
+test("Gemini model aliases send explicit thinking levels", () => {
+  const research = read(researchPath);
+  const historian = read(historianPath);
+  const aiUtils = read(aiUtilsPath);
+  const config = read(configPath);
+  const verifyScript = read(path.join(root, "scripts", "verify-gemini-headers.mjs"));
+
+  assert.match(config, /curation:\s*"fast-high"/);
+  assert.match(config, /thinking:\s*"thinking-high"/);
+  assert.match(config, /critical:\s*\[MODELS\.thinking,\s*MODELS\.pro,\s*MODELS\.curation\]/);
+  assert.match(aiUtils, /type GeminiThinkingLevel = "standard" \| "extended"/);
+  assert.match(aiUtils, /thinking_level\?: GeminiThinkingLevel/);
+  assert.match(aiUtils, /export function resolveGeminiModel/);
+  assert.match(aiUtils, /model\.endsWith\(marker\)/);
+  assert.match(research, /callGeminiStudio\(currentPrompt,\s*MODELS\.curation,\s*1\)/);
+  assert.match(historian, /callGeminiStudio\(currentPrompt,\s*MODELS\.thinking,\s*2\)/);
+  assert.match(verifyScript, /thinking_level:\s*"extended"/);
 });
 
 test("ISR server fetch uses a retried dashboard snapshot and lets page errors bubble to ISR", () => {

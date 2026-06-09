@@ -4,10 +4,13 @@ import { randomUUID } from "node:crypto";
 
 import { GEMINI_CLIENT_NAME, GEMINI_PROJECT_NAME, GEMINI_STUDIO_API_URL, MODELS, FALLBACK_CHAINS } from "./config";
 
+type GeminiThinkingLevel = "standard" | "extended";
+
 type GeminiRequestInit = {
     headers: Record<string, string>;
     body: {
         model: string;
+        thinking_level?: GeminiThinkingLevel;
         messages: Array<{ role: "user"; content: string }>;
         project: string;
         client: string;
@@ -20,10 +23,49 @@ type GeminiRequestInit = {
     requestId: string;
 };
 
+const THINKING_LEVEL_SUFFIXES: Array<[string, GeminiThinkingLevel]> = [
+    ["high", "extended"],
+    ["extended", "extended"],
+    ["standard", "standard"],
+    ["medium", "standard"],
+    ["low", "standard"],
+    ["minimal", "standard"],
+];
+
+export function resolveGeminiModel(model: string): { model: string; thinkingLevel?: GeminiThinkingLevel } {
+    for (const [suffix, thinkingLevel] of THINKING_LEVEL_SUFFIXES) {
+        const marker = `-${suffix}`;
+        if (model.endsWith(marker)) {
+            return {
+                model: model.slice(0, -marker.length),
+                thinkingLevel,
+            };
+        }
+    }
+
+    return { model };
+}
+
 function buildGeminiStudioRequest(model: string, content: string, existingRequestId?: string): GeminiRequestInit {
     const requestId = existingRequestId || randomUUID();
     const projectName = GEMINI_PROJECT_NAME;
     const clientName = GEMINI_CLIENT_NAME;
+    const resolvedModel = resolveGeminiModel(model);
+    const body: GeminiRequestInit["body"] = {
+        model: resolvedModel.model,
+        messages: [{ role: "user", content }],
+        project: projectName,
+        client: clientName,
+        request_id: requestId,
+        metadata: {
+            project: projectName,
+            client: clientName,
+        },
+    };
+
+    if (resolvedModel.thinkingLevel) {
+        body.thinking_level = resolvedModel.thinkingLevel;
+    }
 
     return {
         headers: {
@@ -37,17 +79,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
             "X-Client-Name": clientName,
             "X-Request-ID": requestId,
         },
-        body: {
-            model,
-            messages: [{ role: "user", content }],
-            project: projectName,
-            client: clientName,
-            request_id: requestId,
-            metadata: {
-                project: projectName,
-                client: clientName,
-            },
-        },
+        body,
         requestId,
     };
 }
@@ -60,7 +92,6 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
     const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
 
-    console.log(`🤖 [GEMINI STUDIO] Calling ${model}...`);
     const RETRY_DELAY = 8000; // 8 seconds - enough time for Cloudflare tunnel to reconnect
 
     const requestId = randomUUID();
@@ -87,7 +118,7 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.warn(`⚠️ [GEMINI STUDIO] Error ${response.status} after ${duration}ms (requestId: ${request.requestId}): ${errorText.substring(0, 100)}`);
+                console.warn(`[GEMINI] error status=${response.status} duration=${duration}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
                 throw new Error(`API error (${response.status}): ${errorText.substring(0, 100)}`);
             }
 
@@ -98,13 +129,12 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
                 throw new Error("API returned empty response content");
             }
 
-            console.log(`✅ [GEMINI STUDIO] Got response (${content.length} chars) in ${duration}ms (requestId: ${request.requestId})`);
             return content;
 
         } catch (error) {
             clearTimeout(timeoutId);
             const duration = Date.now() - startTime;
-            console.warn(`⚠️ [GEMINI STUDIO] Attempt ${attempt}/${maxRetries} failed after ${duration}ms (requestId: ${requestId}): ${error}`);
+            console.warn(`[GEMINI] attempt_failed attempt=${attempt}/${maxRetries} duration=${duration}ms requestId=${requestId} error=${error}`);
 
             if (attempt < maxRetries) {
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
@@ -150,11 +180,10 @@ export async function callGeminiStudioWithFallback(
 
         for (let attempt = 1; attempt <= maxRetriesPerModel; attempt++) {
             try {
-                console.log(`🤖 [${debugLabel}] Model '${model}' attempt ${attempt}/${maxRetriesPerModel}...`);
                 const result = await callGeminiStudio(prompt, model, 1);
 
                 if (modelIdx > 0) {
-                    console.log(`✅ [${debugLabel}] Got response from fallback model '${model}'`);
+                    console.log(`[${debugLabel}] fallback_model_ok model=${model}`);
                 }
                 return result;
 
@@ -163,24 +192,24 @@ export async function callGeminiStudioWithFallback(
 
                 // Check if this is a rate limit error
                 if (isRateLimitError(error)) {
-                    console.warn(`⚠️ [${debugLabel}] Model '${model}' rate limited: ${errorMsg.substring(0, 80)}`);
+                    console.warn(`[${debugLabel}] model_rate_limited model=${model} error=${errorMsg.substring(0, 80)}`);
 
                     if (!isLastModel) {
-                        console.log(`🔄 [${debugLabel}] Falling back to next model '${fallbackChain[modelIdx + 1]}'...`);
+                        console.log(`[${debugLabel}] fallback_model from=${model} to=${fallbackChain[modelIdx + 1]}`);
                         break; // Skip remaining retries, move to next model
                     } else {
-                        console.error(`❌ [${debugLabel}] All models exhausted (last was '${model}')`);
+                        console.error(`[${debugLabel}] all_models_exhausted lastModel=${model}`);
                         throw new Error(`All models rate limited. Last error: ${errorMsg}`);
                     }
                 }
 
                 // Non-rate-limit error (network, timeout, etc.) - retry same model
-                console.warn(`⚠️ [${debugLabel}] Model '${model}' error (attempt ${attempt}): ${errorMsg.substring(0, 80)}`);
+                console.warn(`[${debugLabel}] model_error model=${model} attempt=${attempt}/${maxRetriesPerModel} error=${errorMsg.substring(0, 80)}`);
 
                 if (attempt < maxRetriesPerModel) {
                     await new Promise(r => setTimeout(r, RETRY_DELAY));
                 } else if (!isLastModel) {
-                    console.log(`🔄 [${debugLabel}] Max retries on '${model}', trying '${fallbackChain[modelIdx + 1]}'...`);
+                    console.log(`[${debugLabel}] fallback_model from=${model} to=${fallbackChain[modelIdx + 1]}`);
                 } else {
                     throw error; // Last model, last attempt - propagate error
                 }
@@ -195,7 +224,7 @@ export async function callGeminiStudioWithFallback(
  * GENERIC SELF-HEALING HELPER
  * Handles retry logic and JSON repair
  * Extracts JSON from fenced ```json blocks first, then falls back to legacy tags/raw braces
- * Uses model fallback for thinking model (critical chain: thinking → pro → fast)
+ * Uses model fallback for thinking model (critical chain: thinking-high -> pro-high -> fast-high)
  */
 export async function callGeminiStudioWithSelfHealing<T>(
     prompt: string,
@@ -204,6 +233,7 @@ export async function callGeminiStudioWithSelfHealing<T>(
     debugLabel: string = "AI"
 ): Promise<T | null> {
     let currentPrompt = prompt;
+    const startedAt = Date.now();
     const unwrapJsonStringEnvelope = (input: string): string => {
         const trimmed = input.trim();
         if (!trimmed.startsWith("\"")) return input;
@@ -245,7 +275,9 @@ export async function callGeminiStudioWithSelfHealing<T>(
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         let rawResponse = "";
         try {
-            console.log(`🤖 [${debugLabel}] Attempt ${attempt}/${maxRetries}...`);
+            if (attempt > 1) {
+                console.log(`[${debugLabel}] retrying_json_call attempt=${attempt}/${maxRetries}`);
+            }
 
             // 1. CALL API - use fallback for thinking model
             try {
@@ -258,7 +290,7 @@ export async function callGeminiStudioWithSelfHealing<T>(
                     .replace(/\\<json>/gi, "<json>")
                     .replace(/\\<\/json>/gi, "</json>");
             } catch (networkError: any) {
-                console.log(`⚠️ [${debugLabel}] API error: ${networkError.message}`);
+                console.warn(`[${debugLabel}] api_error error=${networkError.message}`);
                 throw networkError;
             }
 
@@ -285,7 +317,9 @@ export async function callGeminiStudioWithSelfHealing<T>(
 
             // 3. PARSE
             try {
-                return JSON.parse(normalizeJsonCandidate(jsonStr)) as T;
+                const parsed = JSON.parse(normalizeJsonCandidate(jsonStr)) as T;
+                console.log(`[${debugLabel}] ok attempt=${attempt}/${maxRetries} duration=${Date.now() - startedAt}ms responseChars=${rawResponse.length}`);
+                return parsed;
             } catch (parseError: any) {
                 if (attempt < maxRetries) {
                     currentPrompt = `Your previous response had invalid JSON.
@@ -302,10 +336,10 @@ ${rawResponse.substring(0, 1000)}`;
                 } else throw parseError;
             }
         } catch (e: any) {
-            console.error(`❌ [${debugLabel}] Failed: ${e.message}`);
+            console.error(`[${debugLabel}] failed attempt=${attempt}/${maxRetries} error=${e.message}`);
             // Add delay for network errors to give Cloudflare tunnel time to reconnect
             if (attempt < maxRetries) {
-                console.log(`⏳ [${debugLabel}] Waiting 8s before retry...`);
+                console.log(`[${debugLabel}] retry_wait delay=8s`);
                 await new Promise(resolve => setTimeout(resolve, 8000));
             }
         }
