@@ -6,7 +6,6 @@ import { FunctionReference } from 'convex/server';
 import { api } from '../../convex/_generated/api';
 import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle } from 'lucide-react';
 import type { BorderClashData } from '@/lib/convex-server';
-import Lenis from 'lenis';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
@@ -1563,10 +1562,6 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
       // Small delay to let the new layout render
       const timer = setTimeout(() => {
-        // Resize Lenis to update scroll bounds for the new date count
-        const lenis = (datePickerRef.current as any)?.lenis;
-        if (lenis) lenis.resize();
-
         // Check if the remembered date exists in the current filtered dates
         if (timelineDates.includes(targetDate)) {
           scrollToDateRef.current(targetDate, 'auto');
@@ -1605,45 +1600,80 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // NOTE: Lenis removed from timeline - it conflicts with virtualization.
   // Native scrolling + virtualization = optimal performance.
 
-  // Initialize Lenis for horizontal date picker
+  // Initialize custom horizontal scroll wheel & mouse drag-to-scroll handlers
   useEffect(() => {
-    if (viewMode !== 'TIMELINE' || !datePickerRef.current) return;
+    const container = datePickerRef.current;
+    if (!container || viewMode !== 'TIMELINE') return;
 
-    let lenis: Lenis | null = null;
-    let rafId: number | null = null;
+    let isDown = false;
+    let startX = 0;
+    let scrollLeftVal = 0;
+    let dragDistance = 0;
 
-    // Small delay to ensure render
-    const timer = setTimeout(() => {
-      if (!datePickerRef.current) return;
-
-      lenis = new Lenis({
-        wrapper: datePickerRef.current,
-        orientation: 'horizontal',
-        gestureOrientation: 'both', // Allows vertical trackpad swipe to scroll horizontally if desired, or 'horizontal'
-        smoothWheel: true,
-        wheelMultiplier: 1,
-        // Optional: adjusting Lerp for different feel, default is 0.1
-        // lerp: 0.1 
-      });
-
-      function raf(time: number) {
-        lenis?.raf(time);
-        rafId = requestAnimationFrame(raf);
+    const handleWheelEvent = (e: WheelEvent) => {
+      // Map vertical scroll (deltaY) to horizontal scroll (scrollLeft)
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        container.scrollBy({
+          left: e.deltaY,
+          behavior: 'auto'
+        });
       }
-      rafId = requestAnimationFrame(raf);
+    };
 
-      (datePickerRef.current as any).lenis = lenis;
-    }, 100);
+    const handleMouseDown = (e: MouseEvent) => {
+      // Only drag with left click
+      if (e.button !== 0) return;
+      isDown = true;
+      startX = e.clientX;
+      scrollLeftVal = container.scrollLeft;
+      dragDistance = 0;
+      
+      container.style.cursor = 'grabbing';
+      document.body.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDown) return;
+      const dx = e.clientX - startX;
+      container.scrollLeft = scrollLeftVal - dx;
+      dragDistance = Math.abs(dx);
+    };
+
+    const handleMouseUp = () => {
+      isDown = false;
+      container.style.cursor = '';
+      document.body.style.cursor = '';
+      document.body.style.removeProperty('user-select');
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    const handleClickCapture = (e: MouseEvent) => {
+      // Intercept and prevent the click event from selecting the date button if the mouse was dragged
+      if (dragDistance > 5) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    container.addEventListener('wheel', handleWheelEvent, { passive: false });
+    container.addEventListener('mousedown', handleMouseDown);
+    container.addEventListener('click', handleClickCapture, true); // Use capture phase to intercept button click events
 
     return () => {
-      clearTimeout(timer);
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-      }
-      lenis?.destroy();
-      if (datePickerRef.current) {
-        delete (datePickerRef.current as any).lenis;
-      }
+      container.removeEventListener('wheel', handleWheelEvent);
+      container.removeEventListener('mousedown', handleMouseDown);
+      container.removeEventListener('click', handleClickCapture, true);
+      // Clean up window listeners in case we unmount mid-drag
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.removeProperty('user-select');
     };
   }, [viewMode]);
 
@@ -2645,7 +2675,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
                       <div
                         ref={datePickerRef}
-                        className="flex items-center gap-2 overflow-x-auto pb-2 scroll-auto overscroll-x-contain no-scrollbar"
+                        className="flex items-center gap-2 overflow-x-auto pb-2 scroll-auto overscroll-x-contain no-scrollbar cursor-grab"
                       >
                         {timelineDates.map((date) => {
                           const isSelected = selectedTimelineDate === date;
