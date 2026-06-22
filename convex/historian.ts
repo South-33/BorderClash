@@ -281,8 +281,8 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
         return null;
     };
 
-    // RETRY LOOP (3 attempts)
-    const MAX_RETRIES = 3;
+    // RETRY LOOP (2 attempts)
+    const MAX_RETRIES = 2;
     let currentPrompt = prompt;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -489,8 +489,8 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         return null;
     };
 
-    // RETRY LOOP (3 attempts)
-    const MAX_RETRIES = 3;
+    // RETRY LOOP (2 attempts)
+    const MAX_RETRIES = 2;
     let currentPrompt = prompt;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -499,7 +499,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, 2, "HISTORIAN");
+            const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, 1, "HISTORIAN");
 
             // Extract JSON from response
             const jsonStr = extractJsonPayload(response);
@@ -521,7 +521,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
                 console.warn(`[HISTORIAN] json_parse_failed attempt=${attempt}/${MAX_RETRIES} repair=true`);
                 try {
                     const repairPrompt = `Fix this broken JSON and output ONLY one fenced \`\`\`json code block:\n\n${jsonStr.substring(0, 2000)}`;
-                    const repairResponse = await callGeminiStudio(repairPrompt, MODELS.thinking, 1);
+                    const repairResponse = await callGeminiStudio(repairPrompt, MODELS.historian, 1);
                     const repairedJson = extractJsonPayload(repairResponse);
                     if (repairedJson) {
                         result = tryParseJson(repairedJson);
@@ -1157,7 +1157,7 @@ ${batchContext}
 
 Return rescored importance for every event in CURRENT BATCH.`;
 
-    const maxRetries = 3;
+    const maxRetries = 2;
     let currentPrompt = prompt;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -1728,7 +1728,7 @@ CURRENT BATCH (${events.length} events):
 ${eventContext}
 ═══════════════════════════════════════════════════════════════`;
 
-    const maxRetries = 3;
+    const maxRetries = 2;
     let currentPrompt = prompt;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {

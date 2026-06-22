@@ -1617,7 +1617,7 @@ Return your hours and a brief reason in the "scheduling" section.`;
                     unchanged?: boolean;
                     changeReason?: string;
                 };
-            }>(prompt, "thinking", 3, "SYNTHESIS");
+            }>(prompt, "synthesis", 2, "SYNTHESIS");
 
             if (!result) {
                 console.warn("[SYNTHESIS] skipped reason=invalid_or_missing_json preservedExisting=true");
@@ -1918,7 +1918,7 @@ RULES:
                 actions: any[];
                 crossReferenceNotes?: string;
                 summary?: string;
-            }>(prompt, "thinking", 3, "MANAGER");
+            }>(prompt, "verification", 2, "MANAGER");
 
             if (!result) {
                 console.log("❌ [MANAGER] Invalid or missing JSON response from API");
@@ -2764,7 +2764,7 @@ RULES:
 - Articles about internal Cambodian/Thai politics (not border-related) = OFF_TOPIC`;
 
                 try {
-                    const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 2, "SOURCE-VERIFY");
+                    const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 1, "SOURCE-VERIFY");
 
                     // Extract JSON
                     const extractJsonPayload = (input: string): string | null => {
@@ -3168,7 +3168,7 @@ RULES:
 - Be honest about whether the stored summary matches the actual content`;
 
         try {
-            const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 2, "VERIFY-SINGLE");
+            const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 1, "VERIFY-SINGLE");
 
             // Extract JSON
             const fencedMatch = response.match(/```json\s*([\s\S]*?)```/i);

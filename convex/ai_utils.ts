@@ -112,9 +112,9 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const startTime = Date.now();
 
-        // 3-minute timeout per request (Gemini can be slow on complex prompts)
+        // 4-minute timeout per request (Gemini can be slow on complex prompts)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 180000);
+        const timeoutId = setTimeout(() => controller.abort(), 240000);
 
         try {
             const request = buildGeminiStudioRequest(model, datedPrompt, requestId);
@@ -281,8 +281,8 @@ export async function callGeminiStudioWithSelfHealing<T>(
         return normalized;
     };
 
-    // Use fallback chain for thinking model (critical tasks)
-    const useFallback = modelType === "thinking";
+    // Use fallback chain for thinking/critical models (verification, historian, synthesis)
+    const useFallback = modelType === "thinking" || modelType === "verification" || modelType === "synthesis" || modelType === "historian";
     const fallbackChain = useFallback ? FALLBACK_CHAINS.critical : [MODELS[modelType]];
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -295,7 +295,7 @@ export async function callGeminiStudioWithSelfHealing<T>(
             // 1. CALL API - use fallback for thinking model
             try {
                 if (useFallback) {
-                    rawResponse = await callGeminiStudioWithFallback(currentPrompt, fallbackChain, 2, debugLabel);
+                    rawResponse = await callGeminiStudioWithFallback(currentPrompt, fallbackChain, 1, debugLabel);
                 } else {
                     rawResponse = await callGeminiStudio(currentPrompt, MODELS[modelType], 1);
                 }

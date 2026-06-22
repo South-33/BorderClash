@@ -12,10 +12,18 @@ export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash
 // Model roles - suffixes are resolved by ai_utils into model + thinking_level.
 // "*-high" maps to Gemini Studio Extended thinking.
 export const MODELS = {
-    curation: "fast-high",     // Gemini Flash Lite with Extended thinking
-    fast: "fast-high",         // Back-compat alias for quick/curation work
-    thinking: "thinking-high", // Gemini 3.5 Flash with Extended thinking
-    pro: "pro-high",           // Pro fallback with Extended thinking
+    // Semantic step roles
+    curation: "fast-high",       // Gemini Flash Lite with Extended thinking
+    verification: "thinking-high", // Gemini 3.5 Flash with Extended thinking
+    historian: "thinking-high",    // Gemini 3.5 Flash with Extended thinking
+    synthesis: "thinking-high",    // Gemini 3.5 Flash with Extended thinking
+    proFallback: "pro-high",       // Pro fallback with Extended thinking
+    liteFallback: "fast-high",     // Flash Lite fallback with Extended thinking
+
+    // Backwards compatibility aliases for tests:
+    thinking: "thinking-high",
+    pro: "pro-high",
+    fast: "fast-high",
 } as const;
 
 // Fallback chains for rate limit recovery
