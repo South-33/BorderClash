@@ -48,6 +48,9 @@ export function resolveGeminiModel(model: string): { model: string; thinkingLeve
 
 export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
 - Write like a careful local translator, not a literal dictionary. Understand the event first, then retell it in normal Thai/Khmer.
+- CRITICAL SCRIPT RULE:
+  - All fields ending in "Th" (e.g., titleTh, descriptionTh, officialNarrativeTh, generalSummaryTh, keyEventsTh, postureLabelTh, postureRationaleTh) MUST be written in Thai language using the THAI SCRIPT (ไทย) ONLY. Do NOT write in Khmer script or English in these fields.
+  - All fields ending in "Kh" (e.g., titleKh, descriptionKh, officialNarrativeKh, generalSummaryKh, keyEventsKh, postureLabelKh, postureRationaleKh) MUST be written in Khmer language using the KHMER SCRIPT (ខ្មែរ) ONLY. Do NOT write in Thai script or English in these fields.
 - Keep it short and clear for a broad local audience, but never compress meaning until it becomes vague.
 - Prefer everyday concrete words. When a legal, military, or diplomatic term matters, keep the meaning and add a short plain explanation in the sentence.
 - Use technical terms and acronyms only when they genuinely help accuracy. Otherwise, say what the thing means or why it matters in simple words.
