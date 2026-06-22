@@ -100,7 +100,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
 /**
  * Call the gemini-studio-api (OpenAI compatible)
  */
-export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4): Promise<string> {
+export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4, timeoutMs: number = 240000): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
     const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
@@ -112,9 +112,9 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const startTime = Date.now();
 
-        // 4-minute timeout per request (Gemini can be slow on complex prompts)
+        // Dynamic or 4-minute timeout per request (Gemini can be slow on complex prompts)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 240000);
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
             const request = buildGeminiStudioRequest(model, datedPrompt, requestId);
@@ -183,19 +183,34 @@ export async function callGeminiStudioWithFallback(
     prompt: string,
     fallbackChain: readonly string[] = FALLBACK_CHAINS.critical,
     maxRetriesPerModel: number = 2,
-    debugLabel: string = "AI"
+    debugLabel: string = "AI",
+    timeoutMs?: number
 ): Promise<string> {
     const RETRY_DELAY = 5000; // 5 seconds between retries
 
     for (let modelIdx = 0; modelIdx < fallbackChain.length; modelIdx++) {
-        const model = fallbackChain[modelIdx];
+        const baseModel = fallbackChain[modelIdx];
         const isLastModel = modelIdx === fallbackChain.length - 1;
 
-        for (let attempt = 1; attempt <= maxRetriesPerModel; attempt++) {
-            try {
-                const result = await callGeminiStudio(prompt, model, 1);
+        // Build execution sequence: if model ends with "-high", try it twice (high), then try the "-standard" version once.
+        // Otherwise, try the model twice.
+        const attemptsSeq: string[] = [];
+        if (baseModel.endsWith("-high")) {
+            const standardModel = baseModel.slice(0, -"-high".length) + "-standard";
+            attemptsSeq.push(baseModel, baseModel, standardModel);
+        } else {
+            attemptsSeq.push(baseModel, baseModel);
+        }
 
-                if (modelIdx > 0) {
+        for (let attemptIdx = 0; attemptIdx < attemptsSeq.length; attemptIdx++) {
+            const model = attemptsSeq[attemptIdx];
+            const attemptNum = attemptIdx + 1;
+            const isLastAttemptOfAll = isLastModel && (attemptIdx === attemptsSeq.length - 1);
+
+            try {
+                const result = await callGeminiStudio(prompt, model, 1, timeoutMs);
+
+                if (modelIdx > 0 || attemptIdx > 0) {
                     console.log(`[${debugLabel}] fallback_model_ok model=${model}`);
                 }
                 return result;
@@ -207,19 +222,19 @@ export async function callGeminiStudioWithFallback(
                 if (isRateLimitError(error)) {
                     console.warn(`[${debugLabel}] model_rate_limited model=${model} error=${errorMsg.substring(0, 80)}`);
 
-                    if (!isLastModel) {
-                        console.log(`[${debugLabel}] fallback_model from=${model} to=${fallbackChain[modelIdx + 1]}`);
-                        break; // Skip remaining retries, move to next model
+                    if (!isLastAttemptOfAll) {
+                        console.log(`[${debugLabel}] fallback_model from=${model} to next model/thinking level`);
+                        break; // Skip remaining attempts for this base model, move to next base model
                     } else {
                         console.error(`[${debugLabel}] all_models_exhausted lastModel=${model}`);
                         throw new Error(`All models rate limited. Last error: ${errorMsg}`);
                     }
                 }
 
-                // Non-rate-limit error (network, timeout, etc.) - retry same model
-                console.warn(`[${debugLabel}] model_error model=${model} attempt=${attempt}/${maxRetriesPerModel} error=${errorMsg.substring(0, 80)}`);
+                // Non-rate-limit error (network, timeout, etc.)
+                console.warn(`[${debugLabel}] model_error model=${model} attempt=${attemptNum}/${attemptsSeq.length} error=${errorMsg.substring(0, 80)}`);
 
-                if (attempt < maxRetriesPerModel) {
+                if (attemptIdx < attemptsSeq.length - 1) {
                     await new Promise(r => setTimeout(r, RETRY_DELAY));
                 } else if (!isLastModel) {
                     console.log(`[${debugLabel}] fallback_model from=${model} to=${fallbackChain[modelIdx + 1]}`);
@@ -243,7 +258,8 @@ export async function callGeminiStudioWithSelfHealing<T>(
     prompt: string,
     modelType: keyof typeof MODELS = "thinking",
     maxRetries: number = 3,
-    debugLabel: string = "AI"
+    debugLabel: string = "AI",
+    timeoutMs?: number
 ): Promise<T | null> {
     let currentPrompt = prompt;
     const startedAt = Date.now();
@@ -295,9 +311,9 @@ export async function callGeminiStudioWithSelfHealing<T>(
             // 1. CALL API - use fallback for thinking model
             try {
                 if (useFallback) {
-                    rawResponse = await callGeminiStudioWithFallback(currentPrompt, fallbackChain, 1, debugLabel);
+                    rawResponse = await callGeminiStudioWithFallback(currentPrompt, fallbackChain, 1, debugLabel, timeoutMs);
                 } else {
-                    rawResponse = await callGeminiStudio(currentPrompt, MODELS[modelType], 1);
+                    rawResponse = await callGeminiStudio(currentPrompt, MODELS[modelType], 1, timeoutMs);
                 }
                 rawResponse = rawResponse
                     .replace(/\\<json>/gi, "<json>")

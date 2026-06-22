@@ -244,7 +244,8 @@ async function runPlanner(
         title: string;
         description: string;
         importance: number;
-    }>
+    }>,
+    timeoutMs?: number
 ): Promise<string[] | null> {
 
     // Build compact article list (just enough info for selection)
@@ -410,7 +411,8 @@ async function runHistorian(
         source: string;
         sourceUrl: string;
         credibility: number;
-    }>>
+    }>>,
+    timeoutMs?: number
 ): Promise<HistorianResult | null> {
 
     // Build article context with publication dates
@@ -499,7 +501,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, 1, "HISTORIAN");
+            const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, 1, "HISTORIAN", timeoutMs);
 
             // Extract JSON from response
             const jsonStr = extractJsonPayload(response);
@@ -521,7 +523,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
                 console.warn(`[HISTORIAN] json_parse_failed attempt=${attempt}/${MAX_RETRIES} repair=true`);
                 try {
                     const repairPrompt = `Fix this broken JSON and output ONLY one fenced \`\`\`json code block:\n\n${jsonStr.substring(0, 2000)}`;
-                    const repairResponse = await callGeminiStudio(repairPrompt, MODELS.historian, 1);
+                    const repairResponse = await callGeminiStudio(repairPrompt, MODELS.historian, 1, timeoutMs);
                     const repairedJson = extractJsonPayload(repairResponse);
                     if (repairedJson) {
                         result = tryParseJson(repairedJson);
@@ -581,6 +583,7 @@ export async function runHistorianCycleInternal(
         cachedNewsContext?: any;
     },
 ): Promise<HistorianCycleResult> {
+    const historianStartTime = Date.now();
     // 1. Get ALL unprocessed articles (not just 10)
     const allArticles = await ctx.runQuery(internal.api.getUnprocessedForTimeline, {
         batchSize: 200,  // Get all of them
@@ -624,6 +627,10 @@ export async function runHistorianCycleInternal(
         }
 
         // Run Planner to pick 5-10
+        const elapsedPlanner = Date.now() - historianStartTime;
+        const remainingPlanner = (10 * 60 * 1000) - elapsedPlanner;
+        const requestTimeoutPlanner = Math.max(30000, Math.min(240000, remainingPlanner - 30000));
+
         const plannerSelection = await runPlanner(
             articlesForPlanner.map((a: any) => ({
                 title: a.title,
@@ -637,7 +644,8 @@ export async function runHistorianCycleInternal(
                 title: t.title,
                 description: t.description,
                 importance: t.importance,
-            }))
+            })),
+            requestTimeoutPlanner
         );
 
         if (!plannerSelection || plannerSelection.length === 0) {

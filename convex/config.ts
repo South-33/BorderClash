@@ -22,7 +22,7 @@ export const MODELS = {
 
     // Backwards compatibility aliases for tests:
     thinking: "thinking-high",
-    pro: "pro-high",
+    pro: "thinking-standard",
     fast: "fast-high",
 } as const;
 
