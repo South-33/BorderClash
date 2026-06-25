@@ -17,8 +17,8 @@ const baseHeaders = {
 };
 
 const body = {
-  model: "fast",
-  thinking_level: "extended",
+  model: "gemini-3.1-flash-lite",
+  thinking_level: "Extended",
   messages: [{ role: "user", content: "Return exactly: ok" }],
   project: projectName,
   client: clientName,

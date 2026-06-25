@@ -13,17 +13,17 @@ export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash
 // "*-high" maps to Gemini Studio Extended thinking.
 export const MODELS = {
     // Semantic step roles
-    curation: "fast-high",       // Gemini Flash Lite with Extended thinking
-    verification: "thinking-high", // Gemini 3.5 Flash with Extended thinking
-    historian: "thinking-high",    // Gemini 3.5 Flash with Extended thinking
-    synthesis: "thinking-high",    // Gemini 3.5 Flash with Extended thinking
-    proFallback: "pro-high",       // Pro fallback with Extended thinking
-    liteFallback: "fast-high",     // Flash Lite fallback with Extended thinking
+    curation: "gemini-3.1-flash-lite-extended",       // Gemini Flash Lite with Extended thinking
+    verification: "gemini-3.5-flash-extended", // Gemini 3.5 Flash with Extended thinking
+    historian: "gemini-3.5-flash-extended",    // Gemini 3.5 Flash with Extended thinking
+    synthesis: "gemini-3.5-flash-extended",    // Gemini 3.5 Flash with Extended thinking
+    proFallback: "gemini-3.1-pro-extended",       // Pro fallback with Extended thinking
+    liteFallback: "gemini-3.1-flash-lite-extended",     // Flash Lite fallback with Extended thinking
 
     // Backwards compatibility aliases for tests:
-    thinking: "thinking-high",
-    pro: "thinking-standard",
-    fast: "fast-high",
+    thinking: "gemini-3.5-flash-extended",
+    pro: "gemini-3.1-pro-standard",
+    fast: "gemini-3.1-flash-lite-extended",
 } as const;
 
 // Fallback chains for rate limit recovery

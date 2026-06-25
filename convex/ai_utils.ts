@@ -33,17 +33,36 @@ const THINKING_LEVEL_SUFFIXES: Array<[string, GeminiThinkingLevel]> = [
 ];
 
 export function resolveGeminiModel(model: string): { model: string; thinkingLevel?: GeminiThinkingLevel } {
-    for (const [suffix, thinkingLevel] of THINKING_LEVEL_SUFFIXES) {
+    let resolvedModel = model;
+    let thinkingLevel: GeminiThinkingLevel | undefined = undefined;
+
+    for (const [suffix, level] of THINKING_LEVEL_SUFFIXES) {
         const marker = `-${suffix}`;
         if (model.endsWith(marker)) {
-            return {
-                model: model.slice(0, -marker.length),
-                thinkingLevel,
-            };
+            resolvedModel = model.slice(0, -marker.length);
+            thinkingLevel = level;
+            break;
         }
     }
 
-    return { model };
+    const baseLower = resolvedModel.toLowerCase();
+    if (baseLower === "thinking") {
+        resolvedModel = "gemini-3.5-flash";
+        if (!thinkingLevel) {
+            thinkingLevel = "extended";
+        }
+    } else if (baseLower === "fast" || baseLower === "lite" || baseLower === "flash-lite") {
+        resolvedModel = "gemini-3.1-flash-lite";
+    } else if (baseLower === "flash") {
+        resolvedModel = "gemini-3.5-flash";
+    } else if (baseLower === "pro") {
+        resolvedModel = "gemini-3.1-pro";
+    }
+
+    return {
+        model: resolvedModel,
+        thinkingLevel,
+    };
 }
 
 export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
@@ -64,7 +83,8 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
     const projectName = GEMINI_PROJECT_NAME;
     const clientName = GEMINI_CLIENT_NAME;
     const resolvedModel = resolveGeminiModel(model);
-    const body: GeminiRequestInit["body"] = {
+
+    const body: any = {
         model: resolvedModel.model,
         messages: [{ role: "user", content }],
         project: projectName,
@@ -76,8 +96,10 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
         },
     };
 
-    if (resolvedModel.thinkingLevel) {
-        body.thinking_level = resolvedModel.thinkingLevel;
+    if (resolvedModel.thinkingLevel === "extended") {
+        body.thinking_level = "Extended";
+    } else if (resolvedModel.thinkingLevel === "standard") {
+        body.thinking_level = "Standard";
     }
 
     return {
@@ -92,7 +114,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
             "X-Client-Name": clientName,
             "X-Request-ID": requestId,
         },
-        body,
+        body: body as GeminiRequestInit["body"],
         requestId,
     };
 }
@@ -252,7 +274,7 @@ export async function callGeminiStudioWithFallback(
  * GENERIC SELF-HEALING HELPER
  * Handles retry logic and JSON repair
  * Extracts JSON from fenced ```json blocks first, then falls back to legacy tags/raw braces
- * Uses model fallback for thinking model (critical chain: thinking-high -> pro-high -> fast-high)
+ * Uses model fallback for thinking model (critical chain: gemini-3.5-flash-extended -> gemini-3.1-pro-extended -> gemini-3.1-flash-lite-extended)
  */
 export async function callGeminiStudioWithSelfHealing<T>(
     prompt: string,
