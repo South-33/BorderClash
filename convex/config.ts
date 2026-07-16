@@ -10,7 +10,7 @@ export const GEMINI_PROJECT_NAME = process.env.GEMINI_PROJECT_NAME || "bordercla
 export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash-convex";
 
 // Model roles - suffixes are resolved by ai_utils into model + thinking_level.
-// "*-high" maps to Gemini Studio Extended thinking.
+// "*-extended" (and the legacy "*-high" alias) maps to Gemini Studio Extended thinking.
 export const MODELS = {
     // Semantic step roles
     curation: "gemini-3.1-flash-lite-extended",       // Gemini Flash Lite with Extended thinking

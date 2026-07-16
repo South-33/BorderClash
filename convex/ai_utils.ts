@@ -214,11 +214,12 @@ export async function callGeminiStudioWithFallback(
         const baseModel = fallbackChain[modelIdx];
         const isLastModel = modelIdx === fallbackChain.length - 1;
 
-        // Build execution sequence: if model ends with "-high", try it twice (high), then try the "-standard" version once.
-        // Otherwise, try the model twice.
+        // Build execution sequence: thinking models get two requested-level attempts,
+        // then one same-model Standard attempt before moving to the next model.
         const attemptsSeq: string[] = [];
-        if (baseModel.endsWith("-high")) {
-            const standardModel = baseModel.slice(0, -"-high".length) + "-standard";
+        const thinkingSuffix = ["-extended", "-high"].find(suffix => baseModel.endsWith(suffix));
+        if (thinkingSuffix) {
+            const standardModel = baseModel.slice(0, -thinkingSuffix.length) + "-standard";
             attemptsSeq.push(baseModel, baseModel, standardModel);
         } else {
             attemptsSeq.push(baseModel, baseModel);
