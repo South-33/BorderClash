@@ -106,6 +106,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
         headers: {
             "Content-Type": "application/json",
             "Authorization": "Bearer anything",
+            "ngrok-skip-browser-warning": "true",
             // Browser-like headers to bypass Cloudflare bot protection
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
