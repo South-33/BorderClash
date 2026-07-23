@@ -2145,6 +2145,12 @@ export const runResearchCycle = internalAction({
 export const step2_verification = internalAction({
     args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
     handler: async (ctx, { errors, runId, attempt = 0 }) => {
+        const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+        if (stats?.isPaused || stats?.systemStatus === "stopped") {
+            console.log("[STEP 2] Aborting step2_verification because system is paused/stopped.");
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+            return;
+        }
         const stepErrors = [...errors];
         let verificationSummary = "not_run";
 
@@ -2200,6 +2206,12 @@ export const step2_verification = internalAction({
 export const step3_historian = internalAction({
     args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
     handler: async (ctx, { errors, runId, attempt = 0 }) => {
+        const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+        if (stats?.isPaused || stats?.systemStatus === "stopped") {
+            console.log("[STEP 3] Aborting step3_historian because system is paused/stopped.");
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+            return;
+        }
         const stepErrors = [...errors];
 
         // With chaining, we now have full 10 mins for historian
@@ -2316,6 +2328,12 @@ export const step3_historian = internalAction({
 export const step4_synthesis = internalAction({
     args: { errors: v.array(v.string()), runId: v.string(), attempt: v.optional(v.number()) },
     handler: async (ctx, { errors, runId, attempt = 0 }) => {
+        const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+        if (stats?.isPaused || stats?.systemStatus === "stopped") {
+            console.log("[STEP 4] Aborting step4_synthesis because system is paused/stopped.");
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+            return;
+        }
         const stepErrors = [...errors];
         let schedulingResult: { nextCycleHours: number; reason: string } | null = null;
         let synthesisSucceeded = false;

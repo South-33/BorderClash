@@ -2584,9 +2584,17 @@ export const stopResearchCycle = mutation({
             .first();
 
         if (existing) {
+            if (existing.scheduledRunId) {
+                try {
+                    await ctx.scheduler.cancel(existing.scheduledRunId);
+                } catch (e) {
+                    console.log(`Could not cancel scheduledRunId ${existing.scheduledRunId}: ${e}`);
+                }
+            }
             await ctx.db.patch(existing._id, {
                 isPaused: true,
                 systemStatus: "stopped",
+                scheduledRunId: undefined,
                 errorLog: "Cycle manually stopped by user."
             });
         }
