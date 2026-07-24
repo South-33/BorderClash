@@ -583,16 +583,17 @@ export const getExistingTitlesInternal = internalQuery({
         const cutoff = Date.now() - TWO_DAYS_MS;
 
         const collectRecentUrls = async (status: "active" | "unverified", maxCount: number) => {
-            const urls: Array<{ sourceUrl: string }> = [];
-            const query = ctx.db
+            const articles = await ctx.db
                 .query(table)
                 .withIndex("by_status_publishedAt", q => q.eq("status", status))
-                .order("desc");
+                .order("desc")
+                .take(maxCount);
 
-            for await (const article of query) {
-                if ((article.publishedAt || article.fetchedAt) <= cutoff) break;
-                urls.push({ sourceUrl: article.sourceUrl });
-                if (urls.length >= maxCount) break;
+            const urls: Array<{ sourceUrl: string }> = [];
+            for (const article of articles) {
+                if (article.sourceUrl) {
+                    urls.push({ sourceUrl: article.sourceUrl });
+                }
             }
 
             return urls;
