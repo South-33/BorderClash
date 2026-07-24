@@ -17,7 +17,7 @@ const baseHeaders = {
 };
 
 const body = {
-  model: "gemini-3.1-flash-lite",
+  model: "flash-lite",
   thinking_level: "Extended",
   messages: [{ role: "user", content: "Return exactly: ok" }],
   project: projectName,

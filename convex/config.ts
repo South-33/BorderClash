@@ -13,21 +13,21 @@ export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash
 // "*-extended" (and the legacy "*-high" alias) maps to Gemini Studio Extended thinking.
 export const MODELS = {
     // Semantic step roles
-    curation: "gemini-3.1-flash-lite-extended",       // Gemini Flash Lite with Extended thinking
-    verification: "gemini-3.5-flash-extended", // Gemini 3.5 Flash with Extended thinking
-    historian: "gemini-3.5-flash-extended",    // Gemini 3.5 Flash with Extended thinking
-    synthesis: "gemini-3.5-flash-extended",    // Gemini 3.5 Flash with Extended thinking
-    proFallback: "gemini-3.1-pro-extended",       // Pro fallback with Extended thinking
-    liteFallback: "gemini-3.1-flash-lite-extended",     // Flash Lite fallback with Extended thinking
+    curation: "flash-lite-extended",       // Gemini Flash Lite with Extended thinking
+    verification: "flash-extended",        // Gemini Flash with Extended thinking
+    historian: "flash-extended",           // Gemini Flash with Extended thinking
+    synthesis: "flash-extended",           // Gemini Flash with Extended thinking
+    proFallback: "pro-extended",           // Pro fallback with Extended thinking
+    liteFallback: "flash-lite-extended",   // Flash Lite fallback with Extended thinking
 
-    // Backwards compatibility aliases for tests:
-    thinking: "gemini-3.5-flash-extended",
-    pro: "gemini-3.1-pro-standard",
-    fast: "gemini-3.1-flash-lite-extended",
+    // Clean aliases:
+    thinking: "flash-extended",
+    pro: "pro-standard",
+    fast: "flash-lite-extended",
 } as const;
 
 // Fallback chains for rate limit recovery
-// Critical tasks prefer Gemini 3.5 Flash Extended, then fall back only if needed.
+// Critical tasks prefer Gemini Flash Extended, then fall back only if needed.
 // Curation uses Flash Lite Extended.
 export const FALLBACK_CHAINS = {
     critical: [MODELS.thinking, MODELS.pro, MODELS.curation], // Agent/Historian/Synthesis/verification

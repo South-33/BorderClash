@@ -47,16 +47,16 @@ export function resolveGeminiModel(model: string): { model: string; thinkingLeve
 
     const baseLower = resolvedModel.toLowerCase();
     if (baseLower === "thinking") {
-        resolvedModel = "gemini-3.5-flash";
+        resolvedModel = "flash";
         if (!thinkingLevel) {
             thinkingLevel = "extended";
         }
-    } else if (baseLower === "fast" || baseLower === "lite" || baseLower === "flash-lite") {
-        resolvedModel = "gemini-3.1-flash-lite";
-    } else if (baseLower === "flash") {
-        resolvedModel = "gemini-3.5-flash";
-    } else if (baseLower === "pro") {
-        resolvedModel = "gemini-3.1-pro";
+    } else if (baseLower === "fast" || baseLower === "lite" || baseLower === "flash-lite" || baseLower === "gemini-3.1-flash-lite" || baseLower === "gemini-3.5-flash-lite") {
+        resolvedModel = "flash-lite";
+    } else if (baseLower === "flash" || baseLower === "gemini-3.5-flash" || baseLower === "gemini-3.6-flash") {
+        resolvedModel = "flash";
+    } else if (baseLower === "pro" || baseLower === "gemini-3.1-pro") {
+        resolvedModel = "pro";
     }
 
     return {
