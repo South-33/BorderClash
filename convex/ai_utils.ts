@@ -6,24 +6,6 @@ import { GEMINI_CLIENT_NAME, GEMINI_PROJECT_NAME, GEMINI_STUDIO_API_URL, MODELS,
 
 type GeminiThinkingLevel = "standard" | "extended";
 
-// Borderclash uses a tiny response marker to distinguish an instruction-following
-// answer from Gemini's occasional refusal/error text. The API remains provider-agnostic.
-const RESPONSE_MARKER = "response=good";
-
-function addResponseMarkerInstruction(prompt: string): string {
-    return `${prompt}\n\nRESPONSE FORMAT: Your first line must be exactly ${RESPONSE_MARKER}. Then return the requested answer.`;
-}
-
-function stripResponseMarker(response: string): string {
-    const normalized = (response || "").trimStart();
-    const firstLineEnd = normalized.search(/\r?\n/);
-    const firstLine = (firstLineEnd === -1 ? normalized : normalized.slice(0, firstLineEnd)).trim();
-    if (!/^response\s*=\s*good$/i.test(firstLine)) {
-        throw new Error(`Gemini response missing ${RESPONSE_MARKER} marker`);
-    }
-    return (firstLineEnd === -1 ? "" : normalized.slice(firstLineEnd).trimStart());
-}
-
 type GeminiRequestInit = {
     headers: Record<string, string>;
     body: {
@@ -144,7 +126,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
 export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4, timeoutMs: number = 240000): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
-    const datedPrompt = addResponseMarkerInstruction(`[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`);
+    const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
 
     const RETRY_DELAY = 8000; // 8 seconds - enough time for Cloudflare tunnel to reconnect
 
@@ -183,7 +165,7 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
                 throw new Error("API returned empty response content");
             }
 
-            return stripResponseMarker(content);
+            return content;
 
         } catch (error) {
             clearTimeout(timeoutId);

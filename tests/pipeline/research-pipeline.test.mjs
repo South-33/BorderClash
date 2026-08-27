@@ -145,15 +145,6 @@ test("curation prompts and parsers are hardened against prose and bad escapes", 
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
 });
 
-test("Borderclash AI calls require and remove the lightweight response marker", () => {
-  const aiUtils = read(aiUtilsPath);
-
-  assert.match(aiUtils, /const RESPONSE_MARKER = "response=good"/);
-  assert.match(aiUtils, /first line must be exactly \$\{RESPONSE_MARKER\}/);
-  assert.match(aiUtils, /Gemini response missing \$\{RESPONSE_MARKER\} marker/);
-  assert.match(aiUtils, /return stripResponseMarker\(content\)/);
-});
-
 test("Gemini model aliases send explicit thinking levels", () => {
   const research = read(researchPath);
   const historian = read(historianPath);
