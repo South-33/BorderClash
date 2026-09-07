@@ -300,188 +300,51 @@ export const recoverStuckCycle = internalAction({
     },
 });
 
+
+type CurationCountry = "cambodia" | "thailand" | "international";
+
+const CURATION_PROMPT_MAX_CHARS = 1100;
+
+function buildCurationPrompt(country: CurationCountry): string {
+    const profiles: Record<CurationCountry, { perspective: string; scope: string; sources: string }> = {
+        cambodia: {
+            perspective: "Cambodian civilian",
+            scope: "Cambodian outlets, especially Khmer-language",
+            sources: "Fresh News, DAP, RFA Khmer, Khmer Times, AKP",
+        },
+        thailand: {
+            perspective: "Thai civilian",
+            scope: "Thai outlets, especially Thai-language",
+            sources: "Thai Rath, Khaosod, Matichon, Thai PBS, Bangkok Post",
+        },
+        international: {
+            perspective: "neutral outside observer",
+            scope: "international wire/global outlets, excluding Thai/Cambodian domestic media",
+            sources: "Reuters, AP, AFP, BBC, CNA, UN/ASEAN",
+        },
+    };
+    const profile = profiles[country];
+    const prompt = `Use Google Search now for Thailand-Cambodia news from the last 24-48h, from a ${profile.perspective} perspective. Search ${profile.scope}. Start with ${profile.sources}.
+
+Open each candidate. Return only canonical article URLs that load and support the title/summary. Never invent URLs, use image/attachment URLs, or add facts not on the page. Zero results is valid. Score credibility 0-100 from evidence, sourcing, tone, and balance.
+
+Return JSON only:
+{"newArticles":[{"title":"English","titleTh":"Thai","titleKh":"Khmer","publishedAt":"explicit page date YYYY-MM-DD/ISO UTC+7, else null","sourceUrl":"https://...","source":"publication","category":"military|political|humanitarian|diplomatic","credibility":0,"summary":"English","summaryTh":"concise Thai","summaryKh":"concise Khmer"}],"flaggedTitles":[]}
+
+Use English numerals. Prioritize fighting, casualties, evacuations, official statements, diplomacy, humanitarian impact. Include propaganda if relevant but score it lower.`;
+
+    if (prompt.length > CURATION_PROMPT_MAX_CHARS) {
+        throw new Error(`Curation prompt grew to ${prompt.length} chars; keep it below ${CURATION_PROMPT_MAX_CHARS} to avoid file-upload mode.`);
+    }
+    return prompt;
+}
+
 export const curateCambodia = internalAction({
     args: {},
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
         console.log(`🇰🇭 [CAMBODIA] Curating news via Gemini Studio API...`);
 
-        // Get existing URLs to avoid duplicates (only pass URLs, not titles)
-        const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "cambodia" });
-        const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
-
-        const prompt: string = `⚠️ MANDATORY: Use your [google_search] tool NOW to search the web for current news. Do NOT use your knowledge cutoff - you MUST invoke google_search first.
-
-You are finding NEWS THAT CAMBODIAN CIVILIANS READ.
-
-🇰🇭 YOUR PERSPECTIVE: You are searching for news as if you were a CAMBODIAN CITIZEN.
-Find news articles that Cambodians would see on their local TV, newspapers, and news websites.
-This means searching CAMBODIAN news outlets that publish news FOR Cambodians.
-
-⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES ⛔⛔⛔
-🚫 DO NOT FABRICATE URLS - Every URL you return MUST be a real page you actually found
-🚫 DO NOT GUESS URLS - If you found a news outlet but can't find the exact article URL, DO NOT RETURN IT
-🚫 DO NOT INVENT ARTICLES - Only return articles you can verify exist right now
-🚫 ZERO ARTICLES IS ACCEPTABLE - If you cannot find any real, verifiable articles, return an empty array
-🚫 QUALITY OVER QUANTITY - 1 real article is infinitely better than 10 hallucinated ones
-
-⚠️ WE VERIFY EVERY URL - If your URL returns 404 or doesn't match your summary, you have failed
-
-🚨 PRIORITY: RECENT BREAKING NEWS & MAJOR DEVELOPMENTS
-- Focus on news from the LAST 24-48 HOURS
-- PRIORITIZE: Active fighting, casualties, evacuations, government statements, diplomatic moves
-- Skip old articles or "background explainers" - we want CURRENT developments
-- Breaking news > analysis pieces > opinion pieces
-- If there's active conflict, that's the TOP priority
-
-🌐 SEARCH IN MULTIPLE LANGUAGES:
-- Search in KHMER: ព្រំដែនថៃ-កម្ពុជា, ជម្លោះព្រំដែន, កងទ័ពថៃ, ទំនាក់ទំនងថៃកម្ពុជា
-- Search in ENGLISH: Thailand Cambodia border, Cambodia news, Khmer news
-- PRIORITIZE Khmer-language sources - these are what Cambodians actually read!
-
-🔍 YOUR TASK: Search the web for RECENT news articles about Thailand-Cambodia relations FROM CAMBODIAN NEWS SOURCES.
-
-⚠️ CRITICAL REQUIREMENTS:
-- SEARCH THE WEB - do not rely on memory
-- ONLY include articles from CAMBODIAN news organizations (or international outlets covering Cambodia)
-- Each article MUST have a REAL, working sourceUrl that you VERIFIED exists
-- CLICK ON EACH URL before including it - if it 404s or doesn't load, DO NOT INCLUDE IT
-- Do NOT fabricate URLs - if you can't find any REAL articles, return {"newArticles": [], "flaggedTitles": []}
-- The summary MUST match what the actual article says - read the article before summarizing
-- Focus on what Cambodian media is reporting to its own citizens
-
-🔗 URL VALIDATION - CRITICAL:
-- NEVER include URLs with "/attachment/" in them - these are image links, not articles!
-- NEVER include URLs ending with image extensions (.jpg, .png, .gif, .webp)
-- Use the CANONICAL article URL - check the browser address bar after the page fully loads
-- If the URL redirects, use the FINAL destination URL
-- Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
-
-📺 CAMBODIAN NEWS SOURCES (EXAMPLES - not exhaustive!):
-These are MAJOR sources Cambodians read. Use them as STARTING POINTS,
-but DO NOT limit yourself to only these. If you find relevant articles
-from OTHER Cambodian outlets, INCLUDE them!
-
-KHMER LANGUAGE (prioritize these!):
-• Fresh News ហ្វ្រេសញូស (freshnewsasia.com) - Most popular in Cambodia
-• DAP News ដាប់ញូស (dap-news.com) - Popular Khmer news
-• VOD វីអូឌី (vodkhmer.news) - Voice of Democracy
-• RFA Khmer វិទ្យុអាស៊ីសេរី (rfa.org/khmer) - Radio Free Asia Khmer
-• Sabay News សប្បាយញូស (sabay.com.kh) - Popular portal
-• Thmey Thmey ថ្មីថ្មី (thmey-thmey.com) - Khmer news
-• CNC ស៊ីអិនស៊ី (cnc.com.kh) - Cambodia News Channel
-• TVK ទូរទស្សន៍កម្ពុជា - National TV
-• BTV ប៊ីធីវី (btv.com.kh) - Bayon TV
-
-ENGLISH LANGUAGE:
-• Phnom Penh Post (phnompenhpost.com)
-• Khmer Times (khmertimeskh.com)
-• Cambodia Daily (cambodiadaily.com)
-• AKP - Agence Kampuchea Presse (akp.gov.kh) - Government
-
-⚠️ ALSO SEARCH FOR: Other Cambodian news sites NOT on this list!
-Include ANY legitimate Cambodian news source you discover.
-
-⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
-${existingUrls || "(database is empty - find new articles!)"}
-
-☝️ DO NOT return any article with a URL from the list above. Check EVERY URL you find against this list!
-
-FOCUS:
-- What is CAMBODIAN media telling its citizens about the border situation?
-- Cambodian government statements and positions
-- How Cambodian news frames the conflict
-- Local Cambodian perspectives and concerns
-
-📌 INCLUDE ALL NEWS - NOT JUST CREDIBLE:
-- Find EVERYTHING a Cambodian citizen would see - propaganda, government press releases, viral stories, AND credible journalism
-- 🏢 GOVERNMENT SOURCES ARE IMPORTANT: Official ministry statements, AKP, etc. = pure propaganda. INCLUDE them with low credibility scores!
-- We score credibility separately - your job is to FIND news, not filter it
-- Recent/breaking news is highest priority, regardless of credibility
-
-CREDIBILITY SCORING - THINK CRITICALLY:
-Don't just score based on source name. Analyze the CONTENT:
-🔴 LOWER SCORE IF: Emotional language, no evidence cited, one-sided, exaggerated claims, "sources say" without naming who
-🟢 HIGHER SCORE IF: Quotes both sides, cites specific evidence, admits uncertainty, neutral factual tone, matches international reports
-
-SCORING GUIDE:
-• 75-100: Factual, evidence-based, matches international sources, quotes multiple sides (RARE)
-• 55-74: Solid reporting with working URL, mostly verifiable claims
-• 40-54: Some bias or propaganda elements, needs verification
-• 25-39: Heavy propaganda, emotional language, unverified, missing URL
-• Below 25: Obvious misinformation or fabrication
-
-⚠️ SUMMARY ACCURACY - CRITICAL:
-- Your summary MUST match what the article ACTUALLY says - DO NOT embellish or add details
-- If the article says "security reasons" - write "security reasons", NOT "due to attacks" 
-- If the article doesn't mention casualties - DON'T add casualties to the summary
-- QUOTE the article's actual words when possible
-- DO NOT INFER or EXTRAPOLATE beyond what's written
-- If unsure, keep summary SHORTER and more conservative
-
-${TRANSLATION_STYLE_GUIDE}
-
-OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
-\`\`\`json
-{
-  "newArticles": [
-    {
-      "title": "English headline",
-      "titleTh": "Thai local headline, plain and concise",
-      "titleKh": "Khmer local headline, plain and concise",
-      "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time as shown on the page - Thailand/Cambodia are both UTC+7)",
-      "sourceUrl": "https://actual-url.com/path",
-      "source": "Publication Name",
-      "category": "military|political|humanitarian|diplomatic",
-      "credibility": 60,
-      "summary": "English summary",
-      "summaryTh": "Thai local summary, 1-2 short sentences",
-      "summaryKh": "Khmer local summary, 1-2 short sentences"
-    }
-  ],
-  "flaggedTitles": []
-}
-\`\`\`
-
-RULES:
-- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
-- Inside the fence, output valid JSON only
-- Use English numerals (0-9) only
-- Do NOT include any prose before or after the JSON block
-- Do NOT apologize, explain your reasoning, or ask follow-up questions
-- Do NOT output "ARTICLES FOUND", bullet lists, markdown prose, or extra code fences
-- Do NOT use markdown links like [title](url) anywhere in the JSON
-- "sourceUrl" must be the raw canonical URL string only
-
-⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
-Do NOT mix up Article 1's URL with Article 2's summary!
-
-✅ IT IS OK TO RETURN ZERO ARTICLES:
-- If you searched and found nothing relevant, return:
-\`\`\`json
-{"newArticles": [], "flaggedTitles": []}
-\`\`\`
-- This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
-- Do NOT feel pressured to fill the array - empty is fine!
-
-📅 DATE HANDLING - BE STRICT, DON'T GUESS:
-- ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
-- If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
-- DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
-- DO NOT use today's date unless the article explicitly says \"Published today\" with a date
-- Common bad dates to REJECT: dates in the far future, dates from years ago for current news
-- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ss+07:00\" or \"YYYY-MM-DD\" (Use LOCAL Thai/Khmer time)
-- WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
-
-🔴 FINAL CHECK BEFORE RESPONDING:
-For EACH article in your response, ask yourself:
-1. Did I actually visit this URL and see it load? If NO → remove it
-2. Does my summary match what the page actually says? If NO → remove it
-3. Is this about Thailand-Cambodia relations? If NO → remove it
-
-If no news found, return ONLY:
-\`\`\`json
-{"newArticles": [], "flaggedTitles": []}
-\`\`\``;
+        const prompt = buildCurationPrompt("cambodia");
 
         return await processNewsResponse(ctx, prompt, "cambodia");
     },
@@ -496,184 +359,7 @@ export const curateThailand = internalAction({
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
         console.log(`🇹🇭 [THAILAND] Curating news via Gemini Studio API...`);
 
-        // Get existing URLs to avoid duplicates (only pass URLs, not titles)
-        const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "thailand" });
-        const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
-
-        const prompt: string = `⚠️ MANDATORY: Use your [google_search] tool NOW to search the web for current news. Do NOT use your knowledge cutoff - you MUST invoke google_search first.
-
-You are finding NEWS THAT THAI CIVILIANS READ.
-
-🇹🇭 YOUR PERSPECTIVE: You are searching for news as if you were a THAI CITIZEN.
-Find news articles that Thais would see on their local TV, newspapers, and news websites.
-This means searching THAI news outlets that publish news FOR Thai people.
-
-⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES ⛔⛔⛔
-🚫 DO NOT FABRICATE URLS - Every URL you return MUST be a real page you actually found
-🚫 DO NOT GUESS URLS - If you found a news outlet but can't find the exact article URL, DO NOT RETURN IT
-🚫 DO NOT INVENT ARTICLES - Only return articles you can verify exist right now
-🚫 ZERO ARTICLES IS ACCEPTABLE - If you cannot find any real, verifiable articles, return an empty array
-🚫 QUALITY OVER QUANTITY - 1 real article is infinitely better than 10 hallucinated ones
-
-⚠️ WE VERIFY EVERY URL - If your URL returns 404 or doesn't match your summary, you have failed
-
-🚨 PRIORITY: RECENT BREAKING NEWS & MAJOR DEVELOPMENTS
-- Focus on news from the LAST 24-48 HOURS
-- PRIORITIZE: Active fighting, casualties, evacuations, government statements, diplomatic moves
-- Skip old articles or "background explainers" - we want CURRENT developments
-- Breaking news > analysis pieces > opinion pieces
-- If there's active conflict, that's the TOP priority
-
-🌐 SEARCH IN MULTIPLE LANGUAGES:
-- Search in THAI: ชายแดนไทย-กัมพูชา, ข่าวชายแดน, ทหารไทย, ความสัมพันธ์ไทยกัมพูชา, ปราสาทพระวิหาร
-- Search in ENGLISH: Thailand Cambodia border, Thai news, Bangkok Post
-- PRIORITIZE Thai-language sources - these are what Thai people actually read!
-
-🔍 YOUR TASK: Search the web for RECENT news articles about Thailand-Cambodia relations FROM THAI NEWS SOURCES.
-
-⚠️ CRITICAL REQUIREMENTS:
-- SEARCH THE WEB - do not rely on memory
-- ONLY include articles from THAI news organizations (or international outlets covering Thailand)
-- Each article MUST have a REAL, working sourceUrl that you VERIFIED exists
-- CLICK ON EACH URL before including it - if it 404s or doesn't load, DO NOT INCLUDE IT
-- Do NOT fabricate URLs - if you can't find any REAL articles, return {"newArticles": [], "flaggedTitles": []}
-- The summary MUST match what the actual article says - read the article before summarizing
-- Focus on what Thai media is reporting to its own citizens
-
-🔗 URL VALIDATION - CRITICAL:
-- NEVER include URLs with "/attachment/" in them - these are image links, not articles!
-- NEVER include URLs ending with image extensions (.jpg, .png, .gif, .webp)
-- Use the CANONICAL article URL - check the browser address bar after the page fully loads
-- If the URL redirects, use the FINAL destination URL
-- Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
-
-📺 THAI NEWS SOURCES (EXAMPLES - not exhaustive!):
-These are MAJOR sources Thais read. Use them as STARTING POINTS,
-but DO NOT limit yourself to only these. If you find relevant articles
-from OTHER Thai outlets, INCLUDE them!
-
-THAI LANGUAGE (prioritize these!):
-• ไทยรัฐ Thai Rath (thairath.co.th) - #1 largest circulation in Thailand
-• เดลินิวส์ Daily News (dailynews.co.th) - Major Thai daily
-• มติชน Matichon (matichon.co.th) - Quality Thai newspaper
-• ข่าวสด Khaosod (khaosod.co.th) - Popular Thai news
-• คมชัดลึก Kom Chad Luek (komchadluek.net) - Thai news
-• PPTV HD 36 (pptvhd36.com) - Thai TV channel
-• ช่อง 3 Channel 3 (ch3thailand.com) - Major Thai TV
-• ช่อง 7 Channel 7 (ch7.com) - Major Thai TV  
-• Thai PBS ไทยพีบีเอส (thaipbs.or.th) - Public broadcaster
-• กรุงเทพธุรกิจ (bangkokbiznews.com) - Business news
-• ผู้จัดการ Manager (mgronline.com) - Thai news portal
-
-ENGLISH LANGUAGE:
-• Bangkok Post (bangkokpost.com) - Oldest English daily
-• The Nation Thailand (nationthailand.com)
-• Thai PBS World (thaipbsworld.com)
-• Khaosod English (khaosodenglish.com)
-
-⚠️ ALSO SEARCH FOR: Other Thai news sites NOT on this list!
-Include ANY legitimate Thai news source you discover.
-
-⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
-${existingUrls || "(database is empty - find new articles!)"}
-
-☝️ DO NOT return any article with a URL from the list above. Check EVERY URL you find against this list!
-
-FOCUS:
-- What is THAI media telling its citizens about the border situation?
-- Thai government statements and positions
-- How Thai news frames the conflict
-- Local Thai perspectives and concerns
-
-📌 INCLUDE ALL NEWS - NOT JUST CREDIBLE:
-- Find EVERYTHING a Thai citizen would see - propaganda, government press releases, viral stories, AND credible journalism
-- 🏢 GOVERNMENT SOURCES ARE IMPORTANT: Official military statements, ministry announcements = pure propaganda. INCLUDE them with low credibility scores!
-- We score credibility separately - your job is to FIND news, not filter it
-- Recent/breaking news is highest priority, regardless of credibility
-
-CREDIBILITY SCORING - THINK CRITICALLY:
-Don't just score based on source name. Analyze the CONTENT:
-🔴 LOWER SCORE IF: Emotional language, no evidence cited, one-sided, exaggerated claims, "sources say" without naming who
-🟢 HIGHER SCORE IF: Quotes both sides, cites specific evidence, admits uncertainty, neutral factual tone, matches international reports
-
-• 75-100: Factual, evidence-based, matches international sources, quotes multiple sides (RARE)
-• 55-74: Solid reporting with working URL, mostly verifiable claims
-• 40-54: Some bias or propaganda elements, needs verification
-• 25-39: Heavy propaganda, emotional language, unverified, missing URL
-• Below 25: Obvious misinformation or fabrication
-
-⚠️ SUMMARY ACCURACY - CRITICAL:
-- Your summary MUST match what the article ACTUALLY says - DO NOT embellish or add details
-- If the article says "security reasons" - write "security reasons", NOT "due to attacks" 
-- If the article doesn't mention casualties - DON'T add casualties to the summary
-- QUOTE the article's actual words when possible
-- DO NOT INFER or EXTRAPOLATE beyond what's written
-- If unsure, keep summary SHORTER and more conservative
-
-${TRANSLATION_STYLE_GUIDE}
-
-OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
-\`\`\`json
-{
-  "newArticles": [
-    {
-      "title": "English headline",
-      "titleTh": "Thai local headline, plain and concise",
-      "titleKh": "Khmer local headline, plain and concise",
-      "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time as shown on the page - Thailand is UTC+7)",
-      "sourceUrl": "https://actual-url.com/path",
-      "source": "Publication Name",
-      "category": "military|political|humanitarian|diplomatic",
-      "credibility": 60,
-      "summary": "English summary",
-      "summaryTh": "Thai local summary, 1-2 short sentences",
-      "summaryKh": "Khmer local summary, 1-2 short sentences"
-    }
-  ],
-  "flaggedTitles": []
-}
-\`\`\`
-
-RULES:
-- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
-- Inside the fence, output valid JSON only
-- Use English numerals (0-9) only
-- Do NOT include any prose before or after the JSON block
-- Do NOT apologize, explain your reasoning, or ask follow-up questions
-- Do NOT output "ARTICLES FOUND", bullet lists, markdown prose, or extra code fences
-- Do NOT use markdown links like [title](url) anywhere in the JSON
-- "sourceUrl" must be the raw canonical URL string only
-
-⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
-Do NOT mix up Article 1's URL with Article 2's summary!
-
-✅ IT IS OK TO RETURN ZERO ARTICLES:
-- If you searched and found nothing relevant, return:
-\`\`\`json
-{"newArticles": [], "flaggedTitles": []}
-\`\`\`
-- This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
-- Do NOT feel pressured to fill the array - empty is fine!
-
-📅 DATE HANDLING - BE STRICT, DON'T GUESS:
-- ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
-- If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
-- DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
-- DO NOT use today's date unless the article explicitly says \"Published today\" with a date
-- Common bad dates to REJECT: dates in the far future, dates from years ago for current news
-- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ss+07:00\" or \"YYYY-MM-DD\" (Use LOCAL Thai time)
-- WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
-
-🔴 FINAL CHECK BEFORE RESPONDING:
-For EACH article in your response, ask yourself:
-1. Did I actually visit this URL and see it load? If NO → remove it
-2. Does my summary match what the page actually says? If NO → remove it
-3. Is this about Thailand-Cambodia relations? If NO → remove it
-
-If no news found, return ONLY:
-\`\`\`json
-{"newArticles": [], "flaggedTitles": []}
-\`\`\``;
+        const prompt = buildCurationPrompt("thailand");
 
         return await processNewsResponse(ctx, prompt, "thailand");
     },
@@ -688,189 +374,7 @@ export const curateInternational = internalAction({
     handler: async (ctx): Promise<{ newArticles: number; flagged: number; error?: string }> => {
         console.log(`🌍 [INTERNATIONAL] Curating news via Gemini Studio API...`);
 
-        // Get existing URLs to avoid duplicates (only pass URLs, not titles)
-        const existing = await ctx.runQuery(internal.api.getExistingTitlesInternal, { country: "international" });
-        const existingUrls: string = existing.map((a: { sourceUrl: string }) => a.sourceUrl).join("\n");
-
-        const prompt: string = `⚠️ MANDATORY: Use your [google_search] tool NOW to search the web for current news. Do NOT use your knowledge cutoff - you MUST invoke google_search first.
-
-You are finding INTERNATIONAL/NEUTRAL NEWS about the Thailand-Cambodia situation.
-
-🌍 YOUR PERSPECTIVE: You are an OUTSIDE OBSERVER - not Thai, not Cambodian.
-Find news from international wire services and global news outlets.
-These sources should provide NEUTRAL, BALANCED reporting without favoring either side.
-
-⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES ⛔⛔⛔
-🚫 DO NOT FABRICATE URLS - Every URL you return MUST be a real page you actually found via search
-🚫 DO NOT GUESS URLS - If you found a news outlet but can't find the exact article URL, DO NOT RETURN IT
-🚫 DO NOT INVENT ARTICLES - Only return articles you can verify exist right now
-🚫 ZERO ARTICLES IS ACCEPTABLE - If you cannot find any real, verifiable articles, return an empty array
-🚫 QUALITY OVER QUANTITY - 1 real article is infinitely better than 10 hallucinated ones
-
-⚠️ WE VERIFY EVERY URL - If your URL returns 404 or doesn't match your summary, you have failed
-
-🚨 PRIORITY: RECENT BREAKING NEWS & MAJOR DEVELOPMENTS
-- Focus on news from the LAST 24-48 HOURS
-- PRIORITIZE: Active fighting, casualties, evacuations, international reactions, diplomatic interventions
-- Wire services (Reuters, AP, AFP) are your BEST sources for breaking news
-- Skip old articles - we want what's happening NOW
-- If there's active conflict, that's the TOP priority
-
-🌐 SEARCH IN ENGLISH (primary international language):
-- Search: Thailand Cambodia border conflict, Thailand Cambodia tensions, Southeast Asia border dispute
-- Focus on WIRE SERVICES and GLOBAL NEWS OUTLETS
-- Avoid Thai or Cambodian domestic news - that's for the other curators
-
-🔍 YOUR TASK: Search the web for RECENT, NEUTRAL, INTERNATIONAL news articles about Thailand-Cambodia.
-
-⚠️ CRITICAL REQUIREMENTS:
-- SEARCH THE WEB - do not rely on memory
-- ONLY use INTERNATIONAL sources (NOT Thai or Cambodian domestic outlets)
-- Each article MUST have a REAL, working sourceUrl that you VERIFIED exists
-- CLICK ON EACH URL before including it - if it 404s or doesn't load, DO NOT INCLUDE IT
-- Do NOT fabricate URLs - if you can't find any REAL articles, return {"newArticles": [], "flaggedTitles": []}
-- The summary MUST match what the actual article says - read the article before summarizing
-- Focus on NEUTRAL, OBJECTIVE reporting
-
-🔗 URL VALIDATION - CRITICAL:
-- NEVER include URLs with "/attachment/" in them - these are image links, not articles!
-- NEVER include URLs ending with image extensions (.jpg, .png, .gif, .webp)
-- Use the CANONICAL article URL - check the browser address bar after the page fully loads
-- If the URL redirects, use the FINAL destination URL
-- Article URLs typically look like: domain.com/category/date/article-id or domain.com/news/article-slug
-
-📺 INTERNATIONAL SOURCES (EXAMPLES - not exhaustive!):
-These are well-known international outlets. Use them as STARTING POINTS,
-but DO NOT limit yourself to only these. If you find relevant articles
-from OTHER international sources, INCLUDE them!
-
-WIRE SERVICES (highest credibility):
-• Reuters (reuters.com) - HIGHEST priority
-• Associated Press / AP News (apnews.com)
-• AFP / Agence France-Presse (france24.com)
-
-GLOBAL NEWS OUTLETS:
-• BBC (bbc.com) - British
-• Al Jazeera (aljazeera.com) - Qatar-based
-• CNN International (cnn.com)
-• The Guardian (theguardian.com)
-• DW Deutsche Welle (dw.com) - German
-
-ASIA-FOCUSED INTERNATIONAL:
-• The Diplomat (thediplomat.com) - Asia analysis
-• Nikkei Asia (asia.nikkei.com) - Japanese-owned
-• South China Morning Post (scmp.com) - HK-based
-• Channel News Asia (channelnewsasia.com) - Singapore
-• Voice of America (voanews.com)
-
-OFFICIAL INTERNATIONAL:
-• UN News (news.un.org)
-• ASEAN official statements
-
-⚠️ ALSO SEARCH FOR: Other international news sites NOT on this list!
-Include ANY legitimate international news source covering this conflict.
-
-⛔ DUPLICATE CHECK - SKIP THESE URLs (we already have them):
-${existingUrls || "(database is empty - find new articles!)"}
-
-☝️ DO NOT return any article with a URL from the list above. Check EVERY URL you find against this list!
-
-FOCUS:
-- Neutral, fact-based reporting
-- International community reactions (UN, ASEAN, US, China, Japan)
-- Verified casualty figures and humanitarian impact
-- Diplomatic efforts and negotiations
-- What the OUTSIDE WORLD is being told about this conflict
-
-📌 INCLUDE ALL NEWS - EVEN BIASED INTERNATIONAL COVERAGE:
-- Find EVERYTHING international outlets are reporting - including sensationalized or biased coverage
-- We score credibility separately - your job is to FIND news, not filter it
-- Recent/breaking news is highest priority, regardless of credibility
-
-CREDIBILITY SCORING - THINK CRITICALLY:
-Don't just score based on source name. Analyze the CONTENT:
-🔴 LOWER SCORE IF: Emotional language, unverified claims, sensational headlines, "sources say" without naming who
-🟢 HIGHER SCORE IF: Quotes officials from both countries, cites specific evidence, admits uncertainty, neutral factual tone
-
-SCORING GUIDE:
-• 85-100: Factual, evidence-based, quotes multiple sides, verifiable claims (this is your baseline for international)
-• 70-84: Solid reporting, mostly balanced, working URL
-• 55-69: Some bias or gaps, needs cross-checking
-• 40-54: Questionable claims, missing verification
-• Below 40: Unreliable, missing URL, contradicted by other sources
-
-⚠️ SUMMARY ACCURACY - CRITICAL:
-- Your summary MUST match what the article ACTUALLY says - DO NOT embellish or add details
-- If the article says "security reasons" - write "security reasons", NOT "due to attacks" 
-- If the article doesn't mention casualties - DON'T add casualties to the summary
-- QUOTE the article's actual words when possible
-- DO NOT INFER or EXTRAPOLATE beyond what's written
-- If unsure, keep summary SHORTER and more conservative
-
-${TRANSLATION_STYLE_GUIDE}
-
-OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
-\`\`\`json
-{
-  "newArticles": [
-    {
-      "title": "English headline",
-      "titleTh": "Thai local headline, plain and concise",
-      "titleKh": "Khmer local headline, plain and concise",
-      "publishedAt": "YYYY-MM-DDTHH:mm:ss+07:00 (Use LOCAL time - convert to Thailand/Cambodia time UTC+7)",
-      "sourceUrl": "https://actual-url.com/path",
-      "source": "Publication Name",
-      "category": "military|political|humanitarian|diplomatic",
-      "credibility": 85,
-      "summary": "English summary",
-      "summaryTh": "Thai local summary, 1-2 short sentences",
-      "summaryKh": "Khmer local summary, 1-2 short sentences"
-    }
-  ],
-  "flaggedTitles": []
-}
-\`\`\`
-
-RULES:
-- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
-- Inside the fence, output valid JSON only
-- Use English numerals (0-9) only
-- Do NOT include any prose before or after the JSON block
-- Do NOT apologize, explain your reasoning, or ask follow-up questions
-- Do NOT output "ARTICLES FOUND", bullet lists, markdown prose, or extra code fences
-- Do NOT use markdown links like [title](url) anywhere in the JSON
-- "sourceUrl" must be the raw canonical URL string only
-
-⚠️ DOUBLE-CHECK: Before outputting JSON, verify that each article's URL matches its title and summary.
-Do NOT mix up Article 1's URL with Article 2's summary!
-
-✅ IT IS OK TO RETURN ZERO ARTICLES:
-- If you searched and found nothing relevant, return:
-\`\`\`json
-{"newArticles": [], "flaggedTitles": []}
-\`\`\`
-- This is GOOD behavior - we prefer 0 real articles over any hallucinated ones
-- Do NOT feel pressured to fill the array - empty is fine!
-
-📅 DATE HANDLING - BE STRICT, DON'T GUESS:
-- ONLY provide \"publishedAt\" if you find an EXPLICIT date on the page (e.g., \"Published: Dec 13, 2025\", \"2025-12-13\")
-- If the date is UNCLEAR or you're UNCERTAIN, set \"publishedAt\": null - WE WILL USE FETCH TIME
-- DO NOT guess based on \"yesterday\", \"recently\", \"this week\" - set null instead
-- DO NOT use today's date unless the article explicitly says \"Published today\" with a date
-- Common bad dates to REJECT: dates in the far future, dates from years ago for current news
-- Format if you DO find a date: \"YYYY-MM-DDTHH:mm:ss+07:00\" or \"YYYY-MM-DD\" (Convert to Thai/Khmer local time)
-- WHEN IN DOUBT, USE NULL - bad dates corrupt our timeline system
-
-🔴 FINAL CHECK BEFORE RESPONDING:
-For EACH article in your response, ask yourself:
-1. Did I actually visit this URL and see it load? If NO → remove it
-2. Does my summary match what the page actually says? If NO → remove it
-3. Is this about Thailand-Cambodia relations? If NO → remove it
-
-If no news found, return ONLY:
-\`\`\`json
-{"newArticles": [], "flaggedTitles": []}
-\`\`\``;
+        const prompt = buildCurationPrompt("international");
 
         return await processNewsResponse(ctx, prompt, "international");
     },

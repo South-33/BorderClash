@@ -117,14 +117,27 @@ test("source verification batch isolates per-result failures", () => {
   assert.match(dedupe, /export function findVerifiedDuplicateCandidate/);
 });
 
-test("curation prompts and parsers are hardened against prose and bad escapes", () => {
+test("curation prompts stay compact while parsers remain hardened", () => {
   const research = read(researchPath);
   const aiUtils = read(aiUtilsPath);
   const historian = read(historianPath);
 
   assert.doesNotMatch(research, /IMPORTANT - LIST ARTICLES BEFORE JSON/);
-  assert.match(research, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
-  assert.match(research, /Do NOT apologize, explain your reasoning, or ask follow-up questions/);
+  assert.match(research, /const CURATION_PROMPT_MAX_CHARS = 1100/);
+  assert.match(research, /Use Google Search now for Thailand-Cambodia news/);
+  assert.match(research, /Open each candidate\. Return only canonical article URLs that load/);
+  assert.match(research, /Return JSON only:/);
+  assert.match(research, /buildCurationPrompt\("cambodia"\)/);
+  assert.match(research, /buildCurationPrompt\("thailand"\)/);
+  assert.match(research, /buildCurationPrompt\("international"\)/);
+  assert.doesNotMatch(
+    section(research, "export const curateCambodia", "export const curateThailand"),
+    /getExistingTitlesInternal/,
+  );
+  assert.doesNotMatch(
+    section(research, "export const curateThailand", "export const curateInternational"),
+    /getExistingTitlesInternal/,
+  );
   assert.match(research, /const unwrapJsonStringEnvelope = \(input: string\): string =>/);
   assert.match(research, /replace\(\/\\\\\(\?=\[!<>&`\]\)\/g, ""\)/);
   assert.match(research, /replace\(\/\\\\\(\?!\["\\\\\/bfnrtu\]\)\/g, "\\\\\\\\"/);
