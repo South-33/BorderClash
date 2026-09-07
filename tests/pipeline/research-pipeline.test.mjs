@@ -152,7 +152,7 @@ test("Gemini model aliases send explicit thinking levels", () => {
   const config = read(configPath);
   const verifyScript = read(path.join(root, "scripts", "verify-gemini-headers.mjs"));
 
-  assert.match(config, /curation:\s*"flash-lite-extended"/);
+  assert.match(config, /curation:\s*"flash-lite-standard"/);
   assert.match(config, /thinking:\s*"flash-extended"/);
   assert.match(config, /critical:\s*\[MODELS\.thinking,\s*MODELS\.pro,\s*MODELS\.curation\]/);
   assert.match(aiUtils, /type GeminiThinkingLevel = "standard" \| "extended"/);

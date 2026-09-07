@@ -13,7 +13,7 @@ export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash
 // "*-extended" (and the legacy "*-high" alias) maps to Gemini Studio Extended thinking.
 export const MODELS = {
     // Semantic step roles
-    curation: "flash-lite-extended",       // Gemini Flash Lite with Extended thinking
+    curation: "flash-lite-standard",       // Gemini Flash Lite Standard is reliable for large curation prompts
     verification: "flash-extended",        // Gemini Flash with Extended thinking
     historian: "flash-extended",           // Gemini Flash with Extended thinking
     synthesis: "flash-extended",           // Gemini Flash with Extended thinking
@@ -28,7 +28,7 @@ export const MODELS = {
 
 // Fallback chains for rate limit recovery
 // Critical tasks prefer Gemini Flash Extended, then fall back only if needed.
-// Curation uses Flash Lite Extended.
+// Curation uses Flash Lite Standard because large Extended curation prompts can stall in Gemini Web.
 export const FALLBACK_CHAINS = {
     critical: [MODELS.thinking, MODELS.pro, MODELS.curation], // Agent/Historian/Synthesis/verification
     standard: [MODELS.thinking],                              // Planner, JSON repair, general tasks

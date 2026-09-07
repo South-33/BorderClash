@@ -123,7 +123,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
 /**
  * Call the gemini-studio-api (OpenAI compatible)
  */
-export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4, timeoutMs: number = 240000): Promise<string> {
+export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4, timeoutMs: number = 300000): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
     const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
@@ -135,7 +135,8 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const startTime = Date.now();
 
-        // Dynamic or 4-minute timeout per request (Gemini can be slow on complex prompts)
+        // Keep the client timeout beyond the web worker's own retry/failure window.
+        // Aborting first leaves the server-side browser job running and causes retries to queue behind it.
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
