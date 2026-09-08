@@ -14,21 +14,21 @@ export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash
 export const MODELS = {
     // Semantic step roles
     curation: "flash-lite-standard",       // Gemini Flash Lite Standard is reliable for large curation prompts
-    verification: "flash-extended",        // Gemini Flash with Extended thinking
-    historian: "flash-extended",           // Gemini Flash with Extended thinking
-    synthesis: "flash-extended",           // Gemini Flash with Extended thinking
-    proFallback: "pro-extended",           // Pro fallback with Extended thinking
-    liteFallback: "flash-lite-extended",   // Flash Lite fallback with Extended thinking
+    verification: "flash-standard",        // Flash Standard was reliable in live structured verification
+    historian: "flash-standard",           // Flash Standard avoids repeated marker failures on large Historian jobs
+    synthesis: "flash-standard",           // Flash Standard first; Pro Standard remains the quality fallback
+    proFallback: "pro-standard",           // Pro Standard is the reliable quality fallback
+    liteFallback: "flash-lite-standard",   // Flash Lite Standard is the final lightweight fallback
 
     // Clean aliases:
-    thinking: "flash-extended",
+    thinking: "flash-standard",
     pro: "pro-standard",
-    fast: "flash-lite-extended",
+    fast: "flash-lite-standard",
 } as const;
 
 // Fallback chains for rate limit recovery
-// Critical tasks prefer Gemini Flash Extended, then fall back only if needed.
-// Curation uses Flash Lite Standard because large Extended curation prompts can stall in Gemini Web.
+// Automated research starts with Standard thinking because the audited live cycle showed Extended repeatedly missing the acceptance marker on large structured jobs.
+// Pro Standard is the quality fallback; curation stays on Flash Lite Standard.
 export const FALLBACK_CHAINS = {
     critical: [MODELS.thinking, MODELS.pro, MODELS.curation], // Agent/Historian/Synthesis/verification
     standard: [MODELS.thinking],                              // Planner, JSON repair, general tasks

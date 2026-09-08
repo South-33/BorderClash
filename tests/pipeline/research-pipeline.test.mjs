@@ -106,6 +106,10 @@ test("source verification batch isolates per-result failures", () => {
   const verify = section(source, "export const verifyAllSources", "export const verifySingleSource");
 
   assert.match(verify, /const BATCH_SIZE = 3;/);
+  assert.match(verify, /use Google Search with the exact headline plus publisher\/domain/);
+  assert.match(verify, /403, login wall, bot block, timeout, or browser limitation is NOT URL_DEAD/);
+  assert.match(verify, /Search by exact title \+ publisher\/domain is allowed only to corroborate/);
+  assert.doesNotMatch(verify, /If you cannot access a URL, mark it URL_DEAD/);
   assert.match(verify, /for \(const r of result\.results \|\| \[\]\)/);
   assert.match(verify, /const findDuplicateForArticle =/);
   assert.match(verify, /findVerifiedDuplicateCandidate/);
@@ -114,6 +118,11 @@ test("source verification batch isolates per-result failures", () => {
   assert.match(verify, /Error processing verification result for/);
   assert.match(api, /export const getArticlesNeedingVerification = internalQuery/);
   assert.match(api, /export const getRecentDuplicateCandidates = internalQuery/);
+  const flagArticle = section(api, "export const flagArticle", "export const deleteArticle");
+  const markProcessed = section(api, "export const markAsProcessedToTimeline", "Clear processedToTimeline flag on ALL articles");
+  assert.match(flagArticle, /withIndex\("by_title"[\s\S]*?\.collect\(\)/);
+  assert.match(flagArticle, /let countDelta = 0/);
+  assert.match(markProcessed, /withIndex\("by_title"[\s\S]*?\.collect\(\)/);
   assert.match(dedupe, /export const canonicalizeArticleUrl = \(rawUrl\?: string\): string =>/);
   assert.match(dedupe, /export function findVerifiedDuplicateCandidate/);
 });
@@ -167,7 +176,10 @@ test("Gemini model aliases send explicit thinking levels", () => {
   const verifyScript = read(path.join(root, "scripts", "verify-gemini-headers.mjs"));
 
   assert.match(config, /curation:\s*"flash-lite-standard"/);
-  assert.match(config, /thinking:\s*"flash-extended"/);
+  assert.match(config, /thinking:\s*"flash-standard"/);
+  assert.match(config, /verification:\s*"flash-standard"/);
+  assert.match(config, /historian:\s*"flash-standard"/);
+  assert.match(config, /synthesis:\s*"flash-standard"/);
   assert.match(config, /critical:\s*\[MODELS\.thinking,\s*MODELS\.pro,\s*MODELS\.curation\]/);
   assert.match(aiUtils, /type GeminiThinkingLevel = "standard" \| "extended"/);
   assert.match(aiUtils, /thinking_level\?: GeminiThinkingLevel/);
@@ -179,6 +191,11 @@ test("Gemini model aliases send explicit thinking levels", () => {
   assert.match(historian, /limit: 40/);
   assert.match(historian, /const maxPlannerArticles = 30/);
   assert.match(research, /getRecentTimelineContextForHistorian, \{ limit: 40 \}/);
+  assert.match(research, /getRecentTimeline, \{ limit: 30 \}/);
+  assert.match(research, /getLowCredArticles, \{ country: "cambodia", limit: 6 \}/);
+  assert.match(research, /getLowCredArticles, \{ country: "thailand", limit: 6 \}/);
+  assert.match(research, /getLowCredArticles, \{ country: "international", limit: 6 \}/);
+  assert.match(research, /getRecentBreakingNews, \{ limit: 15 \}/);
   assert.match(verifyScript, /thinking_level:\s*"Extended"/);
 });
 

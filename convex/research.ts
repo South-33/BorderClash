@@ -380,7 +380,7 @@ export const curateInternational = internalAction({
     },
 });
 
-// Shared helper to process Ghost API response and save articles
+// Shared helper to parse Gemini research output and save articles
 async function processNewsResponse(
     ctx: any,
     prompt: string,
@@ -692,7 +692,7 @@ Please output the FIXED JSON only:
 }
 
 // =============================================================================
-// STEP 2: COMBINED SYNTHESIS (1 Ghost API call for all 3 analyses)
+// COMBINED SYNTHESIS (one Gemini request for all 3 analyses)
 // =============================================================================
 
 export const synthesizeAll = internalAction({
@@ -700,7 +700,7 @@ export const synthesizeAll = internalAction({
     handler: async (ctx): Promise<any> => {
         // ==================== TIMELINE CONTEXT (PRIMARY SOURCE) ====================
         // Timeline events are the verified, structured "memory" of the conflict
-        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 100 });
+        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 30 });
         const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
 
         // Build timeline context using shared helper
@@ -718,12 +718,12 @@ export const synthesizeAll = internalAction({
         // PHASE 2 OPTIMIZATION: Use specialized indexed queries instead of fetching 300 articles
         // This reduces bandwidth by ~75-80% by fetching exactly what we need
 
-        // ==================== LOW CREDIBILITY / PROPAGANDA (15 per country) ====================
+        // ==================== LOW CREDIBILITY / PROPAGANDA (6 per country) ====================
         // Use new indexed query that sorts by credibility at database level
         const [cambodiaLowCred, thailandLowCred, internationalLowCred] = await Promise.all([
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "cambodia", limit: 15 }),
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "thailand", limit: 15 }),
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "international", limit: 15 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "cambodia", limit: 6 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "thailand", limit: 6 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "international", limit: 6 }),
         ]);
 
         if (cambodiaLowCred.length === 0 && thailandLowCred.length === 0 && internationalLowCred.length === 0 && timeline.length === 0) {
@@ -741,9 +741,9 @@ export const synthesizeAll = internalAction({
         const thailandPropaganda = thailandLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
         const internationalPropaganda = internationalLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
 
-        // ==================== BREAKING NEWS (30 most recent across all) ====================
+        // ==================== BREAKING NEWS (15 most recent across all) ====================
         // Use new indexed query that fetches from all tables and sorts by publishedAt
-        const breakingNews: any[] = await ctx.runQuery(internal.api.getRecentBreakingNews, { limit: 30 });
+        const breakingNews: any[] = await ctx.runQuery(internal.api.getRecentBreakingNews, { limit: 15 });
 
         const breakingNewsList = breakingNews.map((a: any, idx: number) =>
             `${idx + 1}. [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
@@ -2058,7 +2058,7 @@ export const step4_synthesis = internalAction({
 
 /**
  * Verify all sources in the database
- * Goes through each article, fetches the URL via Ghost API, and verifies:
+ * Goes through each queued article and verifies the supplied source with Gemini web search:
  * 1. URL is accessible (not 404)
  * 2. Summary matches actual content
  * 3. Title is accurate
@@ -2193,98 +2193,51 @@ Country: ${a.country}
 Credibility: ${a.credibility}`;
                 }).join("\n\n");
 
-                const verificationPrompt = `You are a SOURCE VERIFICATION AGENT. Your job is to verify that articles in our database are REAL and ACCURATE.
+                const verificationPrompt = `You are a SOURCE VERIFICATION AGENT. Verify whether each stored news record refers to a real Thailand-Cambodia article from the stated publisher.
 
-⚠️ CRITICAL: VISIT THE URL DIRECTLY
-- DO NOT search for the article by title/name - this can lead to wrong results!
-- DIRECTLY NAVIGATE to the exact URL provided
-- Check if the URL loads the actual article page (not an image or attachment page)
-- If the URL redirects or shows wrong content, try to find the correct article URL
+VERIFICATION METHOD:
+1. First try the exact URL.
+2. If the exact page is blocked or unavailable to your browser, use Google Search with the exact headline plus publisher/domain to corroborate the SAME article. Search evidence may confirm the record, but do not replace it with a different article.
+3. Compare publisher, headline, topic, summary, and publication date using the strongest evidence you can actually observe.
+4. Preserve articles when evidence is incomplete.
 
-🔍 YOUR TASK:
-For each article below, you MUST:
-1. VISIT the URL DIRECTLY (don't search by title!, as we want to make sure the URL is correct)
-2. CHECK if it loads an article page (not an image, not a redirect to wrong page)
-3. READ the actual content
-4. COMPARE the stored summary/title against what the page ACTUALLY says
-5. CHECK the publish date on the page
-6. DETERMINE if the article is about Thailand-Cambodia relations
+STATUSES:
+- VERIFIED: strong evidence from the exact page OR same-publisher/domain search evidence confirms this exact article and the stored record is materially correct.
+- NEEDS_UPDATE: strong evidence confirms the exact article but proves stored title, summary, date, or URL metadata is materially wrong.
+- URL_DEAD: the exact URL explicitly returns 404, 410, page-not-found, or the publisher clearly says it was removed. A 403, login wall, bot block, timeout, or browser limitation is NOT URL_DEAD.
+- OFF_TOPIC: strong evidence proves the exact article is real but not about Thailand-Cambodia border/relations.
+- HALLUCINATED: strong evidence proves the exact URL/title refers to unrelated content.
+- SKIP: evidence is insufficient, blocked, ambiguous, or cannot be corroborated. Prefer SKIP over guessing.
 
-⚠️ VERIFICATION CRITERIA:
-- VERIFIED: URL loads, content is about Thailand-Cambodia, and reasonably matches our stored info
-- NEEDS_UPDATE: URL loads, content IS about Thailand-Cambodia, but our title/summary/date has errors → provide corrections
-- URL_DEAD: You received an EXPLICIT HTTP error (404, 403, "page not found"). Not just slow/blocked
-- OFF_TOPIC: Content exists but is NOT about Thailand-Cambodia border/relations
-- HALLUCINATED: URL shows completely unrelated content (e.g., we said "border clash" but page is about cooking)
-- SKIP: Any uncertainty - couldn't load, slow, blocked, unsure, or page changed. ALWAYS prefer this when uncertain!
+IMPORTANT:
+- Never mark URL_DEAD just because you cannot access a page.
+- Never substitute a similar article from another URL.
+- Search by exact title + publisher/domain is allowed only to corroborate the supplied record.
+- Keep articleIndex matched to the supplied article.
 
-🧠 SMART VERIFICATION PRINCIPLES:
-1. ASSUME URLS ARE VALID unless you have CONCRETE proof they're broken
-2. News sites rarely delete recent articles - if you "can't find it", it's probably your access issue, not a dead link
-3. Content can be paraphrased differently - minor wording differences ≠ wrong article
-4. If the TOPIC matches (Thailand-Cambodia news), the article is probably correct
-5. NEVER "fix" a URL by finding a similar article elsewhere - that's replacing, not fixing
-6. Your job is to VERIFY, not to be paranoid. Err on the side of keeping articles.
-
-📊 CONFIDENCE DECISION FRAMEWORK:
-- 80%+ confident URL is valid and content matches → VERIFIED
-- 80%+ confident content needs correction → NEEDS_UPDATE  
-- 95%+ confident URL returns 404/403 error → URL_DEAD
-- 80%+ confident content is unrelated topic → OFF_TOPIC or HALLUCINATED
-- Anything less than these thresholds → SKIP (we'll retry later)
-
-📋 ARTICLES TO VERIFY:
+ARTICLES TO VERIFY:
 ${articlesToVerify}
 
-OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
+Return EXACTLY one fenced \`\`\`json code block and nothing else:
 \`\`\`json
 {
   "results": [
     {
       "articleIndex": 1,
       "status": "VERIFIED|NEEDS_UPDATE|URL_DEAD|OFF_TOPIC|HALLUCINATED|SKIP",
-      "actualTitle": "What the page headline actually says (original language)",
-      "actualSummary": "2-3 sentence summary of what the article ACTUALLY says",
-      "actualPublishedAt": "2025-12-14T10:00:00+07:00 (Use LOCAL Thai/Khmer time UTC+7)",
+      "actualTitle": "observed headline or null",
+      "actualSummary": "brief evidence-based summary or null",
+      "actualPublishedAt": "ISO timestamp with +07:00 when known, otherwise null",
       "isAboutBorder": true,
       "matchScore": 85,
-      "reason": "Why you made this determination",
-      
-      "correctData": {
-        // ONLY for NEEDS_UPDATE! Include only fields that need fixing.
-        // Example - only date wrong: { "publishedAt": "2025-12-14T16:00:00+07:00" }
-        // Example - title wrong: { "title": "...", "titleEn": "...", "titleTh": "...", "titleKh": "..." }
-        // Example - URL wrong (Google search link instead of direct article): { "sourceUrl": "https://actual-article-url.com/..." }
-      }
+      "reason": "brief evidence for the decision",
+      "correctData": {}
     }
   ]
 }
 \`\`\`
 
-${TRANSLATION_STYLE_GUIDE}
-
-For correctData translation fields:
-- Only include translated title/summary fields when you are correcting them.
-- Titles should be clear local headlines, usually 8-14 words.
-- Summaries should be 1-2 short sentences. If the English source uses jargon, explain it in plain local words.
-
-⚠️ DOUBLE-CHECK: Before outputting JSON, verify that:
-- Each result's articleIndex matches the article you analyzed
-- You haven't mixed up Article 1's URL with Article 2's result
-- The status matches what you actually found on the page
-
-RULES:
-- You MUST visit each URL - do not guess
-- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
-- Inside the fence, output valid JSON only
-- If you cannot access a URL, mark it URL_DEAD
-- matchScore: 0-100, how well the stored summary matches actual content
-- For NEEDS_UPDATE: only include fields that are WRONG in correctData!
-  → Don't include fields that are already correct - that's wasteful
-  → If only date is wrong: correctData: { "publishedAt": "..." }
-  → If title AND summary wrong: include all title/summary fields
-- For dates: Look for "Published:", "Posted:", date in URL, or article metadata. If unclear, set to null
-- Articles about internal Cambodian/Thai politics (not border-related) = OFF_TOPIC`;
+For NEEDS_UPDATE, put only fields that are proven wrong in correctData. For every other status use an empty correctData object.`;
 
                 try {
                     const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 1, "SOURCE-VERIFY");
@@ -2662,33 +2615,25 @@ export const verifySingleSource = internalAction({
     handler: async (ctx, args): Promise<{ status: string; actualTitle?: string; actualTopic?: string; matchScore?: number; reason: string }> => {
         console.log(`🔍 [SINGLE VERIFY] Checking: ${args.url}`);
 
-        const verificationPrompt = `You are a SOURCE VERIFICATION AGENT.
+        const verificationPrompt = `You are a SOURCE VERIFICATION AGENT. Verify this stored record:
+URL: ${args.url}
+Stored Title: "${args.storedTitle}"
+Stored Summary: "${args.storedSummary}"
 
-🔍 YOUR TASK:
-1. VISIT this URL: ${args.url}
-2. READ the actual content of the page
-3. COMPARE against what we have stored:
-   - Stored Title: "${args.storedTitle}"
-   - Stored Summary: "${args.storedSummary}"
-4. DETERMINE if this is a valid article about Thailand-Cambodia relations
+First try the exact URL. If the page is blocked or unavailable to your browser, use Google Search with the exact headline and publisher/domain to corroborate the SAME article. Do not substitute a different article.
 
-OUTPUT FORMAT - Return EXACTLY one fenced \`\`\`json code block:
+URL_DEAD requires explicit 404, 410, page-not-found, or clear publisher removal. A 403, login wall, bot block, timeout, or browser limitation is NOT URL_DEAD. If evidence is insufficient, return SKIP.
+
+Return EXACTLY one fenced \`\`\`json code block and nothing else:
 \`\`\`json
 {
-  "status": "VERIFIED|URL_DEAD|CONTENT_MISMATCH|OFF_TOPIC|HALLUCINATED",
-  "actualTitle": "What the page actually says",
-  "actualTopic": "Brief description of what the article is actually about",
+  "status": "VERIFIED|URL_DEAD|CONTENT_MISMATCH|OFF_TOPIC|HALLUCINATED|SKIP",
+  "actualTitle": "observed headline or null",
+  "actualTopic": "brief observed topic or null",
   "matchScore": 85,
-  "reason": "Detailed explanation of your determination"
+  "reason": "brief evidence for the decision"
 }
-\`\`\`
-
-RULES:
-- You MUST visit the URL - do not guess
-- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
-- Inside the fence, output valid JSON only
-- If you cannot access it, mark it URL_DEAD
-- Be honest about whether the stored summary matches the actual content`;
+\`\`\``;
 
         try {
             const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 1, "VERIFY-SINGLE");

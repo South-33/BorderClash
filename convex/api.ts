@@ -1930,37 +1930,36 @@ export const flagArticle = internalMutation({
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
 
-        const article = await ctx.db
+        const articles = await ctx.db
             .query(table)
             .withIndex("by_title", (q) => q.eq("title", args.title))
-            .first();
+            .collect();
 
-        if (article) {
-            // BUGFIX: Track if article status change affects counts
-            // countable = active OR unverified (both show in frontend counts)
+        if (articles.length === 0) return;
+
+        // Historical duplicates with the same exact title are one logical article.
+        // Flag every copy together so the Historian cannot rediscover the same story.
+        const willBeCountable = args.status === "unverified";
+        let countDelta = 0;
+        for (const article of articles) {
             const wasCountable = article.status === "active" || article.status === "unverified";
-            // flagArticle can only set: outdated, unverified, false, archived
-            // Of these, only "unverified" is countable
-            const willBeCountable = args.status === "unverified";
-
+            if (wasCountable !== willBeCountable) countDelta += willBeCountable ? 1 : -1;
             await ctx.db.patch(article._id, { status: args.status });
-            console.log(`Flagged "${args.title}" as ${args.status}`);
+        }
+        console.log(`Flagged ${articles.length} exact-title record(s) for "${args.title}" as ${args.status}`);
 
-            // Update counts if transitioning between countable <-> non-countable
-            if (wasCountable !== willBeCountable) {
-                const counts = await ctx.db.query("articleCounts")
-                    .withIndex("by_key", q => q.eq("key", "main"))
-                    .first();
+        if (countDelta !== 0) {
+            const counts = await ctx.db.query("articleCounts")
+                .withIndex("by_key", q => q.eq("key", "main"))
+                .first();
 
-                if (counts) {
-                    const delta = willBeCountable ? 1 : -1;
-                    const newCount = Math.max(0, (counts[args.country] || 0) + delta);
-                    await ctx.db.patch(counts._id, {
-                        [args.country]: newCount,
-                        lastUpdatedAt: Date.now(),
-                    });
-                    console.log(`📊 [COUNTS] ${args.country} ${delta > 0 ? '+' : ''}${delta} → ${newCount}`);
-                }
+            if (counts) {
+                const newCount = Math.max(0, (counts[args.country] || 0) + countDelta);
+                await ctx.db.patch(counts._id, {
+                    [args.country]: newCount,
+                    lastUpdatedAt: Date.now(),
+                });
+                console.log(`[COUNTS] ${args.country} ${countDelta > 0 ? '+' : ''}${countDelta} -> ${newCount}`);
             }
         }
     },
@@ -3569,12 +3568,12 @@ export const markAsProcessedToTimeline = internalMutation({
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
 
-        const article = await ctx.db
+        const articles = await ctx.db
             .query(table)
             .withIndex("by_title", (q) => q.eq("title", args.title))
-            .first();
+            .collect();
 
-        if (article) {
+        for (const article of articles) {
             await ctx.db.patch(article._id, { processedToTimeline: true });
         }
     },
