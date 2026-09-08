@@ -78,7 +78,7 @@ export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
 - Use English numerals (0-9), not Thai or Khmer numerals.
 - Prefer short sentences. One idea per sentence.`;
 
-function buildGeminiStudioRequest(model: string, content: string, existingRequestId?: string): GeminiRequestInit {
+function buildGeminiStudioRequest(model: string, content: string, existingRequestId?: string, useSearch: boolean = false): GeminiRequestInit {
     const requestId = existingRequestId || randomUUID();
     const projectName = GEMINI_PROJECT_NAME;
     const clientName = GEMINI_CLIENT_NAME;
@@ -95,6 +95,10 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
             client: clientName,
         },
     };
+
+    if (useSearch) {
+        body.use_search = true;
+    }
 
     if (resolvedModel.thinkingLevel === "extended") {
         body.thinking_level = "Extended";
@@ -123,7 +127,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
 /**
  * Call the gemini-studio-api (OpenAI compatible)
  */
-export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4, timeoutMs: number = 300000): Promise<string> {
+export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4, timeoutMs: number = 300000, useSearch: boolean = false): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
     const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
@@ -141,7 +145,7 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
-            const request = buildGeminiStudioRequest(model, datedPrompt, requestId);
+            const request = buildGeminiStudioRequest(model, datedPrompt, requestId, useSearch);
             const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
                 method: "POST",
                 headers: request.headers,
@@ -208,7 +212,8 @@ export async function callGeminiStudioWithFallback(
     fallbackChain: readonly string[] = FALLBACK_CHAINS.critical,
     maxRetriesPerModel: number = 1,
     debugLabel: string = "AI",
-    timeoutMs?: number
+    timeoutMs?: number,
+    useSearch: boolean = false
 ): Promise<string> {
     const RETRY_DELAY = 5000; // 5 seconds between retries
 
@@ -233,7 +238,7 @@ export async function callGeminiStudioWithFallback(
             const isLastAttemptOfAll = isLastModel && (attemptIdx === attemptsSeq.length - 1);
 
             try {
-                const result = await callGeminiStudio(prompt, model, 1, timeoutMs);
+                const result = await callGeminiStudio(prompt, model, 1, timeoutMs, useSearch);
 
                 if (modelIdx > 0 || attemptIdx > 0) {
                     console.log(`[${debugLabel}] fallback_model_ok model=${model}`);

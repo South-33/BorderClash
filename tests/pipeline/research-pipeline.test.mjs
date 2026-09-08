@@ -184,6 +184,9 @@ test("Gemini model aliases send explicit thinking levels", () => {
   assert.match(aiUtils, /type GeminiThinkingLevel = "standard" \| "extended"/);
   assert.match(aiUtils, /thinking_level\?: GeminiThinkingLevel/);
   assert.match(aiUtils, /export function resolveGeminiModel/);
+  assert.match(aiUtils, /body\.use_search = true/);
+  assert.match(research, /"SOURCE-VERIFY",\s*undefined,\s*true/);
+  assert.match(research, /"VERIFY-SINGLE",\s*undefined,\s*true/);
   assert.match(aiUtils, /model\.endsWith\(marker\)/);
   assert.match(aiUtils, /attemptsSeq\.push\(baseModel, standardModel\)/);
   assert.match(aiUtils, /attemptsSeq\.push\(baseModel\);/);
