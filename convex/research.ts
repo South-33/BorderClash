@@ -2151,8 +2151,9 @@ export const verifyAllSources = internalAction({
                 return { verified: 0, updated: 0, deleted: 0, errors: 0 };
             }
 
-            // Process 10 articles at a time - smaller batches for better URL verification
-            const BATCH_SIZE = 10;
+            // Keep each Gemini browser task small. Asking one generation to visit ten
+            // unrelated URLs repeatedly produced refusals/dead response shells.
+            const BATCH_SIZE = 3;
 
             // Time budget - stop processing before Convex timeout
             const startTime = Date.now();

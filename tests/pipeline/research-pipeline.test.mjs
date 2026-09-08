@@ -105,6 +105,7 @@ test("source verification batch isolates per-result failures", () => {
   const dedupe = read(path.join(root, "convex", "dedupe.ts"));
   const verify = section(source, "export const verifyAllSources", "export const verifySingleSource");
 
+  assert.match(verify, /const BATCH_SIZE = 3;/);
   assert.match(verify, /for \(const r of result\.results \|\| \[\]\)/);
   assert.match(verify, /const findDuplicateForArticle =/);
   assert.match(verify, /findVerifiedDuplicateCandidate/);
