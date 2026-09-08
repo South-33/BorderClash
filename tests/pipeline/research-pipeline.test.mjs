@@ -173,6 +173,12 @@ test("Gemini model aliases send explicit thinking levels", () => {
   assert.match(aiUtils, /thinking_level\?: GeminiThinkingLevel/);
   assert.match(aiUtils, /export function resolveGeminiModel/);
   assert.match(aiUtils, /model\.endsWith\(marker\)/);
+  assert.match(aiUtils, /attemptsSeq\.push\(baseModel, standardModel\)/);
+  assert.match(aiUtils, /attemptsSeq\.push\(baseModel\);/);
+  assert.doesNotMatch(aiUtils, /attemptsSeq\.push\(baseModel, baseModel/);
+  assert.match(historian, /limit: 40/);
+  assert.match(historian, /const maxPlannerArticles = 30/);
+  assert.match(research, /getRecentTimelineContextForHistorian, \{ limit: 40 \}/);
   assert.match(verifyScript, /thinking_level:\s*"Extended"/);
 });
 

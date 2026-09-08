@@ -200,13 +200,13 @@ function isRateLimitError(error: any): boolean {
  * 
  * @param prompt - The prompt to send
  * @param fallbackChain - Array of model names to try in order (default: critical chain)
- * @param maxRetriesPerModel - Max retries per model before moving to next (default: 2)
+ * @param maxRetriesPerModel - Retained for call-site compatibility; each model/thinking level is attempted once
  * @param debugLabel - Label for logging
  */
 export async function callGeminiStudioWithFallback(
     prompt: string,
     fallbackChain: readonly string[] = FALLBACK_CHAINS.critical,
-    maxRetriesPerModel: number = 2,
+    maxRetriesPerModel: number = 1,
     debugLabel: string = "AI",
     timeoutMs?: number
 ): Promise<string> {
@@ -216,15 +216,15 @@ export async function callGeminiStudioWithFallback(
         const baseModel = fallbackChain[modelIdx];
         const isLastModel = modelIdx === fallbackChain.length - 1;
 
-        // Build execution sequence: thinking models get two requested-level attempts,
-        // then one same-model Standard attempt before moving to the next model.
+        // Keep retries visible and bounded: one Extended attempt, then one
+        // same-model Standard fallback. Do not repeat the same UI request twice.
         const attemptsSeq: string[] = [];
         const thinkingSuffix = ["-extended", "-high"].find(suffix => baseModel.endsWith(suffix));
         if (thinkingSuffix) {
             const standardModel = baseModel.slice(0, -thinkingSuffix.length) + "-standard";
-            attemptsSeq.push(baseModel, baseModel, standardModel);
+            attemptsSeq.push(baseModel, standardModel);
         } else {
-            attemptsSeq.push(baseModel, baseModel);
+            attemptsSeq.push(baseModel);
         }
 
         for (let attemptIdx = 0; attemptIdx < attemptsSeq.length; attemptIdx++) {

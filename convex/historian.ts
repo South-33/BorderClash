@@ -596,7 +596,7 @@ export async function runHistorianCycleInternal(
 
     // 2. Get existing timeline for context (use cache if provided)
     const timeline = cachedTimeline ?? await ctx.runQuery(internal.api.getRecentTimelineContextForHistorian, {
-        limit: 150  // Recent events only - older events rarely need updates
+        limit: 40  // Enough recent context without turning one Gemini request into a huge attachment
     });
 
     // 3. Get timeline stats (always fresh - small query)
@@ -616,8 +616,8 @@ export async function runHistorianCycleInternal(
         // If 10 or fewer, process all
         selectedTitles = allArticles.map((a: any) => a.title);
     } else {
-        // Pre-filter to top 50 by credibility to avoid overwhelming the Planner
-        const maxPlannerArticles = 50;
+        // Keep planner context small enough for one reliable browser generation.
+        const maxPlannerArticles = 30;
         const articlesForPlanner = allArticles.length > maxPlannerArticles
             ? allArticles.slice(0, maxPlannerArticles)
             : allArticles;
