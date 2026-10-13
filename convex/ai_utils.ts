@@ -4,19 +4,17 @@ import { randomUUID } from "node:crypto";
 
 import {
     GEMINI_CLIENT_NAME,
+    GEMINI_MODEL,
     GEMINI_PROJECT_NAME,
     GEMINI_STUDIO_API_URL,
-    MODELS,
-    FALLBACK_CHAINS,
-    type GeminiModelConfig,
-    type GeminiThinkingLevel,
+    GEMINI_THINKING_LEVEL,
 } from "./config";
 
 type GeminiRequestInit = {
     headers: Record<string, string>;
     body: {
-        model: string;
-        thinking_level?: GeminiThinkingLevel;
+        model: typeof GEMINI_MODEL;
+        thinking_level: typeof GEMINI_THINKING_LEVEL;
         messages: Array<{ role: "user"; content: string }>;
         project: string;
         client: string;
@@ -28,6 +26,8 @@ type GeminiRequestInit = {
     };
     requestId: string;
 };
+
+const GEMINI_REQUEST_TIMEOUT_MS = 510_000;
 
 export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
 - Write like a careful local translator, not a literal dictionary. Understand the event first, then retell it in normal Thai/Khmer.
@@ -42,14 +42,14 @@ export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
 - Use English numerals (0-9), not Thai or Khmer numerals.
 - Prefer short sentences. One idea per sentence.`;
 
-function buildGeminiStudioRequest(modelConfig: GeminiModelConfig, content: string, existingRequestId?: string): GeminiRequestInit {
+function buildGeminiStudioRequest(content: string, existingRequestId?: string): GeminiRequestInit {
     const requestId = existingRequestId || randomUUID();
     const projectName = GEMINI_PROJECT_NAME;
     const clientName = GEMINI_CLIENT_NAME;
 
     const body: GeminiRequestInit["body"] = {
-        model: modelConfig.model,
-        thinking_level: modelConfig.thinkingLevel,
+        model: GEMINI_MODEL,
+        thinking_level: GEMINI_THINKING_LEVEL,
         messages: [{ role: "user", content }],
         project: projectName,
         client: clientName,
@@ -81,130 +81,50 @@ function buildGeminiStudioRequest(modelConfig: GeminiModelConfig, content: strin
 /**
  * Call the gemini-studio-api (OpenAI compatible)
  */
-export async function callGeminiStudio(prompt: string, modelConfig: GeminiModelConfig, maxRetries: number = 4, timeoutMs: number = 300000): Promise<string> {
+export async function callGeminiStudio(prompt: string, timeoutMs: number = GEMINI_REQUEST_TIMEOUT_MS): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
     const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
 
-    const RETRY_DELAY = 8000; // 8 seconds - enough time for Cloudflare tunnel to reconnect
-
     const requestId = randomUUID();
+    const startTime = Date.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        const startTime = Date.now();
+    try {
+        const request = buildGeminiStudioRequest(datedPrompt, requestId);
+        const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
+            method: "POST",
+            headers: request.headers,
+            body: JSON.stringify(request.body),
+            signal: controller.signal,
+        });
 
-        // Keep the client timeout beyond the web worker's own retry/failure window.
-        // Aborting first leaves the server-side browser job running and causes retries to queue behind it.
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-        try {
-            const request = buildGeminiStudioRequest(modelConfig, datedPrompt, requestId);
-            const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
-                method: "POST",
-                headers: request.headers,
-                body: JSON.stringify(request.body),
-                signal: controller.signal,
-            });
-
-            clearTimeout(timeoutId);
-
-            const duration = Date.now() - startTime;
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.warn(`[GEMINI] error status=${response.status} duration=${duration}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
-                throw new Error(`API error (${response.status}): ${errorText.substring(0, 100)}`);
-            }
-
-            const data = await response.json();
-            const content = data.choices?.[0]?.message?.content;
-
-            if (!content) {
-                throw new Error("API returned empty response content");
-            }
-
-            return content;
-
-        } catch (error) {
-            clearTimeout(timeoutId);
-            const duration = Date.now() - startTime;
-            console.warn(`[GEMINI] attempt_failed attempt=${attempt}/${maxRetries} duration=${duration}ms requestId=${requestId} error=${error}`);
-
-            if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-            } else {
-                throw error;
-            }
+        const duration = Date.now() - startTime;
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.warn(`[GEMINI] error status=${response.status} duration=${duration}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
+            throw new Error(`API error (${response.status}): ${errorText.substring(0, 100)}`);
         }
-    }
-    throw new Error("API failed after max retries");
-}
 
-/**
- * Check if an error is a rate limit error (429 or rate/quota keywords)
- */
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
-
-function isRateLimitError(error: unknown): boolean {
-    const errorStr = errorMessage(error).toLowerCase();
-    return errorStr.includes("429") ||
-        errorStr.includes("rate") ||
-        errorStr.includes("quota") ||
-        errorStr.includes("too many");
-}
-
-/**
- * Try the configured model/thinking pairs in order until one succeeds.
- */
-export async function callGeminiStudioWithFallback(
-    prompt: string,
-    fallbackChain: readonly GeminiModelConfig[] = FALLBACK_CHAINS.critical,
-    debugLabel: string = "AI",
-    timeoutMs?: number
-): Promise<string> {
-    for (let modelIdx = 0; modelIdx < fallbackChain.length; modelIdx++) {
-        const modelConfig = fallbackChain[modelIdx];
-        const isLastModel = modelIdx === fallbackChain.length - 1;
-        const modelLabel = `${modelConfig.model}/${modelConfig.thinkingLevel}`;
-
-        try {
-            const result = await callGeminiStudio(prompt, modelConfig, 1, timeoutMs);
-            if (modelIdx > 0) {
-                console.log(`[${debugLabel}] fallback_model_ok model=${modelLabel}`);
-            }
-            return result;
-        } catch (error) {
-            const errorMsg = errorMessage(error);
-            if (isRateLimitError(error)) {
-                console.warn(`[${debugLabel}] model_rate_limited model=${modelLabel} error=${errorMsg.substring(0, 80)}`);
-            } else {
-                console.warn(`[${debugLabel}] model_error model=${modelLabel} error=${errorMsg.substring(0, 80)}`);
-            }
-
-            if (isLastModel) {
-                throw error;
-            }
-
-            const next = fallbackChain[modelIdx + 1];
-            console.log(`[${debugLabel}] fallback_model from=${modelLabel} to=${next.model}/${next.thinkingLevel}`);
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) {
+            throw new Error("API returned empty response content");
         }
+        return content;
+    } finally {
+        clearTimeout(timeoutId);
     }
-
-    throw new Error("All models in fallback chain failed");
 }
 
 /**
  * GENERIC SELF-HEALING HELPER
  * Handles retry logic and JSON repair
  * Extracts JSON from fenced ```json blocks first, then falls back to legacy tags/raw braces
- * Uses the explicit critical model chain for synthesis/verification/historian work.
  */
 export async function callGeminiStudioWithSelfHealing<T>(
     prompt: string,
-    modelType: keyof typeof MODELS,
     maxRetries: number = 3,
     debugLabel: string = "AI",
     timeoutMs?: number
@@ -245,9 +165,6 @@ export async function callGeminiStudioWithSelfHealing<T>(
         return normalized;
     };
 
-    const useFallback = modelType === "verification" || modelType === "synthesis" || modelType === "historian";
-    const fallbackChain = useFallback ? FALLBACK_CHAINS.critical : [MODELS[modelType]];
-
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         let rawResponse = "";
         try {
@@ -255,13 +172,9 @@ export async function callGeminiStudioWithSelfHealing<T>(
                 console.log(`[${debugLabel}] retrying_json_call attempt=${attempt}/${maxRetries}`);
             }
 
-            // 1. CALL API - use fallback for thinking model
+            // 1. CALL API
             try {
-                if (useFallback) {
-                    rawResponse = await callGeminiStudioWithFallback(currentPrompt, fallbackChain, debugLabel, timeoutMs);
-                } else {
-                    rawResponse = await callGeminiStudio(currentPrompt, MODELS[modelType], 1, timeoutMs);
-                }
+                rawResponse = await callGeminiStudio(currentPrompt, timeoutMs);
                 rawResponse = rawResponse
                     .replace(/\\<json>/gi, "<json>")
                     .replace(/\\<\/json>/gi, "</json>");

@@ -10,8 +10,7 @@ import { findVerifiedDuplicateCandidate, type DuplicateCandidate } from "./dedup
 import { collectSourceEvidence, formatSourceEvidence } from "./source_evidence";
 
 // Use gemini-studio-api helpers
-import { MODELS, FALLBACK_CHAINS } from "./config";
-import { callGeminiStudio, callGeminiStudioWithSelfHealing, callGeminiStudioWithFallback, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
+import { callGeminiStudio, callGeminiStudioWithSelfHealing, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
 
 
 // =============================================================================
@@ -471,7 +470,7 @@ async function processNewsResponse(
             console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: curation)...`);
 
             // 1. CALL API - Using curation model mapping
-            rawResponse = await callGeminiStudio(currentPrompt, MODELS.curation, 1);
+            rawResponse = await callGeminiStudio(currentPrompt);
             rawResponse = rawResponse
                 .replace(/\\<json>/gi, "<json>")
                 .replace(/\\<\/json>/gi, "</json>");
@@ -1122,7 +1121,7 @@ Return your hours and a brief reason in the "scheduling" section.`;
                     unchanged?: boolean;
                     changeReason?: string;
                 };
-            }>(prompt, "synthesis", 2, "SYNTHESIS");
+            }>(prompt, 2, "SYNTHESIS");
 
             if (!result) {
                 console.warn("[SYNTHESIS] skipped reason=invalid_or_missing_json preservedExisting=true");
@@ -1423,7 +1422,7 @@ RULES:
                 actions: any[];
                 crossReferenceNotes?: string;
                 summary?: string;
-            }>(prompt, "verification", 2, "MANAGER");
+            }>(prompt, 2, "MANAGER");
 
             if (!result) {
                 console.log("❌ [MANAGER] Invalid or missing JSON response from API");
@@ -2251,7 +2250,7 @@ Return EXACTLY one fenced \`\`\`json code block and nothing else:
 For NEEDS_UPDATE, put only fields that are proven wrong in correctData. For every other status use an empty correctData object.`;
 
                 try {
-                    const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, "SOURCE-VERIFY");
+                    const response = await callGeminiStudio(verificationPrompt);
 
                     // Extract JSON
                     const extractJsonPayload = (input: string): string | null => {
@@ -2652,7 +2651,7 @@ Return EXACTLY one fenced \`\`\`json code block and nothing else:
 \`\`\``;
 
         try {
-            const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, "VERIFY-SINGLE");
+            const response = await callGeminiStudio(verificationPrompt);
 
             // Extract JSON
             const fencedMatch = response.match(/```json\s*([\s\S]*?)```/i);

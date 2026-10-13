@@ -180,27 +180,22 @@ test("curation prompts stay compact while parsers remain hardened", () => {
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
 });
 
-test("Gemini requests use the current explicit model and thinking contract", () => {
+test("Gemini requests use only Flash Medium", () => {
   const research = read(researchPath);
   const historian = read(historianPath);
   const aiUtils = read(aiUtilsPath);
   const config = read(configPath);
   const verifyScript = read(path.join(root, "scripts", "verify-gemini-headers.mjs"));
 
-  assert.match(config, /type GeminiThinkingLevel = "low" \| "medium" \| "high"/);
-  assert.match(config, /curation:\s*\{ model: "flash-lite", thinkingLevel: "medium" \}/);
-  assert.match(config, /verification:\s*\{ model: "flash", thinkingLevel: "medium" \}/);
-  assert.match(config, /historian:\s*\{ model: "flash", thinkingLevel: "medium" \}/);
-  assert.match(config, /synthesis:\s*\{ model: "flash", thinkingLevel: "medium" \}/);
-  assert.match(config, /planner:\s*\{ model: "flash", thinkingLevel: "medium" \}/);
-  assert.match(config, /critical:\s*\[MODELS\.verification,\s*MODELS\.proFallback,\s*MODELS\.curation\]/);
-  assert.match(aiUtils, /thinking_level\?: GeminiThinkingLevel/);
-  assert.match(aiUtils, /thinking_level:\s*modelConfig\.thinkingLevel/);
-  assert.doesNotMatch(aiUtils, /resolveGeminiModel|THINKING_LEVEL_SUFFIXES/);
-  assert.doesNotMatch(config, /standard|extended/i);
+  assert.match(config, /GEMINI_MODEL = "flash" as const/);
+  assert.match(config, /GEMINI_THINKING_LEVEL = "medium" as const/);
+  assert.match(aiUtils, /model:\s*GEMINI_MODEL/);
+  assert.match(aiUtils, /thinking_level:\s*GEMINI_THINKING_LEVEL/);
+  assert.doesNotMatch(aiUtils, /GeminiModelConfig|GeminiThinkingLevel|callGeminiStudioWithFallback|resolveGeminiModel|THINKING_LEVEL_SUFFIXES/);
+  assert.doesNotMatch(config, /"flash-lite"|"pro"|"low"|"high"|"standard"|"extended"/i);
   assert.doesNotMatch(research, /"SOURCE-VERIFY",\s*undefined,\s*true/);
   assert.doesNotMatch(research, /"VERIFY-SINGLE",\s*undefined,\s*true/);
-  assert.doesNotMatch(aiUtils, /attemptsSeq|thinkingSuffix/);
+  assert.doesNotMatch(aiUtils, /attemptsSeq|thinkingSuffix|fallback_thinking/);
   assert.match(historian, /limit: 40/);
   assert.match(historian, /const maxPlannerArticles = 30/);
   assert.match(research, /getRecentTimelineContextForHistorian, \{ limit: 40 \}/);
@@ -209,7 +204,8 @@ test("Gemini requests use the current explicit model and thinking contract", () 
   assert.match(research, /getLowCredArticles, \{ country: "thailand", limit: 6 \}/);
   assert.match(research, /getLowCredArticles, \{ country: "international", limit: 6 \}/);
   assert.match(research, /getRecentBreakingNews, \{ limit: 15 \}/);
-  assert.match(verifyScript, /thinking_level:\s*"medium"/);
+  assert.match(verifyScript, /const thinkingLevel = "medium"/);
+  assert.match(verifyScript, /model:\s*"flash"/);
 });
 
 test("ISR server fetch uses a retried dashboard snapshot and lets page errors bubble to ISR", () => {

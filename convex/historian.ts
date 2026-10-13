@@ -4,8 +4,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { MODELS, FALLBACK_CHAINS, type GeminiModelConfig } from "./config";
-import { callGeminiStudio, callGeminiStudioWithFallback, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
+import { callGeminiStudio, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
 
 
 // =============================================================================
@@ -292,7 +291,7 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudio(currentPrompt, MODELS.planner, 2);
+            const response = await callGeminiStudio(currentPrompt);
 
             // Extract JSON
             const jsonStr = extractJsonPayload(response);
@@ -501,7 +500,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, "HISTORIAN", timeoutMs);
+            const response = await callGeminiStudio(currentPrompt, timeoutMs);
 
             // Extract JSON from response
             const jsonStr = extractJsonPayload(response);
@@ -523,7 +522,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
                 console.warn(`[HISTORIAN] json_parse_failed attempt=${attempt}/${MAX_RETRIES} repair=true`);
                 try {
                     const repairPrompt = `Fix this broken JSON and output ONLY one fenced \`\`\`json code block:\n\n${jsonStr.substring(0, 2000)}`;
-                    const repairResponse = await callGeminiStudio(repairPrompt, MODELS.historian, 1, timeoutMs);
+                    const repairResponse = await callGeminiStudio(repairPrompt, timeoutMs);
                     const repairedJson = extractJsonPayload(repairResponse);
                     if (repairedJson) {
                         result = tryParseJson(repairedJson);
@@ -1172,11 +1171,7 @@ Return rescored importance for every event in CURRENT BATCH.`;
         console.log(`🎚️ [IMPACT-RESCORE] Attempt ${attempt}/${maxRetries} for ${batchEvents.length} events...`);
 
         try {
-            const response = await callGeminiStudioWithFallback(
-                currentPrompt,
-                FALLBACK_CHAINS.critical,
-                "IMPACT-RESCORE"
-            );
+            const response = await callGeminiStudio(currentPrompt);
 
             const parsed = tryParseImpactRescoreJson(response);
             if (parsed && Array.isArray(parsed.scores)) {
@@ -1215,7 +1210,7 @@ export const previewTimelineImpactRescoreBatch = internalAction({
             startIndex: number;
             batchSize: number;
             lookbackSize: number;
-            modelChain: readonly GeminiModelConfig[];
+            thinkingLevel: "medium";
         };
         summary?: {
             total: number;
@@ -1344,7 +1339,7 @@ export const previewTimelineImpactRescoreBatch = internalAction({
                 startIndex,
                 batchSize: batchEvents.length,
                 lookbackSize,
-                modelChain: FALLBACK_CHAINS.critical,
+                thinkingLevel: "medium",
             },
             summary: {
                 total,
@@ -1741,11 +1736,7 @@ ${eventContext}
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         console.log(`🧹 [CANONICALIZE] Attempt ${attempt}/${maxRetries} for ${events.length} events...`);
         try {
-            const response = await callGeminiStudioWithFallback(
-                currentPrompt,
-                FALLBACK_CHAINS.critical,
-                "CANONICALIZE"
-            );
+            const response = await callGeminiStudio(currentPrompt);
 
             const parsed = tryParseCanonicalizationJson(response);
             if (parsed && Array.isArray(parsed.actions)) {
