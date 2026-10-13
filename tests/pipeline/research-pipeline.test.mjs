@@ -180,28 +180,27 @@ test("curation prompts stay compact while parsers remain hardened", () => {
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
 });
 
-test("Gemini model aliases send explicit thinking levels", () => {
+test("Gemini requests use the current explicit model and thinking contract", () => {
   const research = read(researchPath);
   const historian = read(historianPath);
   const aiUtils = read(aiUtilsPath);
   const config = read(configPath);
   const verifyScript = read(path.join(root, "scripts", "verify-gemini-headers.mjs"));
 
-  assert.match(config, /curation:\s*"flash-lite-standard"/);
-  assert.match(config, /thinking:\s*"flash-standard"/);
-  assert.match(config, /verification:\s*"flash-standard"/);
-  assert.match(config, /historian:\s*"flash-standard"/);
-  assert.match(config, /synthesis:\s*"flash-standard"/);
-  assert.match(config, /critical:\s*\[MODELS\.thinking,\s*MODELS\.pro,\s*MODELS\.curation\]/);
-  assert.match(aiUtils, /type GeminiThinkingLevel = "standard" \| "extended"/);
+  assert.match(config, /type GeminiThinkingLevel = "low" \| "medium" \| "high"/);
+  assert.match(config, /curation:\s*\{ model: "flash-lite", thinkingLevel: "medium" \}/);
+  assert.match(config, /verification:\s*\{ model: "flash", thinkingLevel: "medium" \}/);
+  assert.match(config, /historian:\s*\{ model: "flash", thinkingLevel: "medium" \}/);
+  assert.match(config, /synthesis:\s*\{ model: "flash", thinkingLevel: "medium" \}/);
+  assert.match(config, /planner:\s*\{ model: "flash", thinkingLevel: "medium" \}/);
+  assert.match(config, /critical:\s*\[MODELS\.verification,\s*MODELS\.proFallback,\s*MODELS\.curation\]/);
   assert.match(aiUtils, /thinking_level\?: GeminiThinkingLevel/);
-  assert.match(aiUtils, /export function resolveGeminiModel/);
+  assert.match(aiUtils, /thinking_level:\s*modelConfig\.thinkingLevel/);
+  assert.doesNotMatch(aiUtils, /resolveGeminiModel|THINKING_LEVEL_SUFFIXES/);
+  assert.doesNotMatch(config, /standard|extended/i);
   assert.doesNotMatch(research, /"SOURCE-VERIFY",\s*undefined,\s*true/);
   assert.doesNotMatch(research, /"VERIFY-SINGLE",\s*undefined,\s*true/);
-  assert.match(aiUtils, /model\.endsWith\(marker\)/);
-  assert.match(aiUtils, /attemptsSeq\.push\(baseModel, standardModel\)/);
-  assert.match(aiUtils, /attemptsSeq\.push\(baseModel\);/);
-  assert.doesNotMatch(aiUtils, /attemptsSeq\.push\(baseModel, baseModel/);
+  assert.doesNotMatch(aiUtils, /attemptsSeq|thinkingSuffix/);
   assert.match(historian, /limit: 40/);
   assert.match(historian, /const maxPlannerArticles = 30/);
   assert.match(research, /getRecentTimelineContextForHistorian, \{ limit: 40 \}/);
@@ -210,7 +209,7 @@ test("Gemini model aliases send explicit thinking levels", () => {
   assert.match(research, /getLowCredArticles, \{ country: "thailand", limit: 6 \}/);
   assert.match(research, /getLowCredArticles, \{ country: "international", limit: 6 \}/);
   assert.match(research, /getRecentBreakingNews, \{ limit: 15 \}/);
-  assert.match(verifyScript, /thinking_level:\s*"Extended"/);
+  assert.match(verifyScript, /thinking_level:\s*"medium"/);
 });
 
 test("ISR server fetch uses a retried dashboard snapshot and lets page errors bubble to ISR", () => {

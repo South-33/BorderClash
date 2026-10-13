@@ -18,7 +18,7 @@ const baseHeaders = {
 
 const body = {
   model: "flash-lite",
-  thinking_level: "Extended",
+  thinking_level: "medium",
   messages: [{ role: "user", content: "Return exactly: ok" }],
   project: projectName,
   client: clientName,

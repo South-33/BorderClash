@@ -2251,7 +2251,7 @@ Return EXACTLY one fenced \`\`\`json code block and nothing else:
 For NEEDS_UPDATE, put only fields that are proven wrong in correctData. For every other status use an empty correctData object.`;
 
                 try {
-                    const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 1, "SOURCE-VERIFY");
+                    const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, "SOURCE-VERIFY");
 
                     // Extract JSON
                     const extractJsonPayload = (input: string): string | null => {
@@ -2652,7 +2652,7 @@ Return EXACTLY one fenced \`\`\`json code block and nothing else:
 \`\`\``;
 
         try {
-            const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, 1, "VERIFY-SINGLE");
+            const response = await callGeminiStudioWithFallback(verificationPrompt, FALLBACK_CHAINS.critical, "VERIFY-SINGLE");
 
             // Extract JSON
             const fencedMatch = response.match(/```json\s*([\s\S]*?)```/i);

@@ -2,9 +2,15 @@
 
 import { randomUUID } from "node:crypto";
 
-import { GEMINI_CLIENT_NAME, GEMINI_PROJECT_NAME, GEMINI_STUDIO_API_URL, MODELS, FALLBACK_CHAINS } from "./config";
-
-type GeminiThinkingLevel = "standard" | "extended";
+import {
+    GEMINI_CLIENT_NAME,
+    GEMINI_PROJECT_NAME,
+    GEMINI_STUDIO_API_URL,
+    MODELS,
+    FALLBACK_CHAINS,
+    type GeminiModelConfig,
+    type GeminiThinkingLevel,
+} from "./config";
 
 type GeminiRequestInit = {
     headers: Record<string, string>;
@@ -23,48 +29,6 @@ type GeminiRequestInit = {
     requestId: string;
 };
 
-const THINKING_LEVEL_SUFFIXES: Array<[string, GeminiThinkingLevel]> = [
-    ["high", "extended"],
-    ["extended", "extended"],
-    ["standard", "standard"],
-    ["medium", "standard"],
-    ["low", "standard"],
-    ["minimal", "standard"],
-];
-
-export function resolveGeminiModel(model: string): { model: string; thinkingLevel?: GeminiThinkingLevel } {
-    let resolvedModel = model;
-    let thinkingLevel: GeminiThinkingLevel | undefined = undefined;
-
-    for (const [suffix, level] of THINKING_LEVEL_SUFFIXES) {
-        const marker = `-${suffix}`;
-        if (model.endsWith(marker)) {
-            resolvedModel = model.slice(0, -marker.length);
-            thinkingLevel = level;
-            break;
-        }
-    }
-
-    const baseLower = resolvedModel.toLowerCase();
-    if (baseLower === "thinking") {
-        resolvedModel = "flash";
-        if (!thinkingLevel) {
-            thinkingLevel = "extended";
-        }
-    } else if (baseLower === "fast" || baseLower === "lite" || baseLower === "flash-lite" || baseLower === "gemini-3.1-flash-lite" || baseLower === "gemini-3.5-flash-lite") {
-        resolvedModel = "flash-lite";
-    } else if (baseLower === "flash" || baseLower === "gemini-3.5-flash" || baseLower === "gemini-3.6-flash") {
-        resolvedModel = "flash";
-    } else if (baseLower === "pro" || baseLower === "gemini-3.1-pro") {
-        resolvedModel = "pro";
-    }
-
-    return {
-        model: resolvedModel,
-        thinkingLevel,
-    };
-}
-
 export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
 - Write like a careful local translator, not a literal dictionary. Understand the event first, then retell it in normal Thai/Khmer.
 - CRITICAL SCRIPT RULE:
@@ -78,14 +42,14 @@ export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
 - Use English numerals (0-9), not Thai or Khmer numerals.
 - Prefer short sentences. One idea per sentence.`;
 
-function buildGeminiStudioRequest(model: string, content: string, existingRequestId?: string): GeminiRequestInit {
+function buildGeminiStudioRequest(modelConfig: GeminiModelConfig, content: string, existingRequestId?: string): GeminiRequestInit {
     const requestId = existingRequestId || randomUUID();
     const projectName = GEMINI_PROJECT_NAME;
     const clientName = GEMINI_CLIENT_NAME;
-    const resolvedModel = resolveGeminiModel(model);
 
-    const body: any = {
-        model: resolvedModel.model,
+    const body: GeminiRequestInit["body"] = {
+        model: modelConfig.model,
+        thinking_level: modelConfig.thinkingLevel,
         messages: [{ role: "user", content }],
         project: projectName,
         client: clientName,
@@ -95,12 +59,6 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
             client: clientName,
         },
     };
-
-    if (resolvedModel.thinkingLevel === "extended") {
-        body.thinking_level = "Extended";
-    } else if (resolvedModel.thinkingLevel === "standard") {
-        body.thinking_level = "Standard";
-    }
 
     return {
         headers: {
@@ -115,7 +73,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
             "X-Client-Name": clientName,
             "X-Request-ID": requestId,
         },
-        body: body as GeminiRequestInit["body"],
+        body,
         requestId,
     };
 }
@@ -123,7 +81,7 @@ function buildGeminiStudioRequest(model: string, content: string, existingReques
 /**
  * Call the gemini-studio-api (OpenAI compatible)
  */
-export async function callGeminiStudio(prompt: string, model: string, maxRetries: number = 4, timeoutMs: number = 300000): Promise<string> {
+export async function callGeminiStudio(prompt: string, modelConfig: GeminiModelConfig, maxRetries: number = 4, timeoutMs: number = 300000): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
     const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
@@ -141,7 +99,7 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
-            const request = buildGeminiStudioRequest(model, datedPrompt, requestId);
+            const request = buildGeminiStudioRequest(modelConfig, datedPrompt, requestId);
             const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
                 method: "POST",
                 headers: request.headers,
@@ -186,8 +144,12 @@ export async function callGeminiStudio(prompt: string, model: string, maxRetries
 /**
  * Check if an error is a rate limit error (429 or rate/quota keywords)
  */
-function isRateLimitError(error: any): boolean {
-    const errorStr = String(error?.message || error).toLowerCase();
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+function isRateLimitError(error: unknown): boolean {
+    const errorStr = errorMessage(error).toLowerCase();
     return errorStr.includes("429") ||
         errorStr.includes("rate") ||
         errorStr.includes("quota") ||
@@ -195,78 +157,39 @@ function isRateLimitError(error: any): boolean {
 }
 
 /**
- * Call Gemini API with smart model fallback for rate limit handling.
- * Tries each model in the fallback chain until one succeeds.
- * 
- * @param prompt - The prompt to send
- * @param fallbackChain - Array of model names to try in order (default: critical chain)
- * @param maxRetriesPerModel - Retained for call-site compatibility; each model/thinking level is attempted once
- * @param debugLabel - Label for logging
+ * Try the configured model/thinking pairs in order until one succeeds.
  */
 export async function callGeminiStudioWithFallback(
     prompt: string,
-    fallbackChain: readonly string[] = FALLBACK_CHAINS.critical,
-    maxRetriesPerModel: number = 1,
+    fallbackChain: readonly GeminiModelConfig[] = FALLBACK_CHAINS.critical,
     debugLabel: string = "AI",
     timeoutMs?: number
 ): Promise<string> {
-    const RETRY_DELAY = 5000; // 5 seconds between retries
-
     for (let modelIdx = 0; modelIdx < fallbackChain.length; modelIdx++) {
-        const baseModel = fallbackChain[modelIdx];
+        const modelConfig = fallbackChain[modelIdx];
         const isLastModel = modelIdx === fallbackChain.length - 1;
+        const modelLabel = `${modelConfig.model}/${modelConfig.thinkingLevel}`;
 
-        // Keep retries visible and bounded: one Extended attempt, then one
-        // same-model Standard fallback. Do not repeat the same UI request twice.
-        const attemptsSeq: string[] = [];
-        const thinkingSuffix = ["-extended", "-high"].find(suffix => baseModel.endsWith(suffix));
-        if (thinkingSuffix) {
-            const standardModel = baseModel.slice(0, -thinkingSuffix.length) + "-standard";
-            attemptsSeq.push(baseModel, standardModel);
-        } else {
-            attemptsSeq.push(baseModel);
-        }
-
-        for (let attemptIdx = 0; attemptIdx < attemptsSeq.length; attemptIdx++) {
-            const model = attemptsSeq[attemptIdx];
-            const attemptNum = attemptIdx + 1;
-            const isLastAttemptOfAll = isLastModel && (attemptIdx === attemptsSeq.length - 1);
-
-            try {
-                const result = await callGeminiStudio(prompt, model, 1, timeoutMs);
-
-                if (modelIdx > 0 || attemptIdx > 0) {
-                    console.log(`[${debugLabel}] fallback_model_ok model=${model}`);
-                }
-                return result;
-
-            } catch (error: any) {
-                const errorMsg = error?.message || String(error);
-
-                // Check if this is a rate limit error
-                if (isRateLimitError(error)) {
-                    console.warn(`[${debugLabel}] model_rate_limited model=${model} error=${errorMsg.substring(0, 80)}`);
-
-                    if (!isLastAttemptOfAll) {
-                        console.log(`[${debugLabel}] fallback_model from=${model} to next model/thinking level`);
-                        break; // Skip remaining attempts for this base model, move to next base model
-                    } else {
-                        console.error(`[${debugLabel}] all_models_exhausted lastModel=${model}`);
-                        throw new Error(`All models rate limited. Last error: ${errorMsg}`);
-                    }
-                }
-
-                // Non-rate-limit error (network, timeout, etc.)
-                console.warn(`[${debugLabel}] model_error model=${model} attempt=${attemptNum}/${attemptsSeq.length} error=${errorMsg.substring(0, 80)}`);
-
-                if (attemptIdx < attemptsSeq.length - 1) {
-                    await new Promise(r => setTimeout(r, RETRY_DELAY));
-                } else if (!isLastModel) {
-                    console.log(`[${debugLabel}] fallback_model from=${model} to=${fallbackChain[modelIdx + 1]}`);
-                } else {
-                    throw error; // Last model, last attempt - propagate error
-                }
+        try {
+            const result = await callGeminiStudio(prompt, modelConfig, 1, timeoutMs);
+            if (modelIdx > 0) {
+                console.log(`[${debugLabel}] fallback_model_ok model=${modelLabel}`);
             }
+            return result;
+        } catch (error) {
+            const errorMsg = errorMessage(error);
+            if (isRateLimitError(error)) {
+                console.warn(`[${debugLabel}] model_rate_limited model=${modelLabel} error=${errorMsg.substring(0, 80)}`);
+            } else {
+                console.warn(`[${debugLabel}] model_error model=${modelLabel} error=${errorMsg.substring(0, 80)}`);
+            }
+
+            if (isLastModel) {
+                throw error;
+            }
+
+            const next = fallbackChain[modelIdx + 1];
+            console.log(`[${debugLabel}] fallback_model from=${modelLabel} to=${next.model}/${next.thinkingLevel}`);
         }
     }
 
@@ -277,11 +200,11 @@ export async function callGeminiStudioWithFallback(
  * GENERIC SELF-HEALING HELPER
  * Handles retry logic and JSON repair
  * Extracts JSON from fenced ```json blocks first, then falls back to legacy tags/raw braces
- * Uses model fallback for thinking model (critical chain: gemini-3.5-flash-extended -> gemini-3.1-pro-extended -> gemini-3.1-flash-lite-extended)
+ * Uses the explicit critical model chain for synthesis/verification/historian work.
  */
 export async function callGeminiStudioWithSelfHealing<T>(
     prompt: string,
-    modelType: keyof typeof MODELS = "thinking",
+    modelType: keyof typeof MODELS,
     maxRetries: number = 3,
     debugLabel: string = "AI",
     timeoutMs?: number
@@ -322,8 +245,7 @@ export async function callGeminiStudioWithSelfHealing<T>(
         return normalized;
     };
 
-    // Use fallback chain for thinking/critical models (verification, historian, synthesis)
-    const useFallback = modelType === "thinking" || modelType === "verification" || modelType === "synthesis" || modelType === "historian";
+    const useFallback = modelType === "verification" || modelType === "synthesis" || modelType === "historian";
     const fallbackChain = useFallback ? FALLBACK_CHAINS.critical : [MODELS[modelType]];
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -336,7 +258,7 @@ export async function callGeminiStudioWithSelfHealing<T>(
             // 1. CALL API - use fallback for thinking model
             try {
                 if (useFallback) {
-                    rawResponse = await callGeminiStudioWithFallback(currentPrompt, fallbackChain, 1, debugLabel, timeoutMs);
+                    rawResponse = await callGeminiStudioWithFallback(currentPrompt, fallbackChain, debugLabel, timeoutMs);
                 } else {
                     rawResponse = await callGeminiStudio(currentPrompt, MODELS[modelType], 1, timeoutMs);
                 }

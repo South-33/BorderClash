@@ -4,7 +4,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { MODELS, FALLBACK_CHAINS } from "./config";
+import { MODELS, FALLBACK_CHAINS, type GeminiModelConfig } from "./config";
 import { callGeminiStudio, callGeminiStudioWithFallback, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
 
 
@@ -292,7 +292,7 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudio(currentPrompt, MODELS.thinking, 2);
+            const response = await callGeminiStudio(currentPrompt, MODELS.planner, 2);
 
             // Extract JSON
             const jsonStr = extractJsonPayload(response);
@@ -501,7 +501,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, 1, "HISTORIAN", timeoutMs);
+            const response = await callGeminiStudioWithFallback(currentPrompt, FALLBACK_CHAINS.critical, "HISTORIAN", timeoutMs);
 
             // Extract JSON from response
             const jsonStr = extractJsonPayload(response);
@@ -1175,7 +1175,6 @@ Return rescored importance for every event in CURRENT BATCH.`;
             const response = await callGeminiStudioWithFallback(
                 currentPrompt,
                 FALLBACK_CHAINS.critical,
-                1,
                 "IMPACT-RESCORE"
             );
 
@@ -1216,7 +1215,7 @@ export const previewTimelineImpactRescoreBatch = internalAction({
             startIndex: number;
             batchSize: number;
             lookbackSize: number;
-            modelChain: readonly string[];
+            modelChain: readonly GeminiModelConfig[];
         };
         summary?: {
             total: number;
@@ -1745,7 +1744,6 @@ ${eventContext}
             const response = await callGeminiStudioWithFallback(
                 currentPrompt,
                 FALLBACK_CHAINS.critical,
-                1,
                 "CANONICALIZE"
             );
 
