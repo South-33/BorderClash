@@ -118,7 +118,9 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step4, /runWithRetries\(\s*"\[STEP 4\] Synthesis"/s);
   assert.match(step4, /scheduleStepRetry\(/);
   assert.match(step4, /scheduleRunAtWithRetries\(\s*ctx,\s*"Next runResearchCycle"/s);
-  assert.match(source, /ctx\.runMutation\(internal\.api\.publishDashboardSnapshot, \{\}\)/);
+  assert.match(step4, /if \(!synthesisSucceeded\) \{/);
+  assert.match(step4, /ctx\.runMutation\(internal\.api\.publishDashboardSnapshot, \{\}\)/);
+  assert.match(step4, /Published fallback dashboard snapshot with previous analysis/);
 });
 
 test("historian action loop isolates item failures instead of aborting the batch", () => {

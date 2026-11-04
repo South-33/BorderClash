@@ -1581,6 +1581,7 @@ export const step4_synthesis = internalAction({
         let schedulingResult: { nextCycleHours: number; reason: string } | null = null;
         let synthesisSucceeded = false;
         let dashboardUpdated = false;
+        let fallbackSnapshotPublished = false;
         let synthesisWriteErrors = 0;
 
         try {
@@ -1619,6 +1620,22 @@ export const step4_synthesis = internalAction({
             if (scheduledRetry) return;
             stepErrors.push(`Synthesis: ${summarizeError(e)}`);
             console.warn("[STEP 4] Retry budget exhausted - falling back to conservative scheduling");
+        }
+
+        // Synthesis may be unavailable while the deterministic feed, source
+        // verification, and historian steps still changed the database. Publish
+        // those current records with the previous analysis intact instead of
+        // leaving the public snapshot stale until Gemini recovers.
+        if (!synthesisSucceeded) {
+            try {
+                await ctx.runMutation(internal.api.publishDashboardSnapshot, {});
+                fallbackSnapshotPublished = true;
+                console.log("[STEP 4] Published fallback dashboard snapshot with previous analysis");
+            } catch (e) {
+                const snapshotError = `SnapshotFallback: ${summarizeError(e)}`;
+                stepErrors.push(snapshotError);
+                console.error(`[STEP 4] fallback_snapshot_failed error=${summarizeError(e)}`);
+            }
         }
 
         // ═══ ADAPTIVE SCHEDULING with scheduler.runAt ═══
@@ -1691,7 +1708,7 @@ export const step4_synthesis = internalAction({
             scheduledRunId,
         });
         const shortReason = reason.substring(0, 160).replace(/"/g, "'");
-        console.log(`[STEP 4] complete synthesisOk=${synthesisSucceeded} dashboardUpdated=${dashboardUpdated} writeErrors=${synthesisWriteErrors} nextRunHours=${clampedHours} nextRunAt=${new Date(nextRunAt).toISOString()} scheduledRunId=${scheduledRunId ?? "none"} cancelledPendingJobs=${cancelledPendingJobs} cancelFailures=${pendingCancelFailures} reason="${shortReason}" accumulatedErrors=${stepErrors.length}`);
+        console.log(`[STEP 4] complete synthesisOk=${synthesisSucceeded} dashboardUpdated=${dashboardUpdated} fallbackSnapshot=${fallbackSnapshotPublished} writeErrors=${synthesisWriteErrors} nextRunHours=${clampedHours} nextRunAt=${new Date(nextRunAt).toISOString()} scheduledRunId=${scheduledRunId ?? "none"} cancelledPendingJobs=${cancelledPendingJobs} cancelFailures=${pendingCancelFailures} reason="${shortReason}" accumulatedErrors=${stepErrors.length}`);
 
         // ═══ CYCLE COMPLETE ═══
         // Increment cycle counter and trigger dashboard (every cycle now, since cycles are 16h+)
