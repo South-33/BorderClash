@@ -187,7 +187,7 @@ export async function callGeminiStudio(
         let lastError: unknown;
         let lastResponse: Response | null = null;
 
-        for (let attempt = 1; attempt <= 3; attempt++) {
+        for (let attempt = 1; attempt <= 5; attempt++) {
             const baseUrl = attempt === 1
                 ? await resolveGeminiDataPlane(controller.signal)
                 : attempt === 2
@@ -199,17 +199,18 @@ export async function callGeminiStudio(
                 const transientStatus = response.status === 502
                     || response.status === 503
                     || response.status === 504
+                    || (response.status >= 520 && response.status <= 530)
                     || (allowNotFound && response.status === 404);
-                if (!transientStatus || attempt === 3) return response;
+                if (!transientStatus || attempt === 5) return response;
                 await response.text().catch(() => "");
             } catch (error) {
                 lastError = error;
-                if (controller.signal.aborted || attempt === 3) throw error;
+                if (controller.signal.aborted || attempt === 5) throw error;
             }
 
             const remaining = deadline - Date.now();
             if (remaining <= 0) break;
-            await new Promise(resolve => setTimeout(resolve, Math.min(1500 * attempt, remaining)));
+            await new Promise(resolve => setTimeout(resolve, Math.min(2000 * attempt, 6000, remaining)));
         }
 
         if (lastResponse) return lastResponse;
@@ -219,30 +220,37 @@ export async function callGeminiStudio(
     try {
         const request = buildGeminiStudioRequest(datedPrompt, options.thinkingLevel, requestId, options.useSearch ?? false);
         request.body.async = true;
-        const response = await fetchWithTransientRetry("/v1/chat/completions", {
-            method: "POST",
-            headers: request.headers,
-            body: JSON.stringify(request.body),
-        }, { allowNotFound: true });
+        const submitRequest = async (): Promise<string | null> => {
+            const response = await fetchWithTransientRetry("/v1/chat/completions", {
+                method: "POST",
+                headers: request.headers,
+                body: JSON.stringify(request.body),
+            }, { allowNotFound: true });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            const duration = Date.now() - startTime;
-            console.warn(`[GEMINI] submit_error status=${response.status} duration=${duration}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
-            throw new Error(`API error (${response.status}): ${errorText.substring(0, 100)}`);
-        }
+            if (!response.ok) {
+                const errorText = await response.text();
+                const duration = Date.now() - startTime;
+                console.warn(`[GEMINI] submit_error status=${response.status} duration=${duration}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
+                throw new Error(`API error (${response.status}): ${errorText.substring(0, 100)}`);
+            }
 
-        // Backward compatibility for an older server that completes inline.
-        if (response.status !== 202) {
-            return readCompletion(await response.json());
-        }
+            // Backward compatibility for an older server that completes inline.
+            if (response.status !== 202) {
+                return readCompletion(await response.json());
+            }
 
-        const accepted = await response.json();
-        if (accepted?.request_id && accepted.request_id !== request.requestId) {
-            throw new Error(`API returned mismatched request_id ${accepted.request_id}`);
-        }
+            const accepted = await response.json();
+            if (accepted?.request_id && accepted.request_id !== request.requestId) {
+                throw new Error(`API returned mismatched request_id ${accepted.request_id}`);
+            }
+            return null;
+        };
+
+        const inlineContent = await submitRequest();
+        if (inlineContent) return inlineContent;
 
         let consecutiveNotFound = 0;
+        let resubmittedAfterRestart = false;
         while (Date.now() < deadline) {
             const remaining = deadline - Date.now();
             await new Promise(resolve => setTimeout(resolve, Math.min(GEMINI_POLL_INTERVAL_MS, remaining)));
@@ -259,7 +267,21 @@ export async function callGeminiStudio(
             }
             if (poll.status === 404) {
                 consecutiveNotFound++;
-                if (consecutiveNotFound < 3) continue;
+                if (consecutiveNotFound < 2) continue;
+                if (!resubmittedAfterRestart) {
+                    // Async jobs live in the API process. If that process is
+                    // restarted while Gemini is working, the transport can
+                    // recover while the in-memory job record disappears.
+                    // Resubmit the same logical request once instead of
+                    // failing the entire research cycle.
+                    console.warn(`[GEMINI] async_job_missing resubmit=true requestId=${request.requestId}`);
+                    geminiEndpointCache = null;
+                    const recoveredInlineContent = await submitRequest();
+                    if (recoveredInlineContent) return recoveredInlineContent;
+                    resubmittedAfterRestart = true;
+                    consecutiveNotFound = 0;
+                    continue;
+                }
                 throw new Error("Gemini async job disappeared after submission");
             }
             if (!poll.ok) {

@@ -78,6 +78,61 @@ test("Bing News curation parser extracts publisher URLs and enforces the date wi
   assert.equal(candidates[0].publishedAt, "2026-11-04T09:00:00.000Z");
 });
 
+test("deterministic source verifier is conservative and evidence-backed", () => {
+  const moduleUrl = pathToFileURL(sourceEvidencePath).href;
+  const script = `
+    const m = await import(${JSON.stringify(moduleUrl)});
+    const stored = {
+      title: "Nearly 8,000 Cambodians remain displaced along Thai border despite ceasefire, Cambodia says",
+      summary: "Cambodia says civilians remain displaced along the Thailand border after the ceasefire.",
+      source: "Anadolu Agency",
+      sourceUrl: "https://www.aa.com.tr/en/asia-pacific/example/123",
+    };
+    const base = {
+      requestedUrl: stored.sourceUrl,
+      gatheredAt: "2026-11-05T00:00:00.000Z",
+      googleNews: { query: "example", items: [] },
+    };
+    const exact = m.assessSourceEvidence({
+      ...base,
+      direct: {
+        status: "ok", httpStatus: 200, finalUrl: stored.sourceUrl,
+        title: stored.title,
+        description: stored.summary,
+      },
+    }, stored);
+    const rss = m.assessSourceEvidence({
+      ...base,
+      direct: { status: "blocked", httpStatus: 403, finalUrl: stored.sourceUrl },
+      googleNews: {
+        query: "example",
+        items: [{ title: stored.title + " - Anadolu", source: "Anadolu Agency", sourceUrl: "https://www.aa.com.tr/" }],
+      },
+    }, stored);
+    const dead = m.assessSourceEvidence({
+      ...base,
+      direct: { status: "dead", httpStatus: 404, finalUrl: stored.sourceUrl, reason: "HTTP 404" },
+    }, stored);
+    const ambiguous = m.assessSourceEvidence({
+      ...base,
+      direct: { status: "ok", httpStatus: 200, finalUrl: stored.sourceUrl, title: "Unrelated sports results" },
+    }, stored);
+    process.stdout.write(JSON.stringify({ exact, rss, dead, ambiguous }));
+  `;
+  const result = spawnSync(
+    "node",
+    ["--experimental-strip-types", "--input-type=module", "-e", script],
+    { cwd: root, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const assessments = JSON.parse(result.stdout);
+  assert.equal(assessments.exact.status, "VERIFIED");
+  assert.equal(assessments.rss.status, "VERIFIED");
+  assert.equal(assessments.dead.status, "URL_DEAD");
+  assert.equal(assessments.ambiguous.status, "SKIP");
+});
+
 test("research pipeline retries and handoff guards exist on all chained steps", () => {
   const source = read(researchPath);
 
@@ -247,6 +302,10 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /geminiEndpointCache/);
   assert.match(aiUtils, /resolveGeminiDataPlane\(controller\.signal, true\)/);
   assert.match(aiUtils, /: normalizeBaseUrl\(GEMINI_STUDIO_CONTROL_URL\)/);
+  assert.match(aiUtils, /response\.status >= 520 && response\.status <= 530/);
+  assert.match(aiUtils, /attempt <= 5/);
+  assert.match(aiUtils, /async_job_missing resubmit=true/);
+  assert.match(aiUtils, /resubmittedAfterRestart/);
   assert.match(research, /Thai fields must use natural Thai script/);
   assert.match(research, /Khmer fields must use natural Khmer script/);
   assert.match(historian, /Thai text must use Thai script and Khmer text must use Khmer script/);
