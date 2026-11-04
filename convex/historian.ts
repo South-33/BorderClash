@@ -4,7 +4,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { callGeminiStudio, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
+import { callGeminiStudio, formatTimelineEvent, isCompletedGeminiFailure } from "./ai_utils";
 import { GEMINI_THINKING } from "./config";
 
 
@@ -13,106 +13,24 @@ import { GEMINI_THINKING } from "./config";
 // The "thinking" analyst that decides what becomes a timeline event
 // =============================================================================
 
-const HISTORIAN_PROMPT = `You are the HISTORIAN - the final gatekeeper of truth for BorderClash.
+const HISTORIAN_PROMPT = `You maintain BorderClash's permanent Thailand-Cambodia timeline.
 
-🧠 WHO YOU ARE:
-You're not a news aggregator. You're building the historical record that people will reference years from now.
-You've seen how propaganda works, how governments spin, how media sensationalizes.
-Your job is to cut through all of it and record WHAT ACTUALLY HAPPENED.
+Use only the supplied article records and timeline context. Treat every side's claims with equal skepticism. Do not invent facts, dates, places, units, quotes, or verification. If evidence is weak or only describes commentary, archive it instead of creating an event.
 
-You are skeptical of everyone equally. Thai claims, Cambodian claims, international media - all get the same scrutiny.
-You don't take sides. You take notes.
+Keep only historically useful events: combat, territorial changes, signed agreements, major humanitarian milestones, or discrete confirmed casualty incidents. Merge repeated reporting into an existing event. Use 70+ importance only for developments that materially change the conflict story.
 
-⚡ HOW YOU THINK:
-- VERIFY before you trust. Visit URLs. Search the web. Cross-reference.
-- QUESTION everything. "Who benefits from this story?" "What's the evidence?" "Who else is reporting this?"
-- ADMIT uncertainty. "Disputed" and "unverified" are valid states. Don't pretend to know what you don't.
+Actions:
+- create_event: a new, well-supported timeline event.
+- merge_source: the article supports an existing event.
+- update_event: the article materially corrects or improves an existing event.
+- delete_event: an existing event is proven false or is a duplicate.
+- archive: real but not timeline-worthy, including reactions and routine status reports.
+- discard: broken, irrelevant, or unusable material.
+- flag_conflict: credible evidence contradicts the timeline and needs review.
 
-💡 TIP: You have the [google_search] tool available. Use it to verify claims, find newer updates, or cross-reference facts when the provided articles or timeline are insufficient.
+For dates use YYYY-MM-DD and optional HH:MM. Keep English titles under 10 words. Keep descriptions to 2 short sentences. Thai text must use Thai script and Khmer text must use Khmer script.
 
-🎯 YOUR CORE PRINCIPLES:
-
-1. HISTORICAL SIGNIFICANCE
-   Ask: "Would someone researching this conflict in 10 years need to know this?"
-   If yes → Timeline. If no → Archive.
-
-2. SYMMETRIC SKEPTICISM  
-   Government press releases from ANY country = claims, not facts.
-   Cross-reference. Verify. Trust evidence, not authority.
-
-3. NO DUPLICATES
-   Before creating, check: "Is this already on the timeline?"
-   Same event + different wording = MERGE, don't create.
-   Same day + same place + related actions = CONSOLIDATE into one event.
-
-4. CREDIBILITY IS YOUR JUDGMENT
-   You rate every article 0-100 based on: evidence quality, source reliability, bias level, verification.
-   Your rating overrides whatever credibility score came before.
-
-5. EVENT vs REACTION (CRITICAL FILTER)
-   Only EVENTS belong on the timeline. REACTIONS get archived.
-   
-   EVENT = Something physically happened
-     ✅ Combat action (airstrikes, shelling, captures)
-     ✅ Territorial change (forces advance/retreat)
-     ✅ Treaty/agreement signed
-     ✅ Major humanitarian milestone (100k+ displaced, hospitals overwhelmed)
-     ✅ Confirmed casualties (discrete incident, not running totals)
-   
-   REACTION = Commentary, warnings, measurements about events
-     ❌ Travel advisories from foreign governments → ARCHIVE
-     ❌ Tourism/economic impact reports → ARCHIVE
-     ❌ Celebrity/activist statements → ARCHIVE
-     ❌ Running casualty total updates (unless major milestone) → ARCHIVE
-     ❌ "Status quo" reports ("fighting continues", "ceasefire holds") → ARCHIVE
-   
-   If something is a REACTION to an event, archive it. The event itself is what matters.
-
-📊 IMPORTANCE SCALE (0-100) — USE THIS STRICTLY:
-- 90-100: Conflict-defining turning points. Major battles, treaty signing, regime-level shifts.
-- 80-89: Major strategic shifts. New front opened/closed, large force moves, formal high-stakes state decisions.
-- 70-79: Story-critical state changes. Important but not decisive milestones readers MUST know.
-- 60-69: Real and useful updates, but supporting detail (usually not key-event material).
-- 40-59: Minor/redundant/reactive updates. Usually archive unless needed to preserve chronology.
-- 0-39: Noise, weakly evidenced claims, or repetitive commentary → ARCHIVE/DISCARD.
-
-⚠️ HIGH-IMPACT DISCIPLINE (CRITICAL):
-- 70+ is RESERVED for events that materially change the conflict story.
-- If this article is just a small update to an existing thread, prefer merge_source/update_event and keep importance below 70.
-- Repeated reports on the same incident should trend DOWN in importance unless they add decisive new facts.
-- For running totals (displaced/casualties), only assign 70+ when a major milestone is crossed or policy/operational reality changes.
-
-📅 DATES & TIMES:
-- Published dates are often WRONG. Find the actual event date from the article.
-- Estimate time of day when possible (dawn attacks, afternoon announcements, etc.)
-- Cause must come before effect. Order events logically.
-- Format: "YYYY-MM-DD" for date, "HH:MM" for time (24-hour).
-
-🔄 TIMELINE CLEANUP:
-You have FULL ACCESS to the entire timeline. You can:
-- UPDATE old events with new information
-- DELETE events that turned out to be false
-- MERGE duplicates (update the better one, delete the worse)
-- Change status: confirmed → disputed → debunked
-
-If new evidence shows an old event was wrong, FIX IT. That's your job.
-
-📋 YOUR ACTIONS:
-
-| Action | When to Use |
-|--------|-------------|
-| create_event | New verified event worthy of permanent record |
-| merge_source | Article confirms existing event - add as source |
-| update_event | Correct/improve existing event (including merging duplicates) |
-| delete_event | Remove fabricated events OR duplicates after merging |
-| archive | True but not important enough for timeline |
-| discard | Broken links, spam, gibberish |
-| flag_conflict | Contradicts timeline, needs investigation |
-
-${TRANSLATION_STYLE_GUIDE}
-
-OUTPUT FORMAT:
-Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
+Return EXACTLY one fenced \`\`\`json code block and nothing else.
 
 \`\`\`json
 {
@@ -121,64 +39,42 @@ Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
       "articleTitle": "Exact title from input",
       "articleCountry": "thailand|cambodia|international",
       "action": "create_event|merge_source|update_event|archive|discard|flag_conflict|delete_event",
-      "verifiedCredibility": 0-100,
-      "credibilityReason": "Brief explanation",
-      "visitedSourceUrl": true,
+      "verifiedCredibility": 0,
+      "credibilityReason": "Brief evidence-based explanation",
+      "visitedSourceUrl": false,
       "eventData": {
         "date": "YYYY-MM-DD",
         "timeOfDay": "HH:MM",
-        "title": "English title (max 10 words)",
-        "titleTh": "Thai local headline in THAI SCRIPT ONLY, plain and concise",
-        "titleKh": "Khmer local headline in KHMER SCRIPT ONLY, plain and concise",
-        "description": "2-3 sentences",
-        "descriptionTh": "Thai local description in THAI SCRIPT ONLY, short everyday sentences",
-        "descriptionKh": "Khmer local description in KHMER SCRIPT ONLY, short everyday sentences",
+        "title": "English title",
+        "titleTh": "Thai translation",
+        "titleKh": "Khmer translation",
+        "description": "English description",
+        "descriptionTh": "Thai translation",
+        "descriptionKh": "Khmer translation",
         "category": "military|diplomatic|humanitarian|political",
-        "importance": 0-100,
-        "sourceSnippet": "Key quote"
+        "importance": 0,
+        "sourceSnippet": "Short source-supported phrase"
       },
-      "targetEventTitle": "For merge/update/delete - exact title from timeline",
-      "eventUpdates": { "field": "newValue" },
-      "reasoning": "Why this action"
+      "targetEventTitle": "Exact existing timeline title when needed",
+      "eventUpdates": {},
+      "reasoning": "Brief reason"
     }
   ],
-  "summary": "Processed X: created Y, merged Z, archived W"
+  "summary": "Brief batch summary"
 }
 \`\`\`
 
-RULES:
-- Every article MUST have an action
-- create_event/merge_source/update_event require visitedSourceUrl: true
-- update_event/delete_event require targetEventTitle + reasoning
-- Output valid JSON only inside the fence
+Rules:
+- Every supplied article must have one action.
+- Never claim you visited a URL. Set visitedSourceUrl to false.
+- update_event and delete_event require targetEventTitle and reasoning.
+- Output valid JSON only inside the fence.
 `;
 
 // =============================================================================
 // PLANNER PROMPT
 // Phase 1: Sees ALL articles, picks up to 10 most important to process
 // =============================================================================
-
-const PLANNER_PROMPT = `Select 5-10 articles to process next.
-
-STRATEGY:
-1. Look for a "Main Event" (a cluster of articles about the same incident). Pick ALL articles related to it.
-2. If that's fewer than 5, fill the rest of the quota (up to 10) with the next most important independent updates.
-
-PRIORITIZE: Breaking news, heavily corroborated events.
-SKIP FOR LATER: Low-value opinion pieces if you have better news.
-
-OUTPUT FORMAT:
-Return EXACTLY one fenced \`\`\`json code block and NOTHING else.
-
-\`\`\`json
-{
-  "selectedArticles": ["Exact title 1", "Exact title 2", "..."],
-  "reasoning": "Selected [Event A] cluster and [Event B] updates"
-}
-\`\`\`
-
-Copy article titles EXACTLY from the input list.
-`;
 
 function extractJsonPayload(raw: string): string | null {
     const fencedMatch = raw.match(/```json\s*([\s\S]*?)```/i);
@@ -230,106 +126,6 @@ function normalizeJsonCandidate(input: string): string {
 // PLANNER RUNNER
 // Selects which articles to process from the full queue
 // =============================================================================
-
-async function runPlanner(
-    allArticles: Array<{
-        title: string;
-        country: string;
-        source: string;
-        credibility: number;
-        summary?: string;
-    }>,
-    existingTimeline: Array<{
-        date: string;
-        title: string;
-        description: string;
-        importance: number;
-    }>,
-    timeoutMs?: number
-): Promise<string[] | null> {
-
-    // Build compact article list (just enough info for selection)
-    const articlesContext = allArticles.map((a, i) =>
-        `${i + 1}. [${a.country.toUpperCase()}] "${a.title}" (${a.source}, cred:${a.credibility})`
-    ).join("\n");
-
-    // Build timeline context using shared helper
-    const timelineContext = existingTimeline.length > 0
-        ? existingTimeline.map((e: any) => formatTimelineEvent(e)).join("\n\n")
-        : "(Timeline is empty)";
-
-    const prompt = `${PLANNER_PROMPT}
-
-═══════════════════════════════════════════════════════════════
-📰 ALL PENDING ARTICLES (${allArticles.length} total):
-${articlesContext}
-
-📜 CURRENT TIMELINE (${existingTimeline.length} events):
-${timelineContext}
-═══════════════════════════════════════════════════════════════
-
-Pick 5-10 articles to process now. Output your selection in JSON.`;
-
-    // Helper to clean and parse JSON with multiple fallback strategies
-    const tryParseJson = (jsonStr: string): any => {
-        try { return JSON.parse(normalizeJsonCandidate(jsonStr)); } catch { /* continue */ }
-        try {
-            const cleaned = normalizeJsonCandidate(jsonStr)
-                .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-                .replace(/,\s*([\]\}])/g, '$1');
-            return JSON.parse(cleaned);
-        } catch { /* continue */ }
-        return null;
-    };
-
-    // RETRY LOOP (2 attempts)
-    const MAX_RETRIES = 2;
-    let currentPrompt = prompt;
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        if (attempt > 1) {
-            console.log(`[PLANNER] retrying attempt=${attempt}/${MAX_RETRIES}`);
-        }
-
-        try {
-            const response = await callGeminiStudio(currentPrompt, {
-                thinkingLevel: GEMINI_THINKING.planner,
-            });
-
-            // Extract JSON
-            const jsonStr = extractJsonPayload(response);
-            if (!jsonStr) {
-                console.warn(`[PLANNER] no_json attempt=${attempt}/${MAX_RETRIES}`);
-                if (attempt < MAX_RETRIES) {
-                    currentPrompt = "Your response had no valid JSON payload. Output ONLY one fenced ```json code block with {\"selectedArticles\": [\"Title 1\", \"Title 2\"], \"reasoning\": \"...\"}. Select 5-10 from the list you already saw.";
-                    continue;
-                }
-                return null;
-            }
-
-            const result = tryParseJson(jsonStr);
-            if (result && result.selectedArticles && Array.isArray(result.selectedArticles)) {
-                return result.selectedArticles;
-            }
-
-            // Wrong structure - retry with feedback
-            console.warn(`[PLANNER] invalid_structure attempt=${attempt}/${MAX_RETRIES} sample=${jsonStr.substring(0, 150)}`);
-            if (attempt < MAX_RETRIES) {
-                currentPrompt = `Wrong format. You returned: ${jsonStr.substring(0, 200)}...\n\nOutput ONLY one fenced \`\`\`json code block with {"selectedArticles": ["Exact Title 1", "Exact Title 2", ...], "reasoning": "..."}.`;
-            }
-        } catch (error) {
-            // Network error - wait before retry
-            console.warn(`[PLANNER] network_error attempt=${attempt}/${MAX_RETRIES} error=${error}`);
-            if (attempt < MAX_RETRIES) {
-                await new Promise(r => setTimeout(r, 3000));
-                currentPrompt = prompt; // Reset to original prompt for network retries
-            }
-        }
-    }
-
-    console.warn("[PLANNER] exhausted fallback=default_article_selection");
-    return null;
-}
 
 // =============================================================================
 // HISTORIAN RUNNER
@@ -406,14 +202,6 @@ async function runHistorian(
             snippet?: string;
         }>;
     }>,
-    newsContext?: Record<string, Array<{
-        title: string;
-        summary: string;
-        date: string;
-        source: string;
-        sourceUrl: string;
-        credibility: number;
-    }>>,
     timeoutMs?: number
 ): Promise<HistorianResult | null> {
 
@@ -431,33 +219,6 @@ async function runHistorian(
         ? existingTimeline.map((e: any) => formatTimelineEvent(e)).join("\n\n")
         : "(Timeline is empty)";
 
-    // Build lean news context section (latest 20 already-processed articles per country)
-    // This gives the Historian awareness of what's been happening without processing overhead
-    let newsContextSection = "";
-    if (newsContext) {
-        const formatCountryContext = (articles: typeof newsContext.TH, label: string) => {
-            if (!articles || articles.length === 0) return "";
-            return `[${label}]\n` + articles.map(a =>
-                `• "${a.title}" (${a.date}, cred:${a.credibility})\n  ${a.source}: ${a.sourceUrl}\n  ${a.summary.substring(0, 100)}...`
-            ).join("\n");
-        };
-
-        const thContext = formatCountryContext(newsContext.TH, "THAI NEWS");
-        const khContext = formatCountryContext(newsContext.KH, "CAMBODIAN NEWS");
-        const intContext = formatCountryContext(newsContext.INT, "INTERNATIONAL NEWS");
-
-        if (thContext || khContext || intContext) {
-            newsContextSection = `
-📊 RECENT NEWS CONTEXT (already processed - for your awareness only):
-${thContext}
-
-${khContext}
-
-${intContext}
-`;
-        }
-    }
-
     const prompt = `${HISTORIAN_PROMPT}
 
 ═══════════════════════════════════════════════════════════════
@@ -466,7 +227,6 @@ ${articlesContext}
 
 📜 EXISTING TIMELINE (${existingTimeline.length} events):
 ${timelineContext}
-${newsContextSection}
 ═══════════════════════════════════════════════════════════════
 
 Process each article above and decide its fate. Output your decisions in JSON.`;
@@ -506,7 +266,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
             const response = await callGeminiStudio(currentPrompt, {
                 thinkingLevel: GEMINI_THINKING.historian,
                 timeoutMs,
-                useSearch: true,
+                useSearch: false,
             });
 
             // Extract JSON from response
@@ -555,6 +315,10 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         } catch (error) {
             // Network error - wait before retry
             console.warn(`[HISTORIAN] network_error attempt=${attempt}/${MAX_RETRIES} error=${error}`);
+            if (isCompletedGeminiFailure(error)) {
+                console.warn("[HISTORIAN] server_retry_budget_exhausted localRetry=false");
+                break;
+            }
             if (attempt < MAX_RETRIES) {
                 await new Promise(r => setTimeout(r, 5000));
                 currentPrompt = prompt; // Reset to original for network retries
@@ -587,12 +351,10 @@ export type HistorianCycleResult = {
 
 export async function runHistorianCycleInternal(
     ctx: any,
-    { cachedTimeline, cachedNewsContext }: {
+    { cachedTimeline }: {
         cachedTimeline?: any[];
-        cachedNewsContext?: any;
     },
 ): Promise<HistorianCycleResult> {
-    const historianStartTime = Date.now();
     // 1. Get ALL unprocessed articles (not just 10)
     const allArticles = await ctx.runQuery(internal.api.getUnprocessedForTimeline, {
         batchSize: 200,  // Get all of them
@@ -605,65 +367,22 @@ export async function runHistorianCycleInternal(
 
     // 2. Get existing timeline for context (use cache if provided)
     const timeline = cachedTimeline ?? await ctx.runQuery(internal.api.getRecentTimelineContextForHistorian, {
-        limit: 40  // Enough recent context without turning one Gemini request into a huge attachment
+        limit: 12  // Bounded context keeps the browser generation reliable
     });
 
     // 3. Get timeline stats (always fresh - small query)
     const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
 
-    // 4. Get recent news context (use cache if provided)
-    // This gives the Historian situational awareness without processing overhead
-    const newsContext = cachedNewsContext ?? await ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {});
-    console.log(`[HISTORIAN] context unprocessed=${allArticles.length} timeline=${timeline.length} totalEvents=${timelineStats.totalEvents} avgImportance=${timelineStats.avgImportance} news=th:${newsContext.TH.length},kh:${newsContext.KH.length},int:${newsContext.INT.length} cachedTimeline=${cachedTimeline ? "true" : "false"} cachedNews=${cachedNewsContext ? "true" : "false"}`);
+    // Processed-news context duplicates the timeline and made each browser request much larger.
+    console.log(`[HISTORIAN] context unprocessed=${allArticles.length} timeline=${timeline.length} totalEvents=${timelineStats.totalEvents} avgImportance=${timelineStats.avgImportance} cachedTimeline=${cachedTimeline ? "true" : "false"}`);
 
     // ====================================================================
     // PHASE 1: PLANNER - Pick up to 10 most important articles
     // ====================================================================
-    let selectedTitles: string[];
-
-    if (allArticles.length <= 10) {
-        // If 10 or fewer, process all
-        selectedTitles = allArticles.map((a: any) => a.title);
-    } else {
-        // Keep planner context small enough for one reliable browser generation.
-        const maxPlannerArticles = 30;
-        const articlesForPlanner = allArticles.length > maxPlannerArticles
-            ? allArticles.slice(0, maxPlannerArticles)
-            : allArticles;
-
-        if (allArticles.length > maxPlannerArticles) {
-            console.log(`[PLANNER] limited_input total=${allArticles.length} sent=${maxPlannerArticles}`);
-        }
-
-        // Run Planner to pick 5-10
-        const elapsedPlanner = Date.now() - historianStartTime;
-        const remainingPlanner = (10 * 60 * 1000) - elapsedPlanner;
-        const requestTimeoutPlanner = Math.max(30000, Math.min(240000, remainingPlanner - 30000));
-
-        const plannerSelection = await runPlanner(
-            articlesForPlanner.map((a: any) => ({
-                title: a.title,
-                country: a.country,
-                source: a.source,
-                credibility: a.credibility,
-                summary: a.summary || a.summaryEn,
-            })),
-            timeline.map((t: any) => ({
-                date: t.date,
-                title: t.title,
-                description: t.description,
-                importance: t.importance,
-            })),
-            requestTimeoutPlanner
-        );
-
-        if (!plannerSelection || plannerSelection.length === 0) {
-            console.warn("[PLANNER] selection_failed fallback=first_10_by_credibility");
-            selectedTitles = allArticles.slice(0, 10).map((a: any) => a.title);
-        } else {
-            selectedTitles = plannerSelection;
-        }
-    }
+    // The query is already credibility-sorted. Avoid a separate Gemini planner call
+    // and process a small deterministic batch per loop.
+    const historianBatchSize = 3;
+    const selectedTitles: string[] = allArticles.slice(0, historianBatchSize).map((a: any) => a.title);
 
     // Helper for fuzzy title matching (AI often returns slightly different titles)
     const normalizeTitle = (title: string) =>
@@ -690,9 +409,11 @@ export async function runHistorianCycleInternal(
         const dbSamples = allArticles.slice(0, 3).map((a: any) => a.title.substring(0, 60)).join(" | ");
         console.warn(`[PLANNER] no_title_matches fallback=first_10_by_credibility plannerSamples="${plannerSamples}" dbSamples="${dbSamples}"`);
 
-        // Fallback: just use first 10 articles
-        selectedArticles = allArticles.slice(0, 10);
+        // Fallback: use the same bounded credibility-sorted batch.
+        selectedArticles = allArticles.slice(0, historianBatchSize);
     }
+
+    selectedArticles = selectedArticles.slice(0, historianBatchSize);
 
     // ====================================================================
     // PHASE 2: HISTORIAN - Process the selected articles
@@ -722,8 +443,7 @@ export async function runHistorianCycleInternal(
                 credibility: s.credibility,  // For sorting top sources
                 snippet: s.snippet,
             })),
-        })),
-        newsContext  // Pass recent news context for situational awareness
+        }))
     );
 
 
@@ -999,7 +719,6 @@ export const runHistorianCycle = internalAction({
     args: {
         // Optional cached data to reduce bandwidth when called in a loop
         cachedTimeline: v.optional(v.array(v.any())),
-        cachedNewsContext: v.optional(v.any()),
     },
     handler: async (ctx, args): Promise<HistorianCycleResult> => await runHistorianCycleInternal(ctx, args),
 });

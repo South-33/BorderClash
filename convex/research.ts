@@ -17,7 +17,7 @@ import {
 import { GEMINI_THINKING } from "./config";
 
 // Use gemini-studio-api helpers
-import { callGeminiStudio, callGeminiStudioWithSelfHealing, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
+import { callGeminiStudio, callGeminiStudioWithSelfHealing, formatTimelineEvent } from "./ai_utils";
 
 
 // =============================================================================
@@ -209,7 +209,7 @@ async function scheduleCurationOutageRetry(
         await ctx.runMutation(internal.api.setNextRunAt, {
             nextRunAt,
             lastCycleInterval: delayHours,
-            schedulingReason: `Gemini curation unavailable; automatic retry in ${delayHours}h`,
+            schedulingReason: `News feed discovery unavailable; automatic retry in ${delayHours}h`,
             scheduledRunId,
         });
         console.warn(`[STEP 1] Scheduled curation outage retry in ${delayHours}h`);
@@ -450,7 +450,7 @@ export const synthesizeAll = internalAction({
     handler: async (ctx): Promise<any> => {
         // ==================== TIMELINE CONTEXT (PRIMARY SOURCE) ====================
         // Timeline events are the verified, structured "memory" of the conflict
-        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 30 });
+        const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 12 });
         const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
 
         // Build timeline context using shared helper
@@ -471,9 +471,9 @@ export const synthesizeAll = internalAction({
         // ==================== LOW CREDIBILITY / PROPAGANDA (6 per country) ====================
         // Use new indexed query that sorts by credibility at database level
         const [cambodiaLowCred, thailandLowCred, internationalLowCred] = await Promise.all([
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "cambodia", limit: 6 }),
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "thailand", limit: 6 }),
-            ctx.runQuery(internal.api.getLowCredArticles, { country: "international", limit: 6 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "cambodia", limit: 2 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "thailand", limit: 2 }),
+            ctx.runQuery(internal.api.getLowCredArticles, { country: "international", limit: 2 }),
         ]);
 
         if (cambodiaLowCred.length === 0 && thailandLowCred.length === 0 && internationalLowCred.length === 0 && timeline.length === 0) {
@@ -493,7 +493,7 @@ export const synthesizeAll = internalAction({
 
         // ==================== BREAKING NEWS (15 most recent across all) ====================
         // Use new indexed query that fetches from all tables and sorts by publishedAt
-        const breakingNews: any[] = await ctx.runQuery(internal.api.getRecentBreakingNews, { limit: 15 });
+        const breakingNews: any[] = await ctx.runQuery(internal.api.getRecentBreakingNews, { limit: 8 });
 
         const breakingNewsList = breakingNews.map((a: any, idx: number) =>
             `${idx + 1}. [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
@@ -509,351 +509,109 @@ export const synthesizeAll = internalAction({
         const prevNeutral = await ctx.runQuery(api.api.getAnalysis, { target: "neutral" }) as any;
         const prevStats = await ctx.runQuery(api.api.getDashboardStats, {}) as any;
 
-        const memoryContext = `
-📜 TIMELINE (VERIFIED HISTORICAL RECORD - ${timeline.length} events):
-This is the structured memory of key conflict events. Use this as your PRIMARY source of truth.
+        const prompt: string = `You are the BorderClash synthesis analyst. Use only the supplied timeline and article records. Do not browse or search. Be neutral, concise, and explicit about uncertainty. Never invent a fact, source, casualty number, place, unit, or date.
+
+Evidence rules:
+- Prefer timeline events and higher-credibility articles.
+- Treat government and domestic-media claims as claims unless corroborated.
+- If sources disagree, say the point is disputed and attribute the competing claims.
+- Do not call something verified or confirmed without naming the source that supports it.
+- Keep the previous analysis when current evidence does not justify a change.
+
+Posture rules:
+- PEACEFUL intensity 0-30: diplomacy, routine patrols, no kinetic action.
+- DEFENSIVE intensity 31-55: fortification, defensive response, holding positions.
+- ESCALATED intensity 56-69: mobilization, forward deployment, serious military pressure.
+- AGGRESSIVE intensity 70-100: cross-border strikes, offensive operations, territory seizure.
+- territorialContext is one of OWN_TERRITORY, DISPUTED_ZONE, FOREIGN_TERRITORY, BORDER_ZONE when supported; otherwise omit it.
+
+Dashboard rules:
+- conflictLevel LOW means no kinetic action; ELEVATED means movements or minor clashes; CRITICAL means sustained combat or confirmed fatalities; UNCERTAIN means evidence conflicts.
+- casualtyCount is cumulative fatalities and must never decrease.
+- Change casualty, displaced, or injury values only when current supplied evidence supports the new number. Otherwise preserve the previous value.
+
+Scheduling: choose 4-48 hours. Use 4-8 for active fighting, 12-24 for moving but non-kinetic conditions, and 24-48 for stable or diplomatic conditions.
+
+Translation: Thai fields must use natural Thai script. Khmer fields must use natural Khmer script. Translate meaning, not word order. Keep labels short.
+
+RECENT TIMELINE (${timeline.length} events):
 ${timelineContext}
 
-📜 PREVIOUS ANALYSIS (CONTINUITY CONTEXT):
-The following was the previous analysis. Think of this as your last report - you're updating it, not starting from scratch.
+LOW-CREDIBILITY CAMBODIAN ARTICLES (${cambodiaLowCred.length}):
+${cambodiaPropaganda || "(none)"}
 
-⚠️ CRITICAL: DON'T BLINDLY FOLLOW THE OLD ANALYSIS!
-The previous synthesis might be outdated, flawed, or based on limited information. YOU MUST:
-- **Evaluate independently**: Look at the CURRENT timeline and articles. What do THEY tell you?
-- **Challenge the old narrative**: Does it still match the evidence? Or was it based on a bias/misreading?
-- **Don't auto-continue storylines**: Just because the previous analysis said "escalating tension" doesn't mean you should keep saying that if current evidence shows otherwise.
-- **Think for yourself**: The previous analysis is ONE data point. The timeline and articles are your PRIMARY evidence.
+LOW-CREDIBILITY THAI ARTICLES (${thailandLowCred.length}):
+${thailandPropaganda || "(none)"}
 
-🔄 ITERATION GUIDANCE:
-- **If the situation is essentially unchanged**: Keep the core narrative and make only minor refinements (update phrasing, add nuance, adjust intensity slightly). You don't need to manufacture a new story every cycle.
-- **If there's genuinely new information**: Incorporate it smoothly. Evolve the narrative rather than replacing it entirely.
-- **If major developments contradict previous analysis**: Update boldly and explain the shift.
-- **Think evolution, not revolution**: Most cycles involve gradual adjustments, not complete rewrites.
+LOW-CREDIBILITY INTERNATIONAL ARTICLES (${internationalLowCred.length}):
+${internationalPropaganda || "(none)"}
 
-Your job is to maintain an accurate, **evolving** narrative - not to create drama where none exists, and not to perpetuate errors from previous cycles.
+RECENT BREAKING ARTICLES (${breakingNews.length}):
+${breakingNewsList || "(none)"}
 
-[PREVIOUS CAMBODIA NARRATIVE]: ${prevCambodia?.officialNarrative || "None"}
-[PREVIOUS THAILAND NARRATIVE]: ${prevThailand?.officialNarrative || "None"}
-[PREVIOUS NEUTRAL SUMMARY]: ${prevNeutral?.generalSummary || "None"}
-[PREVIOUS POSTURE]: Cambodia=${prevCambodia?.militaryPosture}, Thailand=${prevThailand?.militaryPosture}
-`;
+PREVIOUS ANALYSIS:
+Cambodia: ${prevCambodia?.officialNarrative || "None"}
+Thailand: ${prevThailand?.officialNarrative || "None"}
+Neutral: ${prevNeutral?.generalSummary || "None"}
+Posture: Cambodia=${prevCambodia?.militaryPosture || "unknown"}, Thailand=${prevThailand?.militaryPosture || "unknown"}
+Previous dashboard: conflict=${prevStats?.conflictLevel || "LOW"}, casualties=${prevStats?.casualtyCount ?? 0}, displaced=${prevStats?.displacedCount ?? 0}, civilianInjured=${prevStats?.civilianInjuredCount ?? 0}, militaryInjured=${prevStats?.militaryInjuredCount ?? 0}
 
-        const prompt: string = `You are a senior geopolitical analyst providing NEUTRAL but SHARP analysis. You have TWO roles:
-
-💡 TIP: You have the [google_search] tool available. If current news articles don't provide enough clarity or if you need to verify a specific claim, feel free to use it to search for the most recent context.
-
-🎯 FOR CAMBODIA/THAILAND SECTIONS: Provide RESPECTFUL summaries of each country's perspective - what their media reports, how they frame things. You are a REPORTER here, not a judge.
-
-⚖️ FOR THE NEUTRAL SECTION: BE A REFEREE. You're the guy calling out BS, flagging obvious spin, and pointing out when the numbers don't add up. You're fair but you're NOT a pushover. If someone's lying or exaggerating, you say it. Think sports commentator calling a bad call: assertive, clear, no diplomatic fluff.
-
-📰 CONTEXT - HOW THESE ARTICLES WERE COLLECTED:
-- CAMBODIAN SOURCES: Domestic news that Cambodian civilians read (Fresh News, DAP, VOD, Phnom Penh Post, etc.)
-- THAI SOURCES: Domestic news that Thai civilians read (Thai Rath, Matichon, Bangkok Post, etc.)
-- INTERNATIONAL SOURCES: Outside observers (Reuters, AP, BBC, etc.) — NOTE: "International" doesn't mean "neutral". These outlets may have access biases (e.g., easier access to one government's officials) or editorial leanings. Treat them as additional perspectives, not automatic truth.
-
-${memoryContext}
-
-🧠 YOUR ANALYSIS APPROACH:
-- You can SEARCH THE WEB to verify claims or find additional context
-- Compare how different sources frame the same events
-- Identify the KEY THEMES and CONCERNS emphasized by each country's media
-- Note where different sources emphasize different aspects
-- Apply balanced judgment to differing accounts
-- You may reference previous analysis for CONTEXT, but evaluate current news on its own merits. If evidence changes, your analysis should change.
-
-═══════════════════════════════════════════════════════════════
-🛡️ BULLETPROOF NEUTRALITY RULES (CRITICAL - READ CAREFULLY)
-═══════════════════════════════════════════════════════════════
-
-These rules ensure NO reader from ANY country can accuse you of bias:
-
-📐 RULE 1: SYMMETRIC LANGUAGE
-If you use a negative word for one country, you MUST use equally weighted language for the other.
-❌ BAD: "Country A's claim is propaganda" vs "Country B's claim is unverified"
-   → "Propaganda" = accusation of lying. "Unverified" = neutral uncertainty.
-✅ GOOD: "Country A's claim is unverified" AND "Country B's claim is unverified"
-✅ ALSO GOOD: "Country A's claim appears exaggerated" AND "Country B's claim appears exaggerated"
-
-📐 RULE 2: ATTRIBUTION MANDATE
-NEVER say "verified" or "confirmed" without naming WHO verified it.
-❌ BAD: "The verified death toll is 30"
-✅ GOOD: "Per Reuters/AP estimates, the death toll is approximately 30"
-✅ GOOD: "International monitors (ICRC, UN) report 30-50 casualties"
-If you cannot name a verifier, say "reported" not "verified".
-
-📐 RULE 3: CONFIDENCE REFLECTS SOURCE QUALITY
-Confidence scores should reflect ACTUAL source quality and information availability — do NOT force artificial parity.
-- If one side has better verified coverage (more wire services, more independent reporters), that side CAN have higher confidence
-- Large gaps (>15 points) MUST be explained in confidenceRationale
-- Hiding genuine information asymmetry IS a form of bias — report reality
-
-📐 RULE 4: PROPORTIONAL CRITICISM (NEUTRAL SECTION)
-Criticism should be proportional to actual discrepancies found, NOT forced 50/50 balance.
-❌ BAD: Forcing equal criticism when evidence clearly shows one side fabricating more
-❌ ALSO BAD: 5 paragraphs criticizing one side, silence on the other
-✅ GOOD: If one side has objectively more spin, criticize proportionally BUT explicitly state: "Analysis shows more discrepancies in [Country]'s claims this period."
-✅ KEY: No side gets a pass. Even if one side is worse, the other side's issues still get mentioned.
-
-📐 RULE 5: NO EDITORIALIZING ON THIRD PARTIES
-Describe what foreign leaders/organizations DID, not whether it was smart.
-❌ BAD: "The US announcement was detached from reality"
-✅ GOOD: "The US announced X; Country A rejected it, Country B welcomed it"
-
-📐 RULE 6: RANGE OVER PICKING SIDES
-When sources give conflicting numbers, report the RANGE, not your favorite.
-❌ BAD: "Death toll is 30" (picking the international number)
-✅ GOOD: "Death toll disputed: 30-50 per international monitors, 480+ per Country A claims"
-
-📏 FICTIONAL EXAMPLES (to show the PATTERN - these are NOT about Cambodia/Thailand):
-Example of SYMMETRIC criticism:
-"Country A claims to have killed 500 enemy soldiers; international tallies suggest 40-60. Similarly, Country B claims zero civilian casualties from its shelling, contradicted by NGO reports of 12 civilian deaths. BOTH governments appear to be manipulating figures for domestic audiences."
-
-Example of ATTRIBUTED claims:
-"According to Red Cross field reports, approximately 2,000 civilians have fled the border region. Country A's government puts this figure at 10,000; Country B disputes any displacement occurred. The Red Cross figure is considered most reliable due to on-ground presence."
-
-Example of BALANCED referee call:
-"The situation reveals classic information warfare from BOTH sides: Country A's state media emphasizes enemy atrocities while minimizing own-side incidents; Country B's coverage does the mirror opposite. Neither domestic narrative can be taken at face value."
-═══════════════════════════════════════════════════════════════
-
-⚠️ ADDITIONAL CRITICAL ANALYSIS PRINCIPLES:
-- ALL parties in a conflict have incentives to exaggerate successes and minimize losses
-- Apply EQUAL skepticism to: (1) Thai government/military, (2) Cambodian government/military, (3) Both domestic media, (4) International media (which may have its own editorial biases)
-- NO source type is automatically 'truth' - prioritize claims corroborated by MULTIPLE independent sources regardless of origin
-- If sources disagree, NOTE THE DISCREPANCY without assuming either is correct
-- BE DIRECT about discrepancies between ANY sources (Thai vs Cambodian, domestic vs international, etc.)
-- CALL OUT all sides proportionally when they exaggerate, omit facts, or use nationalist framing — don't force false equivalence, but don't give anyone a free pass either
-- DON'T pick sides - acknowledge uncertainty when evidence is conflicting
-- CUMULATIVE BIAS CHECK: After drafting, ask yourself: "Did I give one country benefit-of-doubt more often across ALL claims?" If yes, rebalance or explicitly justify why.
-
-📊 ARTICLE COUNT NOTE:
-- The number of articles from each country may vary - this is normal and does NOT indicate importance
-- Fewer articles from one country does NOT mean less activity or less validity
-- Judge each perspective by QUALITY and CONTENT, not by article count
-- Give equal analytical weight to all perspectives regardless of how many articles were found
-
-⭐ CREDIBILITY SCORES (cred:XX) - USE THESE!
-Each article has a credibility score. Weight your analysis accordingly:
-- cred:80-100: HIGHLY RELIABLE - base your analysis primarily on these
-- cred:60-79: RELIABLE - solid sources, can trust most claims
-- cred:40-59: MIXED - verify claims against higher-cred sources before accepting
-- cred:20-39: SKEPTICAL - likely propaganda or unverified, mention with caveats
-- cred:0-19: UNRELIABLE - do not use as basis for facts, only note the narrative exists
-If high-cred and low-cred articles conflict, TRUST THE HIGH-CRED SOURCE.
-
-${TRANSLATION_STYLE_GUIDE}
-
-═══════════════════════════════════════════════════════════════
-🔶 LOW-CREDIBILITY / UNVERIFIED ARTICLES (analyze for spin & framing):
-These articles scored lowest on credibility. They may contain TRUE information presented with spin, or outright fabrications. Your job: extract what's real, flag what's exaggerated, note the framing each side uses.
-
-🇰🇭 CAMBODIAN LOW-CRED (${cambodiaLowCred.length} articles):
-${cambodiaPropaganda || "(no articles)"}
-
-🇹🇭 THAI LOW-CRED (${thailandLowCred.length} articles):
-${thailandPropaganda || "(no articles)"}
-
-🌍 INTERNATIONAL LOW-CRED (${internationalLowCred.length} articles):
-${internationalPropaganda || "(no articles)"}
-
-⚡ BREAKING NEWS (${breakingNews.length} most recent articles across all sources):
-${breakingNewsList || "(no articles)"}
-═══════════════════════════════════════════════════════════════
-
-🎖️ MILITARY POSTURE - SCORING GUIDE:
-This gauge measures whether a party is DEFENDING, ESCALATING, or ATTACKING.
-The bar position MUST match the posture category.
-
-⚔️ POSTURE & INTENSITY (these MUST match!):
-🟢 PEACEFUL (intensity: 0-30): No military threat, normal operations, diplomacy active
-   - 0-10: Complete peace, minimal military presence
-   - 11-20: Normal patrols, routine operations
-   - 21-30: Heightened awareness, but no military action
-
-🟡 DEFENSIVE (intensity: 31-55): Protecting own position, responding to threats
-   - 31-40: Reinforcing positions, moving to defensive posture
-   - 41-50: Active defense, fortifying against incursion
-   - 51-55: Heavy defensive action (returning fire, repelling attack)
-
-🟠 ESCALATED (intensity: 56-69): Mobilizing, posturing, preparing for potential offensive
-   - 56-60: Troop buildups, forward deployments, ultimatums issued
-   - 61-65: Artillery/assets moved to striking positions
-   - 66-69: Imminent attack posture, provocations, cross-border probing
-
-🔴 AGGRESSIVE (intensity: 70-100): Attacking, invading, or initiating combat
-   - 70-80: Cross-border strikes, entering contested areas
-   - 81-90: Active offensive operations, seizing ground
-   - 91-100: Full-scale offensive
-
-⚠️ CRITICAL RULES:
-   - If posture is PEACEFUL → intensity must be 0-30
-   - If posture is DEFENSIVE → intensity must be 31-55
-   - If posture is ESCALATED → intensity must be 56-69
-   - If posture is AGGRESSIVE → intensity must be 70-100
-   - BOTH-SIDES RULE: Both parties CAN have the same posture. Assign intensity based on scale/severity of each side's actions independently.
-
-🏷️ POSTURE LABEL - MUST BE SHORT (MAX 6 WORDS):
-Examples by posture:
-  PEACEFUL: "Routine Patrols", "Normal Operations", "Diplomatic Talks"
-  DEFENSIVE: "Border Reinforcement", "Defensive Positions", "Repelling Attack"
-  ESCALATED: "Troop Mobilization", "Forces Massing", "Preparing Offensive"
-  AGGRESSIVE: "Cross-Border Strike", "Territory Seizure", "Offensive Underway"
-
-💡 ACTION-BASED ASSESSMENT (focus on WHAT parties DO, not territorial claims):
-- WHO MOVED FORWARD this cycle? → Moving toward the other side = more aggressive
-- WHO FIRED FIRST in engagements? → Initiating fire = more aggressive
-- WHO IS STATIONARY vs ADVANCING? → Holding position = more defensive
-- SCALE OF OPERATIONS: Airstrikes/artillery > ground incursions > defensive fire
-- If both sides claim self-defense, focus on WHO INITIATED the specific engagement being analyzed
-
-🛡️ VERIFICATION & ACCURACY RULES:
-1. NO SPECIFICITY WITHOUT SOURCE: Do NOT invent specific names (e.g., specific hill numbers, bridge names, or unit IDs) unless EXPLICITLY present in the source text. Use general terms like "high ground" or "infrastructure" if unsure.
-2. PRECISE LANGUAGE: Distinguish between "rejecting a PROPOSAL" vs "rejecting a CLAIM". If a source says "We deny X happened", report it as a DENIAL, not a refusal of peace.
-3. PLATFORM VERIFICATION: Do not specify weapon platforms (e.g., "Naval shelling", "F-16s") unless high-credibility sources confirm them. Use "airstrikes" or "shelling" if the specific platform is unconfirmed.
-4. POLICY VS REALITY: Distinguish between official policy (e.g., "border closed by decree") and tactical reality (e.g., "crossing impassable due to fighting").
-
-📰 KEY EVENTS STYLE GUIDE - SMART SPACE MANAGEMENT:
-Write KEY EVENTS as SHORT headline-style bullets. MAX 12 WORDS each!
-
-⚖️ BALANCE SUMMARY LENGTH vs. NUMBER OF POINTS:
-The neutral card has LIMITED TOTAL SPACE. You must balance these two elements:
-- **If your summary is LONG (70+ words)**: Use FEWER key events (2-3 points max)
-- **If your summary is SHORT (50-60 words)**: You can use MORE key events (4-5 points)
-- **Think total card density**: Long text + many bullets = overload. Keep it scannable!
-
-❌ TOO LONG: "Country A announces 'Ceasefire', but fighting intensifies hours later as Country B rejects the truce"
-❌ TOO LONG: "Humanitarian Crisis: 330,000+ civilians displaced as borders close"
-✅ GOOD: "Ceasefire collapses hours after announcement"
-✅ GOOD: "Airstrikes hit key bridge; rockets fired in response"
-✅ GOOD: "330,000+ civilians displaced; borders closed"
-✅ GOOD: "Both sides claim self-defense at UN"
-
-Be CONCISE. Each event = 1 short line. No multi-clause sentences. Frame events NEUTRALLY - don't imply who "started it" unless clearly established.
-
-📏 LENGTH HIERARCHY (IMPORTANT!):
-- SIDE CARDS (Cambodia/Thailand): COMPACT. 2-3 sentences, max 50 words. These cards have limited space. Report key claims CONCISELY - just the essence of what their media is saying.
-- CENTER CARD (Neutral): LONGEST but BOUNDED. 3-5 sentences, 50-80 words for summary. You are the REFEREE here - summarize BOTH sides' actions, call out discrepancies, give the full picture. Remember to balance with key events!
-
-ANALYZE ALL PERSPECTIVES. Return EXACTLY one fenced \`\`\`json code block and NOTHING else:
+Return exactly one fenced \`\`\`json code block and nothing else. Use this shape:
 \`\`\`json
 {
   "cambodia": {
-    "officialNarrative": "English (2-3 sentences, max 50 words). Key claims from Cambodian media only.",
-    "officialNarrativeTh": "Thai local wording in THAI SCRIPT ONLY (2 short sentences, plain everyday words)",
-    "officialNarrativeKh": "Khmer local wording in KHMER SCRIPT ONLY (2 short sentences, plain everyday words)",
-    "narrativeSource": "Primary source(s)",
-    "militaryIntensity": 50,
+    "officialNarrative": "English, max 50 words",
+    "officialNarrativeTh": "Thai translation",
+    "officialNarrativeKh": "Khmer translation",
+    "narrativeSource": "Main supplied source names",
+    "militaryIntensity": 0,
     "militaryPosture": "PEACEFUL|DEFENSIVE|ESCALATED|AGGRESSIVE",
-    "postureLabel": "Short phrase (max 4 words)",
-    "postureLabelTh": "Thai plain label in THAI SCRIPT ONLY (max 4 words)",
-    "postureLabelKh": "Khmer plain label in KHMER SCRIPT ONLY (max 4 words)",
-    "postureRationale": "English 1-2 sentences. WHY this posture? Focus on actions, not sources.",
-    "postureRationaleTh": "Thai local wording in THAI SCRIPT ONLY (1-2 short sentences; explain jargon simply)",
-    "postureRationaleKh": "Khmer local wording in KHMER SCRIPT ONLY (1-2 short sentences; explain jargon simply)",
-    "biasNotes": "Key themes emphasized",
-    "confidence": 75,
-    "confidenceRationale": "Brief justification"
+    "postureLabel": "max 4 words",
+    "postureLabelTh": "Thai label",
+    "postureLabelKh": "Khmer label",
+    "postureRationale": "English, 1-2 short sentences",
+    "postureRationaleTh": "Thai translation",
+    "postureRationaleKh": "Khmer translation",
+    "territorialContext": "OWN_TERRITORY|DISPUTED_ZONE|FOREIGN_TERRITORY|BORDER_ZONE"
   },
   "thailand": {
-    "officialNarrative": "English (2-3 sentences, max 50 words). Key claims from Thai media only.",
-    "officialNarrativeTh": "Thai local wording in THAI SCRIPT ONLY (2 short sentences, plain everyday words)",
-    "officialNarrativeKh": "Khmer local wording in KHMER SCRIPT ONLY (2 short sentences, plain everyday words)",
-    "narrativeSource": "Primary source(s)",
-    "militaryIntensity": 50,
+    "officialNarrative": "English, max 50 words",
+    "officialNarrativeTh": "Thai translation",
+    "officialNarrativeKh": "Khmer translation",
+    "narrativeSource": "Main supplied source names",
+    "militaryIntensity": 0,
     "militaryPosture": "PEACEFUL|DEFENSIVE|ESCALATED|AGGRESSIVE",
-    "postureLabel": "Short phrase (max 4 words)",
-    "postureLabelTh": "Thai plain label in THAI SCRIPT ONLY (max 4 words)",
-    "postureLabelKh": "Khmer plain label in KHMER SCRIPT ONLY (max 4 words)",
-    "postureRationale": "English 1-2 sentences. WHY this posture? Focus on actions, not sources.",
-    "postureRationaleTh": "Thai local wording in THAI SCRIPT ONLY (1-2 short sentences; explain jargon simply)",
-    "postureRationaleKh": "Khmer local wording in KHMER SCRIPT ONLY (1-2 short sentences; explain jargon simply)",
-    "biasNotes": "Key themes emphasized",
-    "confidence": 75,
-    "confidenceRationale": "Brief justification"
+    "postureLabel": "max 4 words",
+    "postureLabelTh": "Thai label",
+    "postureLabelKh": "Khmer label",
+    "postureRationale": "English, 1-2 short sentences",
+    "postureRationaleTh": "Thai translation",
+    "postureRationaleKh": "Khmer translation",
+    "territorialContext": "OWN_TERRITORY|DISPUTED_ZONE|FOREIGN_TERRITORY|BORDER_ZONE"
   },
   "neutral": {
-    "generalSummary": "English (3-5 sentences, 50-80 words). Summarize BOTH sides' key actions, humanitarian impact, diplomatic developments. Compare claims. Note where sources agree/disagree. Be the impartial commentator giving the full picture.",
-    "generalSummaryTh": "Thai local summary in THAI SCRIPT ONLY (3-5 short sentences, plain everyday words, explain hard terms)",
-    "generalSummaryKh": "Khmer local summary in KHMER SCRIPT ONLY (3-5 short sentences, plain everyday words, explain hard terms)",
+    "generalSummary": "English, 50-80 words",
+    "generalSummaryTh": "Thai translation",
+    "generalSummaryKh": "Khmer translation",
     "conflictLevel": "Low|Elevated|Critical|Uncertain",
-    "keyEvents": [
-      "2-5 SHORT English headlines (adjust based on summary length!)",
-      "MAX 12 words each - use NEUTRAL framing",
-      "If summary is 70+ words, use only 2-3 events",
-      "If summary is 50-60 words, can use 4-5 events"
-    ],
-    "keyEventsTh": ["หัวข้อสั้นๆ ในภาษาไทย (THAI SCRIPT ONLY) ไม่เกิน 12 คำ"],
-    "keyEventsKh": ["ចំណងជើងខ្លី ជាភាសាខ្មែរ (KHMER SCRIPT ONLY) មិនលើស 12 ពាក្យ"],
-    "discrepancies": "List SPECIFIC contradictions. Use SYMMETRIC language: 'Country A claims X, Country B claims Y, international sources suggest Z'. ATTRIBUTE the 'believable' version to a NAMED source (Reuters, ICRC, etc), don't just pick one.",
-    "confidence": 75,
-    "confidenceRationale": "Must justify if Cambodia/Thailand confidence differs by >10 points. What's verified? What's propaganda from EACH side?"
+    "keyEvents": ["2-5 neutral English headlines, max 12 words each"],
+    "keyEventsTh": ["Thai translations in the same order"],
+    "keyEventsKh": ["Khmer translations in the same order"]
   },
   "scheduling": {
-    "nextCycleHours": 12,
-    "reason": "Brief 1-sentence explanation. Example: 'Peaceful conditions, both sides defensive, no major developments'"
+    "nextCycleHours": 24,
+    "reason": "One short sentence"
   },
   "dashboard": {
     "conflictLevel": "LOW|ELEVATED|CRITICAL|UNCERTAIN",
-    "casualtyCount": 0,
-    "displacedCount": 0,
-    "civilianInjuredCount": 0,
-    "militaryInjuredCount": 0,
-    "unchanged": true,
-    "changeReason": "Brief explanation of why stats changed or stayed same"
+    "casualtyCount": ${prevStats?.casualtyCount ?? 0},
+    "displacedCount": ${prevStats?.displacedCount ?? 0},
+    "civilianInjuredCount": ${prevStats?.civilianInjuredCount ?? 0},
+    "militaryInjuredCount": ${prevStats?.militaryInjuredCount ?? 0}
   }
 }
 \`\`\`
-
-📊 DASHBOARD STATS RULES (in the "dashboard" section):
-These are the LIVE STATS shown on the dashboard. Be CONSERVATIVE - only change if you have NEW verified evidence.
-
-CONFLICT LEVEL:
-- "LOW": No kinetic action, only diplomatic words
-- "ELEVATED": Troop movements, drills, minor skirmishes, small-scale evacuations
-- "CRITICAL": Sustained shelling, confirmed fatalities, major offensive
-- "UNCERTAIN": Conflicting reports, cannot determine with confidence
-
-STATS RULES:
-- casualtyCount: CUMULATIVE fatalities - can only increase, never decrease
-- displacedCount: Current number of displaced civilians
-- civilianInjuredCount: Separate civilian injuries
-- militaryInjuredCount: Separate military injuries
-- unchanged: true if you're keeping previous values (this is GOOD if nothing changed)
-- changeReason: Explain why you changed or kept the values
-
-PREVIOUS DASHBOARD VALUES (keep these if no new verified evidence):
-- Conflict Level: ${prevNeutral?.conflictLevel || "LOW"}
-- Casualties: ${prevStats?.casualtyCount ?? 0}
-- Displaced: ${prevStats?.displacedCount ?? 0}
-- Civilian Injured: ${prevStats?.civilianInjuredCount ?? 0}
-- Military Injured: ${prevStats?.militaryInjuredCount ?? 0}
-
-If timeline shows no new casualties/displacement events, KEEP THE SAME NUMBERS.
-
-RULES:
-- Return EXACTLY one fenced \`\`\`json code block and NOTHING else
-- Inside the fence, output valid JSON only
-- Use English numerals (0-9) only
-
-🔍 MANDATORY SELF-CHECK (DO THIS BEFORE OUTPUTTING):
-1. SYMMETRIC LANGUAGE: Count negative words for each country in neutral section - roughly proportional to actual discrepancies found?
-2. ATTRIBUTION: Every "verified/confirmed" claim has a NAMED source (Reuters, ICRC, etc)?
-3. CONFIDENCE PARITY: Cambodia/Thailand confidence within 10 points, OR gap justified in rationale?
-4. INTENSITY COHERENCE: If one is AGGRESSIVE and other is DEFENSIVE, is the intensity gap ≥20 points? If both AGGRESSIVE, are intensities proportional to actions?
-5. NO EDITORIAL: No adjectives for third parties (Trump, UN) - only describe what they DID?
-6. CUMULATIVE BIAS: Across ALL claims, did you give one country benefit-of-doubt more often? If so, explicitly note it or rebalance.
-7. FOG OF WAR: If information is genuinely unclear/conflicting, say so. "Insufficient verified information" is a valid answer.
-
-📅 ADAPTIVE SCHEDULING DECISION:
-Decide when the next intelligence cycle should run. Pick any value between 4 and 48 hours. If the border is quiet and news is just repeating itself, don't be afraid to "sleep on it" for 24-48 hours. We don't need to burn cycles on stale news. 
-
-However, if bullets are flying or troops are moving, stay on top of it with a 4-8h window.
-
-THINK LIKE THIS:
-- "Is something actually moving?" -> 4-12 hours.
-- "Same old posturing/patrols?" -> 18-24 hours.
-- "Dead silence/Peace talks?" -> 36-48 hours.
-
-Return your hours and a brief reason in the "scheduling" section.`;
+`;
 
         try {
             // Use generic self-healing helper
@@ -1474,15 +1232,7 @@ export const step3_historian = internalAction({
         let historianDiscarded = 0;
         let historianCredibilityUpdated = 0;
 
-        let cachedNewsContext: any = null;
         try {
-            // Cache the news context once, but keep it inside the guarded retry path so
-            // transient Convex query failures do not bypass step-level retries/finalization.
-            cachedNewsContext = await runWithRetries(
-                "[STEP 3] Historian news context",
-                () => ctx.runQuery(internal.api.getRecentNewsContextForHistorian, {}),
-            );
-
             while (historianLoops < MAX_HISTORIAN_LOOPS) {
                 const timeRemaining = getTimeRemaining();
                 if (timeRemaining < 90 * 1000) { // 90s minimum
@@ -1494,14 +1244,13 @@ export const step3_historian = internalAction({
 
                 const latestTimeline = await runWithRetries(
                     `[STEP 3] Timeline refresh iteration ${historianLoops}`,
-                    () => ctx.runQuery(internal.api.getRecentTimelineContextForHistorian, { limit: 40 }),
+                    () => ctx.runQuery(internal.api.getRecentTimelineContextForHistorian, { limit: 12 }),
                 );
 
                 const result = await runWithRetries(
                     `[STEP 3] Historian iteration ${historianLoops}`,
                     () => runHistorianCycleInternal(ctx, {
                         cachedTimeline: latestTimeline,
-                        cachedNewsContext,
                     }),
                 );
 
@@ -1539,7 +1288,7 @@ export const step3_historian = internalAction({
             console.warn("[STEP 3] Retry budget exhausted - moving to synthesis");
         }
 
-        console.log(`[STEP 3] complete loops=${historianLoops} processed=${historianProcessed} created=${historianEventsCreated} updated=${historianEventsUpdated} deleted=${historianEventsDeleted} merged=${historianSourcesMerged} archived=${historianArchived} discarded=${historianDiscarded} credibilityUpdated=${historianCredibilityUpdated} stop=${historianStopReason} news=th:${cachedNewsContext?.TH?.length ?? 0},kh:${cachedNewsContext?.KH?.length ?? 0},int:${cachedNewsContext?.INT?.length ?? 0} accumulatedErrors=${stepErrors.length}`);
+        console.log(`[STEP 3] complete loops=${historianLoops} processed=${historianProcessed} created=${historianEventsCreated} updated=${historianEventsUpdated} deleted=${historianEventsDeleted} merged=${historianSourcesMerged} archived=${historianArchived} discarded=${historianDiscarded} credibilityUpdated=${historianCredibilityUpdated} stop=${historianStopReason} accumulatedErrors=${stepErrors.length}`);
 
         // Chain to Step 4 (fresh 10-min timer for synthesis)
         try {

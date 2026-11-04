@@ -32,24 +32,21 @@ type GeminiRequestInit = {
 
 const GEMINI_REQUEST_TIMEOUT_MS = 510_000;
 
-export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
-- Write like a careful local translator, not a literal dictionary. Understand the event first, then retell it in normal Thai/Khmer.
-- CRITICAL SCRIPT RULE:
-  - All fields ending in "Th" (e.g., titleTh, descriptionTh, officialNarrativeTh, generalSummaryTh, keyEventsTh, postureLabelTh, postureRationaleTh) MUST be written in Thai language using the THAI SCRIPT (ไทย) ONLY. Do NOT write in Khmer script or English in these fields.
-  - All fields ending in "Kh" (e.g., titleKh, descriptionKh, officialNarrativeKh, generalSummaryKh, keyEventsKh, postureLabelKh, postureRationaleKh) MUST be written in Khmer language using the KHMER SCRIPT (ខ្មែរ) ONLY. Do NOT write in Thai script or English in these fields.
-- Keep it short and clear for a broad local audience, but never compress meaning until it becomes vague.
-- Prefer everyday concrete words. When a legal, military, or diplomatic term matters, keep the meaning and add a short plain explanation in the sentence.
-- Use technical terms and acronyms only when they genuinely help accuracy. Otherwise, say what the thing means or why it matters in simple words.
-- Choose the natural local phrase a thoughtful news editor would use in daily speech. Avoid textbook-style abstractions, word-for-word calques, and dramatic partisan wording.
-- Preserve official names and place names when known; keep the same name consistent across Thai and Khmer fields.
-- Use English numerals (0-9), not Thai or Khmer numerals.
-- Prefer short sentences. One idea per sentence.`;
-
 type GeminiCallOptions = {
     timeoutMs?: number;
     useSearch?: boolean;
     thinkingLevel: GeminiThinkingLevel;
 };
+
+/**
+ * The Gemini API owns browser-level retries. A "Gemini request failed" error
+ * means that server retry budget is already exhausted, so repeating the same
+ * call immediately in BorderClash only multiplies an upstream outage.
+ */
+export function isCompletedGeminiFailure(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.toLowerCase().includes("gemini request failed:");
+}
 
 function buildGeminiStudioRequest(
     content: string,
@@ -250,6 +247,10 @@ ${rawResponse.substring(0, 1000)}`;
             }
         } catch (e: any) {
             console.error(`[${debugLabel}] failed attempt=${attempt}/${maxRetries} error=${e.message}`);
+            if (isCompletedGeminiFailure(e)) {
+                console.warn(`[${debugLabel}] server_retry_budget_exhausted localRetry=false`);
+                return null;
+            }
             // Add delay for network errors to give Cloudflare tunnel time to reconnect
             if (attempt < maxRetries) {
                 console.log(`[${debugLabel}] retry_wait delay=8s`);

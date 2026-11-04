@@ -105,10 +105,10 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step2, /scheduleRunAfterWithRetries\(ctx, "Step 3"/);
 
   const step3 = section(source, "export const step3_historian", "export const step4_synthesis");
-  assert.match(step3, /runWithRetries\(\s*"\[STEP 3\] Historian news context"/s);
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Timeline refresh iteration \$\{historianLoops\}`/s);
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Historian iteration \$\{historianLoops\}`/s);
-  assert.match(step3, /getRecentTimelineContextForHistorian/);
+  assert.match(step3, /getRecentTimelineContextForHistorian, \{ limit: 12 \}/);
+  assert.doesNotMatch(step3, /getRecentNewsContextForHistorian/);
   assert.match(step3, /runHistorianCycleInternal\(ctx, \{/);
   assert.doesNotMatch(step3, /ctx\.runAction\(internal\.historian\.runHistorianCycle/);
   assert.match(step3, /scheduleStepRetry\(/);
@@ -218,15 +218,16 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /replace\(\/\\\\\(\?=\[!<>&`\]\)\/g, ""\)/);
   assert.match(aiUtils, /replace\(\/\\\\\(\?!\["\\\\\/bfnrtu\]\)\/g, "\\\\\\\\"/);
   assert.match(aiUtils, /fenced ```json blocks first/);
-  assert.match(aiUtils, /export const TRANSLATION_STYLE_GUIDE/);
-  assert.match(aiUtils, /LANGUAGE & TRANSLATION VOICE/);
-  assert.match(aiUtils, /careful local translator/);
-  assert.match(aiUtils, /normal Thai\/Khmer/);
-  assert.match(aiUtils, /Use English numerals \(0-9\)/);
-  assert.match(research, /\$\{TRANSLATION_STYLE_GUIDE\}/);
-  assert.match(historian, /\$\{TRANSLATION_STYLE_GUIDE\}/);
+  assert.match(aiUtils, /export function isCompletedGeminiFailure/);
+  assert.match(aiUtils, /includes\("gemini request failed:"\)/);
+  assert.match(aiUtils, /server_retry_budget_exhausted localRetry=false/);
+  assert.match(research, /Thai fields must use natural Thai script/);
+  assert.match(research, /Khmer fields must use natural Khmer script/);
+  assert.match(historian, /Thai text must use Thai script and Khmer text must use Khmer script/);
   assert.doesNotMatch(historian, /List each article with your analysis plan FIRST/);
-  assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
+  assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and nothing else/);
+  assert.match(historian, /isCompletedGeminiFailure\(error\)/);
+  assert.match(historian, /\[HISTORIAN\] server_retry_budget_exhausted localRetry=false/);
 });
 
 test("Gemini requests use Flash with Medium and High thinking only", () => {
@@ -239,7 +240,6 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
   assert.match(config, /GEMINI_MODEL = "flash" as const/);
   assert.match(config, /GEMINI_MEDIUM_FALLBACK = "high" as const/);
   assert.doesNotMatch(config, /curation:/);
-  assert.match(config, /planner: "medium"/);
   assert.match(config, /repair: "medium"/);
   assert.match(config, /verification: "high"/);
   assert.match(config, /historian: "high"/);
@@ -254,21 +254,22 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
   assert.doesNotMatch(research, /"SOURCE-VERIFY",\s*undefined,\s*true/);
   assert.doesNotMatch(research, /"VERIFY-SINGLE",\s*undefined,\s*true/);
   assert.doesNotMatch(aiUtils, /attemptsSeq|thinkingSuffix/);
-  assert.match(historian, /limit: 40/);
-  assert.match(historian, /const maxPlannerArticles = 30/);
-  assert.match(research, /getRecentTimelineContextForHistorian, \{ limit: 40 \}/);
-  assert.match(research, /getRecentTimeline, \{ limit: 30 \}/);
-  assert.match(research, /getLowCredArticles, \{ country: "cambodia", limit: 6 \}/);
-  assert.match(research, /getLowCredArticles, \{ country: "thailand", limit: 6 \}/);
-  assert.match(research, /getLowCredArticles, \{ country: "international", limit: 6 \}/);
-  assert.match(research, /getRecentBreakingNews, \{ limit: 15 \}/);
+  assert.match(historian, /limit: 12/);
+  assert.match(historian, /const historianBatchSize = 3/);
+  assert.match(historian, /useSearch: false/);
+  assert.doesNotMatch(historian, /runPlanner\(/);
+  assert.match(research, /getRecentTimelineContextForHistorian, \{ limit: 12 \}/);
+  assert.match(research, /getRecentTimeline, \{ limit: 12 \}/);
+  assert.match(research, /getLowCredArticles, \{ country: "cambodia", limit: 2 \}/);
+  assert.match(research, /getLowCredArticles, \{ country: "thailand", limit: 2 \}/);
+  assert.match(research, /getLowCredArticles, \{ country: "international", limit: 2 \}/);
+  assert.match(research, /getRecentBreakingNews, \{ limit: 8 \}/);
   assert.match(verifyScript, /const thinkingLevels = \["medium", "high"\]/);
   assert.match(verifyScript, /model:\s*"flash"/);
   assert.match(verifyScript, /fallback_thinking_level = "high"/);
   assert.doesNotMatch(research, /GEMINI_THINKING\.curation/);
   assert.match(research, /thinkingLevel: GEMINI_THINKING\.verification/);
   assert.match(research, /thinkingLevel: GEMINI_THINKING\.synthesis/);
-  assert.match(historian, /thinkingLevel: GEMINI_THINKING\.planner/);
   assert.match(historian, /thinkingLevel: GEMINI_THINKING\.historian/);
 });
 
