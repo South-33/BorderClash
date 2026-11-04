@@ -172,6 +172,8 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
 
   const step4 = section(source, "export const step4_synthesis", "export const verifyAllSources");
   assert.match(step4, /runWithRetries\(\s*"\[STEP 4\] Synthesis"/s);
+  assert.match(step4, /\(\) => synthesizeAllInternal\(ctx\)/);
+  assert.doesNotMatch(step4, /ctx\.runAction\(internal\.research\.synthesizeAll/);
   assert.match(step4, /scheduleStepRetry\(/);
   assert.match(step4, /synthesis_unavailable retrying_step_without_rerunning_research=true/);
   assert.match(step4, /scheduleRunAtWithRetries\(\s*ctx,\s*"Next runResearchCycle"/s);

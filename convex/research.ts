@@ -445,9 +445,7 @@ async function insertFeedCandidates(
 // COMBINED SYNTHESIS (one Gemini request for all 3 analyses)
 // =============================================================================
 
-export const synthesizeAll = internalAction({
-    args: {},
-    handler: async (ctx): Promise<any> => {
+async function synthesizeAllInternal(ctx: any): Promise<any> {
         // ==================== TIMELINE CONTEXT (PRIMARY SOURCE) ====================
         // Timeline events are the verified, structured "memory" of the conflict
         const timeline = await ctx.runQuery(internal.api.getRecentTimeline, { limit: 12 });
@@ -826,7 +824,11 @@ Return exactly one fenced \`\`\`json code block and nothing else. Use this shape
             console.error("[SYNTHESIS] failed", error);
             return null;
         }
-    },
+}
+
+export const synthesizeAll = internalAction({
+    args: {},
+    handler: async (ctx): Promise<any> => synthesizeAllInternal(ctx),
 });
 
 // =============================================================================
@@ -1340,7 +1342,7 @@ export const step4_synthesis = internalAction({
         try {
             const result = await runWithRetries(
                 "[STEP 4] Synthesis",
-                () => ctx.runAction(internal.research.synthesizeAll, {}),
+                () => synthesizeAllInternal(ctx),
             );
             if (!result) {
                 console.warn("[STEP 4] synthesis_returned_no_result dashboardMayBeUnchanged=true");
