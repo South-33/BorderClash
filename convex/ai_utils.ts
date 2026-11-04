@@ -7,14 +7,14 @@ import {
     GEMINI_MODEL,
     GEMINI_PROJECT_NAME,
     GEMINI_STUDIO_API_URL,
-    GEMINI_THINKING_LEVEL,
+    type GeminiThinkingLevel,
 } from "./config";
 
 type GeminiRequestInit = {
     headers: Record<string, string>;
     body: {
         model: typeof GEMINI_MODEL;
-        thinking_level: typeof GEMINI_THINKING_LEVEL;
+        thinking_level: GeminiThinkingLevel;
         messages: Array<{ role: "user"; content: string }>;
         project: string;
         client: string;
@@ -43,14 +43,25 @@ export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
 - Use English numerals (0-9), not Thai or Khmer numerals.
 - Prefer short sentences. One idea per sentence.`;
 
-function buildGeminiStudioRequest(content: string, existingRequestId?: string, useSearch: boolean = false): GeminiRequestInit {
+type GeminiCallOptions = {
+    timeoutMs?: number;
+    useSearch?: boolean;
+    thinkingLevel: GeminiThinkingLevel;
+};
+
+function buildGeminiStudioRequest(
+    content: string,
+    thinkingLevel: GeminiThinkingLevel,
+    existingRequestId?: string,
+    useSearch: boolean = false,
+): GeminiRequestInit {
     const requestId = existingRequestId || randomUUID();
     const projectName = GEMINI_PROJECT_NAME;
     const clientName = GEMINI_CLIENT_NAME;
 
     const body: GeminiRequestInit["body"] = {
         model: GEMINI_MODEL,
-        thinking_level: GEMINI_THINKING_LEVEL,
+        thinking_level: thinkingLevel,
         messages: [{ role: "user", content }],
         project: projectName,
         client: clientName,
@@ -88,8 +99,7 @@ function buildGeminiStudioRequest(content: string, existingRequestId?: string, u
  */
 export async function callGeminiStudio(
     prompt: string,
-    timeoutMs: number = GEMINI_REQUEST_TIMEOUT_MS,
-    useSearch: boolean = false,
+    options: GeminiCallOptions,
 ): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
@@ -98,10 +108,10 @@ export async function callGeminiStudio(
     const requestId = randomUUID();
     const startTime = Date.now();
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? GEMINI_REQUEST_TIMEOUT_MS);
 
     try {
-        const request = buildGeminiStudioRequest(datedPrompt, requestId, useSearch);
+        const request = buildGeminiStudioRequest(datedPrompt, options.thinkingLevel, requestId, options.useSearch ?? false);
         const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
             method: "POST",
             headers: request.headers,
@@ -134,9 +144,9 @@ export async function callGeminiStudio(
  */
 export async function callGeminiStudioWithSelfHealing<T>(
     prompt: string,
+    options: GeminiCallOptions,
     maxRetries: number = 3,
     debugLabel: string = "AI",
-    timeoutMs?: number
 ): Promise<T | null> {
     let currentPrompt = prompt;
     const startedAt = Date.now();
@@ -183,7 +193,7 @@ export async function callGeminiStudioWithSelfHealing<T>(
 
             // 1. CALL API
             try {
-                rawResponse = await callGeminiStudio(currentPrompt, timeoutMs);
+                rawResponse = await callGeminiStudio(currentPrompt, options);
                 rawResponse = rawResponse
                     .replace(/\\<json>/gi, "<json>")
                     .replace(/\\<\/json>/gi, "</json>");

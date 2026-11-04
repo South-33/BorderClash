@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 const apiUrl = process.env.GEMINI_STUDIO_API_URL || "http://localhost:8001";
 const projectName = process.env.GEMINI_PROJECT_NAME || "borderclash";
 const clientName = process.env.GEMINI_CLIENT_NAME || "borderclash-convex";
-const thinkingLevel = "low";
+const thinkingLevels = ["medium", "high"];
 const prompt = "Briefly summarize why cross-checking multiple sources improves news reliability.";
 const transientGeminiReplies = new Set([
     "sorry, something went wrong. please try your request again.",
@@ -18,7 +18,7 @@ function isTransientGeminiReply(value) {
             && normalized.includes("something else instead?"));
 }
 
-async function run() {
+async function verifyLevel(thinkingLevel) {
     const requestId = randomUUID();
     const headers = {
       "Content-Type": "application/json",
@@ -29,7 +29,7 @@ async function run() {
       "X-Request-ID": requestId,
     };
     const body = {
-      model: "flash-lite",
+      model: "flash",
       thinking_level: thinkingLevel,
       messages: [{ role: "user", content: prompt }],
       project: projectName,
@@ -38,7 +38,7 @@ async function run() {
       metadata: { project: projectName, client: clientName },
     };
 
-    console.log(`[verify] sending Flash-Lite/${thinkingLevel} requestId=${requestId}`);
+    console.log(`[verify] sending Flash/${thinkingLevel} requestId=${requestId}`);
     const chatResponse = await fetch(`${apiUrl}/v1/chat/completions`, {
       method: "POST",
       headers,
@@ -46,15 +46,15 @@ async function run() {
     });
     if (!chatResponse.ok) {
       const errorText = await chatResponse.text();
-      throw new Error(`Flash-Lite/${thinkingLevel} failed (${chatResponse.status}): ${errorText}`);
+      throw new Error(`Flash/${thinkingLevel} failed (${chatResponse.status}): ${errorText}`);
     }
     const completion = await chatResponse.json();
     const answer = completion?.choices?.[0]?.message?.content;
     if (typeof answer !== "string" || !answer.trim()) {
-      throw new Error(`Flash-Lite/${thinkingLevel} returned an empty completion`);
+      throw new Error(`Flash/${thinkingLevel} returned an empty completion`);
     }
     if (isTransientGeminiReply(answer)) {
-      throw new Error(`Flash-Lite/${thinkingLevel} returned Gemini's transient failure reply`);
+      throw new Error(`Flash/${thinkingLevel} returned Gemini's transient failure reply`);
     }
 
     const diagnosticsResponse = await fetch(`${apiUrl}/v1/diagnostics`);
@@ -68,12 +68,18 @@ async function run() {
     const recordedLevel = matched?.thinking_level || matched?.body?.thinking_level;
     if (
       !matched ||
-      String(recordedModel).toLowerCase() !== "flash-lite" ||
+      String(recordedModel).toLowerCase() !== "flash" ||
       String(recordedLevel).toLowerCase() !== thinkingLevel
     ) {
-      throw new Error(`Flash-Lite/${thinkingLevel} request missing or mis-recorded in diagnostics`);
+      throw new Error(`Flash/${thinkingLevel} request missing or mis-recorded in diagnostics`);
     }
-    console.log(`[verify] Flash-Lite/${thinkingLevel} ok`);
+    console.log(`[verify] Flash/${thinkingLevel} ok`);
+}
+
+async function run() {
+    for (const thinkingLevel of thinkingLevels) {
+      await verifyLevel(thinkingLevel);
+    }
 }
 
 run().catch((error) => {

@@ -8,6 +8,7 @@ import { v } from "convex/values";
 import { runHistorianCycleInternal } from "./historian";
 import { findVerifiedDuplicateCandidate, type DuplicateCandidate } from "./dedupe";
 import { collectSourceEvidence, formatSourceEvidence } from "./source_evidence";
+import { GEMINI_THINKING } from "./config";
 
 // Use gemini-studio-api helpers
 import { callGeminiStudio, callGeminiStudioWithSelfHealing, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
@@ -470,7 +471,10 @@ async function processNewsResponse(
             console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: curation)...`);
 
             // 1. CALL API - Using curation model mapping
-            rawResponse = await callGeminiStudio(currentPrompt, undefined, true);
+            rawResponse = await callGeminiStudio(currentPrompt, {
+                thinkingLevel: GEMINI_THINKING.curation,
+                useSearch: true,
+            });
             rawResponse = rawResponse
                 .replace(/\\<json>/gi, "<json>")
                 .replace(/\\<\/json>/gi, "</json>");
@@ -1121,7 +1125,7 @@ Return your hours and a brief reason in the "scheduling" section.`;
                     unchanged?: boolean;
                     changeReason?: string;
                 };
-            }>(prompt, 2, "SYNTHESIS");
+            }>(prompt, { thinkingLevel: GEMINI_THINKING.synthesis }, 2, "SYNTHESIS");
 
             if (!result) {
                 console.warn("[SYNTHESIS] skipped reason=invalid_or_missing_json preservedExisting=true");
@@ -1422,7 +1426,10 @@ RULES:
                 actions: any[];
                 crossReferenceNotes?: string;
                 summary?: string;
-            }>(prompt, 2, "MANAGER");
+            }>(prompt, {
+                thinkingLevel: GEMINI_THINKING.manager,
+                useSearch: true,
+            }, 2, "MANAGER");
 
             if (!result) {
                 console.log("❌ [MANAGER] Invalid or missing JSON response from API");
@@ -2250,7 +2257,9 @@ Return EXACTLY one fenced \`\`\`json code block and nothing else:
 For NEEDS_UPDATE, put only fields that are proven wrong in correctData. For every other status use an empty correctData object.`;
 
                 try {
-                    const response = await callGeminiStudio(verificationPrompt);
+                    const response = await callGeminiStudio(verificationPrompt, {
+                        thinkingLevel: GEMINI_THINKING.verification,
+                    });
 
                     // Extract JSON
                     const extractJsonPayload = (input: string): string | null => {
@@ -2651,7 +2660,9 @@ Return EXACTLY one fenced \`\`\`json code block and nothing else:
 \`\`\``;
 
         try {
-            const response = await callGeminiStudio(verificationPrompt);
+            const response = await callGeminiStudio(verificationPrompt, {
+                thinkingLevel: GEMINI_THINKING.verification,
+            });
 
             // Extract JSON
             const fencedMatch = response.match(/```json\s*([\s\S]*?)```/i);

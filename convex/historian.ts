@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { callGeminiStudio, formatTimelineEvent, TRANSLATION_STYLE_GUIDE } from "./ai_utils";
+import { GEMINI_THINKING } from "./config";
 
 
 // =============================================================================
@@ -291,7 +292,9 @@ Pick 5-10 articles to process now. Output your selection in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudio(currentPrompt);
+            const response = await callGeminiStudio(currentPrompt, {
+                thinkingLevel: GEMINI_THINKING.planner,
+            });
 
             // Extract JSON
             const jsonStr = extractJsonPayload(response);
@@ -500,7 +503,11 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudio(currentPrompt, timeoutMs, true);
+            const response = await callGeminiStudio(currentPrompt, {
+                thinkingLevel: GEMINI_THINKING.historian,
+                timeoutMs,
+                useSearch: true,
+            });
 
             // Extract JSON from response
             const jsonStr = extractJsonPayload(response);
@@ -522,7 +529,10 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
                 console.warn(`[HISTORIAN] json_parse_failed attempt=${attempt}/${MAX_RETRIES} repair=true`);
                 try {
                     const repairPrompt = `Fix this broken JSON and output ONLY one fenced \`\`\`json code block:\n\n${jsonStr.substring(0, 2000)}`;
-                    const repairResponse = await callGeminiStudio(repairPrompt, timeoutMs);
+                    const repairResponse = await callGeminiStudio(repairPrompt, {
+                        thinkingLevel: GEMINI_THINKING.repair,
+                        timeoutMs,
+                    });
                     const repairedJson = extractJsonPayload(repairResponse);
                     if (repairedJson) {
                         result = tryParseJson(repairedJson);
@@ -1171,7 +1181,9 @@ Return rescored importance for every event in CURRENT BATCH.`;
         console.log(`🎚️ [IMPACT-RESCORE] Attempt ${attempt}/${maxRetries} for ${batchEvents.length} events...`);
 
         try {
-            const response = await callGeminiStudio(currentPrompt);
+            const response = await callGeminiStudio(currentPrompt, {
+                thinkingLevel: GEMINI_THINKING.impactRescore,
+            });
 
             const parsed = tryParseImpactRescoreJson(response);
             if (parsed && Array.isArray(parsed.scores)) {
@@ -1736,7 +1748,9 @@ ${eventContext}
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         console.log(`🧹 [CANONICALIZE] Attempt ${attempt}/${maxRetries} for ${events.length} events...`);
         try {
-            const response = await callGeminiStudio(currentPrompt);
+            const response = await callGeminiStudio(currentPrompt, {
+                thinkingLevel: GEMINI_THINKING.canonicalization,
+            });
 
             const parsed = tryParseCanonicalizationJson(response);
             if (parsed && Array.isArray(parsed.actions)) {
