@@ -174,21 +174,11 @@ test("source verification batch isolates per-result failures", () => {
   assert.match(dedupe, /export function findVerifiedDuplicateCandidate/);
 });
 
-test("curation prompts stay compact while parsers remain hardened", () => {
+test("curation uses feed-backed deterministic ingestion without Gemini", () => {
   const research = read(researchPath);
-  const aiUtils = read(aiUtilsPath);
-  const historian = read(historianPath);
   const evidence = read(sourceEvidencePath);
 
-  assert.doesNotMatch(research, /IMPORTANT - LIST ARTICLES BEFORE JSON/);
   assert.match(research, /collectCurationCandidates/);
-  assert.match(research, /DO NOT browse or search/);
-  assert.match(research, /Use only the provided candidate IDs/);
-  assert.match(research, /thinkingLevel: GEMINI_THINKING\.curation/);
-  assert.doesNotMatch(
-    section(research, "async function processNewsResponse", "// COMBINED SYNTHESIS"),
-    /useSearch: true/,
-  );
   assert.match(evidence, /export async function collectCurationCandidates/);
   assert.match(evidence, /www\.bing\.com\/news\/search/);
   assert.match(evidence, /searchParams\.get\("url"\)/);
@@ -196,16 +186,17 @@ test("curation prompts stay compact while parsers remain hardened", () => {
   assert.match(evidence, /mentionsCambodia/);
   assert.match(evidence, /mentionsThailand/);
   assert.match(evidence, /urlYearMatch/);
-  assert.match(research, /Return JSON only:/);
-  assert.match(research, /buildCurationPrompt\("cambodia", discovery\.candidates\)/);
-  assert.match(research, /buildCurationPrompt\("thailand", discovery\.candidates\)/);
-  assert.match(research, /buildCurationPrompt\("international", discovery\.candidates\)/);
   assert.match(research, /collectCurationCandidates\(country, \{ targetDate \}\)/);
   assert.match(research, /if \(discovery\.error && discovery\.candidates\.length === 0\) throw new Error/);
-  assert.match(research, /async function insertFeedCandidatesFallback/);
+  assert.match(research, /async function insertFeedCandidates/);
   assert.match(research, /credibility: 60/);
-  assert.match(research, /if \(!rawResponse\) \{\s*return await insertFeedCandidatesFallback/s);
-  assert.match(research, /return await insertFeedCandidatesFallback\(\s*ctx,\s*country,\s*candidates,/s);
+  assert.match(research, /return await insertFeedCandidates\(ctx, "cambodia", discovery\.candidates, "feed-backed curation"\)/);
+  assert.match(research, /return await insertFeedCandidates\(ctx, "thailand", discovery\.candidates, "feed-backed curation"\)/);
+  assert.match(research, /return await insertFeedCandidates\(ctx, "international", discovery\.candidates, "feed-backed curation"\)/);
+  assert.match(research, /const result = await insertFeedCandidates\(ctx, country, candidates, "manual feed backfill"\)/);
+  const curation = section(research, "export const curateCambodia", "// COMBINED SYNTHESIS");
+  assert.doesNotMatch(curation, /callGeminiStudio|GEMINI_THINKING|useSearch/);
+  assert.doesNotMatch(research, /buildCurationPrompt|processNewsResponse|CURATION_PROMPT_MAX_CHARS/);
   assert.doesNotMatch(
     section(research, "export const curateCambodia", "export const curateThailand"),
     /getExistingTitlesInternal/,
@@ -214,11 +205,13 @@ test("curation prompts stay compact while parsers remain hardened", () => {
     section(research, "export const curateThailand", "export const curateInternational"),
     /getExistingTitlesInternal/,
   );
-  assert.match(research, /const unwrapJsonStringEnvelope = \(input: string\): string =>/);
-  assert.match(research, /replace\(\/\\\\\(\?=\[!<>&`\]\)\/g, ""\)/);
-  assert.match(research, /replace\(\/\\\\\(\?!\["\\\\\/bfnrtu\]\)\/g, "\\\\\\\\"/);
-  assert.match(research, /Extracted JSON from fenced code block/);
-  assert.match(research, /Extracted JSON from legacy <json> tags/);
+});
+
+test("shared Gemini parsing and translation guidance remain hardened", () => {
+  const research = read(researchPath);
+  const aiUtils = read(aiUtilsPath);
+  const historian = read(historianPath);
+
   assert.match(aiUtils, /const unwrapJsonStringEnvelope = \(input: string\): string =>/);
   assert.match(aiUtils, /replace\(\/\\\\\(\?=\[!<>&`\]\)\/g, ""\)/);
   assert.match(aiUtils, /replace\(\/\\\\\(\?!\["\\\\\/bfnrtu\]\)\/g, "\\\\\\\\"/);
@@ -243,7 +236,7 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
 
   assert.match(config, /GEMINI_MODEL = "flash" as const/);
   assert.match(config, /GEMINI_MEDIUM_FALLBACK = "high" as const/);
-  assert.match(config, /curation: "medium"/);
+  assert.doesNotMatch(config, /curation:/);
   assert.match(config, /planner: "medium"/);
   assert.match(config, /repair: "medium"/);
   assert.match(config, /verification: "high"/);
@@ -270,7 +263,7 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
   assert.match(verifyScript, /const thinkingLevels = \["medium", "high"\]/);
   assert.match(verifyScript, /model:\s*"flash"/);
   assert.match(verifyScript, /fallback_thinking_level = "high"/);
-  assert.match(research, /thinkingLevel: GEMINI_THINKING\.curation/);
+  assert.doesNotMatch(research, /GEMINI_THINKING\.curation/);
   assert.match(research, /thinkingLevel: GEMINI_THINKING\.verification/);
   assert.match(research, /thinkingLevel: GEMINI_THINKING\.synthesis/);
   assert.match(historian, /thinkingLevel: GEMINI_THINKING\.planner/);
