@@ -8,6 +8,7 @@ import {
     GEMINI_MODEL,
     GEMINI_PROJECT_NAME,
     GEMINI_STUDIO_API_URL,
+    GEMINI_STUDIO_CONTROL_URL,
     type GeminiThinkingLevel,
 } from "./config";
 
@@ -21,6 +22,7 @@ type GeminiRequestInit = {
         project: string;
         client: string;
         request_id: string;
+        async?: boolean;
         use_search?: boolean;
         metadata: {
             project: string;
@@ -31,6 +33,63 @@ type GeminiRequestInit = {
 };
 
 const GEMINI_REQUEST_TIMEOUT_MS = 510_000;
+const GEMINI_POLL_INTERVAL_MS = 5_000;
+const GEMINI_ENDPOINT_CACHE_MS = 30 * 60 * 1000;
+const GEMINI_ENDPOINT_DISCOVERY_TIMEOUT_MS = 8_000;
+
+let geminiEndpointCache: { url: string; resolvedAt: number } | null = null;
+
+const normalizeBaseUrl = (value: string): string => value.replace(/\/+$/, "");
+
+async function resolveGeminiDataPlane(
+    parentSignal: AbortSignal,
+    forceRefresh: boolean = false,
+): Promise<string> {
+    const now = Date.now();
+    if (!forceRefresh && geminiEndpointCache && now - geminiEndpointCache.resolvedAt < GEMINI_ENDPOINT_CACHE_MS) {
+        return geminiEndpointCache.url;
+    }
+
+    const controlUrl = normalizeBaseUrl(GEMINI_STUDIO_CONTROL_URL);
+    const discoveryController = new AbortController();
+    const abortDiscovery = () => discoveryController.abort();
+    parentSignal.addEventListener("abort", abortDiscovery, { once: true });
+    const discoveryTimeout = setTimeout(() => discoveryController.abort(), GEMINI_ENDPOINT_DISCOVERY_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(`${controlUrl}/v1/endpoint`, {
+            method: "GET",
+            headers: {
+                "Accept": "application/json",
+                "ngrok-skip-browser-warning": "true",
+                "X-Project-Name": GEMINI_PROJECT_NAME,
+                "X-Client-Name": GEMINI_CLIENT_NAME,
+            },
+            signal: discoveryController.signal,
+        });
+        if (response.ok) {
+            const payload = await response.json();
+            const candidate = typeof payload?.data_plane_url === "string"
+                ? normalizeBaseUrl(payload.data_plane_url)
+                : "";
+            const allowedDataPlane = candidate === controlUrl
+                || /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(candidate)
+                || (controlUrl.startsWith("http://localhost") && candidate.startsWith("http://localhost"));
+            if (allowedDataPlane) {
+                geminiEndpointCache = { url: candidate, resolvedAt: now };
+                return candidate;
+            }
+        }
+    } catch (error) {
+        if (parentSignal.aborted) throw error;
+        if (geminiEndpointCache) return geminiEndpointCache.url;
+    } finally {
+        clearTimeout(discoveryTimeout);
+        parentSignal.removeEventListener("abort", abortDiscovery);
+    }
+
+    return geminiEndpointCache?.url || controlUrl || normalizeBaseUrl(GEMINI_STUDIO_API_URL);
+}
 
 type GeminiCallOptions = {
     timeoutMs?: number;
@@ -110,30 +169,116 @@ export async function callGeminiStudio(
     const requestId = randomUUID();
     const startTime = Date.now();
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? GEMINI_REQUEST_TIMEOUT_MS);
+    const timeoutMs = options.timeoutMs ?? GEMINI_REQUEST_TIMEOUT_MS;
+    const deadline = startTime + timeoutMs;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const readCompletion = (data: any): string => {
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content) throw new Error("API returned empty response content");
+        return content;
+    };
+
+    const fetchWithTransientRetry = async (
+        path: string,
+        init: RequestInit,
+        { allowNotFound = false }: { allowNotFound?: boolean } = {},
+    ): Promise<Response> => {
+        let lastError: unknown;
+        let lastResponse: Response | null = null;
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            const baseUrl = attempt === 1
+                ? await resolveGeminiDataPlane(controller.signal)
+                : attempt === 2
+                    ? await resolveGeminiDataPlane(controller.signal, true)
+                    : normalizeBaseUrl(GEMINI_STUDIO_CONTROL_URL);
+            try {
+                const response = await fetch(`${baseUrl}${path}`, { ...init, signal: controller.signal });
+                lastResponse = response;
+                const transientStatus = response.status === 502
+                    || response.status === 503
+                    || response.status === 504
+                    || (allowNotFound && response.status === 404);
+                if (!transientStatus || attempt === 3) return response;
+                await response.text().catch(() => "");
+            } catch (error) {
+                lastError = error;
+                if (controller.signal.aborted || attempt === 3) throw error;
+            }
+
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) break;
+            await new Promise(resolve => setTimeout(resolve, Math.min(1500 * attempt, remaining)));
+        }
+
+        if (lastResponse) return lastResponse;
+        throw lastError instanceof Error ? lastError : new Error("Gemini API transport retry exhausted");
+    };
 
     try {
         const request = buildGeminiStudioRequest(datedPrompt, options.thinkingLevel, requestId, options.useSearch ?? false);
-        const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
+        request.body.async = true;
+        const response = await fetchWithTransientRetry("/v1/chat/completions", {
             method: "POST",
             headers: request.headers,
             body: JSON.stringify(request.body),
-            signal: controller.signal,
-        });
+        }, { allowNotFound: true });
 
-        const duration = Date.now() - startTime;
         if (!response.ok) {
             const errorText = await response.text();
-            console.warn(`[GEMINI] error status=${response.status} duration=${duration}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
+            const duration = Date.now() - startTime;
+            console.warn(`[GEMINI] submit_error status=${response.status} duration=${duration}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
             throw new Error(`API error (${response.status}): ${errorText.substring(0, 100)}`);
         }
 
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (!content) {
-            throw new Error("API returned empty response content");
+        // Backward compatibility for an older server that completes inline.
+        if (response.status !== 202) {
+            return readCompletion(await response.json());
         }
-        return content;
+
+        const accepted = await response.json();
+        if (accepted?.request_id && accepted.request_id !== request.requestId) {
+            throw new Error(`API returned mismatched request_id ${accepted.request_id}`);
+        }
+
+        let consecutiveNotFound = 0;
+        while (Date.now() < deadline) {
+            const remaining = deadline - Date.now();
+            await new Promise(resolve => setTimeout(resolve, Math.min(GEMINI_POLL_INTERVAL_MS, remaining)));
+
+            const poll = await fetchWithTransientRetry(
+                `/v1/chat/completions/${encodeURIComponent(request.requestId)}`,
+                { method: "GET", headers: request.headers },
+                { allowNotFound: true },
+            );
+
+            if (poll.status === 202) {
+                consecutiveNotFound = 0;
+                continue;
+            }
+            if (poll.status === 404) {
+                consecutiveNotFound++;
+                if (consecutiveNotFound < 3) continue;
+                throw new Error("Gemini async job disappeared after submission");
+            }
+            if (!poll.ok) {
+                const errorText = await poll.text();
+                console.warn(`[GEMINI] poll_error status=${poll.status} duration=${Date.now() - startTime}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
+                throw new Error(`API error (${poll.status}): ${errorText.substring(0, 100)}`);
+            }
+
+            const data = await poll.json();
+            if (data?.status === "failed" || data?.status === "error" || data?.status === "timeout") {
+                throw new Error(`Gemini request failed: ${data.error || data.status}`);
+            }
+
+            const content = readCompletion(data);
+            console.log(`[GEMINI] ok duration=${Date.now() - startTime}ms requestId=${request.requestId}`);
+            return content;
+        }
+
+        throw new Error(`Gemini async job exceeded ${timeoutMs}ms polling budget`);
     } finally {
         clearTimeout(timeoutId);
     }

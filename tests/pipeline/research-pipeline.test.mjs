@@ -223,6 +223,7 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   const research = read(researchPath);
   const aiUtils = read(aiUtilsPath);
   const historian = read(historianPath);
+  const config = read(configPath);
 
   assert.match(aiUtils, /const unwrapJsonStringEnvelope = \(input: string\): string =>/);
   assert.match(aiUtils, /replace\(\/\\\\\(\?=\[!<>&`\]\)\/g, ""\)/);
@@ -231,6 +232,15 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /export function isCompletedGeminiFailure/);
   assert.match(aiUtils, /includes\("gemini request failed:"\)/);
   assert.match(aiUtils, /server_retry_budget_exhausted localRetry=false/);
+  assert.match(aiUtils, /request\.body\.async = true/);
+  assert.match(aiUtils, /\/v1\/chat\/completions\/\$\{encodeURIComponent\(request\.requestId\)\}/);
+  assert.match(aiUtils, /if \(response\.status !== 202\)/);
+  assert.match(aiUtils, /data\?\.status === "failed"/);
+  assert.match(config, /GEMINI_STUDIO_CONTROL_URL = process\.env\.GEMINI_STUDIO_CONTROL_URL \|\| GEMINI_STUDIO_API_URL/);
+  assert.match(aiUtils, /\/v1\/endpoint/);
+  assert.match(aiUtils, /geminiEndpointCache/);
+  assert.match(aiUtils, /resolveGeminiDataPlane\(controller\.signal, true\)/);
+  assert.match(aiUtils, /: normalizeBaseUrl\(GEMINI_STUDIO_CONTROL_URL\)/);
   assert.match(research, /Thai fields must use natural Thai script/);
   assert.match(research, /Khmer fields must use natural Khmer script/);
   assert.match(historian, /Thai text must use Thai script and Khmer text must use Khmer script/);
