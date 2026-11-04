@@ -470,7 +470,7 @@ async function processNewsResponse(
             console.log(`🤖 [${country.toUpperCase()}] Attempt ${attempt}/${MAX_RETRIES} (Model: curation)...`);
 
             // 1. CALL API - Using curation model mapping
-            rawResponse = await callGeminiStudio(currentPrompt);
+            rawResponse = await callGeminiStudio(currentPrompt, undefined, true);
             rawResponse = rawResponse
                 .replace(/\\<json>/gi, "<json>")
                 .replace(/\\<\/json>/gi, "</json>");

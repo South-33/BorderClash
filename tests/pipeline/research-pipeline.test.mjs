@@ -147,6 +147,8 @@ test("curation prompts stay compact while parsers remain hardened", () => {
   assert.doesNotMatch(research, /IMPORTANT - LIST ARTICLES BEFORE JSON/);
   assert.match(research, /const CURATION_PROMPT_MAX_CHARS = 1100/);
   assert.match(research, /Use Google Search now for Thailand-Cambodia news/);
+  assert.match(research, /callGeminiStudio\(currentPrompt, undefined, true\)/);
+  assert.match(aiUtils, /body\.use_search = true/);
   assert.match(research, /Open each candidate\. Return only canonical article URLs that load/);
   assert.match(research, /Return JSON only:/);
   assert.match(research, /buildCurationPrompt\("cambodia"\)/);

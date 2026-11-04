@@ -19,6 +19,7 @@ type GeminiRequestInit = {
         project: string;
         client: string;
         request_id: string;
+        use_search?: boolean;
         metadata: {
             project: string;
             client: string;
@@ -42,7 +43,7 @@ export const TRANSLATION_STYLE_GUIDE = `LANGUAGE & TRANSLATION VOICE:
 - Use English numerals (0-9), not Thai or Khmer numerals.
 - Prefer short sentences. One idea per sentence.`;
 
-function buildGeminiStudioRequest(content: string, existingRequestId?: string): GeminiRequestInit {
+function buildGeminiStudioRequest(content: string, existingRequestId?: string, useSearch: boolean = false): GeminiRequestInit {
     const requestId = existingRequestId || randomUUID();
     const projectName = GEMINI_PROJECT_NAME;
     const clientName = GEMINI_CLIENT_NAME;
@@ -59,6 +60,10 @@ function buildGeminiStudioRequest(content: string, existingRequestId?: string): 
             client: clientName,
         },
     };
+
+    if (useSearch) {
+        body.use_search = true;
+    }
 
     return {
         headers: {
@@ -81,7 +86,11 @@ function buildGeminiStudioRequest(content: string, existingRequestId?: string): 
 /**
  * Call the gemini-studio-api (OpenAI compatible)
  */
-export async function callGeminiStudio(prompt: string, timeoutMs: number = GEMINI_REQUEST_TIMEOUT_MS): Promise<string> {
+export async function callGeminiStudio(
+    prompt: string,
+    timeoutMs: number = GEMINI_REQUEST_TIMEOUT_MS,
+    useSearch: boolean = false,
+): Promise<string> {
     // 🗓️ INJECT CURRENT DATE (Bangkok Time)
     const bangkokDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok", dateStyle: "full", timeStyle: "short" });
     const datedPrompt = `[CURRENT DATE: ${bangkokDate}]\n\n${prompt}`;
@@ -92,7 +101,7 @@ export async function callGeminiStudio(prompt: string, timeoutMs: number = GEMIN
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-        const request = buildGeminiStudioRequest(datedPrompt, requestId);
+        const request = buildGeminiStudioRequest(datedPrompt, requestId, useSearch);
         const response = await fetch(`${GEMINI_STUDIO_API_URL}/v1/chat/completions`, {
             method: "POST",
             headers: request.headers,
