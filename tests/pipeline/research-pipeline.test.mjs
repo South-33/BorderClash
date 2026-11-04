@@ -155,12 +155,16 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
 
   const step2 = section(source, "export const step2_verification", "export const step3_historian");
   assert.match(step2, /attempt: v\.optional\(v\.number\(\)\)/);
+  assert.match(step2, /stats\.cycleRunId !== runId \|\| stats\.systemStatus !== "syncing"/);
+  assert.match(step2, /skipped stale_run/);
   assert.match(step2, /runWithRetries\(\s*"\[STEP 2\] Source verification"/s);
   assert.match(step2, /scheduleStepRetry\(/);
   assert.match(step2, /scheduleRunAfterWithRetries\(ctx, "Step 3"/);
   assert.match(step2, /Verification: \$\{verifyResult\.errors\} article\(s\) left unverified/);
 
   const step3 = section(source, "export const step3_historian", "export const step4_synthesis");
+  assert.match(step3, /stats\.cycleRunId !== runId \|\| stats\.systemStatus !== "syncing"/);
+  assert.match(step3, /skipped stale_run/);
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Timeline refresh iteration \$\{historianLoops\}`/s);
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Historian iteration \$\{historianLoops\}`/s);
   assert.match(step3, /getRecentTimelineContextForHistorian, \{ limit: 12 \}/);
@@ -171,6 +175,8 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step3, /scheduleRunAfterWithRetries\(ctx, "Step 4"/);
 
   const step4 = section(source, "export const step4_synthesis", "export const verifyAllSources");
+  assert.match(step4, /stats\.cycleRunId !== runId \|\| stats\.systemStatus !== "syncing"/);
+  assert.match(step4, /skipped stale_run/);
   assert.match(step4, /runWithRetries\(\s*"\[STEP 4\] Synthesis"/s);
   assert.match(step4, /\(\) => synthesizeAllInternal\(ctx\)/);
   assert.doesNotMatch(step4, /ctx\.runAction\(internal\.research\.synthesizeAll/);

@@ -1155,6 +1155,10 @@ export const step2_verification = internalAction({
             await ctx.runMutation(internal.api.releaseCycleLock, { runId });
             return;
         }
+        if (!stats || stats.cycleRunId !== runId || stats.systemStatus !== "syncing") {
+            console.warn(`[STEP 2] skipped stale_run runId=${runId} activeRunId=${stats?.cycleRunId ?? "none"} status=${stats?.systemStatus ?? "missing"}`);
+            return;
+        }
         const stepErrors = [...errors];
         let verificationSummary = "not_run";
 
@@ -1217,6 +1221,10 @@ export const step3_historian = internalAction({
         if (stats?.isPaused || stats?.systemStatus === "stopped") {
             console.log("[STEP 3] Aborting step3_historian because system is paused/stopped.");
             await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+            return;
+        }
+        if (!stats || stats.cycleRunId !== runId || stats.systemStatus !== "syncing") {
+            console.warn(`[STEP 3] skipped stale_run runId=${runId} activeRunId=${stats?.cycleRunId ?? "none"} status=${stats?.systemStatus ?? "missing"}`);
             return;
         }
         const stepErrors = [...errors];
@@ -1330,6 +1338,10 @@ export const step4_synthesis = internalAction({
         if (stats?.isPaused || stats?.systemStatus === "stopped") {
             console.log("[STEP 4] Aborting step4_synthesis because system is paused/stopped.");
             await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+            return;
+        }
+        if (!stats || stats.cycleRunId !== runId || stats.systemStatus !== "syncing") {
+            console.warn(`[STEP 4] skipped stale_run runId=${runId} activeRunId=${stats?.cycleRunId ?? "none"} status=${stats?.systemStatus ?? "missing"}`);
             return;
         }
         const stepErrors = [...errors];
