@@ -230,6 +230,7 @@ ${timelineContext}
 ═══════════════════════════════════════════════════════════════
 
 Process each article above and decide its fate. Output your decisions in JSON.`;
+    console.log(`[HISTORIAN] request articles=${articles.length} timeline=${existingTimeline.length} promptChars=${prompt.length}`);
 
     // Helper to clean and parse JSON with multiple fallback strategies
     const tryParseJson = (jsonStr: string): HistorianResult | null => {

@@ -258,6 +258,7 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
   assert.doesNotMatch(aiUtils, /attemptsSeq|thinkingSuffix/);
   assert.match(historian, /limit: 12/);
   assert.match(historian, /const historianBatchSize = 3/);
+  assert.match(historian, /\[HISTORIAN\] request articles=\$\{articles\.length\} timeline=\$\{existingTimeline\.length\} promptChars=\$\{prompt\.length\}/);
   assert.match(historian, /useSearch: false/);
   assert.doesNotMatch(historian, /runPlanner\(/);
   assert.match(research, /getRecentTimelineContextForHistorian, \{ limit: 12 \}/);
@@ -266,6 +267,7 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
   assert.match(research, /getLowCredArticles, \{ country: "thailand", limit: 2 \}/);
   assert.match(research, /getLowCredArticles, \{ country: "international", limit: 2 \}/);
   assert.match(research, /getRecentBreakingNews, \{ limit: 8 \}/);
+  assert.match(research, /\[SYNTHESIS\] request promptChars=\$\{prompt\.length\}/);
   assert.match(verifyScript, /const thinkingLevels = \["medium", "high"\]/);
   assert.match(verifyScript, /model:\s*"flash"/);
   assert.match(verifyScript, /fallback_thinking_level = "high"/);

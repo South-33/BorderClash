@@ -612,6 +612,7 @@ Return exactly one fenced \`\`\`json code block and nothing else. Use this shape
 }
 \`\`\`
 `;
+        console.log(`[SYNTHESIS] request promptChars=${prompt.length}`);
 
         try {
             // Use generic self-healing helper
