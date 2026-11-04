@@ -18,4 +18,10 @@ export const GEMINI_THINKING = {
     canonicalization: "high",
 } as const;
 
+// Gemini Web can transiently reject Medium while High remains available.
+// Medium roles get one Medium browser attempt, then stay on Flash and promote
+// only the remaining attempts to High. No other model family or thinking level
+// is permitted.
+export const GEMINI_MEDIUM_FALLBACK = "high" as const;
+
 export type GeminiThinkingLevel = (typeof GEMINI_THINKING)[keyof typeof GEMINI_THINKING];

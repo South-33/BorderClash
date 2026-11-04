@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import {
     GEMINI_CLIENT_NAME,
+    GEMINI_MEDIUM_FALLBACK,
     GEMINI_MODEL,
     GEMINI_PROJECT_NAME,
     GEMINI_STUDIO_API_URL,
@@ -15,6 +16,7 @@ type GeminiRequestInit = {
     body: {
         model: typeof GEMINI_MODEL;
         thinking_level: GeminiThinkingLevel;
+        fallback_thinking_level?: GeminiThinkingLevel;
         messages: Array<{ role: "user"; content: string }>;
         project: string;
         client: string;
@@ -74,6 +76,9 @@ function buildGeminiStudioRequest(
 
     if (useSearch) {
         body.use_search = true;
+    }
+    if (thinkingLevel === "medium") {
+        body.fallback_thinking_level = GEMINI_MEDIUM_FALLBACK;
     }
 
     return {

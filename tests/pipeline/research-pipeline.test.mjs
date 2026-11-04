@@ -191,6 +191,7 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
   const verifyScript = read(path.join(root, "scripts", "verify-gemini-headers.mjs"));
 
   assert.match(config, /GEMINI_MODEL = "flash" as const/);
+  assert.match(config, /GEMINI_MEDIUM_FALLBACK = "high" as const/);
   assert.match(config, /curation: "medium"/);
   assert.match(config, /planner: "medium"/);
   assert.match(config, /repair: "medium"/);
@@ -200,11 +201,13 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
   assert.match(config, /manager: "high"/);
   assert.match(aiUtils, /model:\s*GEMINI_MODEL/);
   assert.match(aiUtils, /thinking_level:\s*thinkingLevel/);
+  assert.match(aiUtils, /thinkingLevel === "medium"/);
+  assert.match(aiUtils, /body\.fallback_thinking_level = GEMINI_MEDIUM_FALLBACK/);
   assert.doesNotMatch(aiUtils, /GeminiModelConfig|callGeminiStudioWithFallback|resolveGeminiModel|THINKING_LEVEL_SUFFIXES/);
   assert.doesNotMatch(config, /"flash-lite"|"pro"|"low"|"standard"|"extended"/i);
   assert.doesNotMatch(research, /"SOURCE-VERIFY",\s*undefined,\s*true/);
   assert.doesNotMatch(research, /"VERIFY-SINGLE",\s*undefined,\s*true/);
-  assert.doesNotMatch(aiUtils, /attemptsSeq|thinkingSuffix|fallback_thinking/);
+  assert.doesNotMatch(aiUtils, /attemptsSeq|thinkingSuffix/);
   assert.match(historian, /limit: 40/);
   assert.match(historian, /const maxPlannerArticles = 30/);
   assert.match(research, /getRecentTimelineContextForHistorian, \{ limit: 40 \}/);
@@ -215,6 +218,7 @@ test("Gemini requests use Flash with Medium and High thinking only", () => {
   assert.match(research, /getRecentBreakingNews, \{ limit: 15 \}/);
   assert.match(verifyScript, /const thinkingLevels = \["medium", "high"\]/);
   assert.match(verifyScript, /model:\s*"flash"/);
+  assert.match(verifyScript, /fallback_thinking_level = "high"/);
   assert.match(research, /thinkingLevel: GEMINI_THINKING\.curation/);
   assert.match(research, /thinkingLevel: GEMINI_THINKING\.verification/);
   assert.match(research, /thinkingLevel: GEMINI_THINKING\.synthesis/);

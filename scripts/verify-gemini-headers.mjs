@@ -37,6 +37,9 @@ async function verifyLevel(thinkingLevel) {
       request_id: requestId,
       metadata: { project: projectName, client: clientName },
     };
+    if (thinkingLevel === "medium") {
+      body.fallback_thinking_level = "high";
+    }
 
     console.log(`[verify] sending Flash/${thinkingLevel} requestId=${requestId}`);
     const chatResponse = await fetch(`${apiUrl}/v1/chat/completions`, {
@@ -66,10 +69,12 @@ async function verifyLevel(thinkingLevel) {
     const matched = recentRequests.find((entry) => entry?.request_id === requestId);
     const recordedModel = matched?.resolved_model || matched?.model || matched?.body?.model;
     const recordedLevel = matched?.thinking_level || matched?.body?.thinking_level;
+    const recordedFallback = matched?.fallback_thinking_level || matched?.body?.fallback_thinking_level;
     if (
       !matched ||
       String(recordedModel).toLowerCase() !== "flash" ||
-      String(recordedLevel).toLowerCase() !== thinkingLevel
+      String(recordedLevel).toLowerCase() !== thinkingLevel ||
+      (thinkingLevel === "medium" && String(recordedFallback).toLowerCase() !== "high")
     ) {
       throw new Error(`Flash/${thinkingLevel} request missing or mis-recorded in diagnostics`);
     }
