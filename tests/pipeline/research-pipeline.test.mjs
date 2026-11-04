@@ -124,6 +124,12 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step4, /Published fallback dashboard snapshot with previous analysis/);
 });
 
+test("synthesis outage retries at the normal minimum interval", () => {
+  const source = read(researchPath);
+  assert.match(source, /SYNTHESIS_FALLBACK_INTERVAL_HOURS = 4/);
+  assert.match(source, /Gemini synthesis unavailable; operational retry in 4h/);
+});
+
 test("historian action loop isolates item failures instead of aborting the batch", () => {
   const source = read(historianPath);
   const loop = section(

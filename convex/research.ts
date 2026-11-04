@@ -1394,7 +1394,11 @@ export const step4_synthesis = internalAction({
         // ═══ ADAPTIVE SCHEDULING with scheduler.runAt ═══
         // Schedule exact next run time (no more heartbeat polling!)
         const DEFAULT_INTERVAL_HOURS = 12;
-        const SYNTHESIS_FALLBACK_INTERVAL_HOURS = 24;
+        // A failed synthesis is usually an upstream Gemini outage, not a sign
+        // that the border is quiet. Retry on the normal minimum interval so a
+        // transient provider incident cannot leave the dashboard stale for a
+        // full day.
+        const SYNTHESIS_FALLBACK_INTERVAL_HOURS = 4;
         const aiSuggestedHours = schedulingResult?.nextCycleHours;
         const hasValidAiInterval = typeof aiSuggestedHours === "number" && Number.isFinite(aiSuggestedHours);
         const isSynthesisFallback = !hasValidAiInterval && !synthesisSucceeded;
@@ -1407,7 +1411,7 @@ export const step4_synthesis = internalAction({
         const nextRunAt = Date.now() + (clampedHours * 60 * 60 * 1000);
         const reason = schedulingResult?.reason
             || (isSynthesisFallback
-                ? "Fallback scheduling (synthesis failed or returned no result); retrying in 24h"
+                ? "Gemini synthesis unavailable; operational retry in 4h"
                 : "Default scheduling (synthesis did not return decision)");
 
         // ═══ CANCEL ALL PENDING runResearchCycle JOBS ═══
