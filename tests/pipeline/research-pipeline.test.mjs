@@ -202,8 +202,10 @@ test("curation prompts stay compact while parsers remain hardened", () => {
   assert.match(research, /buildCurationPrompt\("international", discovery\.candidates\)/);
   assert.match(research, /collectCurationCandidates\(country, \{ targetDate \}\)/);
   assert.match(research, /if \(discovery\.error && discovery\.candidates\.length === 0\) throw new Error/);
-  assert.match(research, /if \(!rawResponse\) \{\s*throw err;\s*\}/s);
-  assert.match(research, /throw lastError instanceof Error \? lastError : new Error\(String\(lastError\)\)/);
+  assert.match(research, /async function insertFeedCandidatesFallback/);
+  assert.match(research, /credibility: 60/);
+  assert.match(research, /if \(!rawResponse\) \{\s*return await insertFeedCandidatesFallback/s);
+  assert.match(research, /return await insertFeedCandidatesFallback\(\s*ctx,\s*country,\s*candidates,/s);
   assert.doesNotMatch(
     section(research, "export const curateCambodia", "export const curateThailand"),
     /getExistingTitlesInternal/,

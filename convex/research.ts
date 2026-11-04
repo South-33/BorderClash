@@ -454,6 +454,45 @@ export const curateInternational = internalAction({
     },
 });
 
+function inferFeedFallbackCategory(candidate: CurationCandidate): "military" | "political" | "humanitarian" | "diplomatic" {
+    const text = `${candidate.title} ${candidate.summary || ""}`.toLowerCase();
+    if (/displac|evacuat|refugee|humanitarian|casualt|mine-clear|landmine/.test(text)) return "humanitarian";
+    if (/ceasefire|agreement|talks?|negotiat|minister|diplomat|asean|united nations|\bun\b/.test(text)) return "diplomatic";
+    if (/army|military|troop|soldier|clash|fight|attack|weapon|drone|artillery|border guard/.test(text)) return "military";
+    return "political";
+}
+
+async function insertFeedCandidatesFallback(
+    ctx: any,
+    country: CurationCountry,
+    candidates: CurationCandidate[],
+    reason: string,
+): Promise<{ newArticles: number; flagged: number }> {
+    console.warn(`[${country.toUpperCase()}] Gemini curation unavailable; inserting feed-backed candidates as unverified. reason=${reason}`);
+    let addedCount = 0;
+    let skippedCount = 0;
+
+    for (const candidate of candidates) {
+        const insertResult = await ctx.runMutation(internal.api.insertArticle, {
+            perspective: country,
+            title: candidate.title,
+            titleEn: candidate.title,
+            publishedAt: Date.parse(candidate.publishedAt),
+            sourceUrl: candidate.sourceUrl,
+            source: candidate.source || "Unknown",
+            category: inferFeedFallbackCategory(candidate),
+            credibility: 60,
+            summary: candidate.summary || candidate.title,
+            summaryEn: candidate.summary || candidate.title,
+        });
+        if (insertResult !== null) addedCount++;
+        else skippedCount++;
+    }
+
+    console.log(`[${country.toUpperCase()}] Feed fallback added=${addedCount} skipped=${skippedCount}`);
+    return { newArticles: addedCount, flagged: 0 };
+}
+
 // Shared helper to parse Gemini research output and save articles
 async function processNewsResponse(
     ctx: any,
@@ -684,7 +723,7 @@ Please output the FIXED JSON only:
             // already performed its bounded browser retries (including the
             // Medium -> High promotion), so do not multiply that outage here.
             if (!rawResponse) {
-                throw err;
+                return await insertFeedCandidatesFallback(ctx, country, candidates, err.message || String(err));
             }
             // Add delay for network errors to give Cloudflare tunnel time to reconnect
             if (attempt < MAX_RETRIES) {
@@ -694,9 +733,15 @@ Please output the FIXED JSON only:
         }
     }
 
-    // Invalid model output exhausted the local repair budget. Surface this so
-    // Step 1 accounts for the failed curator and schedules the right cycle retry.
-    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    // The feed already supplied canonical URLs, dates, titles, summaries, and
+    // publisher names. If Gemini enrichment exhausts its repair budget, keep
+    // the scan moving with those records and let source verification review them.
+    return await insertFeedCandidatesFallback(
+        ctx,
+        country,
+        candidates,
+        lastError instanceof Error ? lastError.message : String(lastError),
+    );
 }
 
 // =============================================================================
