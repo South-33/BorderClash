@@ -7,7 +7,6 @@ export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash
 // to Flash-Lite, Pro, or Low thinking.
 export const GEMINI_MODEL = "flash" as const;
 export const GEMINI_THINKING = {
-    curation: "medium",
     planner: "medium",
     repair: "medium",
     verification: "high",
