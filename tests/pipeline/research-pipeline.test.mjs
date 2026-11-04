@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const researchPath = path.join(root, "convex", "research.ts");
@@ -47,19 +48,53 @@ test("Convex pipeline sources transpile cleanly in isolation", () => {
   }
 });
 
+test("Bing News curation parser extracts publisher URLs and enforces the date window", () => {
+  const fixture = `<rss><channel>
+    <item><title>Thailand and Cambodia border update</title><link>https://www.bing.com/news/apiclick.aspx?url=https%3A%2F%2Fexample.org%2Fborder-update&amp;c=1</link><description>Fresh summary</description><pubDate>Wed, 04 Nov 2026 09:00:00 GMT</pubDate><News:Source>Example News</News:Source></item>
+    <item><title>Old border update</title><link>https://www.bing.com/news/apiclick.aspx?url=https%3A%2F%2Fexample.org%2Fold-update&amp;c=2</link><description>Old summary</description><pubDate>Sun, 01 Nov 2026 09:00:00 GMT</pubDate><News:Source>Example News</News:Source></item>
+  </channel></rss>`;
+  const moduleUrl = pathToFileURL(sourceEvidencePath).href;
+  const script = `
+    const m = await import(${JSON.stringify(moduleUrl)});
+    const result = m.parseBingNewsCandidates(
+      ${JSON.stringify(fixture)},
+      Date.parse("2026-11-03T17:00:00Z"),
+      Date.parse("2026-11-05T17:00:00Z")
+    );
+    process.stdout.write(JSON.stringify(result));
+  `;
+  const result = spawnSync(
+    "node",
+    ["--experimental-strip-types", "--input-type=module", "-e", script],
+    { cwd: root, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const candidates = JSON.parse(result.stdout);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].id, "n1");
+  assert.equal(candidates[0].source, "Example News");
+  assert.equal(candidates[0].sourceUrl, "https://example.org/border-update");
+  assert.equal(candidates[0].publishedAt, "2026-11-04T09:00:00.000Z");
+});
+
 test("research pipeline retries and handoff guards exist on all chained steps", () => {
   const source = read(researchPath);
 
   assert.match(source, /const ACTION_RETRY_DELAYS_MS = \[5000, 15000\]/);
   assert.match(source, /const STEP_RETRY_DELAYS_MS = \[60_000, 5 \* 60_000\]/);
+  assert.match(source, /const CURATION_OUTAGE_RETRY_DELAYS_MS = \[5 \* 60 \* 60_000, 24 \* 60 \* 60_000\]/);
   assert.match(source, /async function scheduleStepRetry/);
+  assert.match(source, /async function scheduleCurationOutageRetry/);
   assert.match(source, /async function scheduleRunAfterWithRetries/);
   assert.match(source, /async function scheduleRunAtWithRetries/);
 
   const step1 = section(source, "export const runResearchCycle", "export const step2_verification");
-  assert.match(step1, /runWithRetries\(\s*"\[STEP 1\] Cambodia curation"/s);
-  assert.match(step1, /runWithRetries\(\s*"\[STEP 1\] Thailand curation"/s);
-  assert.match(step1, /runWithRetries\(\s*"\[STEP 1\] International curation"/s);
+  assert.match(step1, /cambodiaResult = await ctx\.runAction\(internal\.research\.curateCambodia/);
+  assert.match(step1, /thailandResult = await ctx\.runAction\(internal\.research\.curateThailand/);
+  assert.match(step1, /internationalResult = await ctx\.runAction\(internal\.research\.curateInternational/);
+  assert.doesNotMatch(step1, /runWithRetries\(\s*"\[STEP 1\].*curation"/s);
+  assert.match(step1, /scheduleCurationOutageRetry\(ctx, attempt\)/);
   assert.match(step1, /scheduleStepRetry\(/);
   assert.match(step1, /scheduleRunAfterWithRetries\(ctx, "Step 2"/);
 
@@ -143,18 +178,32 @@ test("curation prompts stay compact while parsers remain hardened", () => {
   const research = read(researchPath);
   const aiUtils = read(aiUtilsPath);
   const historian = read(historianPath);
+  const evidence = read(sourceEvidencePath);
 
   assert.doesNotMatch(research, /IMPORTANT - LIST ARTICLES BEFORE JSON/);
-  assert.match(research, /const CURATION_PROMPT_MAX_CHARS = 1100/);
-  assert.match(research, /Use Google Search now for Thailand-Cambodia news/);
+  assert.match(research, /collectCurationCandidates/);
+  assert.match(research, /DO NOT browse or search/);
+  assert.match(research, /Use only the provided candidate IDs/);
   assert.match(research, /thinkingLevel: GEMINI_THINKING\.curation/);
-  assert.match(research, /useSearch: true/);
-  assert.match(aiUtils, /body\.use_search = true/);
-  assert.match(research, /Open each candidate\. Return only canonical article URLs that load/);
+  assert.doesNotMatch(
+    section(research, "async function processNewsResponse", "// COMBINED SYNTHESIS"),
+    /useSearch: true/,
+  );
+  assert.match(evidence, /export async function collectCurationCandidates/);
+  assert.match(evidence, /www\.bing\.com\/news\/search/);
+  assert.match(evidence, /searchParams\.get\("url"\)/);
+  assert.match(evidence, /CURATION_WINDOW_MS = 48 \* 60 \* 60 \* 1000/);
+  assert.match(evidence, /mentionsCambodia/);
+  assert.match(evidence, /mentionsThailand/);
+  assert.match(evidence, /urlYearMatch/);
   assert.match(research, /Return JSON only:/);
-  assert.match(research, /buildCurationPrompt\("cambodia"\)/);
-  assert.match(research, /buildCurationPrompt\("thailand"\)/);
-  assert.match(research, /buildCurationPrompt\("international"\)/);
+  assert.match(research, /buildCurationPrompt\("cambodia", discovery\.candidates\)/);
+  assert.match(research, /buildCurationPrompt\("thailand", discovery\.candidates\)/);
+  assert.match(research, /buildCurationPrompt\("international", discovery\.candidates\)/);
+  assert.match(research, /collectCurationCandidates\(country, \{ targetDate \}\)/);
+  assert.match(research, /if \(discovery\.error && discovery\.candidates\.length === 0\) throw new Error/);
+  assert.match(research, /if \(!rawResponse\) \{\s*throw err;\s*\}/s);
+  assert.match(research, /throw lastError instanceof Error \? lastError : new Error\(String\(lastError\)\)/);
   assert.doesNotMatch(
     section(research, "export const curateCambodia", "export const curateThailand"),
     /getExistingTitlesInternal/,

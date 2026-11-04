@@ -36,6 +36,20 @@ export type SourceEvidence = {
     };
 };
 
+export type CurationCountry = "cambodia" | "thailand" | "international";
+
+export type CurationCandidate = {
+    id: string;
+    title: string;
+    summary?: string;
+    source?: string;
+    publishedAt: string;
+    sourceUrl: string;
+};
+
+const CURATION_WINDOW_MS = 48 * 60 * 60 * 1000;
+const MAX_CURATION_CANDIDATES = 6;
+
 function decodeHtmlEntities(value: string): string {
     return value
         .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -269,6 +283,122 @@ function parseGoogleNewsItems(xml: string): SourceEvidence["googleNews"]["items"
         if (items.length >= 5) break;
     }
     return items;
+}
+
+function extractBingPublisherUrl(rawLink: string): string | undefined {
+    try {
+        const parsed = new URL(decodeHtmlEntities(rawLink));
+        if (!/\.bing\.com$/i.test(parsed.hostname)) {
+            return /^https?:$/i.test(parsed.protocol) ? parsed.toString() : undefined;
+        }
+        const embedded = parsed.searchParams.get("url");
+        if (!embedded) return undefined;
+        const publisherUrl = new URL(embedded);
+        return /^https?:$/i.test(publisherUrl.protocol) ? publisherUrl.toString() : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+export function parseBingNewsCandidates(
+    xml: string,
+    windowStartMs: number = Date.now() - CURATION_WINDOW_MS,
+    windowEndMs: number = Date.now() + (60 * 60 * 1000),
+    maxCandidates: number = MAX_CURATION_CANDIDATES,
+): CurationCandidate[] {
+    const candidates: CurationCandidate[] = [];
+    const seenUrls = new Set<string>();
+
+    for (const match of xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)) {
+        const item = match[1];
+        const title = cleanText(item.match(/<title>([\s\S]*?)<\/title>/i)?.[1]);
+        const description = cleanText(item.match(/<description>([\s\S]*?)<\/description>/i)?.[1]);
+        const source = cleanText(item.match(/<News:Source>([\s\S]*?)<\/News:Source>/i)?.[1]);
+        const publishedRaw = cleanText(item.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]);
+        const rawLink = item.match(/<link>([\s\S]*?)<\/link>/i)?.[1]?.trim();
+        if (!title || !publishedRaw || !rawLink) continue;
+
+        const relevanceText = `${title} ${description || ""}`.toLowerCase();
+        const mentionsCambodia = /\bcambodia(?:n|ns)?\b/.test(relevanceText);
+        const mentionsThailand = /\bthai(?:land|s)?\b/.test(relevanceText);
+        const explicitBorderPhrase = /thailand.{0,40}cambodia|cambodia.{0,40}thailand|thai.{0,30}cambodian|cambodian.{0,30}thai/.test(relevanceText);
+        if (!(mentionsCambodia && mentionsThailand) && !explicitBorderPhrase) continue;
+
+        const publishedMs = Date.parse(publishedRaw);
+        if (!Number.isFinite(publishedMs) || publishedMs < windowStartMs || publishedMs > windowEndMs) continue;
+
+        const sourceUrl = extractBingPublisherUrl(rawLink);
+        if (!sourceUrl || seenUrls.has(sourceUrl)) continue;
+
+        const urlYearMatch = sourceUrl.match(/\/(20\d{2})(?:\/|[-_])/);
+        if (urlYearMatch && Math.abs(Number(urlYearMatch[1]) - new Date(publishedMs).getUTCFullYear()) > 0) continue;
+        seenUrls.add(sourceUrl);
+
+        candidates.push({
+            id: `n${candidates.length + 1}`,
+            title,
+            summary: description,
+            source,
+            publishedAt: new Date(publishedMs).toISOString(),
+            sourceUrl,
+        });
+        if (candidates.length >= maxCandidates) break;
+    }
+
+    return candidates;
+}
+
+export async function collectCurationCandidates(
+    country: CurationCountry,
+    options: { targetDate?: string } = {},
+): Promise<{
+    query: string;
+    candidates: CurationCandidate[];
+    error?: string;
+}> {
+    const queries: Record<CurationCountry, string> = {
+        cambodia: "Thailand Cambodia border Cambodia",
+        thailand: "Thailand Cambodia border Thailand",
+        international: "Thailand Cambodia border conflict",
+    };
+    let windowStartMs = Date.now() - CURATION_WINDOW_MS;
+    let windowEndMs = Date.now() + (60 * 60 * 1000);
+    let query = queries[country];
+    if (options.targetDate) {
+        const isoMatch = options.targetDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        const targetMs = isoMatch
+            ? Date.parse(`${options.targetDate}T00:00:00+07:00`)
+            : Date.parse(options.targetDate);
+        if (!Number.isFinite(targetMs)) {
+            return { query, candidates: [], error: `invalid target date: ${options.targetDate}` };
+        }
+        windowStartMs = targetMs;
+        windowEndMs = targetMs + (24 * 60 * 60 * 1000);
+        query = `${query} ${options.targetDate}`;
+    }
+    const rssUrl = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss&qft=sortbydate%3d%221%22`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+        const response = await fetch(rssUrl, {
+            signal: controller.signal,
+            headers: {
+                "User-Agent": "BorderClashCurator/1.0",
+                "Accept": "application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.5",
+            },
+        });
+        if (!response.ok) return { query, candidates: [], error: `Bing News HTTP ${response.status}` };
+        const xml = await readTextLimited(response, MAX_RSS_BYTES);
+        return { query, candidates: parseBingNewsCandidates(xml, windowStartMs, windowEndMs) };
+    } catch (error: any) {
+        return {
+            query,
+            candidates: [],
+            error: error?.name === "AbortError" ? `timeout after ${FETCH_TIMEOUT_MS}ms` : (error?.message || String(error)),
+        };
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
 async function fetchGoogleNewsEvidence(storedTitle: string, sourceUrl: string): Promise<SourceEvidence["googleNews"]> {
