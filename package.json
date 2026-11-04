@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:pipeline": "node --test tests/pipeline/research-pipeline.test.mjs",
-    "verify:gemini-headers": "node scripts/verify-gemini-headers.mjs"
+    "verify:gemini-headers": "node scripts/verify-gemini-headers.mjs",
+    "diag:live": "node scripts/live-diagnostics.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
