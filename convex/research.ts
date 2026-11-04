@@ -1351,7 +1351,30 @@ export const step4_synthesis = internalAction({
         let fallbackSnapshotPublished = false;
         let synthesisWriteErrors = 0;
 
+        // A previous Step 4 action can hit Convex's action boundary while the
+        // already-started Gemini job finishes moments later and writes the
+        // dashboard. Scheduled retries run with the same cycle runId. If this
+        // cycle has already published a newer dashboard, finalize the cycle
+        // instead of starting duplicate synthesis work.
+        if (attempt > 0 && typeof stats.lastResearchAt === "number") {
+            const currentDashboard = await ctx.runQuery(api.api.getDashboardStats, {}) as any;
+            if (
+                typeof currentDashboard?.lastUpdatedAt === "number"
+                && currentDashboard.lastUpdatedAt > stats.lastResearchAt
+            ) {
+                synthesisSucceeded = true;
+                dashboardUpdated = true;
+                console.log(
+                    `[STEP 4] late_synthesis_already_published dashboardAt=${new Date(currentDashboard.lastUpdatedAt).toISOString()} cycleStartedAt=${new Date(stats.lastResearchAt).toISOString()}`,
+                );
+            }
+        }
+
         try {
+            if (synthesisSucceeded) {
+                // The earlier invocation already wrote the result. Continue to
+                // scheduling/status/lock finalization below.
+            } else {
             const result = await runWithRetries(
                 "[STEP 4] Synthesis",
                 () => synthesizeAllInternal(ctx),
@@ -1385,6 +1408,7 @@ export const step4_synthesis = internalAction({
             if (result?.scheduling) {
                 const sched = result.scheduling;
                 schedulingResult = sched;
+            }
             }
         } catch (e) {
             console.error("[STEP 4] synthesis_failed", e);

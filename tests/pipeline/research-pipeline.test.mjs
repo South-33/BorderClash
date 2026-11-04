@@ -177,6 +177,9 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   const step4 = section(source, "export const step4_synthesis", "export const verifyAllSources");
   assert.match(step4, /stats\.cycleRunId !== runId \|\| stats\.systemStatus !== "syncing"/);
   assert.match(step4, /skipped stale_run/);
+  assert.match(step4, /attempt > 0 && typeof stats\.lastResearchAt === "number"/);
+  assert.match(step4, /currentDashboard\.lastUpdatedAt > stats\.lastResearchAt/);
+  assert.match(step4, /late_synthesis_already_published/);
   assert.match(step4, /runWithRetries\(\s*"\[STEP 4\] Synthesis"/s);
   assert.match(step4, /\(\) => synthesizeAllInternal\(ctx\)/);
   assert.doesNotMatch(step4, /ctx\.runAction\(internal\.research\.synthesizeAll/);
