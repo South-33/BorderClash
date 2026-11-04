@@ -165,6 +165,8 @@ test("source verification batch isolates per-result failures", () => {
   assert.match(verify, /try \{\s*switch \(status\)/s);
   assert.match(verify, /catch \(resultError\)/);
   assert.match(verify, /Error processing verification result for/);
+  assert.match(verify, /isCompletedGeminiFailure\(error\)/);
+  assert.match(verify, /Gemini server retry budget exhausted/);
   assert.match(api, /export const getArticlesNeedingVerification = internalQuery/);
   assert.match(api, /export const getRecentDuplicateCandidates = internalQuery/);
   const flagArticle = section(api, "export const flagArticle", "export const deleteArticle");

@@ -17,7 +17,7 @@ import {
 import { GEMINI_THINKING } from "./config";
 
 // Use gemini-studio-api helpers
-import { callGeminiStudio, callGeminiStudioWithSelfHealing, formatTimelineEvent } from "./ai_utils";
+import { callGeminiStudio, callGeminiStudioWithSelfHealing, formatTimelineEvent, isCompletedGeminiFailure } from "./ai_utils";
 
 
 // =============================================================================
@@ -2096,6 +2096,12 @@ For NEEDS_UPDATE, put only fields that are proven wrong in correctData. For ever
                 } catch (error: any) {
                     console.log(`   ❌ Batch error: ${error.message}`);
                     errors += batch.length;
+                    if (isCompletedGeminiFailure(error)) {
+                        const skippedRemaining = allArticles.length - (i + batch.length);
+                        errors += skippedRemaining;
+                        console.warn(`   [SOURCE VERIFY] Gemini server retry budget exhausted; leaving ${skippedRemaining} remaining article(s) unverified`);
+                        break;
+                    }
                 }
 
                 // Add delay between batches to avoid rate limiting
