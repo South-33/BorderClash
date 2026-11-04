@@ -3,5 +3,7 @@ export const GEMINI_PROJECT_NAME = process.env.GEMINI_PROJECT_NAME || "bordercla
 export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash-convex";
 
 // BorderClash intentionally uses one stable Gemini configuration everywhere.
-export const GEMINI_MODEL = "flash" as const;
-export const GEMINI_THINKING_LEVEL = "medium" as const;
+// Flash Medium is currently returning Gemini's generic failure response on the
+// production web session; Flash-Lite Low is the verified recovery profile.
+export const GEMINI_MODEL = "flash-lite" as const;
+export const GEMINI_THINKING_LEVEL = "low" as const;

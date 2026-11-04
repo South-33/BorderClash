@@ -500,7 +500,7 @@ Process each article above and decide its fate. Output your decisions in JSON.`;
         }
 
         try {
-            const response = await callGeminiStudio(currentPrompt, timeoutMs);
+            const response = await callGeminiStudio(currentPrompt, timeoutMs, true);
 
             // Extract JSON from response
             const jsonStr = extractJsonPayload(response);

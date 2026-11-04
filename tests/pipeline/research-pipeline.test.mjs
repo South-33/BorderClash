@@ -182,19 +182,19 @@ test("curation prompts stay compact while parsers remain hardened", () => {
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and NOTHING else/);
 });
 
-test("Gemini requests use only Flash Medium", () => {
+test("Gemini requests use the verified Flash-Lite Low recovery profile", () => {
   const research = read(researchPath);
   const historian = read(historianPath);
   const aiUtils = read(aiUtilsPath);
   const config = read(configPath);
   const verifyScript = read(path.join(root, "scripts", "verify-gemini-headers.mjs"));
 
-  assert.match(config, /GEMINI_MODEL = "flash" as const/);
-  assert.match(config, /GEMINI_THINKING_LEVEL = "medium" as const/);
+  assert.match(config, /GEMINI_MODEL = "flash-lite" as const/);
+  assert.match(config, /GEMINI_THINKING_LEVEL = "low" as const/);
   assert.match(aiUtils, /model:\s*GEMINI_MODEL/);
   assert.match(aiUtils, /thinking_level:\s*GEMINI_THINKING_LEVEL/);
   assert.doesNotMatch(aiUtils, /GeminiModelConfig|GeminiThinkingLevel|callGeminiStudioWithFallback|resolveGeminiModel|THINKING_LEVEL_SUFFIXES/);
-  assert.doesNotMatch(config, /"flash-lite"|"pro"|"low"|"high"|"standard"|"extended"/i);
+  assert.doesNotMatch(config, /"flash" as const|"pro"|"medium"|"high"|"standard"|"extended"/i);
   assert.doesNotMatch(research, /"SOURCE-VERIFY",\s*undefined,\s*true/);
   assert.doesNotMatch(research, /"VERIFY-SINGLE",\s*undefined,\s*true/);
   assert.doesNotMatch(aiUtils, /attemptsSeq|thinkingSuffix|fallback_thinking/);
@@ -206,8 +206,9 @@ test("Gemini requests use only Flash Medium", () => {
   assert.match(research, /getLowCredArticles, \{ country: "thailand", limit: 6 \}/);
   assert.match(research, /getLowCredArticles, \{ country: "international", limit: 6 \}/);
   assert.match(research, /getRecentBreakingNews, \{ limit: 15 \}/);
-  assert.match(verifyScript, /const thinkingLevel = "medium"/);
-  assert.match(verifyScript, /model:\s*"flash"/);
+  assert.match(verifyScript, /const thinkingLevel = "low"/);
+  assert.match(verifyScript, /model:\s*"flash-lite"/);
+  assert.match(historian, /callGeminiStudio\(currentPrompt, timeoutMs, true\)/);
 });
 
 test("ISR server fetch uses a retried dashboard snapshot and lets page errors bubble to ISR", () => {
