@@ -9,7 +9,6 @@ export const GEMINI_CLIENT_NAME = process.env.GEMINI_CLIENT_NAME || "borderclash
 export const GEMINI_MODEL = "flash" as const;
 export const GEMINI_THINKING = {
     repair: "medium",
-    verification: "high",
     historian: "high",
     synthesis: "high",
     manager: "high",

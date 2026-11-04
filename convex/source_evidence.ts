@@ -439,6 +439,185 @@ export async function collectSourceEvidence(sourceUrl: string, storedTitle: stri
     };
 }
 
+export type SourceEvidenceAssessment = {
+    status: "VERIFIED" | "URL_DEAD" | "SKIP";
+    actualTitle?: string;
+    actualSummary?: string;
+    actualPublishedAt?: string;
+    isAboutBorder: boolean;
+    matchScore: number;
+    reason: string;
+    correctData: Record<string, never>;
+};
+
+const VERIFICATION_STOP_WORDS = new Set([
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have",
+    "in", "is", "it", "of", "on", "or", "that", "the", "this", "to", "was", "were",
+    "with", "after", "before", "amid", "says", "said",
+]);
+
+function evidenceTokens(value: string | undefined | null): Set<string> {
+    if (!value) return new Set();
+    const tokens = value
+        .toLocaleLowerCase("en-US")
+        .match(/[\p{L}\p{N}]+/gu) || [];
+    return new Set(tokens.filter(token => token.length > 1 && !VERIFICATION_STOP_WORDS.has(token)));
+}
+
+function tokenMatchScore(lhs: string | undefined | null, rhs: string | undefined | null): number {
+    const left = evidenceTokens(lhs);
+    const right = evidenceTokens(rhs);
+    if (left.size === 0 || right.size === 0) return 0;
+
+    let shared = 0;
+    for (const token of left) if (right.has(token)) shared++;
+    if (shared === 0) return 0;
+
+    const containment = shared / Math.min(left.size, right.size);
+    const jaccard = shared / (left.size + right.size - shared);
+    return Math.max(jaccard, containment * 0.9);
+}
+
+function canonicalEvidenceDomain(rawUrl: string | undefined | null): string | null {
+    if (!rawUrl) return null;
+    try {
+        return new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+        return null;
+    }
+}
+
+function samePublisherDomain(lhs: string | undefined | null, rhs: string | undefined | null): boolean {
+    const left = canonicalEvidenceDomain(lhs);
+    const right = canonicalEvidenceDomain(rhs);
+    if (!left || !right) return false;
+    return left === right || left.endsWith(`.${right}`) || right.endsWith(`.${left}`);
+}
+
+function normalizedPublisherName(value: string | undefined | null): string {
+    return (value || "")
+        .toLocaleLowerCase("en-US")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim();
+}
+
+function isBorderRelevantText(value: string | undefined | null): boolean {
+    const text = (value || "").toLocaleLowerCase("en-US");
+    if (!text) return false;
+    const thailand = /\bthailand\b|\bthai\b/.test(text);
+    const cambodia = /\bcambodia\b|\bcambodian\b/.test(text);
+    const borderContext = /\bborder\b|\bceasefire\b|\bdisput|\bconflict\b|\btroop|\bmine|\bmilitary\b|\bterritor/.test(text);
+    return (thailand && cambodia) || ((thailand || cambodia) && borderContext);
+}
+
+/**
+ * Conservatively verify a stored article using evidence BorderClash fetched itself.
+ * This intentionally has only three outcomes:
+ * - VERIFIED for a strong direct-page or same-publisher RSS match.
+ * - URL_DEAD only for an explicit 404/410 already classified by the fetcher.
+ * - SKIP for every ambiguous, blocked, or conflicting case.
+ *
+ * It never invents corrected metadata and never deletes content based on a semantic guess.
+ */
+export function assessSourceEvidence(
+    evidence: SourceEvidence,
+    stored: {
+        title: string;
+        summary?: string;
+        source?: string;
+        sourceUrl: string;
+    },
+): SourceEvidenceAssessment {
+    if (evidence.direct.status === "dead") {
+        return {
+            status: "URL_DEAD",
+            actualTitle: evidence.direct.title,
+            actualSummary: evidence.direct.description,
+            actualPublishedAt: evidence.direct.publishedAt,
+            isAboutBorder: false,
+            matchScore: 100,
+            reason: evidence.direct.reason || `Explicit HTTP ${evidence.direct.httpStatus || "404/410"}`,
+            correctData: {},
+        };
+    }
+
+    const directText = [
+        evidence.direct.title,
+        evidence.direct.description,
+        evidence.direct.textSnippet,
+    ].filter(Boolean).join(" ");
+    const storedText = [stored.title, stored.summary].filter(Boolean).join(" ");
+    const directTitleScore = tokenMatchScore(stored.title, evidence.direct.title);
+    const directContentScore = tokenMatchScore(storedText, directText);
+    const directRelevant = isBorderRelevantText(directText);
+    const storedRelevant = isBorderRelevantText(storedText);
+
+    if (
+        evidence.direct.status === "ok"
+        && (
+            directTitleScore >= 0.72
+            || (directContentScore >= 0.42 && (directRelevant || storedRelevant))
+        )
+    ) {
+        const score = Math.max(directTitleScore, directContentScore);
+        return {
+            status: "VERIFIED",
+            actualTitle: evidence.direct.title,
+            actualSummary: evidence.direct.description,
+            actualPublishedAt: evidence.direct.publishedAt,
+            isAboutBorder: directRelevant || storedRelevant,
+            matchScore: Math.round(score * 100),
+            reason: directTitleScore >= 0.72
+                ? "Direct publisher page strongly matches the stored headline"
+                : "Direct publisher page content strongly matches the stored record",
+            correctData: {},
+        };
+    }
+
+    const storedPublisher = normalizedPublisherName(stored.source);
+    let bestRss: SourceEvidence["googleNews"]["items"][number] | undefined;
+    let bestRssScore = 0;
+    for (const item of evidence.googleNews.items) {
+        const publisherName = normalizedPublisherName(item.source);
+        const samePublisher = samePublisherDomain(stored.sourceUrl, item.sourceUrl)
+            || (storedPublisher.length >= 4 && publisherName.length >= 4
+                && (publisherName.includes(storedPublisher) || storedPublisher.includes(publisherName)));
+        if (!samePublisher) continue;
+
+        const score = tokenMatchScore(stored.title, item.title);
+        if (score > bestRssScore) {
+            bestRss = item;
+            bestRssScore = score;
+        }
+    }
+
+    if (bestRss && bestRssScore >= 0.72) {
+        return {
+            status: "VERIFIED",
+            actualTitle: bestRss.title,
+            actualSummary: evidence.direct.description,
+            actualPublishedAt: bestRss.publishedAt || evidence.direct.publishedAt,
+            isAboutBorder: storedRelevant || isBorderRelevantText(bestRss.title),
+            matchScore: Math.round(bestRssScore * 100),
+            reason: "Same-publisher Google News RSS strongly matches the stored headline",
+            correctData: {},
+        };
+    }
+
+    return {
+        status: "SKIP",
+        actualTitle: evidence.direct.title || bestRss?.title,
+        actualSummary: evidence.direct.description,
+        actualPublishedAt: evidence.direct.publishedAt || bestRss?.publishedAt,
+        isAboutBorder: directRelevant || storedRelevant,
+        matchScore: Math.round(Math.max(directTitleScore, directContentScore, bestRssScore) * 100),
+        reason: evidence.direct.status === "blocked"
+            ? "Publisher page is blocked and corroborating evidence is insufficient"
+            : "Retrieved evidence is insufficient for a conservative verification decision",
+        correctData: {},
+    };
+}
+
 export function formatSourceEvidence(evidence: SourceEvidence): string {
     const direct = evidence.direct;
     const lines = [

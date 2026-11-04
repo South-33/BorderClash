@@ -706,16 +706,21 @@ export const getArticlesNeedingVerification = internalQuery({
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
         const targetLimit = Math.min(args.limit ?? 180, 240);
+        const verificationCutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
         const [unverifiedArticles, recentActiveArticles] = await Promise.all([
             ctx.db
                 .query(table)
-                .withIndex("by_status_publishedAt", q => q.eq("status", "unverified"))
+                .withIndex("by_status_publishedAt", q =>
+                    q.eq("status", "unverified").gte("publishedAt", verificationCutoff)
+                )
                 .order("desc")
                 .take(targetLimit),
             ctx.db
                 .query(table)
-                .withIndex("by_status_publishedAt", q => q.eq("status", "active"))
+                .withIndex("by_status_publishedAt", q =>
+                    q.eq("status", "active").gte("publishedAt", verificationCutoff)
+                )
                 .order("desc")
                 .take(Math.min(40, targetLimit)),
         ]);
