@@ -1344,6 +1344,16 @@ export const step4_synthesis = internalAction({
             );
             if (!result) {
                 console.warn("[STEP 4] synthesis_returned_no_result dashboardMayBeUnchanged=true");
+                const scheduledRetry = await scheduleStepRetry(ctx, {
+                    stepName: "STEP 4",
+                    actionReference: internal.research.step4_synthesis,
+                    args: { errors: stepErrors, runId },
+                    attempt,
+                });
+                if (scheduledRetry) {
+                    console.warn("[STEP 4] synthesis_unavailable retrying_step_without_rerunning_research=true");
+                    return;
+                }
                 stepErrors.push("Synthesis: returned null result");
             } else {
                 synthesisSucceeded = true;
