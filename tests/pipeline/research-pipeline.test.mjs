@@ -103,6 +103,7 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step2, /runWithRetries\(\s*"\[STEP 2\] Source verification"/s);
   assert.match(step2, /scheduleStepRetry\(/);
   assert.match(step2, /scheduleRunAfterWithRetries\(ctx, "Step 3"/);
+  assert.match(step2, /Verification: \$\{verifyResult\.errors\} article\(s\) left unverified/);
 
   const step3 = section(source, "export const step3_historian", "export const step4_synthesis");
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Timeline refresh iteration \$\{historianLoops\}`/s);
@@ -176,6 +177,13 @@ test("source verification batch isolates per-result failures", () => {
   assert.match(markProcessed, /withIndex\("by_title"[\s\S]*?\.collect\(\)/);
   assert.match(dedupe, /export const canonicalizeArticleUrl = \(rawUrl\?: string\): string =>/);
   assert.match(dedupe, /export function findVerifiedDuplicateCandidate/);
+
+  const lowCred = section(api, "export const getLowCredArticles", "export const getRecentBreakingNews");
+  const breaking = section(api, "export const getRecentBreakingNews", "HISTORIAN CONTEXT");
+  const historianQueue = section(api, "export const getUnprocessedForTimeline", "export const markAsProcessedToTimeline");
+  assert.doesNotMatch(lowCred, /eq\("status", "unverified"\)/);
+  assert.doesNotMatch(breaking, /eq\("status", "unverified"\)/);
+  assert.doesNotMatch(historianQueue, /eq\("status", "unverified"\)/);
 });
 
 test("curation uses feed-backed deterministic ingestion without Gemini", () => {

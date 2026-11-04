@@ -1162,6 +1162,9 @@ export const step2_verification = internalAction({
                 () => ctx.runAction(internal.research.verifyAllSources, {}),
             );
             verificationSummary = `verified=${verifyResult.verified} updated=${verifyResult.updated} deleted=${verifyResult.deleted} errors=${verifyResult.errors}`;
+            if (verifyResult.errors > 0) {
+                stepErrors.push(`Verification: ${verifyResult.errors} article(s) left unverified`);
+            }
         } catch (e) {
             verificationSummary = "failed";
             console.error("[STEP 2] source_verification_failed", e);

@@ -744,7 +744,7 @@ export const getArticlesNeedingVerification = internalQuery({
  * Used by synthesizeAll() for propaganda/spin analysis
  * 
  * Uses compound index by_status_credibility to:
- * 1. Filter by status (active/unverified) at database level
+ * 1. Filter to verified active articles at database level
  * 2. Get articles already sorted by credibility (lowest first)
  * 3. Take only what we need (typically 15 per country)
  * 
@@ -760,26 +760,14 @@ export const getLowCredArticles = internalQuery({
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
 
-        // Fetch from both active and unverified status, sorted by credibility ASC (lowest first)
-        // We use the compound index which lets us filter by status AND get pre-sorted by credibility
+        // Analysis only consumes verified active articles. Fresh RSS records remain
+        // visible as unverified news until source verification promotes them.
         const activeArticles = await ctx.db
             .query(table)
             .withIndex("by_status_credibility", q => q.eq("status", "active"))
             .order("asc") // Lowest credibility first
             .take(args.limit);
-
-        const unverifiedArticles = await ctx.db
-            .query(table)
-            .withIndex("by_status_credibility", q => q.eq("status", "unverified"))
-            .order("asc") // Lowest credibility first
-            .take(args.limit);
-
-        // Merge and re-sort by credibility to get overall lowest
-        const combined = [...activeArticles, ...unverifiedArticles]
-            .sort((a, b) => (a.credibility || 50) - (b.credibility || 50))
-            .slice(0, args.limit);
-
-        return combined;
+        return activeArticles;
     },
 });
 
@@ -788,7 +776,7 @@ export const getLowCredArticles = internalQuery({
  * Used by synthesizeAll() for breaking news detection
  * 
  * Uses compound index by_status_publishedAt to:
- * 1. Filter by status (active/unverified) at database level
+ * 1. Filter to verified active articles at database level
  * 2. Get articles already sorted by publishedAt (newest first)
  * 3. Merge from all 3 tables and take only what we need (typically 30)
  * 
@@ -817,18 +805,8 @@ export const getRecentBreakingNews = internalQuery({
                 .order("desc") // Newest first
                 .take(limitPerTable);
 
-            // Unverified articles sorted by publishedAt DESC
-            const unverified = await ctx.db
-                .query(name)
-                .withIndex("by_status_publishedAt", q => q.eq("status", "unverified"))
-                .order("desc")
-                .take(limitPerTable);
-
             // Add country tag for synthesis context
-            allArticles.push(
-                ...active.map(a => ({ ...a, country })),
-                ...unverified.map(a => ({ ...a, country }))
-            );
+            allArticles.push(...active.map(a => ({ ...a, country })));
         }
 
         // Sort all by publishedAt DESC and take top N
@@ -3440,8 +3418,9 @@ export const exportHistorianContext = action({
 
 /**
  * Get articles that haven't been processed by the Historian yet
- * This returns articles regardless of validation status (active, unverified, etc.)
- * Only excludes: archived, false, and already processed articles
+ * Only verified active articles are eligible for the permanent timeline.
+ * Unverified RSS records remain in the news feed until source verification
+ * promotes them to active.
  * 
  * BANDWIDTH OPTIMIZATION v2:
  * - Uses filter() for processedToTimeline instead of fetching all then filtering in JS
@@ -3513,38 +3492,6 @@ export const getUnprocessedForTimeline = internalQuery({
                 });
             }
 
-            // Fetch unverified articles if we still need more
-            if (results.length < targetCount) {
-                const unverifiedUndefined = await ctx.db
-                    .query(name)
-                    .withIndex("by_status_processed", q =>
-                        q.eq("status", "unverified").eq("processedToTimeline", undefined)
-                    )
-                    .take(targetCount - results.length + 25);
-
-                const unverifiedFalse = await ctx.db
-                    .query(name)
-                    .withIndex("by_status_processed", q =>
-                        q.eq("status", "unverified").eq("processedToTimeline", false)
-                    )
-                    .take(targetCount - results.length + 25);
-
-                const unverifiedArticles = [...unverifiedUndefined, ...unverifiedFalse];
-
-                for (const a of unverifiedArticles) {
-                    if (results.length >= targetCount) break;
-                    results.push({
-                        _id: a._id,
-                        title: a.title,
-                        source: a.source,
-                        sourceUrl: a.sourceUrl,
-                        summary: a.summary || a.summaryEn,
-                        credibility: a.credibility,
-                        publishedAt: a.publishedAt,
-                        country,
-                    });
-                }
-            }
         }
 
         // Sort by credibility (higher first) to process best sources first
