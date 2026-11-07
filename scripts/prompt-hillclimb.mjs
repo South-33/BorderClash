@@ -226,7 +226,7 @@ function semanticIssues(item) {
       break;
     case "monitoring":
       if (!/asean/.test(text) || !/(?:si sa ket|sisaket)/.test(text)) issues.push("lost-monitoring-context");
-      if (!/(?:not|did not|without|no ).{0,70}(?:responsib|fault|assign|blam|find|determin)/.test(summary.toLowerCase())) {
+      if (!/(?:not|did not|without|no ).{0,90}(?:responsib|fault|assign|blam|find|determin|conclud|caus)/.test(summary.toLowerCase())) {
         issues.push("lost-no-blame-caveat");
       }
       break;
