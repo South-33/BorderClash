@@ -2066,8 +2066,8 @@ export const repairLegacyTimelineLocalizations = internalAction({
         // browser-generation failures. Longer descriptions remain resumable
         // and are handled by later invocations.
         candidates.sort((a, b) => a.english.length - b.english.length || a.id.localeCompare(b.id));
-        const batchSize = Math.max(1, Math.min(12, Math.round(args.batchSize ?? 8)));
-        const MAX_BATCH_ENGLISH_CHARS = 3500;
+        const batchSize = Math.max(1, Math.min(6, Math.round(args.batchSize ?? 6)));
+        const MAX_BATCH_ENGLISH_CHARS = 600;
         const batch: typeof candidates = [];
         let batchEnglishChars = 0;
         for (const candidate of candidates) {

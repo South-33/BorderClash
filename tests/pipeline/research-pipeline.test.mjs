@@ -400,12 +400,16 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(historian, /localizationUpdate\.newSummaryKh = translations\.summaryKh/);
   assert.match(aiUtils, /LOCALIZATION-REPAIR/);
   assert.match(aiUtils, /thinkingLevel: GeminiThinkingLevel = GEMINI_THINKING\.repair/);
+  assert.match(aiUtils, /Repair only requested BorderClash translations from English/);
+  assert.match(aiUtils, /Preserve facts, numbers, attribution and uncertainty/);
+  assert.match(aiUtils, /Thai must contain no Khmer script; Khmer must contain no Thai script/);
+  assert.match(aiUtils, /Stay neutral: no side-taking/);
   assert.match(aiUtils, /poll_transport_error retry_same_job=true/);
   assert.match(aiUtils, /geminiEndpointCache = null;[\s\S]*continue;/);
   assert.match(historian, /repairLocalizedItems\(items, undefined, GEMINI_THINKING\.historian\)/);
   assert.match(historian, /candidates\.sort\(\(a, b\) => a\.english\.length - b\.english\.length/);
-  assert.match(historian, /MAX_BATCH_ENGLISH_CHARS = 3500/);
-  assert.match(historian, /Math\.min\(12, Math\.round\(args\.batchSize \?\? 8\)\)/);
+  assert.match(historian, /MAX_BATCH_ENGLISH_CHARS = 600/);
+  assert.match(historian, /Math\.min\(6, Math\.round\(args\.batchSize \?\? 6\)\)/);
   assert.match(historian, /acquireTimelineLocalizationRepairLock/);
   assert.match(historian, /releaseTimelineLocalizationRepairLock/);
   assert.match(api, /export const acquireTimelineLocalizationRepairLock = internalMutation/);

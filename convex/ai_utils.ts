@@ -13,7 +13,6 @@ import {
     type GeminiThinkingLevel,
 } from "./config";
 import {
-    LOCALIZED_WRITING_RULES,
     isValidLocalizedText,
     type LocalizedLanguage,
 } from "./language_quality";
@@ -472,13 +471,16 @@ export async function repairLocalizedItems(
 ): Promise<Map<string, LocalizedRepairResult>> {
     if (items.length === 0) return new Map();
 
-    const prompt = `You repair translations for BorderClash. Change translation wording only; never add, remove, strengthen, or weaken facts.
-
-${LOCALIZED_WRITING_RULES}
-
+    // Keep fallback repair prompts compact. Bounded maintenance batches can
+    // then stay in Gemini's normal composer instead of becoming file uploads,
+    // while preserving the same factual, neutral, and script constraints.
+    const prompt = `Repair only requested BorderClash translations from English.
+- Preserve facts, numbers, attribution and uncertainty. Do not add, remove, strengthen or weaken meaning.
+- Use natural everyday Thai for th and Khmer for kh. Thai must contain no Khmer script; Khmer must contain no Thai script.
+- Use normal target-language country/place names. Stay neutral: no side-taking, reader address, slang, cheering, insults or sensational wording.
+- Explain unavoidable jargon plainly.
 INPUT ITEMS:
 ${JSON.stringify(items)}
-
 Return exactly one fenced \`\`\`json code block and nothing else:
 \`\`\`json
 {"items":[{"id":"same id","thai":"correct Thai when requested","khmer":"correct Khmer when requested"}]}
