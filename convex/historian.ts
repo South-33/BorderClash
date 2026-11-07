@@ -2066,11 +2066,10 @@ export const repairLegacyTimelineLocalizations = internalAction({
         // browser-generation failures. Longer descriptions remain resumable
         // and are handled by later invocations.
         candidates.sort((a, b) => a.english.length - b.english.length || a.id.localeCompare(b.id));
-        // Keep common repair prompts below the harness's 1,500-character
-        // attachment threshold. Inline composer submissions are simpler and
-        // avoid file-upload timing for the short legacy titles we repair first.
-        const batchSize = Math.max(1, Math.min(4, Math.round(args.batchSize ?? 4)));
-        const MAX_BATCH_ENGLISH_CHARS = 320;
+        // Compact prompt IDs keep these bounded batches below the harness's
+        // 1,500-character attachment threshold without sacrificing throughput.
+        const batchSize = Math.max(1, Math.min(6, Math.round(args.batchSize ?? 6)));
+        const MAX_BATCH_ENGLISH_CHARS = 600;
         const batch: typeof candidates = [];
         let batchEnglishChars = 0;
         for (const candidate of candidates) {
@@ -2091,11 +2090,9 @@ export const repairLegacyTimelineLocalizations = internalAction({
         }
 
         const items: LocalizedRepairItem[] = batch.map(({ id, english, repair }) => ({ id, english, repair }));
-        // Use the harness's bounded Medium→High fallback for maintenance.
-        // It allows at most two browser attempts, avoiding three long High
-        // attempts that can outlive the client's polling budget and overlap.
-        // 570s covers the 60s Medium trial plus one full High attempt.
-        const repaired = await repairLocalizedItems(items, 570_000, GEMINI_THINKING.repair);
+        // One High-quality logical request. Browser retries remain owned by
+        // the harness and are capped at 480s, below the 510s client budget.
+        const repaired = await repairLocalizedItems(items, undefined, GEMINI_THINKING.historian);
         const updates = new Map<Id<"timelineEvents">, Record<string, string>>();
         let repairedFields = 0;
 

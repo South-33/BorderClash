@@ -474,6 +474,15 @@ export async function repairLocalizedItems(
 ): Promise<Map<string, LocalizedRepairResult>> {
     if (items.length === 0) return new Map();
 
+    // Convex event IDs add no translation context. Use compact per-request
+    // IDs so bounded repair batches stay in Gemini's inline composer, then
+    // map validated outputs back to the real IDs before persistence.
+    const promptItems = items.map((item, index) => ({
+        id: String(index + 1),
+        english: item.english,
+        repair: item.repair,
+    }));
+
     // Keep fallback repair prompts compact. Bounded maintenance batches can
     // then stay in Gemini's normal composer instead of becoming file uploads,
     // while preserving the same factual, neutral, and script constraints.
@@ -482,7 +491,7 @@ export async function repairLocalizedItems(
 - th: natural everyday Thai, no Khmer script. kh: natural everyday Khmer, no Thai script.
 - Use normal local country/place names and neutral plain language; no side-taking, reader address, slang, cheering or hype. Explain jargon plainly.
 INPUT:
-${JSON.stringify(items)}
+${JSON.stringify(promptItems)}
 Return only this fenced JSON shape:
 \`\`\`json
 {"items":[{"id":"same","thai":"if th","khmer":"if kh"}]}
@@ -496,20 +505,20 @@ Include every id and only requested languages.`;
         "LOCALIZATION-REPAIR",
     );
 
-    const requestedById = new Map(items.map((item) => [item.id, item]));
+    const requestedByPromptId = new Map(promptItems.map((item, index) => [item.id, items[index]]));
     const repaired = new Map<string, LocalizedRepairResult>();
     for (const item of result?.items || []) {
-        const requested = requestedById.get(item.id);
+        const requested = requestedByPromptId.get(item.id);
         if (!requested) continue;
 
-        const clean: LocalizedRepairResult = { id: item.id };
+        const clean: LocalizedRepairResult = { id: requested.id };
         if (requested.repair.includes("th") && isValidLocalizedText(item.thai, "th")) {
             clean.thai = item.thai;
         }
         if (requested.repair.includes("kh") && isValidLocalizedText(item.khmer, "kh")) {
             clean.khmer = item.khmer;
         }
-        repaired.set(item.id, clean);
+        repaired.set(requested.id, clean);
     }
 
     return repaired;
