@@ -2695,6 +2695,31 @@ export const pauseTimer = mutation({
     },
 });
 
+async function resumeResearchScheduling(ctx: any, existing: any): Promise<void> {
+    const pendingJobs = await ctx.db.system.query("_scheduled_functions")
+        .filter((q: any) =>
+            q.and(
+                q.eq(q.field("state.kind"), "pending"),
+                q.eq(q.field("name"), "research.ts:runResearchCycle"),
+            ),
+        )
+        .collect();
+
+    let scheduledRunId = pendingJobs[0]?._id;
+    if (!scheduledRunId && typeof existing.nextRunAt === "number") {
+        const runAt = Math.max(existing.nextRunAt, Date.now() + 1_000);
+        scheduledRunId = await ctx.scheduler.runAt(runAt, internal.research.runResearchCycle, {});
+        console.log(`[SYSTEM] Restored missing research schedule for ${new Date(runAt).toISOString()}`);
+    }
+
+    await ctx.db.patch(existing._id, {
+        isPaused: false,
+        systemStatus: "online",
+        errorLog: undefined,
+        scheduledRunId,
+    });
+}
+
 export const resumeTimer = mutation({
     args: {},
     handler: async (ctx) => {
@@ -2703,7 +2728,7 @@ export const resumeTimer = mutation({
             .first();
 
         if (existing) {
-            await ctx.db.patch(existing._id, { isPaused: false });
+            await resumeResearchScheduling(ctx, existing);
         }
     },
 });
@@ -2743,11 +2768,7 @@ export const resumeResearchCycle = mutation({
             .first();
 
         if (existing) {
-            await ctx.db.patch(existing._id, {
-                isPaused: false,
-                systemStatus: "online",
-                errorLog: undefined  // Clear error log
-            });
+            await resumeResearchScheduling(ctx, existing);
             console.log("✅ Research cycle resumed - status set to online");
         }
     },

@@ -531,3 +531,17 @@ test("ISR server fetch uses a retried dashboard snapshot and lets page errors bu
   assert.doesNotMatch(page, /catch\s*\(/);
   assert.doesNotMatch(page, /serverError/);
 });
+
+test("resume paths restore a missing precise research schedule", () => {
+  const api = read(path.join(root, "convex", "api.ts"));
+  const resumeHelper = section(api, "async function resumeResearchScheduling", "export const resumeTimer");
+  const resumeTimer = section(api, "export const resumeTimer", "export const stopResearchCycle");
+  const resumeCycle = section(api, "export const resumeResearchCycle", "// Skip ONLY the next research cycle");
+
+  assert.match(resumeHelper, /_scheduled_functions/);
+  assert.match(resumeHelper, /research\.ts:runResearchCycle/);
+  assert.match(resumeHelper, /ctx\.scheduler\.runAt\(runAt, internal\.research\.runResearchCycle, \{\}\)/);
+  assert.match(resumeHelper, /scheduledRunId/);
+  assert.match(resumeTimer, /resumeResearchScheduling\(ctx, existing\)/);
+  assert.match(resumeCycle, /resumeResearchScheduling\(ctx, existing\)/);
+});
