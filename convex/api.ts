@@ -4122,6 +4122,49 @@ export const updateTimelineEventById = internalMutation({
 });
 
 /**
+ * Atomically update only localized timeline text for a bounded repair batch.
+ * Every patch is validated and every event must exist before any write occurs.
+ */
+export const bulkUpdateTimelineLocalizations = internalMutation({
+    args: {
+        updates: v.array(v.object({
+            eventId: v.id("timelineEvents"),
+            titleTh: v.optional(v.string()),
+            titleKh: v.optional(v.string()),
+            descriptionTh: v.optional(v.string()),
+            descriptionKh: v.optional(v.string()),
+        })),
+        reason: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const rows: Array<{
+            eventId: Id<"timelineEvents">;
+            patch: Record<string, string | number>;
+        }> = [];
+
+        for (const update of args.updates) {
+            validateTimelineLocalizationUpdates(update);
+            const event = await ctx.db.get(update.eventId);
+            if (!event) throw new Error(`Timeline event not found: ${update.eventId}`);
+
+            const patch: Record<string, string | number> = { lastUpdatedAt: Date.now() };
+            if (update.titleTh !== undefined) patch.titleTh = update.titleTh;
+            if (update.titleKh !== undefined) patch.titleKh = update.titleKh;
+            if (update.descriptionTh !== undefined) patch.descriptionTh = update.descriptionTh;
+            if (update.descriptionKh !== undefined) patch.descriptionKh = update.descriptionKh;
+            rows.push({ eventId: update.eventId, patch });
+        }
+
+        for (const row of rows) {
+            await ctx.db.patch(row.eventId, row.patch);
+        }
+
+        console.log(`[TIMELINE] bulk localization update rows=${rows.length} reason=${args.reason}`);
+        return { updatedEvents: rows.length };
+    },
+});
+
+/**
  * Delete timeline event by ID
  */
 export const deleteTimelineEventById = internalMutation({

@@ -2064,13 +2064,10 @@ export const repairLegacyTimelineLocalizations = internalAction({
             updates.set(candidate.eventId, patch);
         }
 
-        for (const [eventId, patch] of updates) {
-            await ctx.runMutation(internal.api.updateTimelineEventById, {
-                eventId,
-                updates: patch,
-                reason: `Legacy multilingual repair; backup ${args.backupId}`,
-            });
-        }
+        await ctx.runMutation(internal.api.bulkUpdateTimelineLocalizations, {
+            updates: [...updates].map(([eventId, patch]) => ({ eventId, ...patch })),
+            reason: `Legacy multilingual repair; backup ${args.backupId}`,
+        });
 
         return {
             scannedEvents: events.length,
