@@ -493,7 +493,7 @@ Return every input id. Only include thai or khmer when that language is listed i
     const result = await callGeminiStudioWithSelfHealing<{ items?: LocalizedRepairResult[] }>(
         prompt,
         { thinkingLevel, timeoutMs },
-        2,
+        1,
         "LOCALIZATION-REPAIR",
     );
 

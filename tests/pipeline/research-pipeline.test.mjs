@@ -432,6 +432,7 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(historian, /localizationUpdate\.newSummaryTh = translations\.summaryTh/);
   assert.match(historian, /localizationUpdate\.newSummaryKh = translations\.summaryKh/);
   assert.match(aiUtils, /LOCALIZATION-REPAIR/);
+  assert.match(aiUtils, /callGeminiStudioWithSelfHealing<\{ items\?: LocalizedRepairResult\[\] \}>\([\s\S]*\{ thinkingLevel, timeoutMs \},\s*1,\s*"LOCALIZATION-REPAIR"/);
   assert.match(aiUtils, /thinkingLevel: GeminiThinkingLevel = GEMINI_THINKING\.repair/);
   assert.match(aiUtils, /Repair only requested BorderClash translations from English/);
   assert.match(aiUtils, /Preserve facts, numbers, attribution and uncertainty/);
