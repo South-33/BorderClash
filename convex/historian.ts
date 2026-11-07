@@ -1,7 +1,7 @@
 "use node";
 
 import { internalAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -1972,6 +1972,113 @@ export const runTimelineCleanup = internalAction({
             eventsUpdated: 0,
             eventsDeleted: 0,
             summary: "Deprecated: use timeline canonicalization loop (merge-only with backup safety).",
+        };
+    },
+});
+
+// Admin-only, resumable repair for legacy Thai/Khmer timeline fields. Each
+// invocation repairs one bounded batch and refuses all writes unless every
+// requested field in that batch passes the same deterministic validator used
+// by normal persistence paths. The caller must supply a full-timeline backup
+// ID so every write carries its rollback reference in the audit reason.
+export const repairLegacyTimelineLocalizations = internalAction({
+    args: {
+        backupId: v.string(),
+        batchSize: v.optional(v.number()),
+    },
+    handler: async (ctx, args): Promise<{
+        scannedEvents: number;
+        remainingPairsBefore: number;
+        repairedPairs: number;
+        repairedFields: number;
+        updatedEvents: number;
+        done: boolean;
+    }> => {
+        const events: any[] = await ctx.runQuery(api.api.getTimeline, { limit: 1000 });
+        const candidates: Array<{
+            id: string;
+            eventId: Id<"timelineEvents">;
+            kind: "title" | "description";
+            english: string;
+            repair: Array<"th" | "kh">;
+        }> = [];
+
+        for (const event of events) {
+            const pairs = [
+                { kind: "title" as const, english: event.title, thai: event.titleTh, khmer: event.titleKh },
+                { kind: "description" as const, english: event.description, thai: event.descriptionTh, khmer: event.descriptionKh },
+            ];
+            for (const pair of pairs) {
+                if (typeof pair.english !== "string" || !pair.english.trim()) continue;
+                const repair: Array<"th" | "kh"> = [];
+                if (!isValidLocalizedText(pair.thai, "th")) repair.push("th");
+                if (!isValidLocalizedText(pair.khmer, "kh")) repair.push("kh");
+                if (repair.length === 0) continue;
+                candidates.push({
+                    id: `${event._id}:${pair.kind}`,
+                    eventId: event._id,
+                    kind: pair.kind,
+                    english: pair.english,
+                    repair,
+                });
+            }
+        }
+
+        const batchSize = Math.max(1, Math.min(30, Math.round(args.batchSize ?? 24)));
+        const batch = candidates.slice(0, batchSize);
+        if (batch.length === 0) {
+            return {
+                scannedEvents: events.length,
+                remainingPairsBefore: 0,
+                repairedPairs: 0,
+                repairedFields: 0,
+                updatedEvents: 0,
+                done: true,
+            };
+        }
+
+        const items: LocalizedRepairItem[] = batch.map(({ id, english, repair }) => ({ id, english, repair }));
+        const repaired = await repairLocalizedItems(items, undefined, GEMINI_THINKING.historian);
+        const updates = new Map<Id<"timelineEvents">, Record<string, string>>();
+        let repairedFields = 0;
+
+        for (const candidate of batch) {
+            const fixed = repaired.get(candidate.id);
+            if (!fixed) throw new Error(`Legacy localization repair missing result for ${candidate.id}`);
+            const patch = updates.get(candidate.eventId) ?? {};
+
+            if (candidate.repair.includes("th")) {
+                if (!isValidLocalizedText(fixed.thai, "th")) {
+                    throw new Error(`Legacy localization repair returned invalid Thai for ${candidate.id}`);
+                }
+                patch[candidate.kind === "title" ? "titleTh" : "descriptionTh"] = fixed.thai;
+                repairedFields++;
+            }
+            if (candidate.repair.includes("kh")) {
+                if (!isValidLocalizedText(fixed.khmer, "kh")) {
+                    throw new Error(`Legacy localization repair returned invalid Khmer for ${candidate.id}`);
+                }
+                patch[candidate.kind === "title" ? "titleKh" : "descriptionKh"] = fixed.khmer;
+                repairedFields++;
+            }
+            updates.set(candidate.eventId, patch);
+        }
+
+        for (const [eventId, patch] of updates) {
+            await ctx.runMutation(internal.api.updateTimelineEventById, {
+                eventId,
+                updates: patch,
+                reason: `Legacy multilingual repair; backup ${args.backupId}`,
+            });
+        }
+
+        return {
+            scannedEvents: events.length,
+            remainingPairsBefore: candidates.length,
+            repairedPairs: batch.length,
+            repairedFields,
+            updatedEvents: updates.size,
+            done: candidates.length <= batch.length,
         };
     },
 });

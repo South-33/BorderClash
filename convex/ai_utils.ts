@@ -455,6 +455,7 @@ export type LocalizedRepairResult = {
 export async function repairLocalizedItems(
     items: LocalizedRepairItem[],
     timeoutMs?: number,
+    thinkingLevel: GeminiThinkingLevel = GEMINI_THINKING.repair,
 ): Promise<Map<string, LocalizedRepairResult>> {
     if (items.length === 0) return new Map();
 
@@ -473,7 +474,7 @@ Return every input id. Only include thai or khmer when that language is listed i
 
     const result = await callGeminiStudioWithSelfHealing<{ items?: LocalizedRepairResult[] }>(
         prompt,
-        { thinkingLevel: GEMINI_THINKING.repair, timeoutMs },
+        { thinkingLevel, timeoutMs },
         2,
         "LOCALIZATION-REPAIR",
     );
