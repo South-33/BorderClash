@@ -10,7 +10,6 @@ import {
 } from "./language_quality";
 
 const isVisibleNewsStatus = (status: string) => status === "active" || status === "unverified";
-const DASHBOARD_TIMELINE_PREVIEW_LIMIT = 180;
 
 const validateOptionalNewsLocalizations = (args: {
     titleTh?: string;
@@ -48,8 +47,25 @@ const validateTimelineLocalizationUpdates = (updates: {
 };
 
 const serializeTimelineEvent = (event: any) => ({
-    ...event,
     _id: String(event._id),
+    date: event.date,
+    timeOfDay: event.timeOfDay,
+    title: event.title,
+    titleTh: event.titleTh,
+    titleKh: event.titleKh,
+    description: event.description,
+    descriptionTh: event.descriptionTh,
+    descriptionKh: event.descriptionKh,
+    category: event.category,
+    importance: event.importance,
+    status: event.status,
+    sources: Array.isArray(event.sources)
+        ? event.sources.map((source: any) => ({
+            url: source.url,
+            name: source.name,
+            credibility: source.credibility,
+        }))
+        : [],
 });
 
 const serializeHistorianTimelineEvent = (event: any) => ({
@@ -122,7 +138,10 @@ async function getVisibleNewsDocs(
 ) {
     const table = country === "thailand" ? "thailandNews" : "cambodiaNews";
     const targetLimit = Math.min(limit ?? 20, 100);
-    const fetchBuffer = Math.min(Math.max(targetLimit * 2, 20), 120);
+    // To compute the top N items across active + unverified, at most the top N
+    // rows from each status can contribute. Reading 2N from both sides only
+    // doubles document bandwidth without changing the result.
+    const fetchBuffer = targetLimit;
 
     const [activeArticles, unverifiedArticles] = await Promise.all([
         ctx.db
@@ -334,10 +353,9 @@ async function getDashboardSnapshotData(ctx: any) {
         .withIndex("by_key", (q: any) => q.eq("key", "main"))
         .first();
 
-    const [thailandNews, cambodiaNews, timelineEvents, systemStats, articleCounts] = await Promise.all([
+    const [thailandNews, cambodiaNews, systemStats, articleCounts] = await Promise.all([
         getNewsSlimData(ctx, "thailand", 20),
         getNewsSlimData(ctx, "cambodia", 20),
-        getTimelineData(ctx, DASHBOARD_TIMELINE_PREVIEW_LIMIT),
         getStatsData(ctx),
         getArticleCountsData(ctx),
     ]);
@@ -350,7 +368,7 @@ async function getDashboardSnapshotData(ctx: any) {
             cambodiaAnalysis: snapshot.cambodiaAnalysis,
             neutralAnalysis: snapshot.neutralAnalysis,
             dashboardStats: snapshot.dashboardStats,
-            timelineEvents,
+            timelineEvents: [],
             systemStats,
             articleCounts,
         };
@@ -360,7 +378,7 @@ async function getDashboardSnapshotData(ctx: any) {
     return {
         thailandNews,
         cambodiaNews,
-        timelineEvents,
+        timelineEvents: [],
         systemStats,
         articleCounts,
         ...assembledSnapshot,
@@ -381,7 +399,7 @@ export const getNews = query({
     },
 });
 
-// Slim query for list view - excludes heavy fields (summary, entities) to save ~70% bandwidth
+// Slim query for list view: excludes summaries and other fields the list does not render.
 export const getNewsSlim = query({
     args: {
         country: v.union(v.literal("thailand"), v.literal("cambodia")),

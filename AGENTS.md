@@ -1,7 +1,7 @@
 This is the project's AGENTS.md
 
 ## 1. Project Overview
-BorderClash is a real-time conflict monitoring dashboard for the Thailand-Cambodia border. It uses an ISR (Incremental Static Regeneration) approach to reduce Convex database bandwidth by ~99%, fetching data at build/revalidation time rather than per user request.
+BorderClash is a real-time conflict monitoring dashboard for the Thailand-Cambodia border. It uses ISR (Incremental Static Regeneration) so normal page views reuse a published dashboard snapshot instead of repeating the same Convex reads.
 
 ## 2. Notes
 - Gemini policy: BorderClash uses the `flash` model family only. Default to `medium` thinking; use `high` only when the task needs it or for an allowed transient-failure promotion. Every Gemini call must explicitly use `medium` or `high`. Do not add Flash-Lite, Pro, Argon, Low, Standard, Extended, or model-family fallbacks.
@@ -14,4 +14,4 @@ BorderClash is a real-time conflict monitoring dashboard for the Thailand-Cambod
 - Localized display text uses ASCII digits `0-9` in every language. Thai text may contain Thai + Latin text but never Khmer script; Khmer text may contain Khmer + Latin text but never Thai script. Normalize numeral glyphs deterministically instead of spending a Gemini retry on formatting alone.
 - If a chained research cycle remains `syncing` for 45 minutes because an action or handoff never finalized, `recoverStuckCycle` is the 10-minute watchdog that forces a safe 24h fallback schedule, releases the cycle lock, and returns the UI to `online`.
 - Research pipeline resilience lives in `convex/research.ts` + `convex/historian.ts` -> keep bounded step retries/scheduler handoff retries and the bounded Step 3 timeline refresh, and keep duplicate checks batched/in-memory or slim-indexed, not per-article recent-doc scans, or Dev bandwidth will spike fast.
-- Dashboard data path lives in `convex/api.ts` + `convex/research.ts` + `src/lib/convex-server.ts` + `src/app/DashboardClient.tsx` -> keep `dashboardSnapshots` limited to synthesis-owned fields plus a bounded timeline preview, and lazy-load the full timeline only in timeline mode, or bandwidth will keep scaling with history length.
+- Dashboard data path lives in `convex/api.ts` + `convex/research.ts` + `src/lib/convex-server.ts` + `src/app/DashboardClient.tsx` -> keep `dashboardSnapshots` free of timeline rows and lazy-load the render-only full timeline only in timeline mode, or bandwidth will scale with history length.

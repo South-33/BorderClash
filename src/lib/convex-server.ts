@@ -2,7 +2,7 @@
  * Server-side Convex client for ISR (Incremental Static Regeneration)
  * 
  * This allows Next.js to fetch data from Convex at build/revalidation time
- * instead of on every user request, reducing Convex bandwidth by ~99%.
+ * instead of repeating the same Convex reads on every user request.
  */
 
 import { ConvexHttpClient } from "convex/browser";
@@ -103,12 +103,8 @@ export interface TimelineEvent {
     sources: Array<{
         url: string;
         name: string;
-        country: string;
         credibility: number;
-        snippet?: string;
     }>;
-    createdAt: number;
-    lastUpdatedAt: number;
 }
 
 export interface SystemStats {

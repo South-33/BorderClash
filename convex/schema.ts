@@ -137,7 +137,7 @@ const articleCountsSnapshotValidator = v.object({
 
 export default defineSchema({
     // ==================== NEWS TABLES ====================
-    // Managed by Ghost API (Scout + Validation)
+    // News records produced by deterministic feed discovery and source verification.
 
     thailandNews: defineTable({
         title: v.string(),              // Primary title (English)
@@ -175,10 +175,10 @@ export default defineSchema({
         .index("by_title", ["title"])
         .index("by_unreviewed", ["status", "lastReviewedAt"])
         .index("by_url", ["sourceUrl"])
-        // Phase 2 bandwidth optimization: compound indexes for synthesis queries
+        // Compound indexes for bounded synthesis queries.
         .index("by_status_credibility", ["status", "credibility"])
         .index("by_status_publishedAt", ["status", "publishedAt"])
-        // Phase 3 bandwidth optimization: index for unprocessed article queries
+        // Indexes for bounded unprocessed-article queries.
         .index("by_status_processed", ["status", "processedToTimeline"])
         .index("by_status_processed_publishedAt", ["status", "processedToTimeline", "publishedAt"]),
 
@@ -217,10 +217,10 @@ export default defineSchema({
         .index("by_title", ["title"])
         .index("by_unreviewed", ["status", "lastReviewedAt"])
         .index("by_url", ["sourceUrl"])
-        // Phase 2 bandwidth optimization: compound indexes for synthesis queries
+        // Compound indexes for bounded synthesis queries.
         .index("by_status_credibility", ["status", "credibility"])
         .index("by_status_publishedAt", ["status", "publishedAt"])
-        // Phase 3 bandwidth optimization: index for unprocessed article queries
+        // Indexes for bounded unprocessed-article queries.
         .index("by_status_processed", ["status", "processedToTimeline"])
         .index("by_status_processed_publishedAt", ["status", "processedToTimeline", "publishedAt"]),
 
@@ -260,10 +260,10 @@ export default defineSchema({
         .index("by_title", ["title"])
         .index("by_unreviewed", ["status", "lastReviewedAt"])
         .index("by_url", ["sourceUrl"])
-        // Phase 2 bandwidth optimization: compound indexes for synthesis queries
+        // Compound indexes for bounded synthesis queries.
         .index("by_status_credibility", ["status", "credibility"])
         .index("by_status_publishedAt", ["status", "publishedAt"])
-        // Phase 3 bandwidth optimization: index for unprocessed article queries
+        // Indexes for bounded unprocessed-article queries.
         .index("by_status_processed", ["status", "processedToTimeline"])
         .index("by_status_processed_publishedAt", ["status", "processedToTimeline", "publishedAt"]),
 

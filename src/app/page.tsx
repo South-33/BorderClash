@@ -6,8 +6,8 @@
  * 2. Passes the data to the client component as props
  * 3. Uses on-demand revalidation (triggered after each research cycle)
  * 
- * Result: Convex is hit once per research cycle, not once per user.
- * Bandwidth reduction: ~99% at scale.
+ * Result: normal page views reuse the latest successful ISR snapshot instead
+ * of repeating the same dashboard reads for every user.
  */
 
 import { fetchBorderClashData, type BorderClashData } from '@/lib/convex-server';

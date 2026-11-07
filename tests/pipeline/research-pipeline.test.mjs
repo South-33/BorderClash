@@ -596,18 +596,24 @@ test("ISR server fetch uses a retried dashboard snapshot and lets page errors bu
   assert.doesNotMatch(convexServer, /degraded: boolean/);
   assert.doesNotMatch(convexServer, /fetchWarnings: string\[]/);
   assert.match(api, /\.query\("dashboardSnapshots"\)/);
-  assert.match(api, /const \[thailandNews, cambodiaNews, timelineEvents, systemStats, articleCounts\] = await Promise\.all\(/);
-  assert.match(api, /getTimelineData\(ctx, DASHBOARD_TIMELINE_PREVIEW_LIMIT\)/);
+  assert.match(api, /const \[thailandNews, cambodiaNews, systemStats, articleCounts\] = await Promise\.all\(/);
+  assert.doesNotMatch(api, /DASHBOARD_TIMELINE_PREVIEW_LIMIT/);
   assert.match(api, /export const getRecentTimelineContextForHistorian = internalQuery/);
   assert.match(api, /thailandAnalysis: snapshot\.thailandAnalysis/);
-  assert.match(api, /timelineEvents,/);
+  assert.match(api, /timelineEvents: \[\]/);
+  assert.doesNotMatch(section(api, "const serializeTimelineEvent", "const serializeHistorianTimelineEvent"), /\.\.\.event/);
+  assert.match(section(api, "const serializeTimelineEvent", "const serializeHistorianTimelineEvent"), /credibility: source\.credibility/);
+  assert.doesNotMatch(section(api, "const serializeTimelineEvent", "const serializeHistorianTimelineEvent"), /snippet|addedAt|createdAt|lastUpdatedAt|country:/);
   assert.match(api, /const assembledSnapshot = await assembleDashboardSnapshotData\(ctx\)/);
   assert.match(api, /export const publishDashboardSnapshot = internalMutation/);
   assert.match(api, /withIndex\("by_status_publishedAt", \(q: any\) => q\.eq\("status", "active"\)\)/);
+  assert.match(api, /const fetchBuffer = targetLimit/);
+  assert.doesNotMatch(section(api, "async function getVisibleNewsDocs", "async function assembleDashboardSnapshotData"), /targetLimit \* 2/);
   assert.doesNotMatch(api, /\.query\(table\)\s*\.order\("desc"\)\s*\.take\(targetLimit\)/);
   assert.match(dashboardClient, /api\.api\.getTimeline/);
   assert.match(dashboardClient, /viewMode !== 'TIMELINE'/);
-  assert.match(dashboardClient, /clientTimelineEvents \?\? timelinePreviewEvents/);
+  assert.match(dashboardClient, /clientTimelineEvents \?\? \[\]/);
+  assert.doesNotMatch(dashboardClient, /timelinePreviewEvents/);
 
   assert.match(page, /const initialData: BorderClashData = await fetchBorderClashData\(\)/);
   assert.doesNotMatch(page, /catch\s*\(/);

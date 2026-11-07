@@ -56,16 +56,16 @@ BorderClash was built as a public-facing monitor for that exact problem:
 
 ## How It Works
 
-BorderClash runs a research pipeline that searches for relevant reporting, verifies article links and topic fit, groups related reports into timeline events, and publishes a dashboard-ready snapshot.
+BorderClash runs a research pipeline that discovers recent reporting from news feeds, verifies source evidence deterministically, groups verified reports into timeline events, and publishes a dashboard-ready snapshot.
 
 The system is intentionally structured around comparison:
 
-- **Scout** finds reporting from Thai, Cambodian, and international sources.
-- **Source Verify** checks whether links are real, relevant, and consistent with the stored article.
-- **Historian** turns verified reporting into deduplicated timeline events.
-- **Synthesis** creates neutral summaries and multilingual dashboard text.
+- **Discovery** uses publisher-backed news-feed results for Thai, Cambodian, and international reporting.
+- **Source Verify** checks publisher pages and independent feed evidence without Gemini.
+- **Historian** uses Gemini Flash to turn verified reporting into deduplicated timeline events.
+- **Synthesis** uses Gemini Flash to create neutral summaries and multilingual dashboard text.
 
-The live site is served through an ISR-style snapshot flow so readers get a fast dashboard without every page view creating fresh backend load.
+The live site is served through an ISR snapshot flow so readers get a fast dashboard without every page view creating fresh backend load. Timeline rows are intentionally excluded from the normal dashboard snapshot and are loaded only when the timeline view is opened.
 
 ---
 
@@ -76,7 +76,7 @@ The live site is served through an ISR-style snapshot flow so readers get a fast
 | Frontend | Next.js 16, React 19, TypeScript |
 | Styling | Tailwind CSS 4, custom dashboard UI |
 | Backend & data | Convex |
-| AI workflow | Custom Gemini-compatible research and synthesis pipeline |
+| AI workflow | Deterministic source pipeline + Gemini Flash historian/synthesis |
 | Hosting | Vercel |
 
 ---

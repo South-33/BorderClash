@@ -27,7 +27,7 @@ import {
 
 
 // =============================================================================
-// SHARED UTILS (deprecated Ghost API endpoints removed)
+// SHARED UTILS
 // =============================================================================
 
 const ACTION_RETRY_DELAYS_MS = [5000, 15000] as const;
@@ -1799,9 +1799,8 @@ export const step4_synthesis = internalAction({
 });
 
 // =============================================================================
-// SOURCE VERIFICATION / ARTICLE CREDIBILITY ("articlecred" step)
-// Pipeline: curator > articlecred > historian > synth
-// Note: The old validation.ts loop is deprecated. This is the new approach.
+// SOURCE VERIFICATION / ARTICLE CREDIBILITY
+// Pipeline: discovery > source verification > historian > synthesis
 // =============================================================================
 
 /**

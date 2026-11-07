@@ -348,10 +348,9 @@ const usePersistentQuery = (query: any, args: any, storageKey: string, skip: boo
 };
 
 // =============================================================================
-// BANDWIDTH-OPTIMIZED QUERY HOOK
-// Only fetches data on mount and when research cycle completes (lastResearchAt changes)
-// Uses manual fetch instead of live subscriptions = ~90% bandwidth reduction
-// IMPORTANT: Pass skip=true when ISR provides data to eliminate ALL bandwidth usage
+// CACHED QUERY HOOK
+// Fetches on mount and after a completed research cycle instead of maintaining
+// a live subscription. Pass skip=true when ISR already provides the data.
 // =============================================================================
 
 // Global ref to track lastResearchAt (updated by Home component)
@@ -1300,14 +1299,13 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const neutralMeta = activeSnapshot?.neutralAnalysis;
   const dashboardStats = activeSnapshot?.dashboardStats;
   const articleCounts = activeSnapshot?.articleCounts;
-  const timelinePreviewEvents = activeSnapshot?.timelineEvents ?? [];
   const isAwaitingInitialFullTimeline = viewMode === 'TIMELINE'
     && shouldFetchFullTimeline
     && clientTimelineEvents === undefined
     && clientTimelineLoading;
   const timelineEvents = viewMode === 'TIMELINE'
-    ? (isAwaitingInitialFullTimeline ? [] : (clientTimelineEvents ?? timelinePreviewEvents))
-    : timelinePreviewEvents;
+    ? (isAwaitingInitialFullTimeline ? [] : (clientTimelineEvents ?? []))
+    : [];
 
   // Loading states: if we have server data, we're never "loading"
   const thNewsLoading = hasServerData ? false : clientSnapshotLoading;
