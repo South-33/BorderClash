@@ -2069,7 +2069,7 @@ export const repairLegacyTimelineLocalizations = internalAction({
         // Compact prompt IDs keep these bounded batches below the harness's
         // 1,500-character attachment threshold without sacrificing throughput.
         const batchSize = Math.max(1, Math.min(6, Math.round(args.batchSize ?? 6)));
-        const MAX_BATCH_ENGLISH_CHARS = 600;
+        const MAX_BATCH_ENGLISH_CHARS = 650;
         const batch: typeof candidates = [];
         let batchEnglishChars = 0;
         for (const candidate of candidates) {
