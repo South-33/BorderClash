@@ -216,7 +216,7 @@ function semanticIssues(item) {
       }
       break;
     case "conciliation":
-      if (!/unclos/.test(text)) issues.push("lost-unclos-context");
+      if (!/(?:unclos|un maritime law)/.test(text)) issues.push("lost-unclos-context");
       if (!/(?:commission|formal process|formal talks|helps? (?:both )?(?:sides|parties)|seek (?:an )?agreement)/.test(text)) {
         issues.push("conciliation-not-explained");
       }
@@ -226,7 +226,7 @@ function semanticIssues(item) {
       break;
     case "monitoring":
       if (!/asean/.test(text) || !/(?:si sa ket|sisaket)/.test(text)) issues.push("lost-monitoring-context");
-      if (!/(?:not|did not|without|no ).{0,70}(?:responsib|fault|assign|blam|find)/.test(summary.toLowerCase())) {
+      if (!/(?:not|did not|without|no ).{0,70}(?:responsib|fault|assign|blam|find|determin)/.test(summary.toLowerCase())) {
         issues.push("lost-no-blame-caveat");
       }
       break;

@@ -14,6 +14,7 @@ import type * as config from "../config.js";
 import type * as crons from "../crons.js";
 import type * as dedupe from "../dedupe.js";
 import type * as historian from "../historian.js";
+import type * as language_quality from "../language_quality.js";
 import type * as research from "../research.js";
 import type * as source_evidence from "../source_evidence.js";
 
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   dedupe: typeof dedupe;
   historian: typeof historian;
+  language_quality: typeof language_quality;
   research: typeof research;
   source_evidence: typeof source_evidence;
 }>;
