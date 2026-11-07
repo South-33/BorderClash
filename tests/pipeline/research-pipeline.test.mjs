@@ -378,6 +378,7 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(historian, /\$\{LOCALIZED_WRITING_RULES\}/);
   assert.match(research, /repairSynthesisLocalizations\(result\)/);
   assert.match(historian, /repairHistorianLocalizations\(historianResult, selectedArticles\)/);
+  assert.match(historian, /internal\.api\.bulkUpdateTimelineLocalizations/);
   assert.match(historian, /articleTranslations/);
   assert.match(historian, /newTitleTh: translations\.titleTh/);
   assert.match(historian, /newTitleKh: translations\.titleKh/);
@@ -388,6 +389,8 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(historian, /repairLocalizedItems\(items, undefined, GEMINI_THINKING\.historian\)/);
   assert.match(api, /assertRequiredLocalizedText\("titleTh", args\.titleTh, "th"\)/);
   assert.match(api, /validateTimelineLocalizationUpdates\(args\.updates\)/);
+  assert.match(api, /export const bulkUpdateTimelineLocalizations = internalMutation/);
+  assert.match(api, /Timeline event not found:/);
   assert.match(api, /assertValidLocalizedArray\("keyEventsTh"/);
   assert.match(api, /validateOptionalNewsLocalizations\(args\)/);
   assert.match(
@@ -415,6 +418,20 @@ test("synthesis context avoids duplicate weighting and non-browsed URLs", () => 
   assert.match(api, /const seen = new Set<string>\(\)/);
   assert.match(api, /canonicalizeArticleUrl\(article\.sourceUrl\)/);
   assert.doesNotMatch(section(aiUtils, "export function formatTimelineEvent", null), /\$\{s\.url\}/);
+});
+
+test("historian processes exact cross-perspective article copies once", () => {
+  const historian = read(historianPath);
+  const cycle = section(historian, "export async function runHistorianCycleInternal", "export const runHistorianAction");
+
+  assert.match(historian, /canonicalizeArticleUrl/);
+  assert.match(historian, /function historianArticleKey/);
+  assert.match(historian, /`\$\{canonicalUrl\}\|\$\{title\}`/);
+  assert.match(cycle, /const articleGroups = new Map<string, any\[]>\(\)/);
+  assert.match(cycle, /const uniqueArticles = \[\.\.\.articleGroups\.values\(\)\]\.map/);
+  assert.match(cycle, /const selectedArticles = uniqueArticles\.slice\(0, historianBatchSize\)/);
+  assert.match(cycle, /for \(const copy of articleCopies\)/);
+  assert.doesNotMatch(cycle, /selectedTitles|no_title_matches|normalizedPlannerTitle/);
 });
 
 test("Gemini requests use Flash with Medium and High thinking only", () => {
