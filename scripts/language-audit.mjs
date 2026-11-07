@@ -42,6 +42,38 @@ function textIssues(value, expectedLanguage) {
   return issues;
 }
 
+function styleIssues(value, expectedLanguage, englishSource = "") {
+  if (typeof value !== "string" || !value.trim()) return [];
+  const issues = [];
+  const english = typeof englishSource === "string" ? englishSource : "";
+  const englishFirstPerson = /\b(?:we|our|ours|us)\b/i.test(english);
+
+  if (expectedLanguage === "th") {
+    if (!englishFirstPerson && /(?:\u0E40\u0E23\u0E32|\u0E1E\u0E35\u0E48\u0E19\u0E49\u0E2D\u0E07|\u0E1E\u0E35\u0E48\u0E44\u0E17\u0E22)/u.test(value)) {
+      issues.push("side-taking-tone");
+    }
+    if (/(?:\u0E19\u0E30\u0E08\u0E4A\u0E30|\u0E08\u0E4A\u0E30|\u0E0B\u0E30\u0E07\u0E31\u0E49\u0E19|\u0E40\u0E09\u0E22\u0E46|\u0E42\u0E27\u0E22|\u0E2A\u0E27\u0E19\u0E01\u0E25\u0E31\u0E1A|\u0E40\u0E1A\u0E35\u0E49\u0E22\u0E27\u0E19\u0E31\u0E14|\u0E14\u0E48\u0E32\u0E01\u0E23\u0E32\u0E14|\u0E2E\u0E38\u0E1A|\u0E08\u0E31\u0E14\u0E2B\u0E19\u0E31\u0E01|\u0E41\u0E09)/u.test(value)) {
+      issues.push("chatty-or-loaded-tone");
+    }
+    if (/\u0E40\u0E02\u0E21\u0E23(?!\u0E41\u0E14\u0E07)/u.test(value)
+      && /\bCambodia(?:n)?\b/i.test(english)
+      && !/\bKhmer\b/i.test(english)) {
+      issues.push("non-neutral-country-label");
+    }
+  } else if (expectedLanguage === "kh") {
+    if (!englishFirstPerson && /(?:\u1799\u17BE\u1784|\u1794\u1784\u1794\u17D2\u17A2\u17BC\u1793)/u.test(value)) {
+      issues.push("side-taking-tone");
+    }
+    if (/\u1796\u17BD\u1780\u1790\u17C3/u.test(value)) issues.push("chatty-or-loaded-tone");
+    if (/\u179F\u17C0\u1798(?!\u179A\u17B6\u1794)/u.test(value)
+      && /\b(?:Thailand|Thai)\b/i.test(english)
+      && !/\bSiam\b/i.test(english)) {
+      issues.push("non-neutral-country-label");
+    }
+  }
+  return issues;
+}
+
 function addFinding(findings, scope, id, field, value, expectedLanguage) {
   for (const issue of textIssues(value, expectedLanguage)) {
     findings.push({ scope, id, field, issue, value });
@@ -102,6 +134,7 @@ const [timeline, cambodiaAnalysis, thailandAnalysis, neutralAnalysis, cambodiaNe
 ]);
 
 const findings = [];
+const styleFindings = [];
 const timelineIssueDates = {};
 for (const event of timeline) {
   const id = `${event.date} ${event.timeOfDay || ""} ${event.title}`.trim();
@@ -112,6 +145,14 @@ for (const event of timeline) {
   addFinding(findings, "timeline", id, "description", event.description, "en");
   addFinding(findings, "timeline", id, "descriptionTh", event.descriptionTh, "th");
   addFinding(findings, "timeline", id, "descriptionKh", event.descriptionKh, "kh");
+  for (const [field, language, englishSource] of [
+    ["titleTh", "th", event.title], ["titleKh", "kh", event.title],
+    ["descriptionTh", "th", event.description], ["descriptionKh", "kh", event.description],
+  ]) {
+    for (const issue of styleIssues(event[field], language, englishSource)) {
+      styleFindings.push({ scope: "timeline", id, field, issue, value: event[field] });
+    }
+  }
   const added = findings.length - before;
   if (added > 0) {
     const createdDate = event.createdAt
@@ -196,6 +237,13 @@ const report = {
     timelineIssueDates,
     samples: compactSamples(findings),
   },
+  generatedStyle: {
+    findingCount: styleFindings.length,
+    affectedRecords: affectedRecords(styleFindings),
+    counts: summarize(styleFindings),
+    byField: summarizeFields(styleFindings),
+    samples: compactSamples(styleFindings),
+  },
   sourceText: {
     findingCount: sourceFindings.length,
     affectedRecords: affectedRecords(sourceFindings),
@@ -212,6 +260,11 @@ if (asJson) {
   console.log(`generated findings=${report.generatedText.findingCount} ${JSON.stringify(report.generatedText.counts)}`);
   for (const sample of report.generatedText.samples) {
     console.log(`generated ${sample.issue}: ${sample.scope}.${sample.field} | ${sample.id}`);
+    console.log(`  ${sample.value}`);
+  }
+  console.log(`style findings=${report.generatedStyle.findingCount} ${JSON.stringify(report.generatedStyle.counts)}`);
+  for (const sample of report.generatedStyle.samples) {
+    console.log(`style ${sample.issue}: ${sample.scope}.${sample.field} | ${sample.id}`);
     console.log(`  ${sample.value}`);
   }
   console.log(`source findings=${report.sourceText.findingCount} ${JSON.stringify(report.sourceText.counts)}`);
