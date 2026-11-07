@@ -6,7 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import type { FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { runHistorianCycleInternal } from "./historian";
-import { findVerifiedDuplicateCandidate, type DuplicateCandidate } from "./dedupe";
+import { canonicalizeArticleUrl, findVerifiedDuplicateCandidate, type DuplicateCandidate } from "./dedupe";
 import {
     assessSourceEvidence,
     collectCurationCandidates,
@@ -15,9 +15,15 @@ import {
     type CurationCountry,
 } from "./source_evidence";
 import { GEMINI_THINKING } from "./config";
+import { LOCALIZED_WRITING_RULES, isValidLocalizedText } from "./language_quality";
 
 // Use gemini-studio-api helpers
-import { callGeminiStudioWithSelfHealing, formatTimelineEvent } from "./ai_utils";
+import {
+    callGeminiStudioWithSelfHealing,
+    formatTimelineEvent,
+    repairLocalizedItems,
+    type LocalizedRepairItem,
+} from "./ai_utils";
 
 
 // =============================================================================
@@ -441,6 +447,149 @@ async function insertFeedCandidates(
     return { newArticles: addedCount, flagged: 0 };
 }
 
+type SynthesisSideLocalizations = {
+    officialNarrative?: string;
+    officialNarrativeEn?: string;
+    officialNarrativeTh?: string;
+    officialNarrativeKh?: string;
+    postureLabel?: string;
+    postureLabelEn?: string;
+    postureLabelTh?: string;
+    postureLabelKh?: string;
+    postureRationale?: string;
+    postureRationaleEn?: string;
+    postureRationaleTh?: string;
+    postureRationaleKh?: string;
+};
+
+type SynthesisNeutralLocalizations = {
+    generalSummary?: string;
+    generalSummaryEn?: string;
+    generalSummaryTh?: string;
+    generalSummaryKh?: string;
+    keyEvents?: string[];
+    keyEventsEn?: string[];
+    keyEventsTh?: string[];
+    keyEventsKh?: string[];
+};
+
+type SynthesisLocalizationShape = {
+    cambodia?: SynthesisSideLocalizations;
+    thailand?: SynthesisSideLocalizations;
+    neutral?: SynthesisNeutralLocalizations;
+};
+
+async function repairSynthesisLocalizations(result: SynthesisLocalizationShape): Promise<void> {
+    const items: LocalizedRepairItem[] = [];
+    const setters = new Map<string, (thai?: string, khmer?: string) => void>();
+
+    const addPair = (
+        id: string,
+        english: unknown,
+        thai: unknown,
+        khmer: unknown,
+        setter: (thai?: string, khmer?: string) => void,
+    ) => {
+        if (typeof english !== "string" || !english.trim()) return;
+        const repair: Array<"th" | "kh"> = [];
+        if (!isValidLocalizedText(thai, "th")) repair.push("th");
+        if (!isValidLocalizedText(khmer, "kh")) repair.push("kh");
+        if (repair.length === 0) return;
+        items.push({
+            id,
+            english,
+            repair,
+        });
+        setters.set(id, setter);
+    };
+
+    for (const side of ["cambodia", "thailand"] as const) {
+        const section = result[side];
+        if (!section) continue;
+        addPair(
+            `${side}:narrative`,
+            section.officialNarrativeEn || section.officialNarrative,
+            section.officialNarrativeTh,
+            section.officialNarrativeKh,
+            (thai, khmer) => {
+                if (thai) section.officialNarrativeTh = thai;
+                if (khmer) section.officialNarrativeKh = khmer;
+            },
+        );
+        addPair(
+            `${side}:posture-label`,
+            section.postureLabelEn || section.postureLabel,
+            section.postureLabelTh,
+            section.postureLabelKh,
+            (thai, khmer) => {
+                if (thai) section.postureLabelTh = thai;
+                if (khmer) section.postureLabelKh = khmer;
+            },
+        );
+        addPair(
+            `${side}:posture-rationale`,
+            section.postureRationaleEn || section.postureRationale,
+            section.postureRationaleTh,
+            section.postureRationaleKh,
+            (thai, khmer) => {
+                if (thai) section.postureRationaleTh = thai;
+                if (khmer) section.postureRationaleKh = khmer;
+            },
+        );
+    }
+
+    const neutral = result.neutral;
+    if (neutral) {
+        addPair(
+            "neutral:summary",
+            neutral.generalSummaryEn || neutral.generalSummary,
+            neutral.generalSummaryTh,
+            neutral.generalSummaryKh,
+            (thai, khmer) => {
+                if (thai) neutral.generalSummaryTh = thai;
+                if (khmer) neutral.generalSummaryKh = khmer;
+            },
+        );
+
+        const englishEvents = Array.isArray(neutral.keyEvents)
+            ? neutral.keyEvents
+            : Array.isArray(neutral.keyEventsEn) ? neutral.keyEventsEn : [];
+        const thaiEvents = Array.isArray(neutral.keyEventsTh)
+            ? neutral.keyEventsTh.slice(0, englishEvents.length)
+            : [];
+        const khmerEvents = Array.isArray(neutral.keyEventsKh)
+            ? neutral.keyEventsKh.slice(0, englishEvents.length)
+            : [];
+        neutral.keyEventsTh = thaiEvents;
+        neutral.keyEventsKh = khmerEvents;
+        englishEvents.forEach((english, index) => {
+            addPair(
+                `neutral:event:${index}`,
+                english,
+                thaiEvents[index],
+                khmerEvents[index],
+                (thai, khmer) => {
+                    if (thai) thaiEvents[index] = thai;
+                    if (khmer) khmerEvents[index] = khmer;
+                },
+            );
+        });
+    }
+
+    if (items.length === 0) return;
+    const repaired = await repairLocalizedItems(items);
+    let repairedFields = 0;
+    for (const item of items) {
+        const fixed = repaired.get(item.id);
+        const setter = setters.get(item.id);
+        if (!fixed || !setter) continue;
+        setter(fixed.thai, fixed.khmer);
+        if (fixed.thai) repairedFields++;
+        if (fixed.khmer) repairedFields++;
+    }
+    console.warn(`[SYNTHESIS] localization_repair requestedFields=${items.reduce((sum, item) => sum + item.repair.length, 0)} repairedFields=${repairedFields}`);
+}
+
 // =============================================================================
 // COMBINED SYNTHESIS (one Gemini request for all 3 analyses)
 // =============================================================================
@@ -459,7 +608,7 @@ async function synthesizeAllInternal(ctx: any): Promise<any> {
         // ==================== STRATIFIED ARTICLE SAMPLING ====================
         // Timeline has verified/credible sources, so we DON'T need high-cred articles again.
         // Instead we focus on:
-        // 1. LOW CREDIBILITY (propaganda) - to analyze what each side is lying about
+        // 1. LOW CREDIBILITY - to detect contested claims/spin without assuming falsehood
         // 2. BREAKING NEWS (most recent) - to catch current developments
         // This keeps context bounded even as DB grows to 1000s of articles.
 
@@ -479,15 +628,29 @@ async function synthesizeAllInternal(ctx: any): Promise<any> {
             return null;
         }
 
-        // Helper to format article for prompt - numbered for better AI tracking
-        const formatArticle = (a: any, idx: number) =>
-            `${idx + 1}. [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
-   URL: ${a.sourceUrl || "(none)"}
-   Summary: ${a.summary || "No summary"}`;
+        const lowCredByKey = new Map<string, (typeof cambodiaLowCred)[number] & { promptCountries: CurationCountry[] }>();
+        for (const [country, articles] of [
+            ["cambodia", cambodiaLowCred],
+            ["thailand", thailandLowCred],
+            ["international", internationalLowCred],
+        ] as const) {
+            for (const article of articles) {
+                const key = canonicalizeArticleUrl(article.sourceUrl)
+                    || `${article.source || ""}|${article.title || ""}`.toLowerCase().trim();
+                const existing = lowCredByKey.get(key);
+                if (existing) {
+                    existing.promptCountries.push(country);
+                    continue;
+                }
+                lowCredByKey.set(key, { ...article, promptCountries: [country] });
+            }
+        }
+        const lowCredArticles = [...lowCredByKey.values()];
 
-        const cambodiaPropaganda = cambodiaLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
-        const thailandPropaganda = thailandLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
-        const internationalPropaganda = internationalLowCred.map((a: any, i: number) => formatArticle(a, i)).join("\n");
+        const lowCredList = lowCredArticles.map((a, idx: number) =>
+            `${idx + 1}. [${a.promptCountries.map((country: CurationCountry) => country.toUpperCase()).join("+")}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
+   Summary: ${a.summary || "No summary"}`
+        ).join("\n");
 
         // ==================== BREAKING NEWS (15 most recent across all) ====================
         // Use new indexed query that fetches from all tables and sorts by publishedAt
@@ -495,11 +658,10 @@ async function synthesizeAllInternal(ctx: any): Promise<any> {
 
         const breakingNewsList = breakingNews.map((a: any, idx: number) =>
             `${idx + 1}. [${a.country.toUpperCase()}] [${a.category}] "${a.title}" (${a.source}, cred:${a.credibility || 50})
-   URL: ${a.sourceUrl || "(none)"}
    Summary: ${a.summary || "No summary"}`
         ).join("\n");
 
-        console.log(`[SYNTHESIS] context timeline=${timeline.length} avgImportance=${timelineStats.avgImportance} lowCred=kh:${cambodiaLowCred.length},th:${thailandLowCred.length},intl:${internationalLowCred.length} breaking=${breakingNews.length}`);
+        console.log(`[SYNTHESIS] context timeline=${timeline.length} avgImportance=${timelineStats.avgImportance} lowCredRaw=kh:${cambodiaLowCred.length},th:${thailandLowCred.length},intl:${internationalLowCred.length} lowCredUnique=${lowCredArticles.length} breaking=${breakingNews.length}`);
 
         // Get previous analysis for context (MEMORY)
         const prevCambodia = await ctx.runQuery(api.api.getAnalysis, { target: "cambodia" }) as any;
@@ -524,25 +686,19 @@ Posture rules:
 - territorialContext is one of OWN_TERRITORY, DISPUTED_ZONE, FOREIGN_TERRITORY, BORDER_ZONE when supported; otherwise omit it.
 
 Dashboard rules:
-- conflictLevel LOW means no kinetic action; ELEVATED means movements or minor clashes; CRITICAL means sustained combat or confirmed fatalities; UNCERTAIN means evidence conflicts.
+- conflictLevel LOW means no armed fighting; ELEVATED means movements or minor clashes; CRITICAL means sustained combat or confirmed fatalities; UNCERTAIN means evidence conflicts.
 - casualtyCount is cumulative fatalities and must never decrease.
 - Change casualty, displaced, or injury values only when current supplied evidence supports the new number. Otherwise preserve the previous value.
 
 Scheduling: choose 4-48 hours. Use 4-8 for active fighting, 12-24 for moving but non-kinetic conditions, and 24-48 for stable or diplomatic conditions.
 
-Translation: Thai fields must use natural Thai script. Khmer fields must use natural Khmer script. Translate meaning, not word order. Keep labels short.
+${LOCALIZED_WRITING_RULES}
 
 RECENT TIMELINE (${timeline.length} events):
 ${timelineContext}
 
-LOW-CREDIBILITY CAMBODIAN ARTICLES (${cambodiaLowCred.length}):
-${cambodiaPropaganda || "(none)"}
-
-LOW-CREDIBILITY THAI ARTICLES (${thailandLowCred.length}):
-${thailandPropaganda || "(none)"}
-
-LOW-CREDIBILITY INTERNATIONAL ARTICLES (${internationalLowCred.length}):
-${internationalPropaganda || "(none)"}
+LOW-CREDIBILITY ARTICLES (${lowCredArticles.length}; duplicate URLs merged):
+${lowCredList || "(none)"}
 
 RECENT BREAKING ARTICLES (${breakingNews.length}):
 ${breakingNewsList || "(none)"}
@@ -636,6 +792,8 @@ Return exactly one fenced \`\`\`json code block and nothing else. Use this shape
                 // This is intentional: we never overwrite good data with nothing
                 return null;
             }
+
+            await repairSynthesisLocalizations(result);
 
             const writeErrors: string[] = [];
             const validPostures = ["PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"] as const;
@@ -1244,7 +1402,6 @@ export const step3_historian = internalAction({
         let historianSourcesMerged = 0;
         let historianArchived = 0;
         let historianDiscarded = 0;
-        let historianCredibilityUpdated = 0;
 
         try {
             while (historianLoops < MAX_HISTORIAN_LOOPS) {
@@ -1280,7 +1437,6 @@ export const step3_historian = internalAction({
                 historianSourcesMerged += result.sourcesMerged || 0;
                 historianArchived += result.archived || 0;
                 historianDiscarded += result.discarded || 0;
-                historianCredibilityUpdated += result.credibilityUpdated || 0;
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
 
@@ -1302,7 +1458,7 @@ export const step3_historian = internalAction({
             console.warn("[STEP 3] Retry budget exhausted - moving to synthesis");
         }
 
-        console.log(`[STEP 3] complete loops=${historianLoops} processed=${historianProcessed} created=${historianEventsCreated} updated=${historianEventsUpdated} deleted=${historianEventsDeleted} merged=${historianSourcesMerged} archived=${historianArchived} discarded=${historianDiscarded} credibilityUpdated=${historianCredibilityUpdated} stop=${historianStopReason} accumulatedErrors=${stepErrors.length}`);
+        console.log(`[STEP 3] complete loops=${historianLoops} processed=${historianProcessed} created=${historianEventsCreated} updated=${historianEventsUpdated} deleted=${historianEventsDeleted} merged=${historianSourcesMerged} archived=${historianArchived} discarded=${historianDiscarded} stop=${historianStopReason} accumulatedErrors=${stepErrors.length}`);
 
         // Chain to Step 4 (fresh 10-min timer for synthesis)
         try {

@@ -4,8 +4,15 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { callGeminiStudio, formatTimelineEvent, isCompletedGeminiFailure } from "./ai_utils";
+import {
+    callGeminiStudio,
+    formatTimelineEvent,
+    isCompletedGeminiFailure,
+    repairLocalizedItems,
+    type LocalizedRepairItem,
+} from "./ai_utils";
 import { GEMINI_THINKING } from "./config";
+import { LOCALIZED_WRITING_RULES, isValidLocalizedText } from "./language_quality";
 
 
 // =============================================================================
@@ -19,6 +26,8 @@ Use only the supplied article records and timeline context. Treat every side's c
 
 Keep only historically useful events: combat, territorial changes, signed agreements, major humanitarian milestones, or discrete confirmed casualty incidents. Merge repeated reporting into an existing event. Use 70+ importance only for developments that materially change the conflict story.
 
+${LOCALIZED_WRITING_RULES}
+
 Actions:
 - create_event: a new, well-supported timeline event.
 - merge_source: the article supports an existing event.
@@ -28,7 +37,7 @@ Actions:
 - discard: broken, irrelevant, or unusable material.
 - flag_conflict: credible evidence contradicts the timeline and needs review.
 
-For dates use YYYY-MM-DD and optional HH:MM. Keep English titles under 10 words. Keep descriptions to 2 short sentences. Thai text must use Thai script and Khmer text must use Khmer script.
+For dates use YYYY-MM-DD and optional HH:MM. Keep titles concise and descriptions to 2 short sentences.
 
 Return EXACTLY one fenced \`\`\`json code block and nothing else.
 
@@ -37,11 +46,13 @@ Return EXACTLY one fenced \`\`\`json code block and nothing else.
   "actions": [
     {
       "articleTitle": "Exact title from input",
-      "articleCountry": "thailand|cambodia|international",
       "action": "create_event|merge_source|update_event|archive|discard|flag_conflict|delete_event",
-      "verifiedCredibility": 0,
-      "credibilityReason": "Brief evidence-based explanation",
-      "visitedSourceUrl": false,
+      "articleTranslations": {
+        "titleTh": "Natural Thai translation of the input article title",
+        "titleKh": "Natural Khmer translation of the input article title",
+        "summaryTh": "Natural Thai translation of the input article summary",
+        "summaryKh": "Natural Khmer translation of the input article summary"
+      },
       "eventData": {
         "date": "YYYY-MM-DD",
         "timeOfDay": "HH:MM",
@@ -66,7 +77,7 @@ Return EXACTLY one fenced \`\`\`json code block and nothing else.
 
 Rules:
 - Every supplied article must have one action.
-- Never claim you visited a URL. Set visitedSourceUrl to false.
+- Every action must include articleTranslations for the supplied article title and summary.
 - update_event and delete_event require targetEventTitle and reasoning.
 - Output valid JSON only inside the fence.
 `;
@@ -135,11 +146,13 @@ function normalizeJsonCandidate(input: string): string {
 
 interface HistorianAction {
     articleTitle: string;
-    articleCountry: string;
     action: "create_event" | "merge_source" | "archive" | "discard" | "flag_conflict" | "update_event" | "delete_event";
-    // CREDIBILITY VERIFICATION - Historian updates credibility for EVERY article
-    verifiedCredibility?: number;  // 0-100, the Historian's assessed credibility after verification
-    credibilityReason?: string;    // Brief explanation of why credibility was adjusted
+    articleTranslations?: {
+        titleTh?: string;
+        titleKh?: string;
+        summaryTh?: string;
+        summaryKh?: string;
+    };
     eventData?: {
         date: string;
         timeOfDay?: string;  // Estimated time "08:00", "14:30", "22:00" for ordering
@@ -176,6 +189,120 @@ interface HistorianResult {
     summary?: string;
 }
 
+type HistorianLocalizedTarget = {
+    title?: string;
+    titleTh?: string;
+    titleKh?: string;
+    summary?: string;
+    summaryTh?: string;
+    summaryKh?: string;
+    description?: string;
+    descriptionTh?: string;
+    descriptionKh?: string;
+};
+
+function decodeHtmlEntities(str: string): string {
+    if (!str) return "";
+    return str
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'");
+}
+
+async function repairHistorianLocalizations(
+    result: HistorianResult,
+    articles: Array<{ title: string; summary?: string }>,
+    timeoutMs?: number,
+): Promise<{ requested: number; repaired: number }> {
+    const items: LocalizedRepairItem[] = [];
+    const targets = new Map<string, {
+        target: HistorianLocalizedTarget;
+        thaiField: keyof HistorianLocalizedTarget;
+        khmerField: keyof HistorianLocalizedTarget;
+    }>();
+
+    const addPair = (
+        id: string,
+        target: HistorianLocalizedTarget,
+        english: unknown,
+        thaiField: keyof HistorianLocalizedTarget,
+        khmerField: keyof HistorianLocalizedTarget,
+        requireBoth: boolean,
+    ) => {
+        if (typeof english !== "string" || !english.trim()) return;
+        const repair: Array<"th" | "kh"> = [];
+        if ((requireBoth || target[thaiField] !== undefined) && !isValidLocalizedText(target[thaiField], "th")) repair.push("th");
+        if ((requireBoth || target[khmerField] !== undefined) && !isValidLocalizedText(target[khmerField], "kh")) repair.push("kh");
+        if (repair.length === 0) return;
+
+        items.push({
+            id,
+            english,
+            repair,
+        });
+        targets.set(id, { target, thaiField, khmerField });
+    };
+
+    result.actions.forEach((action, index) => {
+        const articleTitle = decodeHtmlEntities(action.articleTitle || "");
+        const sourceArticle = articles.find((article) => article.title === articleTitle);
+        if (sourceArticle) {
+            action.articleTranslations ??= {};
+            addPair(
+                `${index}:article-title`,
+                action.articleTranslations,
+                sourceArticle.title,
+                "titleTh",
+                "titleKh",
+                true,
+            );
+            addPair(
+                `${index}:article-summary`,
+                action.articleTranslations,
+                sourceArticle.summary || sourceArticle.title,
+                "summaryTh",
+                "summaryKh",
+                true,
+            );
+        }
+
+        if (action.action === "create_event" && action.eventData) {
+            addPair(`${index}:title`, action.eventData, action.eventData.title, "titleTh", "titleKh", true);
+            addPair(`${index}:description`, action.eventData, action.eventData.description, "descriptionTh", "descriptionKh", true);
+        }
+        if (action.action === "update_event" && action.eventUpdates) {
+            const updates = action.eventUpdates;
+            addPair(`${index}:update-title`, updates, updates.title, "titleTh", "titleKh", updates.title !== undefined);
+            addPair(`${index}:update-description`, updates, updates.description, "descriptionTh", "descriptionKh", updates.description !== undefined);
+        }
+    });
+
+    if (items.length === 0) return { requested: 0, repaired: 0 };
+
+    const repaired = await repairLocalizedItems(items, timeoutMs);
+    let repairedFields = 0;
+    for (const item of items) {
+        const target = targets.get(item.id);
+        const fixed = repaired.get(item.id);
+        if (!target || !fixed) continue;
+
+        if (item.repair.includes("th") && fixed.thai) {
+            target.target[target.thaiField] = fixed.thai;
+            repairedFields++;
+        }
+        if (item.repair.includes("kh") && fixed.khmer) {
+            target.target[target.khmerField] = fixed.khmer;
+            repairedFields++;
+        }
+    }
+
+    console.warn(`[HISTORIAN] localization_repair requestedFields=${items.reduce((sum, item) => sum + item.repair.length, 0)} repairedFields=${repairedFields}`);
+    return { requested: items.reduce((sum, item) => sum + item.repair.length, 0), repaired: repairedFields };
+}
+
 async function runHistorian(
     articles: Array<{
         title: string;
@@ -210,7 +337,6 @@ async function runHistorian(
         const pubDate = a.publishedAt ? new Date(a.publishedAt).toISOString().split('T')[0] : 'unknown';
         return `${i + 1}. [${a.country.toUpperCase()}] "${a.title}"
    Published: ${pubDate} | Source: ${a.source} | Credibility: ${a.credibility}/100
-   URL: ${a.sourceUrl}
    Summary: ${a.summary || "(no summary)"}`;
     }).join("\n\n");
 
@@ -221,15 +347,13 @@ async function runHistorian(
 
     const prompt = `${HISTORIAN_PROMPT}
 
-═══════════════════════════════════════════════════════════════
-📰 NEW ARTICLES TO PROCESS (${articles.length} articles):
+NEW ARTICLES (${articles.length}):
 ${articlesContext}
 
-📜 EXISTING TIMELINE (${existingTimeline.length} events):
+EXISTING TIMELINE (${existingTimeline.length} events):
 ${timelineContext}
-═══════════════════════════════════════════════════════════════
 
-Process each article above and decide its fate. Output your decisions in JSON.`;
+Process every article and return the JSON decisions.`;
     console.log(`[HISTORIAN] request articles=${articles.length} timeline=${existingTimeline.length} promptChars=${prompt.length}`);
 
     // Helper to clean and parse JSON with multiple fallback strategies
@@ -344,7 +468,6 @@ export type HistorianCycleResult = {
     sourcesMerged?: number;
     archived: number;
     discarded?: number;
-    credibilityUpdated?: number;
     conflictsFlagged?: number;
     missingActions?: number;
     actionWarnings?: number;
@@ -453,6 +576,8 @@ export async function runHistorianCycleInternal(
         return { processed: 0, eventsCreated: 0, eventsUpdated: 0, sourcesMerged: 0, archived: 0, discarded: 0 };
     }
 
+    await repairHistorianLocalizations(historianResult, selectedArticles);
+
     // 5. Execute actions
     let eventsCreated = 0;
     let eventsUpdated = 0;
@@ -460,22 +585,9 @@ export async function runHistorianCycleInternal(
     let sourcesMerged = 0;
     let archived = 0;
     let discarded = 0;
-    let credibilityUpdated = 0;
     let conflictsFlagged = 0;
     let missingActions = 0;
     let actionWarnings = 0;
-
-    // Helper to decode HTML entities (AI sometimes returns &quot; instead of ")
-    const decodeHtmlEntities = (str: string) => {
-        if (!str) return "";
-        return str
-            .replace(/&quot;/g, '"')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&#39;/g, "'")
-            .replace(/&apos;/g, "'");
-    };
 
     const returnedTitles = new Set<string>();
 
@@ -655,20 +767,31 @@ export async function runHistorianCycleInternal(
                 break;
         }
 
-        // UPDATE CREDIBILITY - Historian verifies and adjusts credibility for every article
-        if (action.verifiedCredibility !== undefined) {
-            try {
-                const newCred = Math.max(0, Math.min(100, action.verifiedCredibility));
+        const translations = action.articleTranslations;
+        if (translations) {
+            const translationsValid =
+                isValidLocalizedText(translations.titleTh, "th") &&
+                isValidLocalizedText(translations.titleKh, "kh") &&
+                isValidLocalizedText(translations.summaryTh, "th") &&
+                isValidLocalizedText(translations.summaryKh, "kh");
 
-                await ctx.runMutation(internal.api.updateArticleCredibility, {
-                    country: article.country as "thailand" | "cambodia" | "international",
-                    title: article.title,
-                    credibility: newCred,
-                });
-                credibilityUpdated++;
-            } catch (error) {
+            if (translationsValid) {
+                try {
+                    await ctx.runMutation(internal.api.updateArticleContent, {
+                        country: article.country as "thailand" | "cambodia" | "international",
+                        oldTitle: article.title,
+                        newTitleTh: translations.titleTh,
+                        newTitleKh: translations.titleKh,
+                        newSummaryTh: translations.summaryTh,
+                        newSummaryKh: translations.summaryKh,
+                    });
+                } catch (translationError) {
+                    actionWarnings++;
+                    console.warn(`[HISTORIAN] Article localization save failed for "${article.title}": ${translationError}`);
+                }
+            } else {
                 actionWarnings++;
-                console.error(`[HISTORIAN] Credibility update failed for "${article.title}":`, error);
+                console.warn(`[HISTORIAN] Article localization missing or invalid for "${article.title}"; English fallback preserved`);
             }
         }
 
@@ -698,7 +821,7 @@ export async function runHistorianCycleInternal(
         }
     }
 
-    console.log(`[HISTORIAN] complete unprocessed=${allArticles.length} selected=${selectedArticles.length} actions=${historianResult.actions.length} created=${eventsCreated} updated=${eventsUpdated} deleted=${eventsDeleted} merged=${sourcesMerged} archived=${archived} discarded=${discarded} conflicts=${conflictsFlagged} credibilityUpdated=${credibilityUpdated} missingActions=${missingActions} warnings=${actionWarnings}`);
+    console.log(`[HISTORIAN] complete unprocessed=${allArticles.length} selected=${selectedArticles.length} actions=${historianResult.actions.length} created=${eventsCreated} updated=${eventsUpdated} deleted=${eventsDeleted} merged=${sourcesMerged} archived=${archived} discarded=${discarded} conflicts=${conflictsFlagged} missingActions=${missingActions} warnings=${actionWarnings}`);
 
     return {
         processed: selectedArticles.length,  // Return actual selected count, not just AI response count
@@ -708,7 +831,6 @@ export async function runHistorianCycleInternal(
         sourcesMerged,
         archived,
         discarded,
-        credibilityUpdated,
         conflictsFlagged,
         missingActions,
         actionWarnings,

@@ -10,8 +10,36 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
+import { isValidLocalizedText } from '../../convex/language_quality';
 
 type DashboardSnapshot = Omit<BorderClashData, 'fetchedAt'>;
+
+const localizedText = (
+  lang: Lang,
+  english: string | undefined | null,
+  thai?: string | null,
+  khmer?: string | null,
+) => {
+  if (lang === 'th' && isValidLocalizedText(thai, 'th')) return thai;
+  if (lang === 'kh' && isValidLocalizedText(khmer, 'kh')) return khmer;
+  return english || '';
+};
+
+const localizedArray = (
+  lang: Lang,
+  english: string[] | undefined | null,
+  thai?: string[] | null,
+  khmer?: string[] | null,
+) => {
+  const base = english || [];
+  if (lang === 'th' && Array.isArray(thai) && thai.length === base.length && thai.every((item) => isValidLocalizedText(item, 'th'))) {
+    return thai;
+  }
+  if (lang === 'kh' && Array.isArray(khmer) && khmer.length === base.length && khmer.every((item) => isValidLocalizedText(item, 'kh'))) {
+    return khmer;
+  }
+  return base;
+};
 
 
 // --- Error Boundary for Convex Crashes ---
@@ -632,9 +660,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
 
           {/* Headline */}
           <h5 className={`text-riso-ink transition-colors ${titleClass}`}>
-            {lang === 'th' && article.titleTh ? article.titleTh :
-              lang === 'kh' && article.titleKh ? article.titleKh :
-                article.titleEn || article.title}
+            {localizedText(lang as Lang, article.titleEn || article.title, article.titleTh, article.titleKh)}
           </h5>
 
           {/* Minimal Stats Row - Always Visible */}
@@ -655,9 +681,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
           {isExpanded && (
             <div className="mt-3 pt-3 border-t border-dashed border-riso-ink/20 space-y-3">
               <p className={`text-[13px] text-riso-ink/70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'font-mono' : 'font-serif'}`}>
-                {lang === 'th' && article.summaryTh ? article.summaryTh :
-                  lang === 'kh' && article.summaryKh ? article.summaryKh :
-                    article.summaryEn || article.summary}
+                {localizedText(lang as Lang, article.summaryEn || article.summary, article.summaryTh, article.summaryKh)}
               </p>
             </div>
           )}
@@ -882,14 +906,8 @@ const MilitaryIntensityGauge = ({
   const displayIntensity = intensity ?? 50;
   const displayPosture = posture ?? "DEFENSIVE";
 
-  // Select the correct translation based on language
-  const displayLabel = lang === 'th' && postureLabelTh ? postureLabelTh
-    : lang === 'kh' && postureLabelKh ? postureLabelKh
-      : postureLabel;
-
-  const displayRationale = lang === 'th' && postureRationaleTh ? postureRationaleTh
-    : lang === 'kh' && postureRationaleKh ? postureRationaleKh
-      : postureRationale;
+  const displayLabel = localizedText(lang as Lang, postureLabel, postureLabelTh, postureLabelKh);
+  const displayRationale = localizedText(lang as Lang, postureRationale, postureRationaleTh, postureRationaleKh);
 
   const postureColors: Record<string, string> = {
     PEACEFUL: 'text-green-600',
@@ -1367,25 +1385,19 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   // Helper to get narrative based on language
   const getNarrative = (meta: any) => {
     if (!meta) return null;
-    if (lang === 'th' && meta.officialNarrativeTh) return meta.officialNarrativeTh;
-    if (lang === 'kh' && meta.officialNarrativeKh) return meta.officialNarrativeKh;
-    return meta.officialNarrativeEn || meta.officialNarrative;
+    return localizedText(lang as Lang, meta.officialNarrativeEn || meta.officialNarrative, meta.officialNarrativeTh, meta.officialNarrativeKh);
   };
 
   // Helper to get summary based on language
   const getSummary = (meta: any) => {
     if (!meta) return null;
-    if (lang === 'th' && meta.generalSummaryTh) return meta.generalSummaryTh;
-    if (lang === 'kh' && meta.generalSummaryKh) return meta.generalSummaryKh;
-    return meta.generalSummaryEn || meta.generalSummary;
+    return localizedText(lang as Lang, meta.generalSummaryEn || meta.generalSummary, meta.generalSummaryTh, meta.generalSummaryKh);
   };
 
   // Helper to get key events based on language
   const getKeyEvents = (meta: any) => {
     if (!meta) return [];
-    if (lang === 'th' && meta.keyEventsTh?.length) return meta.keyEventsTh;
-    if (lang === 'kh' && meta.keyEventsKh?.length) return meta.keyEventsKh;
-    return meta.keyEventsEn || meta.keyEvents || [];
+    return localizedArray(lang as Lang, meta.keyEventsEn || meta.keyEvents || [], meta.keyEventsTh, meta.keyEventsKh);
   };
 
   // --- Modal Navigation & Touch State ---
@@ -1843,16 +1855,8 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
         const isThai = lang === 'th';
         const isKhmer = lang === 'kh';
 
-        const titleText = isThai
-          ? (event.titleTh || event.title || event.titleKh || '')
-          : isKhmer
-            ? (event.titleKh || event.title || event.titleTh || '')
-            : (event.title || event.titleTh || event.titleKh || '');
-        const descriptionText = isThai
-          ? (event.descriptionTh || event.description || event.descriptionKh || '')
-          : isKhmer
-            ? (event.descriptionKh || event.description || event.descriptionTh || '')
-            : (event.description || event.descriptionTh || event.descriptionKh || '');
+        const titleText = localizedText(lang as Lang, event.title, event.titleTh, event.titleKh);
+        const descriptionText = localizedText(lang as Lang, event.description, event.descriptionTh, event.descriptionKh);
         const hasSources = event.sources && event.sources.length > 0;
 
         const titleLen = titleText.length;
@@ -2818,19 +2822,11 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                       </div>
 
                                       <h4 className={`mb-1 ${timelineEventTitleClass}`}>
-                                        {(() => {
-                                          if (lang === 'th' && event?.titleTh) return event.titleTh;
-                                          if (lang === 'kh' && event?.titleKh) return event.titleKh;
-                                          return event?.title;
-                                        })()}
+                                        {localizedText(lang as Lang, event?.title, event?.titleTh, event?.titleKh)}
                                       </h4>
 
                                       <p className={`line-clamp-2 opacity-70 ${lang === 'kh' ? 'text-sm leading-relaxed' : lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
-                                        {(() => {
-                                          if (lang === 'th' && event?.descriptionTh) return event.descriptionTh;
-                                          if (lang === 'kh' && event?.descriptionKh) return event.descriptionKh;
-                                          return event?.description;
-                                        })()}
+                                        {localizedText(lang as Lang, event?.description, event?.descriptionTh, event?.descriptionKh)}
                                       </p>
 
                                       {event?.sources && event.sources.length > 0 && (
@@ -2873,14 +2869,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
               {/* Event Details Modal - Bottom Sheet with Swipe logic preserved */}
               {selectedEvent && (() => {
                 const getEventTitle = (event: any) => {
-                  if (lang === 'th' && event.titleTh) return event.titleTh;
-                  if (lang === 'kh' && event.titleKh) return event.titleKh;
-                  return event.title;
+                  return localizedText(lang as Lang, event.title, event.titleTh, event.titleKh);
                 };
                 const getEventDescription = (event: any) => {
-                  if (lang === 'th' && event.descriptionTh) return event.descriptionTh;
-                  if (lang === 'kh' && event.descriptionKh) return event.descriptionKh;
-                  return event.description;
+                  return localizedText(lang as Lang, event.description, event.descriptionTh, event.descriptionKh);
                 };
                 const categoryColors: Record<string, string> = {
                   military: 'bg-red-500',

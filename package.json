@@ -12,7 +12,9 @@
     "test:pipeline": "node --test tests/pipeline/research-pipeline.test.mjs",
     "verify:gemini-headers": "node scripts/verify-gemini-headers.mjs",
     "diag:live": "node scripts/live-diagnostics.mjs",
-    "diag:gemini": "node scripts/gemini-probe.mjs"
+    "diag:gemini": "node scripts/gemini-probe.mjs",
+    "audit:language": "node scripts/language-audit.mjs",
+    "eval:prompt": "node scripts/prompt-hillclimb.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

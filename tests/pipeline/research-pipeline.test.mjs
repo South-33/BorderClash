@@ -9,6 +9,8 @@ const root = process.cwd();
 const researchPath = path.join(root, "convex", "research.ts");
 const historianPath = path.join(root, "convex", "historian.ts");
 const aiUtilsPath = path.join(root, "convex", "ai_utils.ts");
+const apiPath = path.join(root, "convex", "api.ts");
+const languageQualityPath = path.join(root, "convex", "language_quality.ts");
 const sourceEvidencePath = path.join(root, "convex", "source_evidence.ts");
 const configPath = path.join(root, "convex", "config.ts");
 const convexServerPath = path.join(root, "src", "lib", "convex-server.ts");
@@ -45,6 +47,15 @@ test("Convex pipeline sources transpile cleanly in isolation", () => {
       0,
       [result.stdout, result.stderr].filter(Boolean).join("\n"),
     );
+  }
+});
+
+test("core multilingual pipeline sources have clean UTF-8 text", () => {
+  for (const filePath of [researchPath, historianPath, aiUtilsPath, apiPath, languageQualityPath, dashboardClientPath]) {
+    const source = read(filePath);
+    assert.ok(!source.startsWith("\uFEFF"), `${path.basename(filePath)} contains a UTF-8 BOM`);
+    assert.ok(!source.includes("\uFFFD"), `${path.basename(filePath)} contains replacement characters`);
+    assert.doesNotMatch(source, /(?:ðŸ|â(?:œ||š|†|‡|€)|ï¸)/u, `${path.basename(filePath)} contains likely mojibake`);
   }
 });
 
@@ -133,6 +144,33 @@ test("deterministic source verifier is conservative and evidence-backed", () => 
   assert.equal(assessments.ambiguous.status, "SKIP");
 });
 
+test("localized text validator rejects mixed Thai and Khmer scripts", () => {
+  const moduleUrl = pathToFileURL(languageQualityPath).href;
+  const script = `
+    const m = await import(${JSON.stringify(moduleUrl)});
+    const result = {
+      badKhmer: m.getLocalizedTextIssue("ประเทศไทยទម្លាក់ថវិកា ៣.៥ ប៊ីាន់បាត", "kh"),
+      badThai: m.getLocalizedTextIssue("กัมพูชา និងไทย", "th"),
+      goodKhmer: m.getLocalizedTextIssue("ថៃបែងចែកថវិកា ៣,៥ ពាន់លានបាត", "kh"),
+      goodThai: m.getLocalizedTextIssue("ไทยเริ่มการหารือภายใต้ UNCLOS", "th"),
+    };
+    process.stdout.write(JSON.stringify(result));
+  `;
+  const result = spawnSync(
+    "node",
+    ["--experimental-strip-types", "--input-type=module", "-e", script],
+    { cwd: root, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    badKhmer: "wrong-script",
+    badThai: "wrong-script",
+    goodKhmer: null,
+    goodThai: null,
+  });
+});
+
 test("research pipeline retries and handoff guards exist on all chained steps", () => {
   const source = read(researchPath);
 
@@ -207,8 +245,9 @@ test("historian action loop isolates item failures instead of aborting the batch
 
   assert.match(loop, /try \{\s*switch \(action\.action\)/s);
   assert.match(loop, /returnedTitles\.add\(searchTitle\)/);
-  assert.match(loop, /Credibility update failed for/);
   assert.match(loop, /Failed to apply action/);
+  assert.doesNotMatch(source, /verifiedCredibility|credibilityReason/);
+  assert.doesNotMatch(source, /updateArticleCredibility/);
 });
 
 test("source verification batch isolates per-result failures", () => {
@@ -303,6 +342,8 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   const research = read(researchPath);
   const aiUtils = read(aiUtilsPath);
   const historian = read(historianPath);
+  const languageQuality = read(languageQualityPath);
+  const api = read(path.join(root, "convex", "api.ts"));
   const config = read(configPath);
 
   assert.match(aiUtils, /const unwrapJsonStringEnvelope = \(input: string\): string =>/);
@@ -325,13 +366,50 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /attempt <= 5/);
   assert.match(aiUtils, /async_job_missing resubmit=true/);
   assert.match(aiUtils, /resubmittedAfterRestart/);
-  assert.match(research, /Thai fields must use natural Thai script/);
-  assert.match(research, /Khmer fields must use natural Khmer script/);
-  assert.match(historian, /Thai text must use Thai script and Khmer text must use Khmer script/);
+  assert.match(languageQuality, /export const LOCALIZED_WRITING_RULES/);
+  assert.match(languageQuality, /ordinary reader with no military, legal, or diplomatic background/);
+  assert.match(languageQuality, /Never mix Thai and Khmer scripts/);
+  assert.match(languageQuality, /normal target-language form of country and place names/);
+  assert.match(languageQuality, /Translate meaning, attribution, and uncertainty/);
+  assert.match(languageQuality, /Apply the same standard to Thailand and Cambodia/);
+  assert.match(languageQuality, /silently check every Thai and Khmer field/);
+  assert.match(languageQuality, /assertRequiredLocalizedText/);
+  assert.match(research, /\$\{LOCALIZED_WRITING_RULES\}/);
+  assert.match(historian, /\$\{LOCALIZED_WRITING_RULES\}/);
+  assert.match(research, /repairSynthesisLocalizations\(result\)/);
+  assert.match(historian, /repairHistorianLocalizations\(historianResult, selectedArticles\)/);
+  assert.match(historian, /articleTranslations/);
+  assert.match(historian, /newTitleTh: translations\.titleTh/);
+  assert.match(historian, /newTitleKh: translations\.titleKh/);
+  assert.match(historian, /newSummaryTh: translations\.summaryTh/);
+  assert.match(historian, /newSummaryKh: translations\.summaryKh/);
+  assert.match(aiUtils, /LOCALIZATION-REPAIR/);
+  assert.match(aiUtils, /thinkingLevel: GEMINI_THINKING\.repair/);
+  assert.match(api, /assertRequiredLocalizedText\("titleTh", args\.titleTh, "th"\)/);
+  assert.match(api, /validateTimelineLocalizationUpdates\(args\.updates\)/);
+  assert.match(api, /assertValidLocalizedArray\("keyEventsTh"/);
+  assert.match(api, /validateOptionalNewsLocalizations\(args\)/);
   assert.doesNotMatch(historian, /List each article with your analysis plan FIRST/);
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and nothing else/);
   assert.match(historian, /isCompletedGeminiFailure\(error\)/);
   assert.match(historian, /\[HISTORIAN\] server_retry_budget_exhausted localRetry=false/);
+});
+
+test("synthesis context avoids duplicate weighting and non-browsed URLs", () => {
+  const research = read(researchPath);
+  const aiUtils = read(aiUtilsPath);
+  const api = read(path.join(root, "convex", "api.ts"));
+
+  assert.match(research, /const lowCredByKey = new Map/);
+  assert.match(research, /canonicalizeArticleUrl\(article\.sourceUrl\)/);
+  assert.match(research, /duplicate URLs merged/);
+  assert.doesNotMatch(
+    section(research, "const lowCredList =", "console.log(`[SYNTHESIS] context"),
+    /URL: \$\{a\.sourceUrl/,
+  );
+  assert.match(api, /const seen = new Set<string>\(\)/);
+  assert.match(api, /canonicalizeArticleUrl\(article\.sourceUrl\)/);
+  assert.doesNotMatch(section(aiUtils, "export function formatTimelineEvent", null), /\$\{s\.url\}/);
 });
 
 test("Gemini requests use Flash with Medium and High thinking only", () => {

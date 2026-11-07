@@ -3,9 +3,49 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { canonicalizeArticleUrl } from "./dedupe";
+import {
+    assertRequiredLocalizedText,
+    assertValidLocalizedArray,
+    assertValidLocalizedText,
+} from "./language_quality";
 
 const isVisibleNewsStatus = (status: string) => status === "active" || status === "unverified";
 const DASHBOARD_TIMELINE_PREVIEW_LIMIT = 180;
+
+const validateOptionalNewsLocalizations = (args: {
+    titleTh?: string;
+    titleKh?: string;
+    summaryTh?: string;
+    summaryKh?: string;
+}) => {
+    assertValidLocalizedText("titleTh", args.titleTh, "th");
+    assertValidLocalizedText("titleKh", args.titleKh, "kh");
+    assertValidLocalizedText("summaryTh", args.summaryTh, "th");
+    assertValidLocalizedText("summaryKh", args.summaryKh, "kh");
+};
+
+const validateTimelineLocalizationUpdates = (updates: {
+    title?: string;
+    titleTh?: string;
+    titleKh?: string;
+    description?: string;
+    descriptionTh?: string;
+    descriptionKh?: string;
+}) => {
+    assertValidLocalizedText("titleTh", updates.titleTh, "th");
+    assertValidLocalizedText("titleKh", updates.titleKh, "kh");
+    assertValidLocalizedText("descriptionTh", updates.descriptionTh, "th");
+    assertValidLocalizedText("descriptionKh", updates.descriptionKh, "kh");
+
+    if (updates.title !== undefined) {
+        assertRequiredLocalizedText("titleTh", updates.titleTh, "th");
+        assertRequiredLocalizedText("titleKh", updates.titleKh, "kh");
+    }
+    if (updates.description !== undefined) {
+        assertRequiredLocalizedText("descriptionTh", updates.descriptionTh, "th");
+        assertRequiredLocalizedText("descriptionKh", updates.descriptionKh, "kh");
+    }
+};
 
 const serializeTimelineEvent = (event: any) => ({
     ...event,
@@ -814,10 +854,22 @@ export const getRecentBreakingNews = internalQuery({
             allArticles.push(...active.map(a => ({ ...a, country })));
         }
 
-        // Sort all by publishedAt DESC and take top N
-        return allArticles
-            .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
-            .slice(0, args.limit);
+        // Sort all by publishedAt DESC, then remove exact cross-table URL
+        // duplicates. A duplicated ingest must not receive extra synthesis
+        // weight just because it exists in more than one country table.
+        const sorted = allArticles
+            .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0));
+        const seen = new Set<string>();
+        const unique: typeof allArticles = [];
+        for (const article of sorted) {
+            const key = canonicalizeArticleUrl(article.sourceUrl)
+                || `${article.source || ""}|${article.title || ""}`.toLowerCase().trim();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unique.push(article);
+            if (unique.length >= args.limit) break;
+        }
+        return unique;
     },
 });
 
@@ -1806,6 +1858,7 @@ export const insertArticle = internalMutation({
         summaryKh: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        validateOptionalNewsLocalizations(args);
         const table = args.perspective === "thailand" ? "thailandNews"
             : args.perspective === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
@@ -2068,10 +2121,24 @@ export const updateArticleContent = internalMutation({
         )),
     },
     handler: async (ctx, args) => {
+        validateOptionalNewsLocalizations({
+            titleTh: args.newTitleTh,
+            titleKh: args.newTitleKh,
+            summaryTh: args.newSummaryTh,
+            summaryKh: args.newSummaryKh,
+        });
         const table = args.country === "thailand" ? "thailandNews"
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";
         const canonicalNewUrl = args.newUrl !== undefined ? canonicalizeArticleUrl(args.newUrl) : undefined;
+        const sourceEvidenceChanged = args.newTitle !== undefined
+            || args.newTitleEn !== undefined
+            || args.newSummary !== undefined
+            || args.newSummaryEn !== undefined
+            || canonicalNewUrl !== undefined
+            || args.publishedAt !== undefined
+            || args.credibility !== undefined
+            || args.status !== undefined;
 
         const article = await ctx.db
             .query(table)
@@ -2097,7 +2164,7 @@ export const updateArticleContent = internalMutation({
                 ...(args.credibility !== undefined && { credibility: args.credibility }),
                 ...(args.status !== undefined && { status: args.status }),
                 lastReviewedAt: Date.now(),
-                sourceVerifiedAt: Date.now(), // Mark as source-verified
+                ...(sourceEvidenceChanged && { sourceVerifiedAt: Date.now() }),
             });
             console.log(`📝 Updated content for "${args.oldTitle}" → "${args.newTitle || args.oldTitle}"`);
         } else {
@@ -2184,6 +2251,22 @@ export const upsertAnalysis = internalMutation({
     },
     handler: async (ctx, args) => {
         if (args.target === "neutral") {
+            assertValidLocalizedText("generalSummaryTh", args.generalSummaryTh, "th");
+            assertValidLocalizedText("generalSummaryKh", args.generalSummaryKh, "kh");
+            assertValidLocalizedArray("keyEventsTh", args.keyEventsTh, "th");
+            assertValidLocalizedArray("keyEventsKh", args.keyEventsKh, "kh");
+            if ((args.generalSummaryEn || args.generalSummary || "").trim()) {
+                assertRequiredLocalizedText("generalSummaryTh", args.generalSummaryTh, "th");
+                assertRequiredLocalizedText("generalSummaryKh", args.generalSummaryKh, "kh");
+            }
+            if ((args.keyEvents?.length || 0) > 0) {
+                if (!args.keyEventsTh || !args.keyEventsKh) {
+                    throw new Error("Neutral key event translations are required");
+                }
+                if (args.keyEventsTh.length !== args.keyEvents!.length || args.keyEventsKh.length !== args.keyEvents!.length) {
+                    throw new Error("Neutral key event translation arrays must match the English array length");
+                }
+            }
             const existing = await ctx.db.query("neutralAnalysis").order("desc").first();
             const data = {
                 generalSummary: args.generalSummary ?? "",
@@ -2208,6 +2291,25 @@ export const upsertAnalysis = internalMutation({
             else await ctx.db.insert("neutralAnalysis", data);
 
         } else {
+            assertValidLocalizedText("officialNarrativeTh", args.officialNarrativeTh, "th");
+            assertValidLocalizedText("officialNarrativeKh", args.officialNarrativeKh, "kh");
+            assertValidLocalizedText("postureLabelTh", args.postureLabelTh, "th");
+            assertValidLocalizedText("postureLabelKh", args.postureLabelKh, "kh");
+            assertValidLocalizedText("postureRationaleTh", args.postureRationaleTh, "th");
+            assertValidLocalizedText("postureRationaleKh", args.postureRationaleKh, "kh");
+
+            if ((args.officialNarrativeEn || args.officialNarrative || "").trim()) {
+                assertRequiredLocalizedText("officialNarrativeTh", args.officialNarrativeTh, "th");
+                assertRequiredLocalizedText("officialNarrativeKh", args.officialNarrativeKh, "kh");
+            }
+            if ((args.postureLabelEn || args.postureLabel || "").trim()) {
+                assertRequiredLocalizedText("postureLabelTh", args.postureLabelTh, "th");
+                assertRequiredLocalizedText("postureLabelKh", args.postureLabelKh, "kh");
+            }
+            if ((args.postureRationaleEn || args.postureRationale || "").trim()) {
+                assertRequiredLocalizedText("postureRationaleTh", args.postureRationaleTh, "th");
+                assertRequiredLocalizedText("postureRationaleKh", args.postureRationaleKh, "kh");
+            }
             const table = args.target === "thailand" ? "thailandAnalysis" : "cambodiaAnalysis";
             const existing = await ctx.db.query(table).order("desc").first();
             const data = {
@@ -3405,7 +3507,7 @@ export const exportHistorianContext = action({
             const time = e.timeOfDay ? ` ${e.timeOfDay}` : "";
             // Sort by credibility (highest first) before taking top 2
             const sortedSources = [...(e.sources || [])].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
-            const sources = sortedSources.slice(0, 2).map((s: any) => `${s.name}(${s.credibility}): ${s.url}`).join(" | ") || "(none)";
+            const sources = sortedSources.slice(0, 2).map((s: any) => `${s.name}(${s.credibility})`).join(" | ") || "(none)";
             const trans = (e.titleTh && e.titleKh) ? "✓" : "⚠️needs-trans";
             return `[${e.date}${time}] "${e.title}" (${e.status}, ${e.category}, imp:${e.importance}) [${trans}]\n   ${e.description}\n   Sources: ${sources}`;
         }).join("\n\n");
@@ -3652,6 +3754,11 @@ export const createTimelineEvent = internalMutation({
         })),
     },
     handler: async (ctx, args) => {
+        assertRequiredLocalizedText("titleTh", args.titleTh, "th");
+        assertRequiredLocalizedText("titleKh", args.titleKh, "kh");
+        assertRequiredLocalizedText("descriptionTh", args.descriptionTh, "th");
+        assertRequiredLocalizedText("descriptionKh", args.descriptionKh, "kh");
+
         // Check for duplicate by date + exact title
         const existing = await ctx.db
             .query("timelineEvents")
@@ -3810,6 +3917,7 @@ export const updateTimelineEvent = internalMutation({
         reason: v.string(), // Required - audit trail
     },
     handler: async (ctx, args) => {
+        validateTimelineLocalizationUpdates(args.updates);
         // Try exact match first
         let event = await ctx.db
             .query("timelineEvents")
@@ -3942,6 +4050,7 @@ export const updateTimelineEventById = internalMutation({
         reason: v.string(),
     },
     handler: async (ctx, args) => {
+        validateTimelineLocalizationUpdates(args.updates);
         const event = await ctx.db.get(args.eventId);
         if (!event) {
             return null;

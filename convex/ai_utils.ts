@@ -9,8 +9,14 @@ import {
     GEMINI_PROJECT_NAME,
     GEMINI_STUDIO_API_URL,
     GEMINI_STUDIO_CONTROL_URL,
+    GEMINI_THINKING,
     type GeminiThinkingLevel,
 } from "./config";
+import {
+    LOCALIZED_WRITING_RULES,
+    isValidLocalizedText,
+    type LocalizedLanguage,
+} from "./language_quality";
 
 type GeminiRequestInit = {
     headers: Record<string, string>;
@@ -428,6 +434,69 @@ ${rawResponse.substring(0, 1000)}`;
     return null;
 }
 
+export type LocalizedRepairItem = {
+    id: string;
+    english: string;
+    repair: LocalizedLanguage[];
+};
+
+export type LocalizedRepairResult = {
+    id: string;
+    thai?: string;
+    khmer?: string;
+};
+
+/**
+ * Repair only localized text that failed deterministic validation. Clean
+ * generations pay no extra Gemini cost. The English text is the source of
+ * meaning; the rejected translation is intentionally not echoed back into
+ * the repair prompt so wrong-script fragments cannot contaminate the retry.
+ */
+export async function repairLocalizedItems(
+    items: LocalizedRepairItem[],
+    timeoutMs?: number,
+): Promise<Map<string, LocalizedRepairResult>> {
+    if (items.length === 0) return new Map();
+
+    const prompt = `You repair translations for BorderClash. Change translation wording only; never add, remove, strengthen, or weaken facts.
+
+${LOCALIZED_WRITING_RULES}
+
+INPUT ITEMS:
+${JSON.stringify(items)}
+
+Return exactly one fenced \`\`\`json code block and nothing else:
+\`\`\`json
+{"items":[{"id":"same id","thai":"correct Thai when requested","khmer":"correct Khmer when requested"}]}
+\`\`\`
+Return every input id. Only include thai or khmer when that language is listed in repair.`;
+
+    const result = await callGeminiStudioWithSelfHealing<{ items?: LocalizedRepairResult[] }>(
+        prompt,
+        { thinkingLevel: GEMINI_THINKING.repair, timeoutMs },
+        2,
+        "LOCALIZATION-REPAIR",
+    );
+
+    const requestedById = new Map(items.map((item) => [item.id, item]));
+    const repaired = new Map<string, LocalizedRepairResult>();
+    for (const item of result?.items || []) {
+        const requested = requestedById.get(item.id);
+        if (!requested) continue;
+
+        const clean: LocalizedRepairResult = { id: item.id };
+        if (requested.repair.includes("th") && isValidLocalizedText(item.thai, "th")) {
+            clean.thai = item.thai;
+        }
+        if (requested.repair.includes("kh") && isValidLocalizedText(item.khmer, "kh")) {
+            clean.khmer = item.khmer;
+        }
+        repaired.set(item.id, clean);
+    }
+
+    return repaired;
+}
+
 // =============================================================================
 // SHARED HELPER: Format timeline events consistently for all AI prompts
 // Used by: research.ts (synthesizeAll), historian.ts (runHistorian, runPlanner)
@@ -441,7 +510,7 @@ export function formatTimelineEvent(e: any, idx?: number): string {
     const time = e.timeOfDay ? ` ${e.timeOfDay}` : "";
     // Sort by credibility (highest first) before taking top 2
     const sortedSources = [...(e.sources || [])].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
-    const sources = sortedSources.slice(0, 2).map((s: any) => `${s.name}(${s.credibility}): ${s.url}`).join(" | ") || "(none)";
+    const sources = sortedSources.slice(0, 2).map((s: any) => `${s.name}(${s.credibility})`).join(" | ") || "(none)";
     const trans = (e.titleTh && e.titleKh) ? "✓" : "⚠️needs-trans";
     const prefix = idx !== undefined ? `${idx + 1}. ` : "";
     return `${prefix}[${e.date}${time}] "${e.title}" (${e.status}, ${e.category}, imp:${e.importance}) [${trans}]
