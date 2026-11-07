@@ -171,6 +171,37 @@ test("localized text validator rejects mixed Thai and Khmer scripts", () => {
   });
 });
 
+test("legacy localized tone guard catches high-confidence loaded wording", () => {
+  const moduleUrl = pathToFileURL(languageQualityPath).href;
+  const script = `
+    const m = await import(${JSON.stringify(moduleUrl)});
+    const result = {
+      sideTaking: m.getLocalizedStyleIssue("\\u0E40\\u0E23\\u0E32", "th", "The army denied the allegation"),
+      loadedCountry: m.getLocalizedStyleIssue("\\u0E40\\u0E02\\u0E21\\u0E23", "th", "Cambodia joined the meeting"),
+      neutralCountry: m.getLocalizedStyleIssue("\\u0E01\\u0E31\\u0E21\\u0E1E\\u0E39\\u0E0A\\u0E32", "th", "Cambodia joined the meeting"),
+      sourceFirstPerson: m.getLocalizedStyleIssue("\\u0E40\\u0E23\\u0E32", "th", "We will attend the meeting"),
+    };
+    process.stdout.write(JSON.stringify(result));
+  `;
+  const result = spawnSync(
+    "node",
+    ["--experimental-strip-types", "--input-type=module", "-e", script],
+    { cwd: root, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    sideTaking: "side-taking-tone",
+    loadedCountry: "non-neutral-country-label",
+    neutralCountry: null,
+    sourceFirstPerson: null,
+  });
+
+  const dashboard = read(dashboardClientPath);
+  assert.match(dashboard, /getLocalizedStyleIssue\(thai, 'th', english\)/);
+  assert.match(dashboard, /getLocalizedStyleIssue\(khmer, 'kh', english\)/);
+});
+
 test("research pipeline retries and handoff guards exist on all chained steps", () => {
   const source = read(researchPath);
 
@@ -367,6 +398,8 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /fenced ```json blocks first/);
   assert.match(aiUtils, /export function isCompletedGeminiFailure/);
   assert.match(aiUtils, /includes\("gemini request failed:"\)/);
+  assert.match(aiUtils, /includes\("gemini async job exceeded"\)/);
+  assert.match(aiUtils, /includes\("gemini async job disappeared after submission"\)/);
   assert.match(aiUtils, /server_retry_budget_exhausted localRetry=false/);
   assert.match(aiUtils, /request\.body\.async = true/);
   assert.match(aiUtils, /\/v1\/chat\/completions\/\$\{encodeURIComponent\(request\.requestId\)\}/);
@@ -406,7 +439,7 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /Stay neutral: no side-taking/);
   assert.match(aiUtils, /poll_transport_error retry_same_job=true/);
   assert.match(aiUtils, /geminiEndpointCache = null;[\s\S]*continue;/);
-  assert.match(historian, /repairLocalizedItems\(items, undefined, GEMINI_THINKING\.historian\)/);
+  assert.match(historian, /repairLocalizedItems\(items, 570_000, GEMINI_THINKING\.repair\)/);
   assert.match(historian, /candidates\.sort\(\(a, b\) => a\.english\.length - b\.english\.length/);
   assert.match(historian, /MAX_BATCH_ENGLISH_CHARS = 600/);
   assert.match(historian, /Math\.min\(6, Math\.round\(args\.batchSize \?\? 6\)\)/);

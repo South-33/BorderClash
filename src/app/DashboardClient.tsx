@@ -10,7 +10,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
-import { isValidLocalizedText } from '../../convex/language_quality';
+import { getLocalizedStyleIssue, isValidLocalizedText } from '../../convex/language_quality';
 
 type DashboardSnapshot = Omit<BorderClashData, 'fetchedAt'>;
 const DASHBOARD_TIME_ZONE = 'Asia/Phnom_Penh';
@@ -21,8 +21,8 @@ const localizedText = (
   thai?: string | null,
   khmer?: string | null,
 ) => {
-  if (lang === 'th' && isValidLocalizedText(thai, 'th')) return thai;
-  if (lang === 'kh' && isValidLocalizedText(khmer, 'kh')) return khmer;
+  if (lang === 'th' && isValidLocalizedText(thai, 'th') && !getLocalizedStyleIssue(thai, 'th', english)) return thai;
+  if (lang === 'kh' && isValidLocalizedText(khmer, 'kh') && !getLocalizedStyleIssue(khmer, 'kh', english)) return khmer;
   return english || '';
 };
 
@@ -33,10 +33,10 @@ const localizedArray = (
   khmer?: string[] | null,
 ) => {
   const base = english || [];
-  if (lang === 'th' && Array.isArray(thai) && thai.length === base.length && thai.every((item) => isValidLocalizedText(item, 'th'))) {
+  if (lang === 'th' && Array.isArray(thai) && thai.length === base.length && thai.every((item, index) => isValidLocalizedText(item, 'th') && !getLocalizedStyleIssue(item, 'th', base[index]))) {
     return thai;
   }
-  if (lang === 'kh' && Array.isArray(khmer) && khmer.length === base.length && khmer.every((item) => isValidLocalizedText(item, 'kh'))) {
+  if (lang === 'kh' && Array.isArray(khmer) && khmer.length === base.length && khmer.every((item, index) => isValidLocalizedText(item, 'kh') && !getLocalizedStyleIssue(item, 'kh', base[index]))) {
     return khmer;
   }
   return base;
