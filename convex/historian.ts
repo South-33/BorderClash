@@ -2088,10 +2088,11 @@ export const repairLegacyTimelineLocalizations = internalAction({
         }
 
         const items: LocalizedRepairItem[] = batch.map(({ id, english, repair }) => ({ id, english, repair }));
-        // Maintenance favors one High-quality logical request. The harness
-        // owns retries inside a 480s total budget, which stays below this
-        // action's 510s client polling budget and Convex's 10-minute limit.
-        const repaired = await repairLocalizedItems(items, undefined, GEMINI_THINKING.historian);
+        // Use the harness's bounded Medium→High fallback for maintenance.
+        // It allows at most two browser attempts, avoiding three long High
+        // attempts that can outlive the client's polling budget and overlap.
+        // 570s covers the 60s Medium trial plus one full High attempt.
+        const repaired = await repairLocalizedItems(items, 570_000, GEMINI_THINKING.repair);
         const updates = new Map<Id<"timelineEvents">, Record<string, string>>();
         let repairedFields = 0;
 
