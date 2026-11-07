@@ -99,6 +99,10 @@ function affectedRecords(findings) {
   return new Set(findings.map((finding) => `${finding.scope}|${finding.id}`)).size;
 }
 
+function affectedFields(findings) {
+  return new Set(findings.map((finding) => `${finding.scope}|${finding.id}|${finding.field}`)).size;
+}
+
 function wrongScriptChars(value, issue) {
   if (typeof value !== "string") return [];
   const matcher = issue === "thai-script-in-khmer"
@@ -231,6 +235,7 @@ const report = {
   },
   generatedText: {
     findingCount: findings.length,
+    uniqueFieldCount: affectedFields(findings),
     affectedRecords: affectedRecords(findings),
     counts: summarize(findings),
     byField: summarizeFields(findings),
@@ -239,6 +244,7 @@ const report = {
   },
   generatedStyle: {
     findingCount: styleFindings.length,
+    uniqueFieldCount: affectedFields(styleFindings),
     affectedRecords: affectedRecords(styleFindings),
     counts: summarize(styleFindings),
     byField: summarizeFields(styleFindings),
@@ -246,6 +252,7 @@ const report = {
   },
   sourceText: {
     findingCount: sourceFindings.length,
+    uniqueFieldCount: affectedFields(sourceFindings),
     affectedRecords: affectedRecords(sourceFindings),
     counts: summarize(sourceFindings),
     byField: summarizeFields(sourceFindings),
