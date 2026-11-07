@@ -487,6 +487,7 @@ export async function repairLocalizedItems(
     // then stay in Gemini's normal composer instead of becoming file uploads,
     // while preserving the same factual, neutral, and script constraints.
     const prompt = `Translate only requested BorderClash fields from English.
+- Do not browse or search. Use only the supplied English text.
 - Keep facts, numbers, attribution and uncertainty unchanged; add, remove, strengthen or weaken nothing.
 - th: natural everyday Thai, no Khmer script. kh: natural everyday Khmer, no Thai script.
 - Use normal local country/place names and neutral plain language; no side-taking, reader address, slang, cheering or hype. Explain jargon plainly.

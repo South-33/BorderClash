@@ -435,6 +435,7 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /callGeminiStudioWithSelfHealing<\{ items\?: LocalizedRepairResult\[\] \}>\([\s\S]*\{ thinkingLevel, timeoutMs \},\s*1,\s*"LOCALIZATION-REPAIR"/);
   assert.match(aiUtils, /thinkingLevel: GeminiThinkingLevel = GEMINI_THINKING\.repair/);
   assert.match(aiUtils, /Translate only requested BorderClash fields from English/);
+  assert.match(aiUtils, /Do not browse or search\. Use only the supplied English text/);
   assert.match(aiUtils, /const promptItems = items\.map\(\(item, index\) => \(\{/);
   assert.match(aiUtils, /id: String\(index \+ 1\)/);
   assert.match(aiUtils, /requestedByPromptId/);
