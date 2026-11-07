@@ -2039,7 +2039,7 @@ export const repairLegacyTimelineLocalizations = internalAction({
         }
 
         const items: LocalizedRepairItem[] = batch.map(({ id, english, repair }) => ({ id, english, repair }));
-        const repaired = await repairLocalizedItems(items, undefined, GEMINI_THINKING.historian);
+        const repaired = await repairLocalizedItems(items);
         const updates = new Map<Id<"timelineEvents">, Record<string, string>>();
         let repairedFields = 0;
 
