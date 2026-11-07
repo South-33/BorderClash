@@ -3694,6 +3694,11 @@ export const updateArticleValidation = internalMutation({
         titleKh: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        validateOptionalNewsLocalizations({
+            titleTh: args.titleTh,
+            titleKh: args.titleKh,
+        });
+
         const table = args.country === "thailand" ? "thailandNews"
             : args.country === "cambodia" ? "cambodiaNews"
                 : "internationalNews";

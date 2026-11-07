@@ -1006,13 +1006,11 @@ async function rescoreImpactBatch(
 
     const prompt = `${IMPACT_RESCORE_PROMPT}
 
-═══════════════════════════════════════════════════════════════
 LOOKBACK CONTEXT (already rescored, chronological):
 ${lookbackContext}
 
 CURRENT BATCH (${batchEvents.length} events):
 ${batchContext}
-═══════════════════════════════════════════════════════════════
 
 Return rescored importance for every event in CURRENT BATCH.`;
 
@@ -1579,10 +1577,8 @@ async function runCanonicalizationAiBatch(events: ImpactRescoreEvent[]): Promise
 
     const prompt = `${CANONICALIZATION_PROMPT}
 
-═══════════════════════════════════════════════════════════════
 CURRENT BATCH (${events.length} events):
-${eventContext}
-═══════════════════════════════════════════════════════════════`;
+${eventContext}`;
 
     const maxRetries = 2;
     let currentPrompt = prompt;

@@ -389,6 +389,10 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(api, /validateTimelineLocalizationUpdates\(args\.updates\)/);
   assert.match(api, /assertValidLocalizedArray\("keyEventsTh"/);
   assert.match(api, /validateOptionalNewsLocalizations\(args\)/);
+  assert.match(
+    section(api, "export const updateArticleValidation", "export const createTimelineEvent"),
+    /validateOptionalNewsLocalizations\(\{\s*titleTh: args\.titleTh,\s*titleKh: args\.titleKh,/s,
+  );
   assert.doesNotMatch(historian, /List each article with your analysis plan FIRST/);
   assert.match(historian, /Return EXACTLY one fenced \\`\\`\\`json code block and nothing else/);
   assert.match(historian, /isCompletedGeminiFailure\(error\)/);
