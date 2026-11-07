@@ -2062,14 +2062,13 @@ export const repairLegacyTimelineLocalizations = internalAction({
             }
         }
 
-        // Shorter source strings keep maintenance prompts bounded and reduce
-        // browser-generation failures. Longer descriptions remain resumable
-        // and are handled by later invocations.
+        // Keep maintenance requests bounded, but do not fragment normal
+        // descriptions solely to stay below the harness's inline-composer
+        // threshold. The serialized harness owns the attachment path and its
+        // logical-request retry budget.
         candidates.sort((a, b) => a.english.length - b.english.length || a.id.localeCompare(b.id));
-        // Compact prompt IDs keep these bounded batches below the harness's
-        // 1,500-character attachment threshold without sacrificing throughput.
         const batchSize = Math.max(1, Math.min(6, Math.round(args.batchSize ?? 6)));
-        const MAX_BATCH_ENGLISH_CHARS = 650;
+        const MAX_BATCH_ENGLISH_CHARS = 1_600;
         const batch: typeof candidates = [];
         let batchEnglishChars = 0;
         for (const candidate of candidates) {

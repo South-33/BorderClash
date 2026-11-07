@@ -449,7 +449,7 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /geminiEndpointCache = null;[\s\S]*continue;/);
   assert.match(historian, /repairLocalizedItems\(items, undefined, GEMINI_THINKING\.historian\)/);
   assert.match(historian, /candidates\.sort\(\(a, b\) => a\.english\.length - b\.english\.length/);
-  assert.match(historian, /MAX_BATCH_ENGLISH_CHARS = 650/);
+  assert.match(historian, /MAX_BATCH_ENGLISH_CHARS = 1_600/);
   assert.match(historian, /Math\.min\(6, Math\.round\(args\.batchSize \?\? 6\)\)/);
   assert.match(historian, /acquireTimelineLocalizationRepairLock/);
   assert.match(historian, /releaseTimelineLocalizationRepairLock/);
