@@ -2089,9 +2089,9 @@ export const repairLegacyTimelineLocalizations = internalAction({
         }
 
         const items: LocalizedRepairItem[] = batch.map(({ id, english, repair }) => ({ id, english, repair }));
-        // One High-quality logical request. Browser retries remain owned by
-        // the harness and are capped at 480s, below the 510s client budget.
-        const repaired = await repairLocalizedItems(items, undefined, GEMINI_THINKING.historian);
+        // Routine localization repair starts at Medium. The harness owns any
+        // transient retry and may promote only the remaining attempts to High.
+        const repaired = await repairLocalizedItems(items, undefined, GEMINI_THINKING.repair);
         const updates = new Map<Id<"timelineEvents">, Record<string, string>>();
         let repairedFields = 0;
 
