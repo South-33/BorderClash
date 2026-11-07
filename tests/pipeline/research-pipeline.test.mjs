@@ -434,10 +434,10 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /LOCALIZATION-REPAIR/);
   assert.match(aiUtils, /callGeminiStudioWithSelfHealing<\{ items\?: LocalizedRepairResult\[\] \}>\([\s\S]*\{ thinkingLevel, timeoutMs \},\s*1,\s*"LOCALIZATION-REPAIR"/);
   assert.match(aiUtils, /thinkingLevel: GeminiThinkingLevel = GEMINI_THINKING\.repair/);
-  assert.match(aiUtils, /Repair only requested BorderClash translations from English/);
-  assert.match(aiUtils, /Preserve facts, numbers, attribution and uncertainty/);
-  assert.match(aiUtils, /Thai must contain no Khmer script; Khmer must contain no Thai script/);
-  assert.match(aiUtils, /Stay neutral: no side-taking/);
+  assert.match(aiUtils, /Translate only requested BorderClash fields from English/);
+  assert.match(aiUtils, /facts, numbers, attribution and uncertainty unchanged/);
+  assert.match(aiUtils, /th: natural everyday Thai, no Khmer script/);
+  assert.match(aiUtils, /neutral plain language; no side-taking/);
   assert.match(aiUtils, /poll_transport_error retry_same_job=true/);
   assert.match(aiUtils, /geminiEndpointCache = null;[\s\S]*continue;/);
   assert.match(historian, /repairLocalizedItems\(items, 570_000, GEMINI_THINKING\.repair\)/);

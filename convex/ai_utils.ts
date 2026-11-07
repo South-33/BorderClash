@@ -477,18 +477,17 @@ export async function repairLocalizedItems(
     // Keep fallback repair prompts compact. Bounded maintenance batches can
     // then stay in Gemini's normal composer instead of becoming file uploads,
     // while preserving the same factual, neutral, and script constraints.
-    const prompt = `Repair only requested BorderClash translations from English.
-- Preserve facts, numbers, attribution and uncertainty. Do not add, remove, strengthen or weaken meaning.
-- Use natural everyday Thai for th and Khmer for kh. Thai must contain no Khmer script; Khmer must contain no Thai script.
-- Use normal target-language country/place names. Stay neutral: no side-taking, reader address, slang, cheering, insults or sensational wording.
-- Explain unavoidable jargon plainly.
-INPUT ITEMS:
+    const prompt = `Translate only requested BorderClash fields from English.
+- Keep facts, numbers, attribution and uncertainty unchanged; add, remove, strengthen or weaken nothing.
+- th: natural everyday Thai, no Khmer script. kh: natural everyday Khmer, no Thai script.
+- Use normal local country/place names and neutral plain language; no side-taking, reader address, slang, cheering or hype. Explain jargon plainly.
+INPUT:
 ${JSON.stringify(items)}
-Return exactly one fenced \`\`\`json code block and nothing else:
+Return only this fenced JSON shape:
 \`\`\`json
-{"items":[{"id":"same id","thai":"correct Thai when requested","khmer":"correct Khmer when requested"}]}
+{"items":[{"id":"same","thai":"if th","khmer":"if kh"}]}
 \`\`\`
-Return every input id. Only include thai or khmer when that language is listed in repair.`;
+Include every id and only requested languages.`;
 
     const result = await callGeminiStudioWithSelfHealing<{ items?: LocalizedRepairResult[] }>(
         prompt,
