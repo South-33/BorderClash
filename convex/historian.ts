@@ -2019,7 +2019,6 @@ export const repairLegacyTimelineLocalizations = internalAction({
             kind: "title" | "description";
             english: string;
             repair: Array<"th" | "kh">;
-            hardFailure: boolean;
         }> = [];
 
         for (const event of events) {
@@ -2041,16 +2040,24 @@ export const repairLegacyTimelineLocalizations = internalAction({
                     kind: pair.kind,
                     english: pair.english,
                     repair,
-                    hardFailure: thaiHardFailure || khmerHardFailure,
                 });
             }
         }
 
-        // Objective corruption first; style-only cleanup must not delay it.
-        candidates.sort((a, b) => Number(b.hardFailure) - Number(a.hardFailure));
-
-        const batchSize = Math.max(1, Math.min(30, Math.round(args.batchSize ?? 24)));
-        const batch = candidates.slice(0, batchSize);
+        // Shorter source strings keep maintenance prompts bounded and reduce
+        // browser-generation failures. Longer descriptions remain resumable
+        // and are handled by later invocations.
+        candidates.sort((a, b) => a.english.length - b.english.length || a.id.localeCompare(b.id));
+        const batchSize = Math.max(1, Math.min(12, Math.round(args.batchSize ?? 8)));
+        const MAX_BATCH_ENGLISH_CHARS = 3500;
+        const batch: typeof candidates = [];
+        let batchEnglishChars = 0;
+        for (const candidate of candidates) {
+            if (batch.length >= batchSize) break;
+            if (batch.length > 0 && batchEnglishChars + candidate.english.length > MAX_BATCH_ENGLISH_CHARS) break;
+            batch.push(candidate);
+            batchEnglishChars += candidate.english.length;
+        }
         if (batch.length === 0) {
             return {
                 scannedEvents: events.length,

@@ -400,7 +400,9 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /poll_transport_error retry_same_job=true/);
   assert.match(aiUtils, /geminiEndpointCache = null;[\s\S]*continue;/);
   assert.match(historian, /repairLocalizedItems\(items, undefined, GEMINI_THINKING\.historian\)/);
-  assert.match(historian, /candidates\.sort\(\(a, b\) => Number\(b\.hardFailure\) - Number\(a\.hardFailure\)\)/);
+  assert.match(historian, /candidates\.sort\(\(a, b\) => a\.english\.length - b\.english\.length/);
+  assert.match(historian, /MAX_BATCH_ENGLISH_CHARS = 3500/);
+  assert.match(historian, /Math\.min\(12, Math\.round\(args\.batchSize \?\? 8\)\)/);
   assert.match(api, /assertRequiredLocalizedText\("titleTh", args\.titleTh, "th"\)/);
   assert.match(api, /validateTimelineLocalizationUpdates\(args\.updates\)/);
   assert.match(api, /assertValidLocalizedArray\("keyEventsTh"/);
