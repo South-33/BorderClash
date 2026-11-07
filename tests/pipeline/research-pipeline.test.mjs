@@ -417,6 +417,18 @@ test("synthesis context avoids duplicate weighting and non-browsed URLs", () => 
   assert.doesNotMatch(section(aiUtils, "export function formatTimelineEvent", null), /\$\{s\.url\}/);
 });
 
+test("historian collapses cross-feed duplicate source stories before Gemini", () => {
+  const historian = read(historianPath);
+
+  assert.match(historian, /canonicalizeArticleUrl\(article\.sourceUrl\)/);
+  assert.match(historian, /const articleGroups = new Map<string, any\[\]>\(\)/);
+  assert.match(historian, /const uniqueArticles: any\[\] = \[\]/);
+  assert.match(historian, /const selectedArticles = uniqueArticles\.slice\(0, historianBatchSize\)/);
+  assert.match(historian, /duplicateRows=\$\{allArticles\.length - uniqueArticles\.length\}/);
+  assert.match(historian, /const articleGroup = articleGroups\.get\(articleGroupKey\(article\)\) \?\? \[article\]/);
+  assert.match(historian, /processedRows/);
+});
+
 test("Gemini requests use Flash with Medium and High thinking only", () => {
   const research = read(researchPath);
   const historian = read(historianPath);

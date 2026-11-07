@@ -13,6 +13,7 @@ import {
 } from "./ai_utils";
 import { GEMINI_THINKING } from "./config";
 import { LOCALIZED_WRITING_RULES, isValidLocalizedText } from "./language_quality";
+import { canonicalizeArticleUrl } from "./dedupe";
 
 
 // =============================================================================
@@ -498,46 +499,28 @@ export async function runHistorianCycleInternal(
     const timelineStats = await ctx.runQuery(internal.api.getTimelineStats, {});
 
     // Processed-news context duplicates the timeline and made each browser request much larger.
-    console.log(`[HISTORIAN] context unprocessed=${allArticles.length} timeline=${timeline.length} totalEvents=${timelineStats.totalEvents} avgImportance=${timelineStats.avgImportance} cachedTimeline=${cachedTimeline ? "true" : "false"}`);
-
-    // ====================================================================
-    // PHASE 1: PLANNER - Pick up to 10 most important articles
-    // ====================================================================
-    // The query is already credibility-sorted. Avoid a separate Gemini planner call
-    // and process a small deterministic batch per loop.
-    const historianBatchSize = 3;
-    const selectedTitles: string[] = allArticles.slice(0, historianBatchSize).map((a: any) => a.title);
-
-    // Helper for fuzzy title matching (AI often returns slightly different titles)
-    const normalizeTitle = (title: string) =>
-        title.toLowerCase().trim()
-            .replace(/[""'']/g, '"')  // Normalize quotes
-            .replace(/\s+/g, ' ')      // Normalize whitespace
-            .substring(0, 50);         // Compare first 50 chars
-
-    // Filter to selected articles with FUZZY matching
-    let selectedArticles = allArticles.filter((a: any) => {
-        const normalizedDbTitle = normalizeTitle(a.title);
-        return selectedTitles.some(plannerTitle => {
-            const normalizedPlannerTitle = normalizeTitle(plannerTitle);
-            // Exact match OR first 50 chars match OR one contains the other
-            return normalizedDbTitle === normalizedPlannerTitle ||
-                normalizedDbTitle.includes(normalizedPlannerTitle) ||
-                normalizedPlannerTitle.includes(normalizedDbTitle);
-        });
-    });
-
-    // If fuzzy matching found nothing, log what planner returned vs what we have
-    if (selectedArticles.length === 0 && selectedTitles.length > 0) {
-        const plannerSamples = selectedTitles.slice(0, 3).map(t => t.substring(0, 60)).join(" | ");
-        const dbSamples = allArticles.slice(0, 3).map((a: any) => a.title.substring(0, 60)).join(" | ");
-        console.warn(`[PLANNER] no_title_matches fallback=first_10_by_credibility plannerSamples="${plannerSamples}" dbSamples="${dbSamples}"`);
-
-        // Fallback: use the same bounded credibility-sorted batch.
-        selectedArticles = allArticles.slice(0, historianBatchSize);
+    const articleGroupKey = (article: any) => canonicalizeArticleUrl(article.sourceUrl)
+        || `${article.source || ""}|${article.title || ""}`.toLowerCase().trim();
+    const articleGroups = new Map<string, any[]>();
+    const uniqueArticles: any[] = [];
+    for (const article of allArticles) {
+        const key = articleGroupKey(article);
+        const group = articleGroups.get(key);
+        if (group) {
+            group.push(article);
+        } else {
+            articleGroups.set(key, [article]);
+            uniqueArticles.push(article);
+        }
     }
 
-    selectedArticles = selectedArticles.slice(0, historianBatchSize);
+    console.log(`[HISTORIAN] context unprocessed=${allArticles.length} unique=${uniqueArticles.length} duplicateRows=${allArticles.length - uniqueArticles.length} timeline=${timeline.length} totalEvents=${timelineStats.totalEvents} avgImportance=${timelineStats.avgImportance} cachedTimeline=${cachedTimeline ? "true" : "false"}`);
+
+    // The query is already credibility-sorted. Process a bounded batch of
+    // unique source stories; cross-feed duplicates are handled with the same
+    // decision and never consume another Gemini slot.
+    const historianBatchSize = 3;
+    const selectedArticles = uniqueArticles.slice(0, historianBatchSize);
 
     // ====================================================================
     // PHASE 2: HISTORIAN - Process the selected articles
@@ -606,6 +589,7 @@ export async function runHistorianCycleInternal(
             actionWarnings++;
             continue;
         }
+        const articleGroup = articleGroups.get(articleGroupKey(article)) ?? [article];
 
         try {
             switch (action.action) {
@@ -682,22 +666,26 @@ export async function runHistorianCycleInternal(
 
             case "archive":
                 // Archive = mark as processed but not timeline-worthy
-                await ctx.runMutation(internal.api.flagArticle, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        title: article.title,
-                    status: "archived",
+                for (const duplicate of articleGroup) {
+                    await ctx.runMutation(internal.api.flagArticle, {
+                        country: duplicate.country as "thailand" | "cambodia" | "international",
+                        title: duplicate.title,
+                        status: "archived",
                     });
-                archived++;
+                    archived++;
+                }
                 break;
 
             case "discard":
                 // Discard = mark as false (bad data)
-                await ctx.runMutation(internal.api.flagArticle, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        title: article.title,
-                    status: "false",
+                for (const duplicate of articleGroup) {
+                    await ctx.runMutation(internal.api.flagArticle, {
+                        country: duplicate.country as "thailand" | "cambodia" | "international",
+                        title: duplicate.title,
+                        status: "false",
                     });
-                discarded++;
+                    discarded++;
+                }
                 break;
 
             case "update_event":
@@ -740,13 +728,15 @@ export async function runHistorianCycleInternal(
 
             case "flag_conflict":
                 // Mark for deeper investigation
-                await ctx.runMutation(internal.api.updateArticleValidation, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        title: article.title,
-                    hasConflict: true,
-                    conflictsWith: action.targetEventTitle,
+                for (const duplicate of articleGroup) {
+                    await ctx.runMutation(internal.api.updateArticleValidation, {
+                        country: duplicate.country as "thailand" | "cambodia" | "international",
+                        title: duplicate.title,
+                        hasConflict: true,
+                        conflictsWith: action.targetEventTitle,
                     });
-                conflictsFlagged++;
+                    conflictsFlagged++;
+                }
                 break;
 
             case "delete_event":
@@ -777,14 +767,16 @@ export async function runHistorianCycleInternal(
 
             if (translationsValid) {
                 try {
-                    await ctx.runMutation(internal.api.updateArticleContent, {
-                        country: article.country as "thailand" | "cambodia" | "international",
-                        oldTitle: article.title,
-                        newTitleTh: translations.titleTh,
-                        newTitleKh: translations.titleKh,
-                        newSummaryTh: translations.summaryTh,
-                        newSummaryKh: translations.summaryKh,
-                    });
+                    for (const duplicate of articleGroup) {
+                        await ctx.runMutation(internal.api.updateArticleContent, {
+                            country: duplicate.country as "thailand" | "cambodia" | "international",
+                            oldTitle: duplicate.title,
+                            newTitleTh: translations.titleTh,
+                            newTitleKh: translations.titleKh,
+                            newSummaryTh: translations.summaryTh,
+                            newSummaryKh: translations.summaryKh,
+                        });
+                    }
                 } catch (translationError) {
                     actionWarnings++;
                     console.warn(`[HISTORIAN] Article localization save failed for "${article.title}": ${translationError}`);
@@ -796,10 +788,12 @@ export async function runHistorianCycleInternal(
         }
 
         // Mark article as processed by Historian (regardless of action taken)
-        await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
-            country: article.country as "thailand" | "cambodia" | "international",
-            title: article.title,
-        });
+        for (const duplicate of articleGroup) {
+            await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
+                country: duplicate.country as "thailand" | "cambodia" | "international",
+                title: duplicate.title,
+            });
+        }
         } catch (error) {
             actionWarnings++;
             console.error(`[HISTORIAN] Failed to apply action "${action.action}" for "${article.title}":`, error);
@@ -814,17 +808,24 @@ export async function runHistorianCycleInternal(
     for (const article of selectedArticles) {
         if (!processedTitles.has(article.title)) {
             missingActions++;
-            await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
-                    country: article.country as "thailand" | "cambodia" | "international",
-                    title: article.title,
+            const articleGroup = articleGroups.get(articleGroupKey(article)) ?? [article];
+            for (const duplicate of articleGroup) {
+                await ctx.runMutation(internal.api.markAsProcessedToTimeline, {
+                    country: duplicate.country as "thailand" | "cambodia" | "international",
+                    title: duplicate.title,
                 });
+            }
         }
     }
 
-    console.log(`[HISTORIAN] complete unprocessed=${allArticles.length} selected=${selectedArticles.length} actions=${historianResult.actions.length} created=${eventsCreated} updated=${eventsUpdated} deleted=${eventsDeleted} merged=${sourcesMerged} archived=${archived} discarded=${discarded} conflicts=${conflictsFlagged} missingActions=${missingActions} warnings=${actionWarnings}`);
+    const processedRows = selectedArticles.reduce(
+        (sum: number, article: any) => sum + (articleGroups.get(articleGroupKey(article))?.length ?? 1),
+        0,
+    );
+    console.log(`[HISTORIAN] complete unprocessed=${allArticles.length} unique=${uniqueArticles.length} selected=${selectedArticles.length} processedRows=${processedRows} actions=${historianResult.actions.length} created=${eventsCreated} updated=${eventsUpdated} deleted=${eventsDeleted} merged=${sourcesMerged} archived=${archived} discarded=${discarded} conflicts=${conflictsFlagged} missingActions=${missingActions} warnings=${actionWarnings}`);
 
     return {
-        processed: selectedArticles.length,  // Return actual selected count, not just AI response count
+        processed: processedRows,
         eventsCreated,
         eventsUpdated,
         eventsDeleted,
