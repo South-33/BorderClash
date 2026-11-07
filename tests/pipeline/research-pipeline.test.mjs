@@ -171,6 +171,31 @@ test("localized text validator rejects mixed Thai and Khmer scripts", () => {
   });
 });
 
+test("legacy localized style check catches obvious side-taking without rejecting neutral text", () => {
+  const moduleUrl = pathToFileURL(languageQualityPath).href;
+  const script = `
+    const m = await import(${JSON.stringify(moduleUrl)});
+    const result = {
+      sideTaking: m.getLocalizedStyleIssue("เราจะปกป้องชายแดน", "th", "We will defend the border"),
+      loadedCountryLabel: m.getLocalizedStyleIssue("เขมรเข้าร่วมการประชุม", "th", "Cambodia joined the meeting"),
+      neutral: m.getLocalizedStyleIssue("กัมพูชาเข้าร่วมการประชุม ASEAN", "th", "Cambodia joined the ASEAN meeting"),
+    };
+    process.stdout.write(JSON.stringify(result));
+  `;
+  const result = spawnSync(
+    "node",
+    ["--experimental-strip-types", "--input-type=module", "-e", script],
+    { cwd: root, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    sideTaking: "side-taking",
+    loadedCountryLabel: "non-neutral-country-label",
+    neutral: null,
+  });
+});
+
 test("research pipeline retries and handoff guards exist on all chained steps", () => {
   const source = read(researchPath);
 
@@ -379,10 +404,10 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(research, /repairSynthesisLocalizations\(result\)/);
   assert.match(historian, /repairHistorianLocalizations\(historianResult, selectedArticles\)/);
   assert.match(historian, /articleTranslations/);
-  assert.match(historian, /newTitleTh: translations\.titleTh/);
-  assert.match(historian, /newTitleKh: translations\.titleKh/);
-  assert.match(historian, /newSummaryTh: translations\.summaryTh/);
-  assert.match(historian, /newSummaryKh: translations\.summaryKh/);
+  assert.match(historian, /localizationUpdate\.newTitleTh = translations\.titleTh/);
+  assert.match(historian, /localizationUpdate\.newTitleKh = translations\.titleKh/);
+  assert.match(historian, /localizationUpdate\.newSummaryTh = translations\.summaryTh/);
+  assert.match(historian, /localizationUpdate\.newSummaryKh = translations\.summaryKh/);
   assert.match(aiUtils, /LOCALIZATION-REPAIR/);
   assert.match(aiUtils, /thinkingLevel: GeminiThinkingLevel = GEMINI_THINKING\.repair/);
   assert.match(historian, /const repaired = await repairLocalizedItems\(items\)/);
@@ -426,6 +451,8 @@ test("historian collapses cross-feed duplicate source stories before Gemini", ()
   assert.match(historian, /const selectedArticles = uniqueArticles\.slice\(0, historianBatchSize\)/);
   assert.match(historian, /duplicateRows=\$\{allArticles\.length - uniqueArticles\.length\}/);
   assert.match(historian, /const articleGroup = articleGroups\.get\(articleGroupKey\(article\)\) \?\? \[article\]/);
+  assert.match(historian, /if \(duplicate\.title === article\.title\)/);
+  assert.match(historian, /if \(articleSummary && duplicateSummary === articleSummary\)/);
   assert.match(historian, /processedRows/);
 });
 

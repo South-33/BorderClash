@@ -12,7 +12,7 @@ import {
     type LocalizedRepairItem,
 } from "./ai_utils";
 import { GEMINI_THINKING } from "./config";
-import { LOCALIZED_WRITING_RULES, isValidLocalizedText } from "./language_quality";
+import { LOCALIZED_WRITING_RULES, getLocalizedStyleIssue, isValidLocalizedText } from "./language_quality";
 import { canonicalizeArticleUrl } from "./dedupe";
 
 
@@ -768,14 +768,31 @@ export async function runHistorianCycleInternal(
             if (translationsValid) {
                 try {
                     for (const duplicate of articleGroup) {
-                        await ctx.runMutation(internal.api.updateArticleContent, {
+                        const localizationUpdate: Record<string, unknown> = {
                             country: duplicate.country as "thailand" | "cambodia" | "international",
                             oldTitle: duplicate.title,
-                            newTitleTh: translations.titleTh,
-                            newTitleKh: translations.titleKh,
-                            newSummaryTh: translations.summaryTh,
-                            newSummaryKh: translations.summaryKh,
-                        });
+                        };
+
+                        // Reuse translations only when the English source field
+                        // is identical. Exact-URL cross-feed rows can carry a
+                        // different headline or curated summary; copying the
+                        // representative translation onto different wording is
+                        // worse than preserving the safe English fallback.
+                        if (duplicate.title === article.title) {
+                            localizationUpdate.newTitleTh = translations.titleTh;
+                            localizationUpdate.newTitleKh = translations.titleKh;
+                        }
+
+                        const articleSummary = article.summaryEn || article.summary || "";
+                        const duplicateSummary = duplicate.summaryEn || duplicate.summary || "";
+                        if (articleSummary && duplicateSummary === articleSummary) {
+                            localizationUpdate.newSummaryTh = translations.summaryTh;
+                            localizationUpdate.newSummaryKh = translations.summaryKh;
+                        }
+
+                        if (Object.keys(localizationUpdate).length > 2) {
+                            await ctx.runMutation(internal.api.updateArticleContent, localizationUpdate as any);
+                        }
                     }
                 } catch (translationError) {
                     actionWarnings++;
@@ -2012,8 +2029,8 @@ export const repairLegacyTimelineLocalizations = internalAction({
             for (const pair of pairs) {
                 if (typeof pair.english !== "string" || !pair.english.trim()) continue;
                 const repair: Array<"th" | "kh"> = [];
-                if (!isValidLocalizedText(pair.thai, "th")) repair.push("th");
-                if (!isValidLocalizedText(pair.khmer, "kh")) repair.push("kh");
+                if (!isValidLocalizedText(pair.thai, "th") || getLocalizedStyleIssue(pair.thai, "th", pair.english)) repair.push("th");
+                if (!isValidLocalizedText(pair.khmer, "kh") || getLocalizedStyleIssue(pair.khmer, "kh", pair.english)) repair.push("kh");
                 if (repair.length === 0) continue;
                 candidates.push({
                     id: `${event._id}:${pair.kind}`,
@@ -2049,14 +2066,14 @@ export const repairLegacyTimelineLocalizations = internalAction({
             const patch = updates.get(candidate.eventId) ?? {};
 
             if (candidate.repair.includes("th")) {
-                if (!isValidLocalizedText(fixed.thai, "th")) {
+                if (!isValidLocalizedText(fixed.thai, "th") || getLocalizedStyleIssue(fixed.thai, "th", candidate.english)) {
                     throw new Error(`Legacy localization repair returned invalid Thai for ${candidate.id}`);
                 }
                 patch[candidate.kind === "title" ? "titleTh" : "descriptionTh"] = fixed.thai;
                 repairedFields++;
             }
             if (candidate.repair.includes("kh")) {
-                if (!isValidLocalizedText(fixed.khmer, "kh")) {
+                if (!isValidLocalizedText(fixed.khmer, "kh") || getLocalizedStyleIssue(fixed.khmer, "kh", candidate.english)) {
                     throw new Error(`Legacy localization repair returned invalid Khmer for ${candidate.id}`);
                 }
                 patch[candidate.kind === "title" ? "titleKh" : "descriptionKh"] = fixed.khmer;

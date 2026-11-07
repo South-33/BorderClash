@@ -15,10 +15,12 @@ export const LOCALIZED_WRITING_RULES = `Writing and translation:
 - Use the normal target-language form of country and place names when one exists. Never copy a name in the other language's script.
 - Translate meaning, attribution, and uncertainty. Do not translate word-for-word and do not add facts.
 - Keep disputed claims attributed to whoever made them. Apply the same standard to Thailand and Cambodia.
+- Never write as "we", "our side", or directly address the reader. Avoid slang, cheering, insults, and sensational wording.
 - Prefer everyday words. Explain an unavoidable military, legal, or diplomatic term in plain language.
 - Before returning JSON, silently check every Thai and Khmer field for wrong-script characters and rewrite any field that fails.`;
 
 export type LocalizedTextIssue = "missing" | "wrong-script" | "no-target-script" | "bad-text";
+export type LocalizedStyleIssue = "side-taking" | "chatty-tone" | "non-neutral-country-label";
 
 export function getLocalizedTextIssue(
     value: unknown,
@@ -40,6 +42,38 @@ export function getLocalizedTextIssue(
 
 export function isValidLocalizedText(value: unknown, language: LocalizedLanguage): value is string {
     return getLocalizedTextIssue(value, language) === null;
+}
+
+/**
+ * High-confidence legacy tone problems. This remains separate from hard
+ * script validation so ordinary persistence is not governed by subjective
+ * style heuristics.
+ */
+export function getLocalizedStyleIssue(
+    value: unknown,
+    language: LocalizedLanguage,
+    englishSource?: string,
+): LocalizedStyleIssue | null {
+    if (typeof value !== "string" || !value.trim()) return null;
+    const english = englishSource || "";
+
+    if (language === "th") {
+        if (/เรา|พี่น้อง|พี่ไทย/u.test(value)) return "side-taking";
+        if (/นะจ๊ะ|จ๊ะ|ซะงั้น|เฉยๆ|โวย|สวนกลับ|เบี้ยวนัด|ด่ากราด|ฮุบ|จัดหนัก|แฉ/u.test(value)) {
+            return "chatty-tone";
+        }
+        if (/เขมร(?!แดง)/u.test(value) && /\bCambodia(?:n)?\b/i.test(english) && !/\bKhmer\b/i.test(english)) {
+            return "non-neutral-country-label";
+        }
+        return null;
+    }
+
+    if (/យើង|បងប្អូន/u.test(value)) return "side-taking";
+    if (/ពួកថៃ/u.test(value)) return "chatty-tone";
+    if (/សៀម(?!រាប)/u.test(value) && /\b(?:Thailand|Thai)\b/i.test(english) && !/\bSiam\b/i.test(english)) {
+        return "non-neutral-country-label";
+    }
+    return null;
 }
 
 export function assertValidLocalizedText(
