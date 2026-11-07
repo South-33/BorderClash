@@ -306,7 +306,20 @@ export async function callGeminiStudio(
                 throw new Error("Gemini async job disappeared after submission");
             }
             if (!poll.ok) {
+                const transientPollStatus = poll.status === 502
+                    || poll.status === 503
+                    || poll.status === 504
+                    || (poll.status >= 520 && poll.status <= 530);
                 const errorText = await poll.text();
+                if (transientPollStatus) {
+                    // The async job was already accepted. Tunnel rotation or
+                    // a restarting API can transiently return gateway errors;
+                    // never submit a second logical request for that alone.
+                    geminiEndpointCache = null;
+                    consecutiveNotFound = 0;
+                    console.warn(`[GEMINI] poll_http_transient status=${poll.status} retry_same_job=true duration=${Date.now() - startTime}ms requestId=${request.requestId}`);
+                    continue;
+                }
                 console.warn(`[GEMINI] poll_error status=${poll.status} duration=${Date.now() - startTime}ms requestId=${request.requestId} message=${errorText.substring(0, 100)}`);
                 throw new Error(`API error (${poll.status}): ${errorText.substring(0, 100)}`);
             }

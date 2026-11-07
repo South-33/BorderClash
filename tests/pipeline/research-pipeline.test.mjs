@@ -444,6 +444,8 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /th: natural everyday Thai, no Khmer script/);
   assert.match(aiUtils, /neutral plain language; no side-taking/);
   assert.match(aiUtils, /poll_transport_error retry_same_job=true/);
+  assert.match(aiUtils, /poll_http_transient status=\$\{poll\.status\} retry_same_job=true/);
+  assert.match(aiUtils, /poll\.status >= 520 && poll\.status <= 530/);
   assert.match(aiUtils, /geminiEndpointCache = null;[\s\S]*continue;/);
   assert.match(historian, /repairLocalizedItems\(items, undefined, GEMINI_THINKING\.historian\)/);
   assert.match(historian, /candidates\.sort\(\(a, b\) => a\.english\.length - b\.english\.length/);
