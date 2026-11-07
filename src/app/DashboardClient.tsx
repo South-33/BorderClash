@@ -366,36 +366,15 @@ const useCachedQuery = <T,>(
 ): { data: T | undefined; isLoading: boolean; isRefreshing: boolean } => {
   const convex = useConvex();
   const effectiveLastResearchAt = lastResearchAt ?? globalLastResearchAt.current;
-  const initialCacheFetchedAt = useRef<number | null>(null);
+  // The first client render must match SSR exactly. Reading localStorage in a
+  // state initializer gives the browser data the server could not see and can
+  // trigger React hydration error #418. Load cached data after mount instead.
+  const [data, setData] = useState<T | undefined>(undefined);
 
-  // Synchronous hydration (instant load)
-  // Initializes state directly from localStorage if available, skipping the initial blank render.
-  // Even when network fetching is skipped, cached data can still be returned for instant view switches.
-  const [data, setData] = useState<T | undefined>(() => {
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem(storageKey);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          const cachedResearchAt = parsed.researchAt ?? parsed.fetchedAt ?? 0;
-          if (effectiveLastResearchAt !== null && cachedResearchAt < effectiveLastResearchAt) {
-            return undefined;
-          }
-
-          initialCacheFetchedAt.current = parsed.fetchedAt ?? cachedResearchAt;
-          return parsed.data;
-        } catch (e) {
-          console.error("Failed to parse cache for", storageKey, e);
-        }
-      }
-    }
-    return undefined;
-  });
-
-  const [isLoading, setIsLoading] = useState(!skip && data === undefined);
+  const [isLoading, setIsLoading] = useState(!skip);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(data !== undefined || skip);
-  const lastFetchedAt = useRef<number | null>(initialCacheFetchedAt.current);
+  const [isHydrated, setIsHydrated] = useState(skip);
+  const lastFetchedAt = useRef<number | null>(null);
   const hasDoneInitialFetch = useRef(false);
   const previousSkip = useRef(skip);
 
@@ -406,7 +385,8 @@ const useCachedQuery = <T,>(
     previousSkip.current = skip;
   }, [skip]);
 
-  // Fallback hydration (for SSR safety) - only runs if sync hydration failed/was skipped
+  // Hydrate cached data only after mount so SSR and the first client render
+  // remain deterministic.
   useEffect(() => {
     if (skip || isHydrated) return;
 
