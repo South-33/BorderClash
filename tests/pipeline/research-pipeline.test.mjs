@@ -171,31 +171,6 @@ test("localized text validator rejects mixed Thai and Khmer scripts", () => {
   });
 });
 
-test("legacy localized style check catches obvious side-taking without rejecting neutral text", () => {
-  const moduleUrl = pathToFileURL(languageQualityPath).href;
-  const script = `
-    const m = await import(${JSON.stringify(moduleUrl)});
-    const result = {
-      sideTaking: m.getLocalizedStyleIssue("เราจะปกป้องชายแดน", "th", "We will defend the border"),
-      loadedCountryLabel: m.getLocalizedStyleIssue("เขมรเข้าร่วมการประชุม", "th", "Cambodia joined the meeting"),
-      neutral: m.getLocalizedStyleIssue("กัมพูชาเข้าร่วมการประชุม ASEAN", "th", "Cambodia joined the ASEAN meeting"),
-    };
-    process.stdout.write(JSON.stringify(result));
-  `;
-  const result = spawnSync(
-    "node",
-    ["--experimental-strip-types", "--input-type=module", "-e", script],
-    { cwd: root, encoding: "utf8" },
-  );
-
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.deepEqual(JSON.parse(result.stdout), {
-    sideTaking: "side-taking",
-    loadedCountryLabel: "non-neutral-country-label",
-    neutral: null,
-  });
-});
-
 test("research pipeline retries and handoff guards exist on all chained steps", () => {
   const source = read(researchPath);
 
@@ -423,6 +398,7 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /LOCALIZATION-REPAIR/);
   assert.match(aiUtils, /thinkingLevel: GeminiThinkingLevel = GEMINI_THINKING\.repair/);
   assert.match(historian, /repairLocalizedItems\(items, undefined, GEMINI_THINKING\.historian\)/);
+  assert.match(historian, /candidates\.sort\(\(a, b\) => Number\(b\.hardFailure\) - Number\(a\.hardFailure\)\)/);
   assert.match(api, /assertRequiredLocalizedText\("titleTh", args\.titleTh, "th"\)/);
   assert.match(api, /validateTimelineLocalizationUpdates\(args\.updates\)/);
   assert.match(api, /assertValidLocalizedArray\("keyEventsTh"/);

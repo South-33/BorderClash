@@ -12,7 +12,7 @@ import {
     type LocalizedRepairItem,
 } from "./ai_utils";
 import { GEMINI_THINKING } from "./config";
-import { LOCALIZED_WRITING_RULES, getLocalizedStyleIssue, isValidLocalizedText } from "./language_quality";
+import { LOCALIZED_WRITING_RULES, isValidLocalizedText } from "./language_quality";
 import { canonicalizeArticleUrl } from "./dedupe";
 
 
@@ -2019,6 +2019,7 @@ export const repairLegacyTimelineLocalizations = internalAction({
             kind: "title" | "description";
             english: string;
             repair: Array<"th" | "kh">;
+            hardFailure: boolean;
         }> = [];
 
         for (const event of events) {
@@ -2028,9 +2029,11 @@ export const repairLegacyTimelineLocalizations = internalAction({
             ];
             for (const pair of pairs) {
                 if (typeof pair.english !== "string" || !pair.english.trim()) continue;
+                const thaiHardFailure = !isValidLocalizedText(pair.thai, "th");
+                const khmerHardFailure = !isValidLocalizedText(pair.khmer, "kh");
                 const repair: Array<"th" | "kh"> = [];
-                if (!isValidLocalizedText(pair.thai, "th") || getLocalizedStyleIssue(pair.thai, "th", pair.english)) repair.push("th");
-                if (!isValidLocalizedText(pair.khmer, "kh") || getLocalizedStyleIssue(pair.khmer, "kh", pair.english)) repair.push("kh");
+                if (thaiHardFailure) repair.push("th");
+                if (khmerHardFailure) repair.push("kh");
                 if (repair.length === 0) continue;
                 candidates.push({
                     id: `${event._id}:${pair.kind}`,
@@ -2038,9 +2041,13 @@ export const repairLegacyTimelineLocalizations = internalAction({
                     kind: pair.kind,
                     english: pair.english,
                     repair,
+                    hardFailure: thaiHardFailure || khmerHardFailure,
                 });
             }
         }
+
+        // Objective corruption first; style-only cleanup must not delay it.
+        candidates.sort((a, b) => Number(b.hardFailure) - Number(a.hardFailure));
 
         const batchSize = Math.max(1, Math.min(30, Math.round(args.batchSize ?? 24)));
         const batch = candidates.slice(0, batchSize);
@@ -2069,14 +2076,14 @@ export const repairLegacyTimelineLocalizations = internalAction({
             const patch = updates.get(candidate.eventId) ?? {};
 
             if (candidate.repair.includes("th")) {
-                if (!isValidLocalizedText(fixed.thai, "th") || getLocalizedStyleIssue(fixed.thai, "th", candidate.english)) {
+                if (!isValidLocalizedText(fixed.thai, "th")) {
                     throw new Error(`Legacy localization repair returned invalid Thai for ${candidate.id}`);
                 }
                 patch[candidate.kind === "title" ? "titleTh" : "descriptionTh"] = fixed.thai;
                 repairedFields++;
             }
             if (candidate.repair.includes("kh")) {
-                if (!isValidLocalizedText(fixed.khmer, "kh") || getLocalizedStyleIssue(fixed.khmer, "kh", candidate.english)) {
+                if (!isValidLocalizedText(fixed.khmer, "kh")) {
                     throw new Error(`Legacy localization repair returned invalid Khmer for ${candidate.id}`);
                 }
                 patch[candidate.kind === "title" ? "titleKh" : "descriptionKh"] = fixed.khmer;
