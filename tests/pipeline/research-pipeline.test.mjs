@@ -403,6 +403,11 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(historian, /candidates\.sort\(\(a, b\) => a\.english\.length - b\.english\.length/);
   assert.match(historian, /MAX_BATCH_ENGLISH_CHARS = 3500/);
   assert.match(historian, /Math\.min\(12, Math\.round\(args\.batchSize \?\? 8\)\)/);
+  assert.match(historian, /acquireTimelineLocalizationRepairLock/);
+  assert.match(historian, /releaseTimelineLocalizationRepairLock/);
+  assert.match(api, /export const acquireTimelineLocalizationRepairLock = internalMutation/);
+  assert.match(api, /const STALE_MS = 30 \* 60 \* 1000/);
+  assert.match(api, /export const releaseTimelineLocalizationRepairLock = internalMutation/);
   assert.match(api, /assertRequiredLocalizedText\("titleTh", args\.titleTh, "th"\)/);
   assert.match(api, /validateTimelineLocalizationUpdates\(args\.updates\)/);
   assert.match(api, /assertValidLocalizedArray\("keyEventsTh"/);

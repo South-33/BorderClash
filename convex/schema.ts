@@ -436,6 +436,10 @@ export default defineSchema({
         // Cycle deduplication (prevents overlapping runs from manual + scheduled)
         cycleRunId: v.optional(v.string()),       // UUID of currently running cycle
         cycleStartedAt: v.optional(v.number()),   // When current cycle started (for zombie detection)
+        // Admin-only legacy localization repair lock. Separate from the
+        // research-cycle lock so paused maintenance cannot overlap itself.
+        localizationRepairRunId: v.optional(v.string()),
+        localizationRepairStartedAt: v.optional(v.number()),
     })
         .index("by_key", ["key"]),
 

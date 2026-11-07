@@ -1,5 +1,6 @@
 "use node";
 
+import { randomUUID } from "node:crypto";
 import { internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
@@ -2011,7 +2012,24 @@ export const repairLegacyTimelineLocalizations = internalAction({
         repairedFields: number;
         updatedEvents: number;
         done: boolean;
+        locked?: boolean;
     }> => {
+        const runId = randomUUID();
+        const lock = await ctx.runMutation(internal.api.acquireTimelineLocalizationRepairLock, { runId });
+        if (!lock.acquired) {
+            console.warn(`[LEGACY-I18N] repair skipped: ${lock.reason || "another repair is running"}`);
+            return {
+                scannedEvents: 0,
+                remainingPairsBefore: 0,
+                repairedPairs: 0,
+                repairedFields: 0,
+                updatedEvents: 0,
+                done: false,
+                locked: true,
+            };
+        }
+
+        try {
         const events: any[] = await ctx.runQuery(api.api.getTimeline, { limit: 1000 });
         const candidates: Array<{
             id: string;
@@ -2112,6 +2130,13 @@ export const repairLegacyTimelineLocalizations = internalAction({
             updatedEvents: updates.size,
             done: candidates.length <= batch.length,
         };
+        } finally {
+            try {
+                await ctx.runMutation(internal.api.releaseTimelineLocalizationRepairLock, { runId });
+            } catch (releaseError) {
+                console.warn(`[LEGACY-I18N] repair lock release failed runId=${runId}: ${releaseError}`);
+            }
+        }
     },
 });
 

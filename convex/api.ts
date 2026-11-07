@@ -2587,6 +2587,54 @@ export const releaseCycleLock = internalMutation({
     },
 });
 
+// Keep legacy localization maintenance strictly single-flight. A repair can
+// legitimately spend several minutes in Gemini, so only take over a lock that
+// has been abandoned for 30 minutes.
+export const acquireTimelineLocalizationRepairLock = internalMutation({
+    args: { runId: v.string() },
+    handler: async (ctx, { runId }): Promise<{ acquired: boolean; reason?: string }> => {
+        const stats = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+        if (!stats) return { acquired: false, reason: "system stats missing" };
+
+        const now = Date.now();
+        const STALE_MS = 30 * 60 * 1000;
+        if (stats.localizationRepairRunId) {
+            const ageMs = now - (stats.localizationRepairStartedAt || 0);
+            if (ageMs < STALE_MS) {
+                return {
+                    acquired: false,
+                    reason: `repair ${stats.localizationRepairRunId.slice(0, 8)} running (${Math.max(0, Math.round(ageMs / 60000))}m)`,
+                };
+            }
+            console.warn(`[LEGACY-I18N] taking over stale repair lock ageMinutes=${Math.round(ageMs / 60000)}`);
+        }
+
+        await ctx.db.patch(stats._id, {
+            localizationRepairRunId: runId,
+            localizationRepairStartedAt: now,
+        });
+        return { acquired: true };
+    },
+});
+
+export const releaseTimelineLocalizationRepairLock = internalMutation({
+    args: { runId: v.string() },
+    handler: async (ctx, { runId }) => {
+        const stats = await ctx.db.query("systemStats")
+            .withIndex("by_key", (q) => q.eq("key", "main"))
+            .first();
+        if (!stats || stats.localizationRepairRunId !== runId) return { released: false };
+
+        await ctx.db.patch(stats._id, {
+            localizationRepairRunId: undefined,
+            localizationRepairStartedAt: undefined,
+        });
+        return { released: true };
+    },
+});
+
 // Get all pending runResearchCycle job IDs for bulk cancellation
 export const getPendingCycleJobs = internalQuery({
     args: {},
