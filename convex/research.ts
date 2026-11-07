@@ -1223,6 +1223,14 @@ export const runResearchCycle = internalAction({
 
         // Check if we should skip this cycle (one-time skip, auto-resets)
         const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
+        if (stats?.isPaused || stats?.systemStatus === "stopped") {
+            console.log("[CYCLE] skipped reason=paused_or_stopped");
+            if (stats?.isPaused && stats?.systemStatus !== "stopped") {
+                await ctx.runMutation(internal.api.setStatus, { status: "online" });
+            }
+            await ctx.runMutation(internal.api.releaseCycleLock, { runId });
+            return;
+        }
         if (stats?.skipNextCycle) {
             console.log("[CYCLE] skipped reason=skipNextCycle");
             await ctx.runMutation(internal.api.setStatus, { status: "online" });

@@ -189,6 +189,9 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(watchdog, /nextRunAt: stats\.isPaused \? stats\.nextRunAt : nextRunAt/);
 
   const step1 = section(source, "export const runResearchCycle", "export const step2_verification");
+  assert.match(step1, /stats\?\.isPaused \|\| stats\?\.systemStatus === "stopped"/);
+  assert.match(step1, /skipped reason=paused_or_stopped/);
+  assert.match(step1, /releaseCycleLock, \{ runId \}/);
   assert.match(step1, /cambodiaResult = await ctx\.runAction\(internal\.research\.curateCambodia/);
   assert.match(step1, /thailandResult = await ctx\.runAction\(internal\.research\.curateThailand/);
   assert.match(step1, /internationalResult = await ctx\.runAction\(internal\.research\.curateInternational/);
@@ -539,9 +542,19 @@ test("resume paths restore a missing precise research schedule", () => {
   const resumeCycle = section(api, "export const resumeResearchCycle", "// Skip ONLY the next research cycle");
 
   assert.match(resumeHelper, /_scheduled_functions/);
+  assert.match(resumeHelper, /research\.js:runResearchCycle/);
   assert.match(resumeHelper, /research\.ts:runResearchCycle/);
+  assert.match(resumeHelper, /ctx\.scheduler\.cancel\(job\._id\)/);
   assert.match(resumeHelper, /ctx\.scheduler\.runAt\(runAt, internal\.research\.runResearchCycle, \{\}\)/);
   assert.match(resumeHelper, /scheduledRunId/);
   assert.match(resumeTimer, /resumeResearchScheduling\(ctx, existing\)/);
   assert.match(resumeCycle, /resumeResearchScheduling\(ctx, existing\)/);
+});
+
+test("pending research job lookup matches Convex compiled function names", () => {
+  const api = read(path.join(root, "convex", "api.ts"));
+  const pending = section(api, "export const getPendingCycleJobs", "// Internal mutation to SET skipNextCycle flag");
+
+  assert.match(pending, /research\.js:runResearchCycle/);
+  assert.match(pending, /research\.ts:runResearchCycle/);
 });

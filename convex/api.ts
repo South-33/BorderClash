@@ -2644,7 +2644,10 @@ export const getPendingCycleJobs = internalQuery({
             .filter((q) => 
                 q.and(
                     q.eq(q.field("state.kind"), "pending"),
-                    q.eq(q.field("name"), "research.ts:runResearchCycle")
+                    q.or(
+                        q.eq(q.field("name"), "research.js:runResearchCycle"),
+                        q.eq(q.field("name"), "research.ts:runResearchCycle"),
+                    ),
                 )
             )
             .collect();
@@ -2700,16 +2703,30 @@ async function resumeResearchScheduling(ctx: any, existing: any): Promise<void> 
         .filter((q: any) =>
             q.and(
                 q.eq(q.field("state.kind"), "pending"),
-                q.eq(q.field("name"), "research.ts:runResearchCycle"),
+                q.or(
+                    q.eq(q.field("name"), "research.js:runResearchCycle"),
+                    q.eq(q.field("name"), "research.ts:runResearchCycle"),
+                ),
             ),
         )
         .collect();
 
-    let scheduledRunId = pendingJobs[0]?._id;
-    if (!scheduledRunId && typeof existing.nextRunAt === "number") {
+    // Resume is an operator action: normalize the queue to one precise job.
+    // This also cleans up legacy duplicates created when the old filter used
+    // the TypeScript source name while Convex stores the compiled .js name.
+    for (const job of pendingJobs) {
+        try {
+            await ctx.scheduler.cancel(job._id);
+        } catch (cancelError) {
+            console.warn(`[SYSTEM] Could not cancel stale research job ${job._id}: ${cancelError}`);
+        }
+    }
+
+    let scheduledRunId: string | undefined;
+    if (typeof existing.nextRunAt === "number") {
         const runAt = Math.max(existing.nextRunAt, Date.now() + 1_000);
         scheduledRunId = await ctx.scheduler.runAt(runAt, internal.research.runResearchCycle, {});
-        console.log(`[SYSTEM] Restored missing research schedule for ${new Date(runAt).toISOString()}`);
+        console.log(`[SYSTEM] Normalized research schedule to ${new Date(runAt).toISOString()} after cancelling ${pendingJobs.length} pending job(s)`);
     }
 
     await ctx.db.patch(existing._id, {
