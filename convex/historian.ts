@@ -2088,10 +2088,11 @@ export const repairLegacyTimelineLocalizations = internalAction({
         }
 
         const items: LocalizedRepairItem[] = batch.map(({ id, english, repair }) => ({ id, english, repair }));
-        // Bulk historical repair benefits from one reliable High pass. The
-        // default Medium→High fallback is tuned for small online repairs and
-        // can exhaust its 60s/210s attempt caps on a maintenance batch.
-        const repaired = await repairLocalizedItems(items, undefined, GEMINI_THINKING.historian);
+        // Use the harness's bounded Medium→High fallback for maintenance.
+        // It allows at most two browser attempts, avoiding three long High
+        // attempts that can outlive the client's polling budget and overlap.
+        // 570s covers the 60s Medium trial plus one full High attempt.
+        const repaired = await repairLocalizedItems(items, 570_000, GEMINI_THINKING.repair);
         const updates = new Map<Id<"timelineEvents">, Record<string, string>>();
         let repairedFields = 0;
 

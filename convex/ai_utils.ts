@@ -109,7 +109,10 @@ type GeminiCallOptions = {
  */
 export function isCompletedGeminiFailure(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
-    return message.toLowerCase().includes("gemini request failed:");
+    const normalized = message.toLowerCase();
+    return normalized.includes("gemini request failed:")
+        || normalized.includes("gemini async job exceeded")
+        || normalized.includes("gemini async job disappeared after submission");
 }
 
 function buildGeminiStudioRequest(
