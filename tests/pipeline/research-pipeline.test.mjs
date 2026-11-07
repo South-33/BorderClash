@@ -207,6 +207,12 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(source, /async function scheduleRunAfterWithRetries/);
   assert.match(source, /async function scheduleRunAtWithRetries/);
 
+  const watchdog = section(source, "export const recoverStuckCycle", "export const curateCambodia");
+  assert.doesNotMatch(watchdog, /stats\.isPaused \|\| stats\.systemStatus === "stopped"/);
+  assert.match(watchdog, /stats\.isPaused \? undefined : await/);
+  assert.match(watchdog, /scheduling remained paused/);
+  assert.match(watchdog, /nextRunAt: stats\.isPaused \? stats\.nextRunAt : nextRunAt/);
+
   const step1 = section(source, "export const runResearchCycle", "export const step2_verification");
   assert.match(step1, /cambodiaResult = await ctx\.runAction\(internal\.research\.curateCambodia/);
   assert.match(step1, /thailandResult = await ctx\.runAction\(internal\.research\.curateThailand/);
@@ -218,6 +224,8 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
 
   const step2 = section(source, "export const step2_verification", "export const step3_historian");
   assert.match(step2, /attempt: v\.optional\(v\.number\(\)\)/);
+  assert.match(step2, /stats\?\.isPaused && stats\?\.systemStatus !== "stopped"/);
+  assert.match(step2, /setStatus, \{ status: "online" \}/);
   assert.match(step2, /stats\.cycleRunId !== runId \|\| stats\.systemStatus !== "syncing"/);
   assert.match(step2, /skipped stale_run/);
   assert.match(step2, /runWithRetries\(\s*"\[STEP 2\] Source verification"/s);
@@ -226,6 +234,8 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step2, /Verification: \$\{verifyResult\.errors\} article\(s\) left unverified/);
 
   const step3 = section(source, "export const step3_historian", "export const step4_synthesis");
+  assert.match(step3, /stats\?\.isPaused && stats\?\.systemStatus !== "stopped"/);
+  assert.match(step3, /setStatus, \{ status: "online" \}/);
   assert.match(step3, /stats\.cycleRunId !== runId \|\| stats\.systemStatus !== "syncing"/);
   assert.match(step3, /skipped stale_run/);
   assert.match(step3, /runWithRetries\(\s*`\[STEP 3\] Timeline refresh iteration \$\{historianLoops\}`/s);
@@ -238,6 +248,8 @@ test("research pipeline retries and handoff guards exist on all chained steps", 
   assert.match(step3, /scheduleRunAfterWithRetries\(ctx, "Step 4"/);
 
   const step4 = section(source, "export const step4_synthesis", "export const verifyAllSources");
+  assert.match(step4, /stats\?\.isPaused && stats\?\.systemStatus !== "stopped"/);
+  assert.match(step4, /setStatus, \{ status: "online" \}/);
   assert.match(step4, /stats\.cycleRunId !== runId \|\| stats\.systemStatus !== "syncing"/);
   assert.match(step4, /skipped stale_run/);
   assert.match(step4, /attempt > 0 && typeof stats\.lastResearchAt === "number"/);

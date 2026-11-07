@@ -277,8 +277,8 @@ export const recoverStuckCycle = internalAction({
             return { recovered: false, reason: "no system stats record" };
         }
 
-        if (stats.isPaused || stats.systemStatus === "stopped") {
-            return { recovered: false, reason: "system paused/stopped" };
+        if (stats.systemStatus === "stopped") {
+            return { recovered: false, reason: "system stopped" };
         }
 
         if (stats.systemStatus !== "syncing" || !stats.cycleRunId || !stats.cycleStartedAt) {
@@ -294,7 +294,9 @@ export const recoverStuckCycle = internalAction({
 
         const FALLBACK_INTERVAL_HOURS = 24;
         const nextRunAt = now + (FALLBACK_INTERVAL_HOURS * 60 * 60 * 1000);
-        const recoveryReason = "Automatic fallback scheduling after stuck/timed-out cycle; retrying in 24h";
+        const recoveryReason = stats.isPaused
+            ? "Automatic recovery cleared a stale cycle while scheduling remains paused"
+            : "Automatic fallback scheduling after stuck/timed-out cycle; retrying in 24h";
 
         // Cancel any pending cycle jobs so we don't stack duplicate runs.
         try {
@@ -313,7 +315,7 @@ export const recoverStuckCycle = internalAction({
             console.log(`⚠️ [RECOVERY] Could not query pending jobs: ${pendingJobsError}`);
         }
 
-        const scheduledRunId = await (async () => {
+        const scheduledRunId = stats.isPaused ? undefined : await (async () => {
             try {
                 const jobId = await scheduleRunAtWithRetries(
                     ctx,
@@ -332,16 +334,20 @@ export const recoverStuckCycle = internalAction({
             }
         })();
 
-        await ctx.runMutation(internal.api.setNextRunAt, {
-            nextRunAt,
-            lastCycleInterval: FALLBACK_INTERVAL_HOURS,
-            schedulingReason: recoveryReason,
-            scheduledRunId,
-        });
+        if (!stats.isPaused) {
+            await ctx.runMutation(internal.api.setNextRunAt, {
+                nextRunAt,
+                lastCycleInterval: FALLBACK_INTERVAL_HOURS,
+                schedulingReason: recoveryReason,
+                scheduledRunId,
+            });
+        }
 
         const lockPrefix = stats.cycleRunId.slice(0, 8);
         const minsStuck = Math.round(cycleAgeMs / 60000);
-        const errorLog = `Recovery watchdog cleared stuck cycle ${lockPrefix} after ${minsStuck}m; fallback next run set to 24h.`;
+        const errorLog = stats.isPaused
+            ? `Recovery watchdog cleared stuck cycle ${lockPrefix} after ${minsStuck}m while scheduling remained paused.`
+            : `Recovery watchdog cleared stuck cycle ${lockPrefix} after ${minsStuck}m; fallback next run set to 24h.`;
 
         await ctx.runMutation(internal.api.setStatus, {
             status: "online",
@@ -355,7 +361,7 @@ export const recoverStuckCycle = internalAction({
         return {
             recovered: true,
             reason: errorLog,
-            nextRunAt,
+            nextRunAt: stats.isPaused ? stats.nextRunAt : nextRunAt,
         };
     },
 });
@@ -1310,6 +1316,9 @@ export const step2_verification = internalAction({
         const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
         if (stats?.isPaused || stats?.systemStatus === "stopped") {
             console.log("[STEP 2] Aborting step2_verification because system is paused/stopped.");
+            if (stats?.isPaused && stats?.systemStatus !== "stopped") {
+                await ctx.runMutation(internal.api.setStatus, { status: "online" });
+            }
             await ctx.runMutation(internal.api.releaseCycleLock, { runId });
             return;
         }
@@ -1378,6 +1387,9 @@ export const step3_historian = internalAction({
         const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
         if (stats?.isPaused || stats?.systemStatus === "stopped") {
             console.log("[STEP 3] Aborting step3_historian because system is paused/stopped.");
+            if (stats?.isPaused && stats?.systemStatus !== "stopped") {
+                await ctx.runMutation(internal.api.setStatus, { status: "online" });
+            }
             await ctx.runMutation(internal.api.releaseCycleLock, { runId });
             return;
         }
@@ -1493,6 +1505,9 @@ export const step4_synthesis = internalAction({
         const stats = await ctx.runQuery(internal.api.getSystemStatsInternal, {});
         if (stats?.isPaused || stats?.systemStatus === "stopped") {
             console.log("[STEP 4] Aborting step4_synthesis because system is paused/stopped.");
+            if (stats?.isPaused && stats?.systemStatus !== "stopped") {
+                await ctx.runMutation(internal.api.setStatus, { status: "online" });
+            }
             await ctx.runMutation(internal.api.releaseCycleLock, { runId });
             return;
         }
