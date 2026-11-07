@@ -13,6 +13,7 @@ import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
 import { isValidLocalizedText } from '../../convex/language_quality';
 
 type DashboardSnapshot = Omit<BorderClashData, 'fetchedAt'>;
+const DASHBOARD_TIME_ZONE = 'Asia/Phnom_Penh';
 
 const localizedText = (
   lang: Lang,
@@ -2402,12 +2403,34 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                       {/* Trend Indicator - Show last updated instead */}
                       <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} leading-tight`}>
                         {dashboardStats?.lastUpdatedAt ? (
-                          <span className="block" title={`${t.lastUpdated}: ${new Date(dashboardStats.lastUpdatedAt).toLocaleString()}`} suppressHydrationWarning>
+                          <span className="block" title={`${t.lastUpdated}: ${new Intl.DateTimeFormat('en-GB', {
+                            timeZone: DASHBOARD_TIME_ZONE,
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }).format(new Date(dashboardStats.lastUpdatedAt))}`}>
                             {t.lastUpdated} {(() => {
                               const d = new Date(dashboardStats.lastUpdatedAt);
-                              const day = d.getDate();
-                              const month = lang === 'kh' ? KH_MONTHS[d.getMonth()] : lang === 'th' ? TH_MONTHS_SHORT[d.getMonth()] : d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-                              const time = d.toLocaleTimeString(lang === 'th' || lang === 'kh' ? 'en-GB' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: lang === 'en' });
+                              const dateParts = new Intl.DateTimeFormat('en-US', {
+                                timeZone: DASHBOARD_TIME_ZONE,
+                                month: 'numeric',
+                                day: 'numeric',
+                              }).formatToParts(d);
+                              const day = Number(dateParts.find(part => part.type === 'day')?.value || '1');
+                              const monthIndex = Number(dateParts.find(part => part.type === 'month')?.value || '1') - 1;
+                              const month = lang === 'kh'
+                                ? KH_MONTHS[monthIndex]
+                                : lang === 'th'
+                                  ? TH_MONTHS_SHORT[monthIndex]
+                                  : new Intl.DateTimeFormat('en-US', { timeZone: DASHBOARD_TIME_ZONE, month: 'short' }).format(d).toUpperCase();
+                              const time = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'en-GB', {
+                                timeZone: DASHBOARD_TIME_ZONE,
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: lang === 'en',
+                              }).format(d);
                               return <>{month} {day} <span className="hidden md:inline ml-1">{time}</span></>;
                             })()}
                           </span>
