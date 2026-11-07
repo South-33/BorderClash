@@ -15,7 +15,7 @@ import {
     type CurationCountry,
 } from "./source_evidence";
 import { GEMINI_THINKING } from "./config";
-import { LOCALIZED_WRITING_RULES, isValidLocalizedText } from "./language_quality";
+import { LOCALIZED_WRITING_RULES, isValidLocalizedText, normalizeLocalizedDigits } from "./language_quality";
 
 // Use gemini-studio-api helpers
 import {
@@ -497,9 +497,17 @@ async function repairSynthesisLocalizations(result: SynthesisLocalizationShape):
         setter: (thai?: string, khmer?: string) => void,
     ) => {
         if (typeof english !== "string" || !english.trim()) return;
+        const normalizedThai = typeof thai === "string" ? normalizeLocalizedDigits(thai) : thai;
+        const normalizedKhmer = typeof khmer === "string" ? normalizeLocalizedDigits(khmer) : khmer;
+        if (typeof normalizedThai === "string" || typeof normalizedKhmer === "string") {
+            setter(
+                typeof normalizedThai === "string" ? normalizedThai : undefined,
+                typeof normalizedKhmer === "string" ? normalizedKhmer : undefined,
+            );
+        }
         const repair: Array<"th" | "kh"> = [];
-        if (!isValidLocalizedText(thai, "th")) repair.push("th");
-        if (!isValidLocalizedText(khmer, "kh")) repair.push("kh");
+        if (!isValidLocalizedText(normalizedThai, "th")) repair.push("th");
+        if (!isValidLocalizedText(normalizedKhmer, "kh")) repair.push("kh");
         if (repair.length === 0) return;
         items.push({
             id,

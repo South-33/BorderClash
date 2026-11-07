@@ -13,7 +13,7 @@ import {
     type LocalizedRepairItem,
 } from "./ai_utils";
 import { GEMINI_THINKING } from "./config";
-import { LOCALIZED_WRITING_RULES, isValidLocalizedText } from "./language_quality";
+import { LOCALIZED_WRITING_RULES, isValidLocalizedText, normalizeLocalizedDigits } from "./language_quality";
 import { canonicalizeArticleUrl } from "./dedupe";
 
 
@@ -235,6 +235,12 @@ async function repairHistorianLocalizations(
         requireBoth: boolean,
     ) => {
         if (typeof english !== "string" || !english.trim()) return;
+        if (typeof target[thaiField] === "string") {
+            target[thaiField] = normalizeLocalizedDigits(target[thaiField] as string);
+        }
+        if (typeof target[khmerField] === "string") {
+            target[khmerField] = normalizeLocalizedDigits(target[khmerField] as string);
+        }
         const repair: Array<"th" | "kh"> = [];
         if ((requireBoth || target[thaiField] !== undefined) && !isValidLocalizedText(target[thaiField], "th")) repair.push("th");
         if ((requireBoth || target[khmerField] !== undefined) && !isValidLocalizedText(target[khmerField], "kh")) repair.push("kh");

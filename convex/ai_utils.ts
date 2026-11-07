@@ -14,6 +14,7 @@ import {
 } from "./config";
 import {
     isValidLocalizedText,
+    normalizeLocalizedDigits,
     type LocalizedLanguage,
 } from "./language_quality";
 
@@ -503,6 +504,7 @@ export async function repairLocalizedItems(
 - Do not browse or search. Use only the supplied English text.
 - Keep facts, numbers, attribution and uncertainty unchanged; add, remove, strengthen or weaken nothing.
 - th: natural everyday Thai, no Khmer script. kh: natural everyday Khmer, no Thai script.
+- Use ASCII digits 0-9 only; never Thai or Khmer numeral glyphs.
 - Use normal local country/place names and neutral plain language; no side-taking, reader address, slang, cheering or hype. Explain jargon plainly.
 INPUT:
 ${JSON.stringify(promptItems)}
@@ -526,11 +528,13 @@ Include every id and only requested languages.`;
         if (!requested) continue;
 
         const clean: LocalizedRepairResult = { id: requested.id };
-        if (requested.repair.includes("th") && isValidLocalizedText(item.thai, "th")) {
-            clean.thai = item.thai;
+        const thai = typeof item.thai === "string" ? normalizeLocalizedDigits(item.thai) : item.thai;
+        const khmer = typeof item.khmer === "string" ? normalizeLocalizedDigits(item.khmer) : item.khmer;
+        if (requested.repair.includes("th") && isValidLocalizedText(thai, "th")) {
+            clean.thai = thai;
         }
-        if (requested.repair.includes("kh") && isValidLocalizedText(item.khmer, "kh")) {
-            clean.khmer = item.khmer;
+        if (requested.repair.includes("kh") && isValidLocalizedText(khmer, "kh")) {
+            clean.khmer = khmer;
         }
         repaired.set(requested.id, clean);
     }

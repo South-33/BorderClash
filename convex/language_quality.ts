@@ -2,7 +2,18 @@ export type LocalizedLanguage = "th" | "kh";
 
 const THAI_RE = /[\u0E00-\u0E7F]/u;
 const KHMER_RE = /[\u1780-\u17FF]/u;
+const NATIVE_DIGIT_RE = /[\u0E50-\u0E59\u17E0-\u17E9]/gu;
 const BAD_TEXT_RE = /(?:\uFFFD|\u00C3.|\u00C2.|\u00E2[\u0080-\u00BF]|\u00F0\u0178|\u00EF\u00BB\u00BF|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F])/u;
+
+export function normalizeLocalizedDigits(value: string): string {
+    return value.replace(NATIVE_DIGIT_RE, (digit) => {
+        const codePoint = digit.codePointAt(0)!;
+        if (codePoint >= 0x0E50 && codePoint <= 0x0E59) {
+            return String(codePoint - 0x0E50);
+        }
+        return String(codePoint - 0x17E0);
+    });
+}
 
 /**
  * Shared contract for every user-facing English/Thai/Khmer generation.
@@ -12,6 +23,7 @@ export const LOCALIZED_WRITING_RULES = `Writing and translation:
 - Write for an ordinary reader with no military, legal, or diplomatic background. Use short, natural sentences and common words.
 - English fields use natural English; Thai fields use natural Thai; Khmer fields use natural Khmer.
 - Thai output may use Thai script plus normal digits, punctuation, and common Latin acronyms. Khmer output may use Khmer script plus the same. Never mix Thai and Khmer scripts in one field.
+- Use ASCII digits 0-9 for numbers in every language. Do not use Thai or Khmer numeral glyphs.
 - Use the normal target-language form of country and place names when one exists. Never copy a name in the other language's script.
 - Translate meaning, attribution, and uncertainty. Do not translate word-for-word and do not add facts.
 - Keep disputed claims attributed to whoever made them. Apply the same standard to Thailand and Cambodia.

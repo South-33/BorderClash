@@ -171,6 +171,30 @@ test("localized text validator rejects mixed Thai and Khmer scripts", () => {
   });
 });
 
+test("localized digit normalization uses ASCII digits without changing language text", () => {
+  const moduleUrl = pathToFileURL(languageQualityPath).href;
+  const script = `
+    const m = await import(${JSON.stringify(moduleUrl)});
+    process.stdout.write(JSON.stringify({
+      thai: m.normalizeLocalizedDigits("วันที่ ๑๒ ราคา ๓.๕ บาท"),
+      khmer: m.normalizeLocalizedDigits("ថ្ងៃទី ១២ តម្លៃ ៣.៥ បាត"),
+      latin: m.normalizeLocalizedDigits("HIMARS 12 / 3.5"),
+    }));
+  `;
+  const result = spawnSync(
+    "node",
+    ["--experimental-strip-types", "--input-type=module", "-e", script],
+    { cwd: root, encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    thai: "วันที่ 12 ราคา 3.5 บาท",
+    khmer: "ថ្ងៃទី 12 តម្លៃ 3.5 បាត",
+    latin: "HIMARS 12 / 3.5",
+  });
+});
+
 test("legacy localized tone guard catches high-confidence loaded wording", () => {
   const moduleUrl = pathToFileURL(languageQualityPath).href;
   const script = `
@@ -417,6 +441,8 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(languageQuality, /export const LOCALIZED_WRITING_RULES/);
   assert.match(languageQuality, /ordinary reader with no military, legal, or diplomatic background/);
   assert.match(languageQuality, /Never mix Thai and Khmer scripts/);
+  assert.match(languageQuality, /ASCII digits 0-9/);
+  assert.match(languageQuality, /normalizeLocalizedDigits/);
   assert.match(languageQuality, /normal target-language form of country and place names/);
   assert.match(languageQuality, /Translate meaning, attribution, and uncertainty/);
   assert.match(languageQuality, /Apply the same standard to Thailand and Cambodia/);
@@ -443,6 +469,9 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(aiUtils, /facts, numbers, attribution and uncertainty unchanged/);
   assert.match(aiUtils, /th: natural everyday Thai, no Khmer script/);
   assert.match(aiUtils, /neutral plain language; no side-taking/);
+  assert.match(aiUtils, /ASCII digits 0-9 only/);
+  assert.match(aiUtils, /normalizeLocalizedDigits\(item\.thai\)/);
+  assert.match(aiUtils, /normalizeLocalizedDigits\(item\.khmer\)/);
   assert.match(aiUtils, /poll_transport_error retry_same_job=true/);
   assert.match(aiUtils, /poll_http_transient status=\$\{poll\.status\} retry_same_job=true/);
   assert.match(aiUtils, /poll\.status >= 520 && poll\.status <= 530/);

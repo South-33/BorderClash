@@ -10,7 +10,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
-import { getLocalizedStyleIssue, isValidLocalizedText } from '../../convex/language_quality';
+import { getLocalizedStyleIssue, isValidLocalizedText, normalizeLocalizedDigits } from '../../convex/language_quality';
 
 type DashboardSnapshot = Omit<BorderClashData, 'fetchedAt'>;
 const DASHBOARD_TIME_ZONE = 'Asia/Phnom_Penh';
@@ -21,9 +21,9 @@ const localizedText = (
   thai?: string | null,
   khmer?: string | null,
 ) => {
-  if (lang === 'th' && isValidLocalizedText(thai, 'th') && !getLocalizedStyleIssue(thai, 'th', english)) return thai;
-  if (lang === 'kh' && isValidLocalizedText(khmer, 'kh') && !getLocalizedStyleIssue(khmer, 'kh', english)) return khmer;
-  return english || '';
+  if (lang === 'th' && isValidLocalizedText(thai, 'th') && !getLocalizedStyleIssue(thai, 'th', english)) return normalizeLocalizedDigits(thai);
+  if (lang === 'kh' && isValidLocalizedText(khmer, 'kh') && !getLocalizedStyleIssue(khmer, 'kh', english)) return normalizeLocalizedDigits(khmer);
+  return english ? normalizeLocalizedDigits(english) : '';
 };
 
 const localizedArray = (
@@ -34,12 +34,12 @@ const localizedArray = (
 ) => {
   const base = english || [];
   if (lang === 'th' && Array.isArray(thai) && thai.length === base.length && thai.every((item, index) => isValidLocalizedText(item, 'th') && !getLocalizedStyleIssue(item, 'th', base[index]))) {
-    return thai;
+    return thai.map(normalizeLocalizedDigits);
   }
   if (lang === 'kh' && Array.isArray(khmer) && khmer.length === base.length && khmer.every((item, index) => isValidLocalizedText(item, 'kh') && !getLocalizedStyleIssue(item, 'kh', base[index]))) {
-    return khmer;
+    return khmer.map(normalizeLocalizedDigits);
   }
-  return base;
+  return base.map(normalizeLocalizedDigits);
 };
 
 
@@ -1776,7 +1776,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   };
 
   const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString();
+    return new Date(timestamp).toLocaleTimeString(undefined, { numberingSystem: 'latn' });
   };
 
 
@@ -1801,7 +1801,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
       const day = d.getDate();
       const month = TH_MONTHS_SHORT[d.getMonth()];
       if (formatStr === 'weekday-short') {
-        const weekday = d.toLocaleDateString('th-TH', { weekday: 'short' });
+        const weekday = d.toLocaleDateString('th-TH', { weekday: 'short', numberingSystem: 'latn' });
         return `${weekday} ${day} ${month}`;
       }
       return `${day} ${month}`;
@@ -1811,15 +1811,15 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     const locale = lang === 'th' ? 'th-TH' : 'en-US';
 
     if (formatStr === 'short') {
-      return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+      return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', numberingSystem: 'latn' });
     }
     if (formatStr === 'weekday') {
-      return d.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' });
+      return d.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', numberingSystem: 'latn' });
     }
     if (formatStr === 'weekday-short') {
-      return d.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric' });
+      return d.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric', numberingSystem: 'latn' });
     }
-    return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+    return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric', numberingSystem: 'latn' });
   };
 
   // Build flat list for virtualization: [header, event, event, ..., header, event, ...]
@@ -2399,7 +2399,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                     {/* Displaced Civilians */}
                     <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.displacedCivilians}</h4>
-                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString()}</span>
+                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString('en-US')}</span>
                       {/* Trend Indicator - Show last updated instead */}
                       <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} leading-tight`}>
                         {dashboardStats?.lastUpdatedAt ? (
