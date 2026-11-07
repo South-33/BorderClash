@@ -2173,6 +2173,86 @@ export const updateArticleContent = internalMutation({
     },
 });
 
+// Legacy localization maintenance must target the exact article that was
+// reviewed. Title-only updates are unsafe because old/duplicate records can
+// share a title. Guard the document ID, canonical source URL, and the exact
+// source text used for translation before changing any localized field.
+export const updateNewsLocalizationsGuarded = internalMutation({
+    args: {
+        country: v.union(v.literal("thailand"), v.literal("cambodia")),
+        articleId: v.string(),
+        expectedTitle: v.string(),
+        expectedSourceUrl: v.string(),
+        expectedTitleSource: v.optional(v.string()),
+        expectedSummarySource: v.optional(v.string()),
+        newTitleTh: v.optional(v.string()),
+        newTitleKh: v.optional(v.string()),
+        newSummaryTh: v.optional(v.string()),
+        newSummaryKh: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        validateOptionalNewsLocalizations({
+            titleTh: args.newTitleTh,
+            titleKh: args.newTitleKh,
+            summaryTh: args.newSummaryTh,
+            summaryKh: args.newSummaryKh,
+        });
+
+        const hasTitleUpdate = args.newTitleTh !== undefined || args.newTitleKh !== undefined;
+        const hasSummaryUpdate = args.newSummaryTh !== undefined || args.newSummaryKh !== undefined;
+        if (!hasTitleUpdate && !hasSummaryUpdate) {
+            throw new Error("No news localization fields supplied");
+        }
+
+        const table = args.country === "thailand" ? "thailandNews" : "cambodiaNews";
+        const articleId = ctx.db.normalizeId(table, args.articleId);
+        if (!articleId) {
+            throw new Error("News localization guard failed: article ID does not belong to " + table);
+        }
+
+        const article = await ctx.db.get(articleId);
+        if (!article) {
+            throw new Error("News localization guard failed: article not found");
+        }
+        if (article.title !== args.expectedTitle) {
+            throw new Error("News localization guard failed: title changed");
+        }
+
+        const expectedUrl = canonicalizeArticleUrl(args.expectedSourceUrl);
+        const currentUrl = canonicalizeArticleUrl(article.sourceUrl);
+        if (expectedUrl !== currentUrl) {
+            throw new Error("News localization guard failed: source URL changed");
+        }
+
+        if (hasTitleUpdate) {
+            const currentTitleSource = article.titleEn || article.title;
+            if (args.expectedTitleSource === undefined || currentTitleSource !== args.expectedTitleSource) {
+                throw new Error("News localization guard failed: title source changed");
+            }
+        }
+
+        if (hasSummaryUpdate) {
+            const currentSummarySource = article.summaryEn
+                || article.summary
+                || article.titleEn
+                || article.title;
+            if (args.expectedSummarySource === undefined || currentSummarySource !== args.expectedSummarySource) {
+                throw new Error("News localization guard failed: summary source changed");
+            }
+        }
+
+        await ctx.db.patch(articleId, {
+            ...(args.newTitleTh !== undefined && { titleTh: args.newTitleTh }),
+            ...(args.newTitleKh !== undefined && { titleKh: args.newTitleKh }),
+            ...(args.newSummaryTh !== undefined && { summaryTh: args.newSummaryTh }),
+            ...(args.newSummaryKh !== undefined && { summaryKh: args.newSummaryKh }),
+            lastReviewedAt: Date.now(),
+        });
+
+        return { updated: true };
+    },
+});
+
 // Update article URL when verifier finds the correct one
 export const updateArticleUrl = internalMutation({
     args: {

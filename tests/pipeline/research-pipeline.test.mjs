@@ -460,6 +460,11 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(api, /validateTimelineLocalizationUpdates\(args\.updates\)/);
   assert.match(api, /assertValidLocalizedArray\("keyEventsTh"/);
   assert.match(api, /validateOptionalNewsLocalizations\(args\)/);
+  assert.match(api, /export const updateNewsLocalizationsGuarded = internalMutation/);
+  assert.match(api, /ctx\.db\.normalizeId\(table, args\.articleId\)/);
+  assert.match(api, /News localization guard failed: source URL changed/);
+  assert.match(api, /currentTitleSource !== args\.expectedTitleSource/);
+  assert.match(api, /currentSummarySource !== args\.expectedSummarySource/);
   assert.match(
     section(api, "export const updateArticleValidation", "export const createTimelineEvent"),
     /validateOptionalNewsLocalizations\(\{\s*titleTh: args\.titleTh,\s*titleKh: args\.titleKh,/s,
