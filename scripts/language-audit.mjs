@@ -6,6 +6,9 @@ const execFileAsync = promisify(execFile);
 const convexCli = resolve(process.cwd(), "node_modules", "convex", "bin", "main.js");
 const asJson = process.argv.includes("--json");
 const sampleLimit = 12;
+const convexEnv = { ...process.env };
+delete convexEnv.CONVEX_URL;
+delete convexEnv.CONVEX_DEPLOYMENT;
 
 const THAI_RE = /[\u0E00-\u0E7F]/u;
 const KHMER_RE = /[\u1780-\u17FF]/u;
@@ -17,7 +20,7 @@ async function runConvex(functionName, args = {}) {
   const { stdout } = await execFileAsync(
     process.execPath,
     [convexCli, "run", functionName, JSON.stringify(args)],
-    { cwd: process.cwd(), encoding: "utf8", timeout: 45_000, maxBuffer: 16_000_000 },
+    { cwd: process.cwd(), env: convexEnv, encoding: "utf8", timeout: 45_000, maxBuffer: 16_000_000 },
   );
   return JSON.parse(stdout.trim());
 }

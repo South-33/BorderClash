@@ -6,6 +6,9 @@ const execFileAsync = promisify(execFile);
 const CONTROL_URL = (process.env.GEMINI_STUDIO_CONTROL_URL
   || "https://believable-unplagiarised-josette.ngrok-free.dev").replace(/\/+$/, "");
 const isJson = process.argv.includes("--json");
+const convexEnv = { ...process.env };
+delete convexEnv.CONVEX_URL;
+delete convexEnv.CONVEX_DEPLOYMENT;
 
 function iso(value) {
   if (!value) return null;
@@ -18,7 +21,7 @@ async function runConvex(functionName) {
   const { stdout } = await execFileAsync(
     process.execPath,
     [convexCli, "run", functionName, "{}"],
-    { cwd: process.cwd(), encoding: "utf8", timeout: 30_000, maxBuffer: 2_000_000 },
+    { cwd: process.cwd(), env: convexEnv, encoding: "utf8", timeout: 30_000, maxBuffer: 2_000_000 },
   );
   return JSON.parse(stdout.trim());
 }
