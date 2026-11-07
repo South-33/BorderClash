@@ -397,6 +397,8 @@ test("shared Gemini parsing and translation guidance remain hardened", () => {
   assert.match(historian, /localizationUpdate\.newSummaryKh = translations\.summaryKh/);
   assert.match(aiUtils, /LOCALIZATION-REPAIR/);
   assert.match(aiUtils, /thinkingLevel: GeminiThinkingLevel = GEMINI_THINKING\.repair/);
+  assert.match(aiUtils, /poll_transport_error retry_same_job=true/);
+  assert.match(aiUtils, /geminiEndpointCache = null;[\s\S]*continue;/);
   assert.match(historian, /repairLocalizedItems\(items, undefined, GEMINI_THINKING\.historian\)/);
   assert.match(historian, /candidates\.sort\(\(a, b\) => Number\(b\.hardFailure\) - Number\(a\.hardFailure\)\)/);
   assert.match(api, /assertRequiredLocalizedText\("titleTh", args\.titleTh, "th"\)/);

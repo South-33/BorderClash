@@ -261,11 +261,24 @@ export async function callGeminiStudio(
             const remaining = deadline - Date.now();
             await new Promise(resolve => setTimeout(resolve, Math.min(GEMINI_POLL_INTERVAL_MS, remaining)));
 
-            const poll = await fetchWithTransientRetry(
-                `/v1/chat/completions/${encodeURIComponent(request.requestId)}`,
-                { method: "GET", headers: request.headers },
-                { allowNotFound: true },
-            );
+            let poll: Response;
+            try {
+                poll = await fetchWithTransientRetry(
+                    `/v1/chat/completions/${encodeURIComponent(request.requestId)}`,
+                    { method: "GET", headers: request.headers },
+                    { allowNotFound: true },
+                );
+            } catch (pollTransportError) {
+                // Submission already succeeded and the browser job may still be
+                // running. A quick-tunnel rotation or brief control-plane outage
+                // must not orphan that in-flight request. Clear endpoint cache
+                // and keep polling the SAME request id until the overall budget
+                // expires; never resubmit merely because transport disappeared.
+                if (controller.signal.aborted) throw pollTransportError;
+                geminiEndpointCache = null;
+                console.warn(`[GEMINI] poll_transport_error retry_same_job=true duration=${Date.now() - startTime}ms requestId=${request.requestId} message=${pollTransportError instanceof Error ? pollTransportError.message : String(pollTransportError)}`);
+                continue;
+            }
 
             if (poll.status === 202) {
                 consecutiveNotFound = 0;
