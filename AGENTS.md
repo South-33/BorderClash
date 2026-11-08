@@ -36,7 +36,7 @@ Start with:
 
 `node scripts/research.mjs`
 
-It returns a concise brief: current state, current analyses, the latest durable events, recent visible news, archive size, and quality status.
+It returns current state plus cycle-relative material context. `cycle-window` means records relevant to the current research window; `fallback-anchors` means no such records exist, so a few older anchors are shown only for orientation.
 
 Use only when needed:
 

@@ -7,6 +7,166 @@ import test from "node:test";
 
 const script = resolve("scripts", "research.mjs");
 
+async function writeJsonFile(path, value) {
+  await mkdir(resolve(path, ".."), { recursive: true });
+  await writeFile(path, JSON.stringify(value, null, 2) + "\n");
+}
+
+async function writeJsonlFile(path, rows) {
+  await mkdir(resolve(path, ".."), { recursive: true });
+  await writeFile(path, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+}
+
+function localizedNews(id, title, publishedAt, fetchedAt = publishedAt) {
+  return {
+    id,
+    status: "active",
+    source: "Fixture",
+    category: "military",
+    title,
+    titleEn: title,
+    titleTh: "ข่าวชายแดน",
+    titleKh: "ព័ត៌មានព្រំដែន",
+    publishedAt,
+    fetchedAt,
+  };
+}
+
+async function makeBriefFixture({ lastResearchAt, lastCycleInterval = 24, news, timeline }) {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-brief-"));
+  await writeJsonFile(join(root, "data", "state.json"), {
+    schemaVersion: 1,
+    isPaused: false,
+    systemStatus: "online",
+    lastResearchAt,
+    nextRunAt: lastResearchAt + 24 * 3_600_000,
+    lastCycleInterval,
+    schedulingReason: "fixture",
+    researchCycleCount: 1,
+    scheduler: "external",
+  });
+  await writeJsonFile(join(root, "data", "dashboard.json"), {
+    conflictLevel: "LOW",
+    displacedCount: 0,
+    casualtyCount: 0,
+    civilianInjuredCount: 0,
+    militaryInjuredCount: 0,
+    lastUpdatedAt: lastResearchAt,
+  });
+  for (const name of ["thailand", "cambodia", "neutral"]) {
+    await writeJsonFile(join(root, "data", "analysis", `${name}.json`), {
+      lastUpdatedAt: lastResearchAt,
+      conflictLevel: "Low",
+      militaryIntensity: 10,
+      militaryPosture: "DEFENSIVE",
+      officialNarrative: "Border situation remains calm.",
+      officialNarrativeEn: "Border situation remains calm.",
+      generalSummary: "Border situation remains calm.",
+      generalSummaryEn: "Border situation remains calm.",
+      keyEvents: [],
+      keyEventsEn: [],
+    });
+  }
+  for (const country of ["thailand", "cambodia", "international"]) {
+    await writeJsonlFile(
+      join(root, "data", "news", "2026-11", `${country}.jsonl`),
+      news[country] || [],
+    );
+  }
+  await writeJsonlFile(join(root, "data", "timeline", "2026.jsonl"), timeline);
+  return root;
+}
+
+function runBrief(root) {
+  const result = spawnSync(process.execPath, [script], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+test("brief uses bounded material fallback when the cycle window is empty", async () => {
+  const lastResearchAt = Date.parse("2026-11-08T12:00:00Z");
+  const old = Date.parse("2026-11-06T12:00:00Z");
+  const root = await makeBriefFixture({
+    lastResearchAt,
+    news: {
+      thailand: [localizedNews("th-old", "Thailand border talks continue", old)],
+      cambodia: [localizedNews("kh-old", "Cambodia reports border monitoring", old)],
+      international: [
+        localizedNews("intl-noise", "Singapore sand imports affect fishing community", old + 1_000),
+        localizedNews("intl-old", "ASEAN border observers continue monitoring", old),
+      ],
+    },
+    timeline: [
+      { id: "tl-1", date: "2026-11-05", timeOfDay: "12:00", title: "Border monitoring continues" },
+      { id: "tl-2", date: "2026-11-04", timeOfDay: "12:00", title: "Ceasefire review held" },
+      { id: "tl-3", date: "2026-11-03", timeOfDay: "12:00", title: "Older event" },
+    ],
+  });
+  try {
+    const brief = runBrief(root);
+    assert.equal(brief.contextWindow.mode, "fallback-anchors");
+    assert.equal(brief.contextWindow.start, "2026-11-08T00:00:00.000Z");
+    assert.deepEqual(brief.contextWindow.windowCounts, {
+      timeline: 0,
+      news: { thailand: 0, cambodia: 0, international: 0 },
+    });
+    assert.equal(brief.recentTimeline.length, 2);
+    assert.equal(brief.recentNews.thailand.length, 1);
+    assert.equal(brief.recentNews.cambodia.length, 1);
+    assert.equal(brief.recentNews.international.length, 1);
+    assert.equal(brief.recentNews.international[0].id, "intl-old");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("brief surfaces fresh material context and counts newly fetched older reporting", async () => {
+  const lastResearchAt = Date.parse("2026-11-08T12:00:00Z");
+  const recent = Date.parse("2026-11-08T14:00:00Z");
+  const old = Date.parse("2026-11-01T12:00:00Z");
+  const root = await makeBriefFixture({
+    lastResearchAt,
+    lastCycleInterval: 4,
+    news: {
+      thailand: [
+        localizedNews("th-1", "Thailand border troops hold position", recent + 3_000),
+        localizedNews("th-2", "Thailand border talks continue", recent + 2_000),
+        localizedNews("th-fetched", "Older border report newly discovered", old, recent + 1_000),
+      ],
+      cambodia: [localizedNews("kh-1", "Cambodia border monitoring continues", recent)],
+      international: [
+        localizedNews("intl-noise", "Singapore sand imports affect fishing community", recent + 1_000),
+        localizedNews("intl-1", "ASEAN border observers inspect ceasefire area", recent),
+      ],
+    },
+    timeline: Array.from({ length: 5 }, (_, index) => ({
+      id: `tl-${index + 1}`,
+      date: "2026-11-08",
+      timeOfDay: `1${index}:00`,
+      createdAt: recent + index,
+      title: `Border event ${index + 1}`,
+    })),
+  });
+  try {
+    const brief = runBrief(root);
+    assert.equal(brief.contextWindow.mode, "cycle-window");
+    assert.equal(brief.contextWindow.overlapHours, 2);
+    assert.equal(brief.contextWindow.start, "2026-11-08T10:00:00.000Z");
+    assert.deepEqual(brief.contextWindow.windowCounts, {
+      timeline: 5,
+      news: { thailand: 3, cambodia: 1, international: 1 },
+    });
+    assert.equal(brief.recentTimeline.length, 4);
+    assert.deepEqual(
+      brief.recentNews.thailand.map((row) => row.id),
+      ["th-1", "th-2", "th-fetched"],
+    );
+    assert.deepEqual(brief.recentNews.international.map((row) => row.id), ["intl-1"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("finish owns cycle timestamps and preserves pause state", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {

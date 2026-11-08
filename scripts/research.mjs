@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { assessContentQuality, selectVisibleNews } from "../lib/content-quality.mjs";
+import { assessContentQuality, isBorderRelevantNews, selectVisibleNews } from "../lib/content-quality.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "../lib/files.mjs";
 
 const dataRoot = resolve("data");
@@ -12,9 +12,20 @@ const RESEARCH_TESTS = [
   "tests/research-content.test.mjs",
   "tests/research-cli.test.mjs",
 ];
+const BRIEF_NEWS_LIMIT = 3;
+const BRIEF_TIMELINE_LIMIT = 4;
+const BRIEF_FALLBACK_NEWS_LIMIT = 1;
+const BRIEF_FALLBACK_TIMELINE_LIMIT = 2;
 
 function latestTimestamp(row) {
   return row.publishedAt || row.fetchedAt || row.lastUpdatedAt || 0;
+}
+
+function newsContextTimestamp(row) {
+  return Math.max(
+    Number(row?.publishedAt || 0),
+    Number(row?.fetchedAt || 0),
+  );
 }
 
 function compactNews(row) {
@@ -36,6 +47,67 @@ function compactTimeline(row) {
     importance: row.importance,
     status: row.status,
     title: row.title,
+  };
+}
+
+function timelineTimestamp(row) {
+  if (typeof row?.date !== "string") return 0;
+  const time = typeof row.timeOfDay === "string" && /^\d{2}:\d{2}$/u.test(row.timeOfDay)
+    ? row.timeOfDay
+    : "00:00";
+  const parsed = Date.parse(`${row.date}T${time}:00Z`);
+  return Math.max(
+    Number.isFinite(parsed) ? parsed : 0,
+    Number(row?.createdAt || 0),
+  );
+}
+
+function briefOverlapHours(state) {
+  const interval = Number(state?.lastCycleInterval || 24);
+  return Math.min(12, Math.max(1, interval / 2));
+}
+
+function selectBriefContext({ state, news, timeline }) {
+  const overlapHours = briefOverlapHours(state);
+  const overlapMs = overlapHours * 3_600_000;
+  const windowStart = Math.max(0, Number(state.lastResearchAt || 0) - overlapMs);
+  const eligibleNews = Object.fromEntries(
+    Object.entries(news).map(([country, rows]) => [
+      country,
+      selectVisibleNews(rows, rows.length).filter(isBorderRelevantNews),
+    ]),
+  );
+  const windowNews = Object.fromEntries(
+    Object.entries(eligibleNews).map(([country, rows]) => [
+      country,
+      rows.filter((row) => newsContextTimestamp(row) >= windowStart),
+    ]),
+  );
+  const windowTimeline = timeline.filter((row) => timelineTimestamp(row) >= windowStart);
+  const hasWindowNews = Object.values(windowNews).some((rows) => rows.length > 0);
+  const hasWindowContext = hasWindowNews || windowTimeline.length > 0;
+
+  const selectedNews = Object.fromEntries(
+    Object.entries(hasWindowContext ? windowNews : eligibleNews).map(([country, rows]) => [
+      country,
+      rows.slice(0, hasWindowContext ? BRIEF_NEWS_LIMIT : BRIEF_FALLBACK_NEWS_LIMIT),
+    ]),
+  );
+  const selectedTimeline = (hasWindowContext ? windowTimeline : timeline)
+    .slice(0, hasWindowContext ? BRIEF_TIMELINE_LIMIT : BRIEF_FALLBACK_TIMELINE_LIMIT);
+
+  return {
+    mode: hasWindowContext ? "cycle-window" : "fallback-anchors",
+    windowStart,
+    overlapHours,
+    newCounts: {
+      timeline: windowTimeline.length,
+      news: Object.fromEntries(
+        Object.entries(windowNews).map(([country, rows]) => [country, rows.length]),
+      ),
+    },
+    news: selectedNews,
+    timeline: selectedTimeline,
   };
 }
 
@@ -76,6 +148,7 @@ async function brief() {
   for (const values of Object.values(news)) {
     values.sort((a, b) => latestTimestamp(b) - latestTimestamp(a));
   }
+  const context = selectBriefContext({ state, news, timeline });
 
   const contentQuality = assessContentQuality({ news, analyses });
   const compactQuality = contentQuality.score === 100 && contentQuality.issues.length === 0
@@ -132,11 +205,17 @@ async function brief() {
         keyEvents: analyses.neutral?.keyEventsEn || analyses.neutral?.keyEvents,
       },
     },
-    recentTimeline: timeline.slice(0, 4).map(compactTimeline),
+    contextWindow: {
+      mode: context.mode,
+      start: toIso(context.windowStart),
+      overlapHours: context.overlapHours,
+      windowCounts: context.newCounts,
+    },
+    recentTimeline: context.timeline.map(compactTimeline),
     recentNews: Object.fromEntries(
-      Object.entries(news).map(([country, values]) => [
+      Object.entries(context.news).map(([country, values]) => [
         country,
-        selectVisibleNews(values, 3).map(compactNews),
+        values.map(compactNews),
       ]),
     ),
     archive: {
