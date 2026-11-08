@@ -236,8 +236,6 @@ try {
     $baseHead = (git -C $repoRoot rev-parse HEAD).Trim()
 
     Invoke-Checked "git" @("-C", $repoRoot, "worktree", "add", "-b", $branch, $worktree, $baseHead) $repoRoot
-    Invoke-Checked "git" @("-C", $worktree, "sparse-checkout", "init", "--cone") $repoRoot
-    Invoke-Checked "git" @("-C", $worktree, "sparse-checkout", "set", "data", "scripts", "lib", "tests") $repoRoot
 
     $effectivePrompt = if ($Prompt) {
         $Prompt
