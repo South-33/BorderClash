@@ -1,0 +1,19 @@
+{
+  "id": "k572y7fjnhb3y9np13rr0hsc8s7x75jq",
+  "lastUpdatedAt": 1794065436297,
+  "militaryIntensity": 40,
+  "militaryPosture": "DEFENSIVE",
+  "narrativeSource": "Spring News, Khaosod English, Bangkok Post, Naewna, Cambodianess",
+  "officialNarrative": "Thailand rejects Cambodian accusations of border incursions, affirming that permanent fencing and security measures in Chanthaburi and Buri Ram occur strictly within Thai sovereign territory. Bangkok emphasizes border defense restructuring, cooperates with ASEAN landmine monitoring missions, and participates in diplomatic dialogue to maintain regional stability.",
+  "officialNarrativeKh": "ថៃបដិសេធការចោទប្រកាន់របស់កម្ពុជាអំពីការឈ្លានពានព្រំដែន ដោយអះអាងថារបងអចិន្ត្រៃយ៍និងវិធានការសន្តិសុខនៅចាន់បុរី និងបុរីរ៉ាំ គឺធ្វើឡើងយ៉ាងតឹងរ៉ឹងក្នុងដែនអធិបតេយ្យភាពថៃ។ ទីក្រុងបាងកកសង្កត់ធ្ងន់លើការរៀបចំរចនាសម្ព័ន្ធការពារព្រំដែន សហការជាមួយបេសកកម្មអាស៊ានត្រួតពិនិត្យមីន និងចូលរួមកិច្ចសន្ទនាការទូតដើម្បីរក្សាស្ថិរភាពក្នុងតំបន់។",
+  "officialNarrativeTh": "ไทยปฏิเสธข้อกล่าวหาของกัมพูชาเรื่องการรุกล้ำชายแดน โดยยืนยันว่าการสร้างรั้วถาวรและมาตรการความมั่นคงในจันทบุรีและบุรีรัมย์ดำเนินอยู่ในดินแดนอธิปไตยของไทยอย่างเคร่งครัด กรุงเทพฯ เน้นการปรับโครงสร้างกำลังป้องกันชายแดน ร่วมมือกับภารกิจอาเซียนตรวจสอบทุ่นระเบิด และร่วมเจรจาทางการทูตเพื่อรักษาเสถียรภาพในภูมิภาค",
+  "postureLabel": "Border Security and Fortification",
+  "postureLabelEn": "Border Security and Fortification",
+  "postureLabelKh": "ការការពារសន្តិសុខនិងពង្រឹងព្រំដែន",
+  "postureLabelTh": "การรักษาความปลอดภัยและสร้างแนวรั้ว",
+  "postureRationale": "Thai forces are focused on passive border defense, permanent border barrier construction, and administrative force restructuring. No offensive actions or cross-border kinetic operations have been launched.",
+  "postureRationaleEn": "Thai forces are focused on passive border defense, permanent border barrier construction, and administrative force restructuring. No offensive actions or cross-border kinetic operations have been launched.",
+  "postureRationaleKh": "កងកម្លាំងថៃផ្តោតលើការការពារព្រំដែនបែបអសកម្ម ការសាងសង់របងព្រំដែនអចិន្ត្រៃយ៍ និងការរៀបចំរចនាសម្ព័ន្ធកងទ័ពឡើងវិញ។ មិនមានសកម្មភាពវាយលុក ឬប្រតិបត្តិការប្រដាប់អាវុធឆ្លងដែនណាមួយត្រូវបានធ្វើឡើងឡើយ។",
+  "postureRationaleTh": "กองทัพไทยมุ่งเน้นการป้องกันชายแดนเชิงรับ การก่อสร้างแนวรั้วชายแดนถาวร และการปรับโครงสร้างหน่วยทหาร โดยไม่มีการปฏิบัติการเชิงรุกหรือการปะทะด้วยอาวุธข้ามแดน",
+  "territorialContext": "BORDER_ZONE"
+}

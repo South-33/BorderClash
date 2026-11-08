@@ -48,3 +48,8 @@ next-env.d.ts
 # RunLong CLI files
 .longrun/
 RUNLONG.md
+
+# BorderClash scheduled research runtime
+/.work/
+/.logs/
+/.state/

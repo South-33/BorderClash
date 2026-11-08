@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "isPaused": true,
+  "systemStatus": "online",
+  "lastResearchAt": 1794099510000,
+  "nextRunAt": 1794185910000,
+  "lastCycleInterval": 24,
+  "schedulingReason": "Border conditions remain non-kinetic with ongoing ASEAN observer monitoring and bilateral confidence-building dialogue.",
+  "researchCycleCount": 608,
+  "scheduler": "external"
+}

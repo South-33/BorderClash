@@ -1,17 +1,114 @@
 This is the project's AGENTS.md
 
-## 1. Project Overview
-BorderClash is a real-time conflict monitoring dashboard for the Thailand-Cambodia border. It uses ISR (Incremental Static Regeneration) so normal page views reuse a published dashboard snapshot instead of repeating the same Convex reads.
+# BorderClash
 
-## 2. Notes
-- Gemini policy: BorderClash uses the `flash` model family only. Default to `medium` thinking; use `high` only when the task needs it or for an allowed transient-failure promotion. Every Gemini call must explicitly use `medium` or `high`. Do not add Flash-Lite, Pro, Argon, Low, Standard, Extended, or model-family fallbacks.
-- News discovery lives in `convex/source_evidence.ts`: Bing News RSS supplies recent publisher-backed candidates, and Step 1 inserts them as `unverified` so curation never waits on Gemini or invents source URLs. Manual backfill reuses the same target-date path.
-- Source verification is deterministic: BorderClash fetches the publisher page plus independent Google News RSS evidence and can only mark a strong match `VERIFIED`, an explicit 404/410 `URL_DEAD`, or otherwise `SKIP`. It does not call Gemini. Automatic verification is limited to recent records so stale legacy backlog cannot consume every cycle. Only `active` articles may influence the permanent timeline or synthesized analysis.
-- If all three RSS curators fail because news-feed discovery is unavailable, replace older pending cycle jobs and retry the cycle after 5h, then 24h on continued outage.
-- `gemini-studio-api` owns bounded browser retries. When it returns `Gemini request failed`, BorderClash must not immediately repeat the same AI call; preserve existing data and continue/fallback. JSON repair and genuine transport errors may still retry locally.
-- Keep historian/synthesis prompts compact: historian processes 3 articles against 12 recent timeline events, and synthesis uses bounded low-credibility/breaking-news context. Do not restore the separate planner call or large recent-news context unless evidence shows it is necessary.
-- User-facing Thai/Khmer text must pass `convex/language_quality.ts` before persistence; repair only failed fields, and keep the frontend English fallback for legacy invalid localizations instead of trusting prompt instructions alone.
-- Localized display text uses ASCII digits `0-9` in every language. Thai text may contain Thai + Latin text but never Khmer script; Khmer text may contain Khmer + Latin text but never Thai script. Normalize numeral glyphs deterministically instead of spending a Gemini retry on formatting alone.
-- If a chained research cycle remains `syncing` for 45 minutes because an action or handoff never finalized, `recoverStuckCycle` is the 10-minute watchdog that forces a safe 24h fallback schedule, releases the cycle lock, and returns the UI to `online`.
-- Research pipeline resilience lives in `convex/research.ts` + `convex/historian.ts` -> keep bounded step retries/scheduler handoff retries and the bounded Step 3 timeline refresh, and keep duplicate checks batched/in-memory or slim-indexed, not per-article recent-doc scans, or Dev bandwidth will spike fast.
-- Dashboard data path lives in `convex/api.ts` + `convex/research.ts` + `src/lib/convex-server.ts` + `src/app/DashboardClient.tsx` -> keep `dashboardSnapshots` free of timeline rows and lazy-load the render-only full timeline only in timeline mode, or bandwidth will scale with history length.
+Maintain the Thailand-Cambodia border research dataset end to end.
+
+## Goal
+
+Keep the dataset accurate, current, sourced, multilingual, and publishable with the smallest reliable change.
+
+This repository contains both the research engine and the website. Routine scheduled research must not change product UI or visual design.
+
+You have full access inside this isolated repository. Use shell, Git inspection, web research, browser tools, scripts, file edits, and local analysis when useful. Prefer direct work over building new machinery.
+
+The repository is durable memory. Do not depend on conversation history for facts, state, or recovery.
+
+## Start
+
+Run:
+
+`pnpm research`
+
+It gives the current scheduler state, dashboard facts, analysis, recent timeline events, and recent news. Then inspect only the files and history relevant to what you find.
+
+Useful shortcuts:
+
+- `pnpm research find <text>` - find matching news or timeline records.
+- `pnpm research show <id>` - print one exact record by stable ID.
+- `pnpm research check` - run the deterministic exit checks.
+
+## Map
+
+- `data/state.json` - research and scheduler state.
+- `data/dashboard.json` - current dashboard facts.
+- `data/analysis/` - current Thailand, Cambodia, and neutral analysis.
+- `data/news/YYYY-MM/{thailand,cambodia,international}.jsonl` - attributable news archive.
+- `data/timeline/YYYY-MM.jsonl` - material historical events with stable IDs.
+- `public/data/` - generated public snapshots; never canonical.
+- `scripts/` and `lib/` - small deterministic helpers.
+- `tests/` - hard checks for the research pipeline.
+- `src/` - website code; read it only when needed and do not redesign it during routine research.
+- `.work/` - disposable scratch space.
+
+JSONL is one object per line. Monthly files are intentional: they keep Git diffs readable without thousands of tiny files. Use the existing record shapes unless a real correctness problem requires a schema change.
+
+If the layout stops being intuitive, simplify it. Do not add side databases, queues, duplicate state, or abstractions unless they clearly remove more complexity than they add.
+
+## Research cycle
+
+1. Run `pnpm research`.
+2. Research material developments since `lastResearchAt`. Search broadly enough to avoid one-sided coverage, then read the strongest sources directly.
+3. Follow important evidence backward when it changes an older fact. Correct historical records directly.
+4. Update canonical data. Keep stable IDs unless records are true duplicates.
+5. Update current analyses and dashboard only when evidence supports a change.
+6. Choose and store the next scan time in `data/state.json`.
+7. Run `pnpm research check`.
+8. Review the final diff. Remove accidental churn, temporary files, duplicate facts, stale scaffolding, and unnecessary complexity.
+9. Return a compact summary of findings, corrections, important source disagreements, validation, next scan, and changed files.
+
+Run the full exit check once after the final edit. Run it again only if you change tracked files afterward.
+
+You may improve any part of this research repository when that genuinely makes the research system simpler, safer, or more accurate. Commit inside the isolated cycle branch if it helps, but do not push or deploy. Keep temporary experiments in `.work/` and remove accidental junk before finishing. The outer runner regenerates `public/data/` with trusted code and owns the validated merge/push so an interrupted cycle cannot publish partial work.
+
+## Evidence
+
+- Prefer primary government, military, court, treaty, humanitarian, and direct-publisher sources.
+- Seek independent corroboration for disputed, kinetic, casualty, territorial, or otherwise high-impact claims.
+- Apply the same evidentiary standard to Thai and Cambodian claims.
+- Keep disputed claims attributed. Never turn one side's allegation into a neutral fact.
+- Preserve direct source URLs, dates, numbers, attribution, uncertainty, and claim strength.
+- Store the final publisher URL, not a search-result or grounding redirect.
+- Never invent a URL, quote, number, date, source, translation, or certainty level.
+- Treat garbled or mojibake source text as unusable until corroborated from a readable source.
+- If no direct current response from the other side is found, say so. Do not infer a rebuttal from older general posture.
+- Prefer a smaller set of strong sources over many weak duplicates.
+
+## Data quality
+
+- English: natural, neutral, concise.
+- Thai: Thai plus Latin/English and ASCII digits only; never Khmer.
+- Khmer: Khmer plus Latin/English and ASCII digits only; never Thai.
+- Normalize Thai/Khmer native numerals to ASCII `0-9`.
+- Use actual current time for created/updated/fetched/verified timestamps. Never write future timestamps; `nextRunAt` is the intentional exception.
+- Windows terminal output can render Thai/Khmer badly. Do not diagnose stored text from terminal mojibake; inspect the UTF-8 file and use the hard validator.
+- Keep enough provenance for a future agent to understand and correct a record without guessing.
+- If old localization is invalid and cannot be repaired confidently, omit it and allow English fallback rather than preserve corruption.
+- Never hand-edit `public/data/` as the source of truth.
+
+## Scheduling
+
+- 1-3 hours: active kinetic escalation or fast safety-critical change.
+- 4-8 hours: meaningful active diplomatic, military, legal, or humanitarian movement.
+- 12-24 hours: stable low activity.
+
+At successful completion:
+
+- set `lastResearchAt` to the completion time in Unix milliseconds;
+- choose `nextRunAt`;
+- set `lastCycleInterval` and a short factual `schedulingReason`;
+- increment `researchCycleCount`;
+- keep `scheduler: "external"`, `systemStatus: "online"`, and `isPaused: false`.
+
+## Judgment
+
+- Favor fewer moving parts, readable files, deterministic checks, and Git history.
+- Fix root causes instead of adding retries, queues, caches, or compatibility layers by reflex.
+- Delete stale code and docs when their purpose is gone.
+- Keep routine work focused on research, data, and this pipeline. No UI changes.
+- A clean no-change cycle is valid. Do not manufacture updates.
+- If a command or source fails, use another reliable path. Never weaken validation just to make a run pass.
+
+The target is not maximum automation. It is a system that is obvious, recoverable, accurate, and hard to accidentally corrupt.
+
+End a completed scheduled cycle with `<!-- GOAL_COMPLETE -->`.
