@@ -93,8 +93,10 @@ try {
     $unicodeLog = Get-ChildItem $logDir -File -Filter "*.json" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     Assert-True ($null -ne $unicodeLog) "UTF-8 fake cycle did not write a JSON log"
     $unicodeText = [IO.File]::ReadAllText($unicodeLog.FullName, [Text.Encoding]::UTF8)
-    Assert-True ($unicodeText.Contains("ทดสอบภาษาไทย")) "runner corrupted Thai AGY output"
-    Assert-True ($unicodeText.Contains("សាកល្បងភាសាខ្មែរ")) "runner corrupted Khmer AGY output"
+    $thaiExpected = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("4LiX4LiU4Liq4Lit4Lia4Lig4Liy4Lip4Liy4LmE4LiX4Lii"))
+    $khmerExpected = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("4Z6f4Z624Z6A4Z6b4Z+S4Z6U4Z6E4Z6X4Z624Z6f4Z624Z6B4Z+S4Z6Y4Z+C4Z6a"))
+    Assert-True ($unicodeText.Contains($thaiExpected)) "runner corrupted Thai AGY output"
+    Assert-True ($unicodeText.Contains($khmerExpected)) "runner corrupted Khmer AGY output"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "UTF-8 shadow cycle changed main HEAD"
 
     Reset-TestArtifacts

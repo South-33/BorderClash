@@ -36,7 +36,7 @@ if ($mode -eq "flip-pause") {
 }
 
 $response = if ($mode -eq "unicode") {
-    "ทดสอบภาษาไทย សាកល្បងភាសាខ្មែរ <!-- GOAL_COMPLETE -->"
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("4LiX4LiU4Liq4Lit4Lia4Lig4Liy4Lip4Liy4LmE4LiX4LiiIOGen+GetuGegOGem+GfkuGelOGehOGel+GetuGen+GetuGegeGfkuGemOGfguGemiA8IS0tIEdPQUxfQ09NUExFVEUgLS0+"))
 } else {
     "fake cycle complete <!-- GOAL_COMPLETE -->"
 }
