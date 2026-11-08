@@ -63,6 +63,37 @@ Assert-True ($runsRoot.StartsWith((Join-Path $repoRoot ".work"), [StringComparis
 Reset-TestArtifacts
 
 try {
+    $staleRunId = "stale-recovery"
+    $staleWorktree = Join-Path $runsRoot $staleRunId
+    $staleBranch = "$branchPrefix/$staleRunId"
+    New-Item -ItemType Directory -Force -Path $runsRoot, $runtimeDir, $logDir | Out-Null
+    & git -C $repoRoot worktree add -b $staleBranch $staleWorktree $headBefore | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) "could not create stale recovery fixture"
+    [ordered]@{
+        updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        status = "running"
+        runId = $staleRunId
+        model = "gemini-3.8-flash-medium"
+        message = "fixture"
+        worktree = $staleWorktree
+        branch = $staleBranch
+    } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
+
+    $env:BORDERCLASH_FAKE_AGY_MODE = "fail"
+    $recovery = Invoke-TestRunner $fakeExe
+    Assert-True ($recovery.ExitCode -eq 1) "post-recovery fake failure should still fail normally"
+    Assert-True (-not (Test-Path -LiteralPath $staleWorktree)) "stale recovery left the interrupted worktree directory"
+    $staleRegistered = @(
+        @(& git -C $repoRoot worktree list --porcelain) | Where-Object {
+            $_ -like "worktree *" -and $_.Substring(9).Trim().Equals($staleWorktree, [StringComparison]::OrdinalIgnoreCase)
+        }
+    )
+    Assert-True ($staleRegistered.Count -eq 0) "stale recovery left the interrupted worktree registered"
+    & git -C $repoRoot show-ref --verify --quiet "refs/heads/$staleBranch"
+    Assert-True ($LASTEXITCODE -ne 0) "stale recovery left the interrupted branch"
+    Assert-True (Test-Path (Join-Path $logDir "$staleRunId.interrupted.json")) "stale recovery did not preserve an interruption record"
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "fail"
     $failure = Invoke-TestRunner $fakeExe
     Assert-True ($failure.ExitCode -eq 1) "fake CLI failure must fail the cycle"

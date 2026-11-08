@@ -25,7 +25,13 @@ $agyModel = "gemini-3.8-flash-medium"
 New-Item -ItemType Directory -Force -Path $runtimeDir, $logDir, $runsRoot | Out-Null
 
 function Write-RuntimeState {
-    param([string]$Status, [string]$RunId, [string]$Message, [string]$Worktree = "")
+    param(
+        [string]$Status,
+        [string]$RunId,
+        [string]$Message,
+        [string]$Worktree = "",
+        [string]$Branch = ""
+    )
     [ordered]@{
         updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         status = $Status
@@ -33,6 +39,7 @@ function Write-RuntimeState {
         model = $agyModel
         message = $Message
         worktree = $Worktree
+        branch = $Branch
     } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
 }
 
@@ -63,15 +70,35 @@ function Recover-StaleRuntimeState {
     if ($previous.status -ne "running") { return }
 
     $previousRunId = if ($previous.runId) { [string]$previous.runId } else { "unknown" }
+    $previousWorktree = if ($previous.worktree) { [string]$previous.worktree } else { "" }
+    $previousBranch = if ($previous.PSObject.Properties["branch"]) { [string]$previous.branch } else { "" }
+
+    if (-not $previousBranch -and $previousWorktree -and (Test-Path -LiteralPath $previousWorktree)) {
+        $detectedBranch = & git -C $previousWorktree branch --show-current 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $previousBranch = ([string]$detectedBranch).Trim()
+        }
+    }
+
     [ordered]@{
         detectedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         status = "interrupted"
         runId = $previousRunId
         message = "Previous runner ended without a final status; the cycle mutex is no longer owned."
-        worktree = [string]$previous.worktree
+        worktree = $previousWorktree
+        branch = $previousBranch
     } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $logDir "$previousRunId.interrupted.json")
 
-    Write-RuntimeState "interrupted" $previousRunId "Recovered stale running state from an interrupted process" ([string]$previous.worktree)
+    if ($previousWorktree) {
+        $candidate = [IO.Path]::GetFullPath($previousWorktree).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+        $ownedRoot = [IO.Path]::GetFullPath($runsRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+        $ownedPrefix = $ownedRoot + [IO.Path]::DirectorySeparatorChar
+        if ($candidate.StartsWith($ownedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            Remove-CycleWorktree $candidate $previousBranch
+        }
+    }
+
+    Write-RuntimeState "interrupted" $previousRunId "Recovered stale running state from an interrupted process" $previousWorktree $previousBranch
 }
 
 function Invoke-Checked {
@@ -245,7 +272,7 @@ try {
 
     $stdoutPath = Join-Path $logDir "$runId.json"
     $stderrPath = Join-Path $logDir "$runId.stderr.log"
-    Write-RuntimeState "running" $runId "Antigravity cycle started" $worktree
+    Write-RuntimeState "running" $runId "Antigravity cycle started" $worktree $branch
 
     Push-Location $worktree
     $previousErrorAction = $ErrorActionPreference
@@ -336,7 +363,7 @@ try {
     $cycleCommit = (git -C $worktree rev-parse HEAD).Trim()
 
     if (-not $Publish) {
-        Write-RuntimeState "validated" $runId "Shadow cycle passed; publication disabled" $worktree
+        Write-RuntimeState "validated" $runId "Shadow cycle passed; publication disabled" $worktree $branch
         Write-Output "SHADOW SUCCESS: conversation=$($result.conversation_id)"
         Write-Output "commit=$cycleCommit"
         Write-Output "worktree=$worktree"
@@ -346,13 +373,13 @@ try {
     Invoke-Checked "git" @("-C", $repoRoot, "merge", "--ff-only", $cycleCommit) $repoRoot
     Invoke-Checked "git" @("-C", $repoRoot, "push", "origin", "main") $repoRoot
 
-    Write-RuntimeState "published" $runId "Published validated cycle $cycleCommit"
+    Write-RuntimeState "published" $runId "Published validated cycle $cycleCommit" $worktree $branch
     Remove-CycleWorktree $worktree $branch
     Write-Output "PUBLISHED: $cycleCommit conversation=$($result.conversation_id)"
 }
 catch {
     $message = $_.Exception.Message
-    Write-RuntimeState "failed" $runId $message $worktree
+    Write-RuntimeState "failed" $runId $message $worktree $branch
     Write-Error $message
     exit 1
 }
