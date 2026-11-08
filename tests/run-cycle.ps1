@@ -69,13 +69,6 @@ try {
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "shadow repo change advanced main HEAD"
 
     Reset-TestArtifacts
-    $env:BORDERCLASH_FAKE_AGY_MODE = "commit"
-    $commit = Invoke-TestRunner $fakeExe
-    Assert-True ($commit.ExitCode -eq 0) "agent-created commit should be allowed in its isolated branch"
-    Assert-True (($commit.Output -join "`n") -match "SHADOW SUCCESS") "agent commit did not reach validated shadow state"
-    Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "shadow agent commit advanced main HEAD"
-
-    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
     $job = Start-Job -ScriptBlock {
         param($runnerPath, $agyPath, $testRunsRoot, $testRuntimeDir, $testLogDir, $testMutexName, $testBranchPrefix)

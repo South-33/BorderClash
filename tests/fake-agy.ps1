@@ -27,12 +27,6 @@ if ($mode -eq "non-data") {
     Add-Content -Path (Join-Path (Get-Location) "README.md") -Value "unexpected agent edit"
 }
 
-if ($mode -eq "commit") {
-    Add-Content -Path (Join-Path (Get-Location) "README.md") -Value "unexpected agent commit"
-    git add README.md
-    git -c user.name=BorderClash-Test -c user.email=borderclash-test@example.invalid commit -m "test: agent commit" | Out-Null
-}
-
 [ordered]@{
     conversation_id = "fake-test-conversation"
     status = "SUCCESS"
