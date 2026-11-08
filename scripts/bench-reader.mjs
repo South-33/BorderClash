@@ -7,10 +7,10 @@ const root = resolve(".");
 const work = resolve(root, ".work", "benchmarks", "reader-copy");
 const fixture = await readFile(resolve(root, "benchmarks", "reader-copy.txt"), "utf8");
 const agy = process.env.AGY_PATH || "agy";
-const model = process.env.BENCH_MODEL || "gemini-3.8-flash-medium";
+const model = process.env.BENCH_MODEL || "gemini-3.8-flash-low";
 const judgeModel = process.env.BENCH_JUDGE || "gpt-oss-120b-medium";
-const printTimeout = process.env.BENCH_TIMEOUT || "2m";
-const wallTimeoutMs = Math.max(10_000, Number(process.env.BENCH_WALL_TIMEOUT_MS || 140_000));
+const printTimeout = process.env.BENCH_TIMEOUT || "90s";
+const wallTimeoutMs = Math.max(10_000, Number(process.env.BENCH_WALL_TIMEOUT_MS || 100_000));
 const fresh = process.argv.includes("--fresh");
 const itemCount = [...fixture.matchAll(/^\d+\.\s/gmu)].length;
 const prompt = process.env.BENCH_PROMPT || "Rewrite each item for ordinary civilians in English, Thai, and Khmer. Write naturally for each audience rather than translating literally. Change expression, never information: preserve facts, attribution, uncertainty, names, numbers, and relationships. Add nothing.";
@@ -96,15 +96,14 @@ function runAgy(runModel, runPrompt) {
 async function runCached(runModel, runPrompt) {
   const key = createHash("sha256").update(JSON.stringify({ runModel, runPrompt })).digest("hex");
   const path = resolve(work, "cache", `${key}.json`);
+  let cached = null;
+  try { cached = JSON.parse(await readFile(path, "utf8")); } catch {}
   if (!fresh) {
-    try {
-      const cached = JSON.parse(await readFile(path, "utf8"));
-      if (cached.ok) return { ...cached, cached: true };
-    } catch {}
+    if (cached?.ok) return { ...cached, cached: true };
   }
   const run = await runAgy(runModel, runPrompt);
   await mkdir(resolve(work, "cache"), { recursive: true });
-  await writeFile(path, JSON.stringify(run, null, 2) + "\n", "utf8");
+  if (run.ok || !cached?.ok) await writeFile(path, JSON.stringify(run, null, 2) + "\n", "utf8");
   return { ...run, cached: false };
 }
 
@@ -155,6 +154,8 @@ function hardIssues(response) {
     const item = items.get(number) || {};
     for (const language of ["EN", "TH", "KH"]) {
       if (!item[language]) issues.push(`item-${number}-missing-${language.toLowerCase()}`);
+      if (item[language] && !item[language].includes("Chouk Chey")) issues.push(`item-${number}-${language.toLowerCase()}-lost-place-name`);
+      if (item[language] && !item[language].includes("8,000")) issues.push(`item-${number}-${language.toLowerCase()}-number-changed`);
     }
     if (item.EN && /[\u0E00-\u0E7F\u1780-\u17FF]/u.test(item.EN)) issues.push(`item-${number}-english-mixed-script`);
     if (item.TH && /[\u1780-\u17FF]/u.test(item.TH)) issues.push(`item-${number}-thai-contains-khmer`);
@@ -175,7 +176,7 @@ function extractJson(value) {
 
 function validScore(score) {
   return score && typeof score.fatal === "boolean" && Array.isArray(score.issues)
-    && ["fidelity", "neutrality", "clarity", "naturalness", "concision"]
+    && ["fidelity", "neutrality", "naturalness"]
       .every((name) => typeof score[name] === "number" && score[name] >= 0 && score[name] <= 10);
 }
 
@@ -187,7 +188,7 @@ try {
 
   let judgment = null;
   if (candidate.ok && hard.length === 0) {
-    const judgePrompt = `Evaluate this rewrite only against the source. Factual fidelity dominates. Mark fatal=true if meaning changes through added implications, stronger or weaker claims, lost attribution or uncertainty, changed names/numbers/places, or mistranslation. Neutrality means the same evidence standard, not forced equal blame. Score 0-10 for fidelity, neutrality, clarity, naturalness across English/Thai/Khmer, and concision. Return JSON only: {"fidelity":0,"neutrality":0,"clarity":0,"naturalness":0,"concision":0,"fatal":false,"issues":[]}\n\nSOURCE ITEMS:\n${fixture}\n\nREWRITE:\n${candidate.response}`;
+    const judgePrompt = `Compare the rewrite with the source. Mark fatal=true for any changed fact, attribution, uncertainty, name, number, relationship, claim strength, added implication, or mistranslation. Score 0-10 for factual fidelity, neutrality, and natural everyday English/Thai/Khmer. Return JSON only: {"fidelity":0,"neutrality":0,"naturalness":0,"fatal":false,"issues":[]}\n\nSOURCE:\n${fixture}\n\nREWRITE:\n${candidate.response}`;
     const judge = await runCached(judgeModel, judgePrompt);
     if (judge.ok) {
       try {
@@ -203,7 +204,6 @@ try {
   }
 
   const hash = createHash("sha256").update(JSON.stringify({ fixture, prompt, model, judgeModel })).digest("hex").slice(0, 12);
-  const reportPath = resolve(work, `${hash}.json`);
   const report = {
     model,
     judgeModel,
@@ -219,7 +219,6 @@ try {
     hardIssues: hard,
     judgment,
   };
-  await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n", "utf8");
 
   const score = judgment?.score;
   const passed = candidate.ok
@@ -228,6 +227,8 @@ try {
     && score?.fatal === false
     && Number(score?.fidelity) >= 8
     && Number(score?.neutrality) >= 8;
+  const reportPath = resolve(work, `${hash}${passed ? "" : ".failed"}.json`);
+  await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n", "utf8");
 
   console.log(JSON.stringify({
     ok: passed,
