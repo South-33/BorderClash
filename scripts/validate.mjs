@@ -34,8 +34,8 @@ function httpUrl(location, value) {
 
 function directSourceUrl(location, value) {
   httpUrl(location, value);
-  if (typeof value === "string" && /(?:vertexaisearch\.cloud\.google\.com|google\.com\/grounding-api-redirect)/iu.test(value)) {
-    add(location, "grounding-redirect");
+  if (typeof value === "string" && /(?:vertexaisearch\.cloud\.google\.com|google\.com\/(?:grounding-api-redirect|search\?))/iu.test(value)) {
+    add(location, "indirect-source-url");
   }
 }
 
