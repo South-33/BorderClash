@@ -1,10 +1,10 @@
 import { stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../lib/content-quality.mjs";
 import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../lib/files.mjs";
 
 const dataRoot = resolve("data");
 const publicRoot = resolve("public", "data");
-const visibleStatuses = new Set(["active", "unverified"]);
 
 async function readAllNews() {
   const files = (await listFiles(join(dataRoot, "news"), ".jsonl"));
@@ -25,14 +25,7 @@ async function readAllNews() {
 }
 
 function visibleNews(records, limit = 20) {
-  return records
-    .filter((row) => visibleStatuses.has(row.status))
-    .sort((a, b) => {
-      const published = (b.publishedAt || b.fetchedAt || 0) - (a.publishedAt || a.fetchedAt || 0);
-      if (published !== 0) return published;
-      return (b.fetchedAt || 0) - (a.fetchedAt || 0);
-    })
-    .slice(0, limit)
+  return selectVisibleNews(records, limit)
     .map((article) => ({
       _id: article.id,
       title: article.title,
@@ -50,7 +43,7 @@ function visibleNews(records, limit = 20) {
 }
 
 function articleCounts(news) {
-  const count = (country) => news[country].filter((row) => visibleStatuses.has(row.status)).length;
+  const count = (country) => news[country].filter((row) => VISIBLE_NEWS_STATUSES.has(row.status)).length;
   const thailand = count("thailand");
   const cambodia = count("cambodia");
   const international = count("international");

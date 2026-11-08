@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { assessContentQuality } from "../lib/content-quality.mjs";
 import { listFiles, readJson, readJsonl } from "../lib/files.mjs";
 
 const dataRoot = resolve("data");
@@ -113,6 +114,7 @@ async function context() {
       timeline: timeline.length,
       news: Object.fromEntries(Object.entries(news).map(([country, values]) => [country, values.length])),
     },
+    contentQuality: assessContentQuality({ news, analyses }),
   };
 
   process.stdout.write(JSON.stringify(output) + "\n");

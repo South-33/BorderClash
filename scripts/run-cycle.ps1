@@ -176,7 +176,7 @@ try {
     $effectivePrompt = if ($Prompt) {
         $Prompt
     } else {
-        "/goal Work in repository $worktree. Read AGENTS.md and complete one research cycle."
+        "/goal In repository $worktree, read AGENTS.md, run node scripts/research.mjs, and complete exactly one research cycle."
     }
 
     $stdoutPath = Join-Path $logDir "$runId.json"
@@ -185,12 +185,20 @@ try {
 
     Push-Location $worktree
     $previousErrorAction = $ErrorActionPreference
+    $previousConsoleEncoding = [Console]::OutputEncoding
+    $previousOutputEncoding = $OutputEncoding
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     $ErrorActionPreference = "Continue"
     try {
-        & $agy -p $effectivePrompt --dangerously-skip-permissions --output-format json --model gemini-3.8-flash-medium --effort medium --print-timeout "$($TimeoutMinutes)m" 1> $stdoutPath 2> $stderrPath
+        [Console]::OutputEncoding = $utf8NoBom
+        $OutputEncoding = $utf8NoBom
+        $stdout = & $agy -p $effectivePrompt --dangerously-skip-permissions --output-format json --model gemini-3.8-flash-medium --print-timeout "$($TimeoutMinutes)m" 2> $stderrPath
         $agyExit = $LASTEXITCODE
+        [IO.File]::WriteAllText($stdoutPath, [string]::Join([Environment]::NewLine, [string[]]$stdout), $utf8NoBom)
     } finally {
         $ErrorActionPreference = $previousErrorAction
+        [Console]::OutputEncoding = $previousConsoleEncoding
+        $OutputEncoding = $previousOutputEncoding
         Pop-Location
     }
 

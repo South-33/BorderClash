@@ -87,6 +87,17 @@ try {
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "pause-control shadow cycle advanced main HEAD"
 
     Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "unicode"
+    $unicode = Invoke-TestRunner $fakeExe
+    Assert-True ($unicode.ExitCode -eq 0) "UTF-8 fake cycle should pass"
+    $unicodeLog = Get-ChildItem $logDir -File -Filter "*.json" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    Assert-True ($null -ne $unicodeLog) "UTF-8 fake cycle did not write a JSON log"
+    $unicodeText = [IO.File]::ReadAllText($unicodeLog.FullName, [Text.Encoding]::UTF8)
+    Assert-True ($unicodeText.Contains("ทดสอบภาษาไทย")) "runner corrupted Thai AGY output"
+    Assert-True ($unicodeText.Contains("សាកល្បងភាសាខ្មែរ")) "runner corrupted Khmer AGY output"
+    Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "UTF-8 shadow cycle changed main HEAD"
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
     $job = Start-Job -ScriptBlock {
         param($runnerPath, $agyPath, $testRunsRoot, $testRuntimeDir, $testLogDir, $testMutexName, $testBranchPrefix)

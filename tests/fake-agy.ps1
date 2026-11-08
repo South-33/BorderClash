@@ -35,10 +35,16 @@ if ($mode -eq "flip-pause") {
     [IO.File]::WriteAllText($statePath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 }
 
+$response = if ($mode -eq "unicode") {
+    "ทดสอบภาษาไทย សាកល្បងភាសាខ្មែរ <!-- GOAL_COMPLETE -->"
+} else {
+    "fake cycle complete <!-- GOAL_COMPLETE -->"
+}
+
 [ordered]@{
     conversation_id = "fake-test-conversation"
     status = "SUCCESS"
-    response = "fake cycle complete <!-- GOAL_COMPLETE -->"
+    response = $response
     duration_seconds = 0.01
     num_turns = 1
     usage = @{

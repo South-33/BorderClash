@@ -1,33 +1,11 @@
 {
   "thailandNews": [
     {
-      "_id": "js7frjx8f84w9y5pqjedb3zmmd8hq1wj",
-      "title": "Café Amazon approaches 5,000 stores in Thailand as future in Cambodia hangs in the balance",
-      "titleEn": "Café Amazon approaches 5,000 stores in Thailand as future in Cambodia hangs in the balance",
-      "publishedAt": 1793939040000,
-      "fetchedAt": 1793986156595,
-      "source": "World Coffee Portal",
-      "sourceUrl": "https://www.worldcoffeeportal.com/news/cafe-amazon-approaches-5-000-stores-in-thailand-as-future-in-cambodia-hangs-in-the-balance",
-      "category": "political",
-      "credibility": 60,
-      "status": "active"
-    },
-    {
-      "_id": "js71r2c0remqp8pzb2bm3rzenh8hq2mq",
-      "title": "Singapore sand imports threaten an already sinking Cambodian fishing community, again",
-      "titleEn": "Singapore sand imports threaten an already sinking Cambodian fishing community, again",
-      "publishedAt": 1793894400000,
-      "fetchedAt": 1793927496440,
-      "source": "Mongabay News",
-      "sourceUrl": "https://news.mongabay.com/2026/11/singapore-sand-imports-threaten-an-already-sinking-cambodian-fishing-community-again",
-      "category": "political",
-      "credibility": 60,
-      "status": "active"
-    },
-    {
       "_id": "js70m4wzqjqcn3z9y0s6jj6v8x8hnb0b",
       "title": "China Hosts Tea Talks to Advance Cambodia-Thailand Confidence-Building",
-      "titleEn": "China Hosts Tea Talks to Advance Cambodia-Thailand Confidence-Building",
+      "titleEn": "China hosts informal talks to help Cambodia and Thailand rebuild trust",
+      "titleTh": "จีนจัดวงพูดคุยแบบไม่เป็นทางการ เพื่อช่วยกัมพูชา-ไทยสร้างความไว้ใจกัน",
+      "titleKh": "ចិនរៀបចំកិច្ចពិភាក្សាបែបមិនផ្លូវការ ដើម្បីជួយកម្ពុជា-ថៃកសាងទំនុកចិត្ត",
       "publishedAt": 1793820840000,
       "fetchedAt": 1793852745478,
       "source": "cambodianess",
@@ -39,7 +17,9 @@
     {
       "_id": "js73k9x9zmk3t9fnmntqvw8xe58hmt11",
       "title": "IDEA chief: Thai traders losing more from prolonged border closure",
-      "titleEn": "IDEA chief: Thai traders losing more from prolonged border closure",
+      "titleEn": "IDEA chief says Thai traders are losing more as the border closure drags on",
+      "titleTh": "หัวหน้า IDEA ชี้ พ่อค้าไทยเสียหายมากขึ้นจากการปิดชายแดนยืดเยื้อ",
+      "titleKh": "ប្រធាន IDEA និយាយថា ពាណិជ្ជករថៃខាតបង់កាន់តែច្រើន ព្រោះការបិទព្រំដែនអូសបន្លាយ",
       "publishedAt": 1793801100000,
       "fetchedAt": 1793855777231,
       "source": "The Phnom Penh Post",
@@ -51,7 +31,9 @@
     {
       "_id": "js7bh2jjamjgy311qy945ge6gx8hjeee",
       "title": "Nearly 8,000 Cambodians remain displaced along Thai border despite ceasefire, Cambodia says",
-      "titleEn": "Nearly 8,000 Cambodians remain displaced along Thai border despite ceasefire, Cambodia says",
+      "titleEn": "Cambodia says nearly 8,000 people remain displaced along the Thai border despite the ceasefire",
+      "titleTh": "กัมพูชาระบุว่า ยังมีประชาชนเกือบ 8,000 คนต้องอพยพตามชายแดนไทย แม้มีข้อตกลงหยุดยิง",
+      "titleKh": "កម្ពុជានិយាយថា ប្រជាជនជិត 8,000 នាក់នៅតែត្រូវជម្លៀសតាមព្រំដែនថៃ ទោះមានបទឈប់បាញ់ក៏ដោយ",
       "publishedAt": 1793678940000,
       "fetchedAt": 1793818438710,
       "source": "Anadolu Agency",
@@ -63,6 +45,7 @@
     {
       "_id": "js75aagtggnba76kmt8msc0nvd8ftfy3",
       "title": "Thailand boosts Cambodia border defense with 3.5bn baht allocation",
+      "titleEn": "Thailand allocates 3.5 billion baht to strengthen defenses along the Cambodia border",
       "titleTh": "ไทยเสริมเขี้ยวเล็บแนวชายแดนกัมพูชา อนุมัติงบ 3.5 พันล้านบาทจัดซื้อยุทโธปกรณ์",
       "titleKh": "ថៃពង្រឹងការការពារព្រំដែនកម្ពុជា ដោយបែងចែកថវិកា 3,5 ពាន់លានបាត",
       "publishedAt": 1790985600000,
@@ -102,6 +85,7 @@
     {
       "_id": "js7fkhassn94gx94f4e9hmvr0x8ehcmt",
       "title": "รัฐบาลย้ำ 6 จุดยืนไทยบนเวทีประนอมไทย–กัมพูชา \"พร้อมคุยแต่ไม่ยอมเสียสิทธิ”",
+      "titleEn": "Thai government sets out six positions in maritime talks with Cambodia: ready to talk, but says it will protect its rights",
       "titleTh": "รัฐบาลย้ำ 6 จุดยืนไทยบนเวทีประนอมไทย–กัมพูชา “พร้อมคุยแต่ไม่ยอมเสียสิทธิ”",
       "titleKh": "រដ្ឋាភិបាលបញ្ជាក់ឡើងវិញនូវជំហរទាំង 6 របស់ថៃនៅលើវេទិកាផ្សះផ្សាថៃ-កម្ពុជា «ត្រៀមខ្លួនចរចា ប៉ុន្តែមិនព្រមបាត់បង់សិទ្ធិ»",
       "publishedAt": 1789558800000,
@@ -115,6 +99,7 @@
     {
       "_id": "js7fq7b7xvw995gmnwhnrv7tns8ef00b",
       "title": "Cambodia 'playing the victim' in sea dispute, says Thailand",
+      "titleEn": "Thailand accuses Cambodia of distorting facts in maritime dispute",
       "titleTh": "ไทยระบุ กัมพูชา 'เล่นบทเหยื่อ' ปมข้อพิพาททางทะเล ณ ศาลโลก",
       "titleKh": "ថៃថា កម្ពុជា 'លេងខ្សឹបខ្សៀវធ្វើជាជនរងគ្រោះ' ក្នុងវិវាទសមុទ្រ",
       "publishedAt": 1789430400000,
@@ -128,6 +113,7 @@
     {
       "_id": "js7d9x7x503v6v9t87yph4znq58eakhv",
       "title": "JIC Reveals Evidence Claiming Cambodia Uses Preah Vihear as a Military Base, Urges International Investigation",
+      "titleEn": "Thai intelligence center alleges Cambodia used the Preah Vihear area for military positions",
       "titleTh": "ผอ. JIC เปิดหลักฐาน แฉกัมพูชาใช้เขาพระวิหารเป็นฐานทหาร จี้ประชาคมโลกตรวจสอบ",
       "titleKh": "គណៈកម្មាធិការស៊ើបការណ៍រួម (JIC) បង្ហាញភស្តុតាងដោយអះអាងថាកម្ពុជាប្រើប្រាស់ប្រាសាទព្រះវិហារជាមូលដ្ឋានយោធា និងជំរុញឱ្យមានការស៊ើបអង្កេតជាអន្តរជាតិ",
       "publishedAt": 1789171200000,
@@ -154,6 +140,7 @@
     {
       "_id": "js7fd9pb5rp8xm4bxjc6nwwm3s8bjahq",
       "title": "1st Army Area Commander Orders Full Care for Demining Soldier Injured in Ban Nong Chan Blast",
+      "titleEn": "Thai army orders full support for soldier injured during mine clearance in Sa Kaeo",
       "titleTh": "กำลังพลเจ็บ 1 เหยียบกับระเบิดขณะเคลียร์พื้นที่บ้านหนองจาน แม่ทัพภาคที่ 1 กำชับดูแลเต็มที่",
       "titleKh": "យោធិន 1 រូបរងរបួសដោយសារជាន់មីននៅ Ban Nong Chan មេបញ្ជាការយោធភូមិភាគទី 1 បញ្ជាឲ្យថែទាំយ៉ាងយកចិត្តទុកដាក់",
       "publishedAt": 1785309600000,
@@ -167,6 +154,7 @@
     {
       "_id": "js738exkr6vkaj1wxjk3581tpd8bk4ax",
       "title": "Demining Officer Severely Injured After Stepping on PMN Landmine in Ban Nong Chan",
+      "titleEn": "Demining officer seriously injured by landmine in Ban Nong Chan",
       "titleTh": "จนท.ชุดเก็บกู้ทุ่นระเบิดเหยียบกับระเบิด PMN ที่บ้านหนองจาน ขาขาดบาดเจ็บสาหัส",
       "titleKh": "មន្ត្រីបោសសម្អាតមីនទទួលរងរបួសធ្ងន់ធ្ងរដោយសារជាន់មីន PMN នៅភូមិ Ban Nong Chan",
       "publishedAt": 1785306780000,
@@ -180,6 +168,7 @@
     {
       "_id": "js780vs62f7gayyrzsjwgmp2ph8b8agc",
       "title": "Neighbours swap citizens",
+      "titleEn": "Thailand and Cambodia repatriate citizens through Klong Luek border checkpoint",
       "titleTh": "ไทยและกัมพูชาแลกเปลี่ยนตัวพลเมืองที่ผ่านกระบวนการทางกฎหมาย",
       "titleKh": "ប្រទេសថៃនិងកម្ពុជាផ្លាស់ប្តូរពលរដ្ឋដែលបានបញ្ចប់នីតិវិធីផ្លូវច្បាប់",
       "publishedAt": 1785024000000,
@@ -254,45 +243,35 @@
       "category": "military",
       "credibility": 65,
       "status": "active"
+    },
+    {
+      "_id": "js70n7csc8s5wfk7xd56v1qh9d8a2462",
+      "title": "Thailand Rejects Allegations Concerning an Explosion on Cambodian Territory",
+      "titleTh": "ไทยแถลงปฏิเสธข้อกล่าวหาเกี่ยวกับเหตุระเบิดในดินแดนกัมพูชา",
+      "titleKh": "ថៃបដិសេធការចោទប្រកាន់ជុំវិញការផ្ទុះនៅលើទឹកដីកម្ពុជា",
+      "publishedAt": 1783357200000,
+      "fetchedAt": 1783466864804,
+      "source": "PRD Thailand",
+      "sourceUrl": "https://thailand.prd.go.th/en/content/category/detail/id/3243/iid/519863",
+      "category": "diplomatic",
+      "credibility": 75,
+      "status": "active"
+    },
+    {
+      "_id": "js70ydf9h34acj84r019pnzns18a3dnv",
+      "title": "Thai Army again denies role in border blast, warns against false claims",
+      "titleTh": "กองทัพไทยโต้กัมพูชา ปฏิเสธข่าวทหารไทยก่อเหตุระเบิดชายแดน",
+      "titleKh": "កងទ័ពថៃបដិសេធការចោទប្រកាន់របស់កម្ពុជាជុំវិញការផ្ទុះនៅតាមព្រំដែន",
+      "publishedAt": 1783357200000,
+      "fetchedAt": 1783466864733,
+      "source": "Thai PBS World",
+      "sourceUrl": "https://world.thaipbs.or.th/detail/61940",
+      "category": "military",
+      "credibility": 70,
+      "status": "active"
     }
   ],
   "cambodiaNews": [
-    {
-      "_id": "jn7986hc8hqw8nvz5ff38hpfth8hs79x",
-      "title": "Toward Cambodia’s Frontier: the Ancient, still Untold World of Neak Bous Temple",
-      "titleEn": "Toward Cambodia’s Frontier: the Ancient, still Untold World of Neak Bous Temple",
-      "publishedAt": 1793981940000,
-      "fetchedAt": 1794010771138,
-      "source": "cambodianess",
-      "sourceUrl": "https://cambodianess.com/article/toward-cambodias-frontier-the-ancient-still-untold-world-of-neak-bous-temple",
-      "category": "political",
-      "credibility": 60,
-      "status": "active"
-    },
-    {
-      "_id": "jn76nwzy9ncb9tma4vk6711p7s8hsqyw",
-      "title": "F&N makes long-term bet on Cambodia",
-      "titleEn": "F&N makes long-term bet on Cambodia",
-      "publishedAt": 1793939700000,
-      "fetchedAt": 1794026434239,
-      "source": "theSun",
-      "sourceUrl": "https://thesun.my/news/fn-makes-long-term-bet-on-cambodia",
-      "category": "political",
-      "credibility": 60,
-      "status": "active"
-    },
-    {
-      "_id": "jn7es69fa1kkg6dzcg70jbxpq58hqrth",
-      "title": "Café Amazon approaches 5,000 stores in Thailand as future in Cambodia hangs in the balance",
-      "titleEn": "Café Amazon approaches 5,000 stores in Thailand as future in Cambodia hangs in the balance",
-      "publishedAt": 1793939040000,
-      "fetchedAt": 1793986153764,
-      "source": "World Coffee Portal",
-      "sourceUrl": "https://www.worldcoffeeportal.com/news/cafe-amazon-approaches-5-000-stores-in-thailand-as-future-in-cambodia-hangs-in-the-balance",
-      "category": "political",
-      "credibility": 60,
-      "status": "active"
-    },
     {
       "_id": "jn7c1m8z2k4p9vx5trw3q7e6yb8hvf2a",
       "title": "ASEAN observers report forward movement of Thai military post, inspect bombed bridge",
@@ -308,21 +287,11 @@
       "status": "active"
     },
     {
-      "_id": "jn79kefsvp04cr357bxjfxntpx8hqhb4",
-      "title": "Singapore sand imports threaten an already sinking Cambodian fishing community, again",
-      "titleEn": "Singapore sand imports threaten an already sinking Cambodian fishing community, again",
-      "publishedAt": 1793894400000,
-      "fetchedAt": 1793927493956,
-      "source": "Mongabay News",
-      "sourceUrl": "https://news.mongabay.com/2026/11/singapore-sand-imports-threaten-an-already-sinking-cambodian-fishing-community-again",
-      "category": "political",
-      "credibility": 60,
-      "status": "active"
-    },
-    {
       "_id": "jn7b023n7ky9vm7aehjz49sc498hmjgz",
       "title": "China Hosts Tea Talks to Advance Cambodia-Thailand Confidence-Building",
-      "titleEn": "China Hosts Tea Talks to Advance Cambodia-Thailand Confidence-Building",
+      "titleEn": "China hosts informal talks to help Cambodia and Thailand rebuild trust",
+      "titleTh": "จีนจัดวงพูดคุยแบบไม่เป็นทางการ เพื่อช่วยกัมพูชา-ไทยสร้างความไว้ใจกัน",
+      "titleKh": "ចិនរៀបចំកិច្ចពិភាក្សាបែបមិនផ្លូវការ ដើម្បីជួយកម្ពុជា-ថៃកសាងទំនុកចិត្ត",
       "publishedAt": 1793820840000,
       "fetchedAt": 1793852742958,
       "source": "cambodianess",
@@ -334,7 +303,9 @@
     {
       "_id": "jn75ps51w6hq6cfhjrxpw9gvp98hnya4",
       "title": "IDEA chief: Thai traders losing more from prolonged border closure",
-      "titleEn": "IDEA chief: Thai traders losing more from prolonged border closure",
+      "titleEn": "IDEA chief says Thai traders are losing more as the border closure drags on",
+      "titleTh": "หัวหน้า IDEA ชี้ พ่อค้าไทยเสียหายมากขึ้นจากการปิดชายแดนยืดเยื้อ",
+      "titleKh": "ប្រធាន IDEA និយាយថា ពាណិជ្ជករថៃខាតបង់កាន់តែច្រើន ព្រោះការបិទព្រំដែនអូសបន្លាយ",
       "publishedAt": 1793801100000,
       "fetchedAt": 1793855774672,
       "source": "The Phnom Penh Post",
@@ -346,7 +317,9 @@
     {
       "_id": "jn7bze4tpnnhfgvnw33qacatw18hjn50",
       "title": "Nearly 8,000 Cambodians remain displaced along Thai border despite ceasefire, Cambodia says",
-      "titleEn": "Nearly 8,000 Cambodians remain displaced along Thai border despite ceasefire, Cambodia says",
+      "titleEn": "Cambodia says nearly 8,000 people remain displaced along the Thai border despite the ceasefire",
+      "titleTh": "กัมพูชาระบุว่า ยังมีประชาชนเกือบ 8,000 คนต้องอพยพตามชายแดนไทย แม้มีข้อตกลงหยุดยิง",
+      "titleKh": "កម្ពុជានិយាយថា ប្រជាជនជិត 8,000 នាក់នៅតែត្រូវជម្លៀសតាមព្រំដែនថៃ ទោះមានបទឈប់បាញ់ក៏ដោយ",
       "publishedAt": 1793678940000,
       "fetchedAt": 1793819784155,
       "source": "Anadolu Agency",
@@ -449,6 +422,7 @@
     {
       "_id": "jn73mcdwseshhz9fcpvc8gh7398ecs17",
       "title": "Cambodia faces new humanitarian burden from Cambodia-Thailand border conflict as explosive ordnance affects nearly 4,000 square kilometers of land",
+      "titleEn": "Cambodian officials say explosive ordnance affects nearly 4,000 square kilometers after border conflict",
       "titleTh": "กัมพูชาเผชิญภาระด้านมนุษยธรรมครั้งใหม่จากความขัดแย้งชายแดนไทย-กัมพูชา",
       "titleKh": "កម្ពុជាប្រឈមមុខនឹងបន្ទុកមនុស្សធម៌ថ្មីពីជម្លោះព្រំដែនកម្ពុជា-ថៃ ដោយសារគ្រាប់បែកមិនទាន់ផ្ទុះ",
       "publishedAt": 1789344000000,
@@ -510,62 +484,124 @@
       "category": "political",
       "credibility": 65,
       "status": "active"
+    },
+    {
+      "_id": "jn7b2psk3877fhbgynrppfkks18cwqms",
+      "title": "Cambodia protests Thailand's continued border violations and land allocation",
+      "titleTh": "กัมพูชาประท้วงไทยเรื่องการจัดสรรที่ดินและละเมิดชายแดน",
+      "titleKh": "កម្ពុជាតវ៉ាចំពោះការបន្តរំលោភព្រំដែន និងការបែងចែកដីធ្លីរបស់ប្រទេសថៃ",
+      "publishedAt": 1786752000000,
+      "fetchedAt": 1787305891449,
+      "source": "Khmer Times",
+      "sourceUrl": "https://www.khmertimeskh.com/502005088/cambodia-protests-thailands-continued-border-violations-and-land-allocation",
+      "category": "political",
+      "credibility": 75,
+      "status": "active"
+    },
+    {
+      "_id": "jn77n021ramsvb0v2269tgzn6s8chb5n",
+      "title": "Thai Authorities Allocate Another Round of Land to Citizens in Banteay Meanchey Border Area",
+      "titleTh": "ทางการไทยจัดสรรที่ดินรอบใหม่ให้ประชาชนในหมู่บ้านโชคชัย จังหวัดบันเตียเมียนเจย",
+      "titleKh": "អាជ្ញាធរថៃបែងចែកដីធ្លីជុំថ្មីដល់ពលរដ្ឋខ្លួននៅភូមិជោគជ័យ ខេត្តបន្ទាយមានជ័យ",
+      "publishedAt": 1786752000000,
+      "fetchedAt": 1786774761852,
+      "source": "DAP News",
+      "sourceUrl": "https://dap-news.com/national/2026/08/15/622916",
+      "category": "political",
+      "credibility": 65,
+      "status": "active"
+    },
+    {
+      "_id": "jn7aamv7k44wc8xqjxbvr9p5sx8cbz8w",
+      "title": "Cambodia urges Thailand to halt 'unilateral activities' along disputed border",
+      "titleTh": "กัมพูชาจี้ไทยยุติกิจกรรมฝ่ายเดียวตามแนวชายแดนที่พิพาท",
+      "titleKh": "កម្ពុជាជំរុញឱ្យភាគីថៃបញ្ឈប់សកម្មភាពឯកតោភាគីតាមបន្ទាត់ព្រំដែនដែលមានជម្លោះ",
+      "publishedAt": 1786406400000,
+      "fetchedAt": 1786532890929,
+      "source": "Kampuchea Thmey Daily",
+      "sourceUrl": "https://en.kampucheathmey.com/national/1144954",
+      "category": "political",
+      "credibility": 60,
+      "status": "active"
+    },
+    {
+      "_id": "jn71vbyf8z48kva6z24a6ets758cakm6",
+      "title": "Cambodia Strongly Protests against Thailand's Continued Construction of Military Bunkers in Veal Veng District, Pursat Province",
+      "titleEn": "Cambodia protests alleged Thai military bunker construction in Pursat",
+      "titleTh": "กัมพูชายื่นประท้วงไทยกรณีสร้างบังเกอร์ทหารต่อเนื่องในอำเภอเวียลเวง จังหวัดโพธิสัตว์",
+      "titleKh": "កម្ពុជាប្រឆាំងយ៉ាងដាច់ខាតចំពោះការសាងសង់រוכាមយោធាបន្តរបស់ថៃនៅស្រុកវាលវែង ខេត្តពោធិ៍សាត់",
+      "publishedAt": 1786402718000,
+      "fetchedAt": 1786532890753,
+      "source": "Fresh News",
+      "sourceUrl": "https://en.freshnewsasia.com/index.php/en/localnews/70868-2026-08-11-05-58-38.html",
+      "category": "military",
+      "credibility": 60,
+      "status": "active"
     }
   ],
   "thailandAnalysis": {
-    "officialNarrative": "Thailand rejects Cambodian accusations of border incursions, affirming that permanent fencing and security measures in Chanthaburi and Buri Ram occur strictly within Thai sovereign territory. Bangkok emphasizes border defense restructuring, cooperates with ASEAN landmine monitoring missions, and participates in diplomatic dialogue to maintain regional stability.",
-    "officialNarrativeTh": "ไทยปฏิเสธข้อกล่าวหาของกัมพูชาเรื่องการรุกล้ำชายแดน โดยยืนยันว่าการสร้างรั้วถาวรและมาตรการความมั่นคงในจันทบุรีและบุรีรัมย์ดำเนินอยู่ในดินแดนอธิปไตยของไทยอย่างเคร่งครัด กรุงเทพฯ เน้นการปรับโครงสร้างกำลังป้องกันชายแดน ร่วมมือกับภารกิจอาเซียนตรวจสอบทุ่นระเบิด และร่วมเจรจาทางการทูตเพื่อรักษาเสถียรภาพในภูมิภาค",
-    "officialNarrativeKh": "ថៃបដិសេធការចោទប្រកាន់របស់កម្ពុជាអំពីការឈ្លានពានព្រំដែន ដោយអះអាងថារបងអចិន្ត្រៃយ៍និងវិធានការសន្តិសុខនៅចាន់បុរី និងបុរីរ៉ាំ គឺធ្វើឡើងយ៉ាងតឹងរ៉ឹងក្នុងដែនអធិបតេយ្យភាពថៃ។ ទីក្រុងបាងកកសង្កត់ធ្ងន់លើការរៀបចំរចនាសម្ព័ន្ធការពារព្រំដែន សហការជាមួយបេសកកម្មអាស៊ានត្រួតពិនិត្យមីន និងចូលរួមកិច្ចសន្ទនាការទូតដើម្បីរក្សាស្ថិរភាពក្នុងតំបន់។",
+    "officialNarrative": "Thailand says it has not crossed into Cambodian territory. It says the new permanent fencing and other security work in Chanthaburi and Buri Ram are inside Thailand. Thai authorities are also reorganizing border forces, working with ASEAN teams that monitor landmine areas, and joining talks with Cambodia to reduce tension.",
+    "officialNarrativeEn": "Thailand says it has not crossed into Cambodian territory. It says the new permanent fencing and other security work in Chanthaburi and Buri Ram are inside Thailand. Thai authorities are also reorganizing border forces, working with ASEAN teams that monitor landmine areas, and joining talks with Cambodia to reduce tension.",
+    "officialNarrativeTh": "ไทยระบุว่าไม่ได้รุกล้ำเข้าไปในดินแดนกัมพูชา และยืนยันว่ารั้วถาวรกับงานด้านความปลอดภัยในจันทบุรีและบุรีรัมย์ทำอยู่ในฝั่งไทย ทางการไทยยังปรับกำลังตามแนวชายแดน ทำงานร่วมกับทีมอาเซียนที่ตรวจพื้นที่ทุ่นระเบิด และพูดคุยกับกัมพูชาเพื่อลดความตึงเครียด",
+    "officialNarrativeKh": "ថៃនិយាយថាខ្លួនមិនបានឆ្លងចូលដែនកម្ពុជាទេ ហើយអះអាងថារបងអចិន្ត្រៃយ៍ និងការងារសន្តិសុខនៅចាន់បុរី និងបុរីរ៉ាំ ស្ថិតនៅក្នុងទឹកដីថៃ។ អាជ្ញាធរថៃក៏កំពុងកែសម្រួលកម្លាំងតាមព្រំដែន សហការជាមួយក្រុមអាស៊ានដែលត្រួតពិនិត្យតំបន់មីន និងពិភាក្សាជាមួយកម្ពុជា ដើម្បីបន្ថយភាពតានតឹង។",
     "narrativeSource": "Spring News, Khaosod English, Bangkok Post, Naewna, Cambodianess",
     "militaryIntensity": 40,
     "militaryPosture": "DEFENSIVE",
-    "postureLabel": "Border Security and Fortification",
-    "postureLabelTh": "การรักษาความปลอดภัยและสร้างแนวรั้ว",
-    "postureLabelKh": "ការការពារសន្តិសុខនិងពង្រឹងព្រំដែន",
-    "postureRationale": "Thai forces are focused on passive border defense, permanent border barrier construction, and administrative force restructuring. No offensive actions or cross-border kinetic operations have been launched.",
-    "postureRationaleTh": "กองทัพไทยมุ่งเน้นการป้องกันชายแดนเชิงรับ การก่อสร้างแนวรั้วชายแดนถาวร และการปรับโครงสร้างหน่วยทหาร โดยไม่มีการปฏิบัติการเชิงรุกหรือการปะทะด้วยอาวุธข้ามแดน",
-    "postureRationaleKh": "កងកម្លាំងថៃផ្តោតលើការការពារព្រំដែនបែបអសកម្ម ការសាងសង់របងព្រំដែនអចិន្ត្រៃយ៍ និងការរៀបចំរចនាសម្ព័ន្ធកងទ័ពឡើងវិញ។ មិនមានសកម្មភាពវាយលុក ឬប្រតិបត្តិការប្រដាប់អាវុធឆ្លងដែនណាមួយត្រូវបានធ្វើឡើងឡើយ។",
+    "postureLabel": "Border defense and fencing",
+    "postureLabelTh": "การป้องกันชายแดนและสร้างรั้ว",
+    "postureLabelKh": "ការការពារព្រំដែន និងសង់របង",
+    "postureRationale": "Thai forces are mainly holding defensive positions, building permanent border fencing, and reorganizing units. No new armed clash is reported in the latest period.",
+    "postureRationaleTh": "กองกำลังไทยเน้นตั้งรับ สร้างรั้วถาวรตามแนวชายแดน และปรับหน่วยทหาร ในช่วงล่าสุดยังไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่",
+    "postureRationaleKh": "កងកម្លាំងថៃផ្តោតលើការការពារ សាងសង់របងព្រំដែនអចិន្ត្រៃយ៍ និងកែសម្រួលអង្គភាពយោធា។ ក្នុងរយៈពេលថ្មីៗនេះ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចដោយអាវុធថ្មីទេ។",
     "territorialContext": "BORDER_ZONE",
     "lastUpdatedAt": 1794065436297
   },
   "cambodiaAnalysis": {
-    "officialNarrative": "Cambodia protests alleged Thai sovereignty violations, citing forward movement of military posts and trench-digging in Pursat, unauthorized border fencing, and military surveying near Chouk Chey. Phnom Penh supports ASEAN ceasefire monitoring while engaging in bilateral confidence-building talks in Beijing to address ongoing frontier disputes.",
-    "officialNarrativeTh": "กัมพูชาประท้วงการละเมิดอธิปไตยของไทย โดยอ้างถึงการขยับฐานที่มั่นทางทหารและการขุดคูสนามในโพธิสัตว์ การสร้างรั้วชายแดนโดยไม่ได้รับอนุญาต และการสำรวจทางทหารใกล้บ้านโชกชัย พนมเปญสนับสนุนการตรวจสอบหยุดยิงของอาเซียนพร้อมร่วมเจรจาสร้างความไว้เนื้อเชื่อใจในปักกิ่ง",
-    "officialNarrativeKh": "កម្ពុជាតវ៉ាចំពោះការរំលោភអធិបតេយ្យភាពដែលចោទប្រកាន់លើភាគីថៃ ដោយលើកឡើងពីការរំកិលប៉ុស្តិ៍យោធាទៅមុខនិងការជីកលេណដ្ឋាននៅពោធិ៍សាត់ ការសង់របងព្រំដែនដោយគ្មានការអនុញ្ញាត និងការស្ទង់មតិយោធានៅជិតភូមិជោគជ័យ។ ភ្នំពេញគាំទ្រការត្រួតពិនិត្យបទឈប់បាញ់របស់អាស៊ាន ខណៈពេលចូលរួមកិច្ចចរចាកសាងទំនុកចិត្តនៅទីក្រុងប៉េកាំង។",
+    "officialNarrative": "Cambodia says Thai forces have moved military posts forward, dug trenches in Pursat, built border fencing without permission, and carried out military surveying near Chouk Chey. Cambodia has protested these actions. It supports ASEAN monitoring of the ceasefire and is also taking part in talks with Thailand in Beijing to reduce tension.",
+    "officialNarrativeEn": "Cambodia says Thai forces have moved military posts forward, dug trenches in Pursat, built border fencing without permission, and carried out military surveying near Chouk Chey. Cambodia has protested these actions. It supports ASEAN monitoring of the ceasefire and is also taking part in talks with Thailand in Beijing to reduce tension.",
+    "officialNarrativeTh": "กัมพูชาระบุว่าฝ่ายไทยขยับจุดทหารไปข้างหน้า ขุดคูในโพธิสัตว์ สร้างรั้วชายแดนโดยไม่ได้รับอนุญาต และสำรวจทางทหารใกล้โชกชัย กัมพูชาได้ยื่นประท้วงต่อเรื่องเหล่านี้ พร้อมสนับสนุนให้อาเซียนติดตามการหยุดยิง และเข้าร่วมการพูดคุยกับไทยที่ปักกิ่งเพื่อลดความตึงเครียด",
+    "officialNarrativeKh": "កម្ពុជានិយាយថាកងកម្លាំងថៃបានរំកិលប៉ុស្តិ៍យោធាទៅមុខ ជីកលេណដ្ឋាននៅពោធិ៍សាត់ សង់របងព្រំដែនដោយគ្មានការអនុញ្ញាត និងធ្វើការស្ទង់យោធាក្បែរជោគជ័យ។ កម្ពុជាបានតវ៉ាចំពោះសកម្មភាពទាំងនេះ។ កម្ពុជាគាំទ្រឱ្យអាស៊ានត្រួតពិនិត្យបទឈប់បាញ់ ហើយក៏ចូលរួមពិភាក្សាជាមួយថៃនៅប៉េកាំង ដើម្បីបន្ថយភាពតានតឹង។",
     "narrativeSource": "Khmer Times, Phnom Penh Post, Cambodianess",
     "militaryIntensity": 40,
     "militaryPosture": "DEFENSIVE",
-    "postureLabel": "Defensive Fortification and Protests",
+    "postureLabel": "Defense and protests",
     "postureLabelTh": "การตั้งรับและการประท้วง",
-    "postureLabelKh": "ការពង្រឹងការការពារនិងការតវ៉ា",
-    "postureRationale": "Cambodian forces maintain defensive positions including trench construction near Sa Kaeo while pursuing diplomatic protests against Thai border actions in Pursat. Troops remain on alert without initiating kinetic clashes.",
-    "postureRationaleTh": "กองกำลังกัมพูชารักษาที่มั่นตั้งรับรวมถึงการขุดคูดักรถถังใกล้ชายแดนสระแก้ว พร้อมทั้งยื่นประท้วงทางการทูตต่อการกระทำบริเวณชายแดนของไทยในโพธิสัตว์ โดยกำลังพลยังคงเฝ้าระวังโดยไม่มีการปะทะด้วยอาวุธ",
-    "postureRationaleKh": "កងកម្លាំងកម្ពុជារក្សាជំហរការពាររួមទាំងការជីកលេណដ្ឋានក្បែរព្រំដែនខេត្តស្រះកែវ ព្រមទាំងដាក់ពាក្យតវ៉ាការទូតចំពោះសកម្មភាពព្រំដែនរបស់ថៃនៅពោធិ៍សាត់។ កងទ័ពបន្តការប្រុងប្រយ័ត្នខ្ពស់ដោយមិនមានការប៉ះទង្គិចប្រដាប់អាវុធឡើយ។",
+    "postureLabelKh": "ការការពារ និងការតវ៉ា",
+    "postureRationale": "Cambodian forces are holding defensive positions, including trenches near Sa Kaeo, while Cambodia protests Thai border actions in Pursat. No new armed clash is reported in the latest period.",
+    "postureRationaleTh": "กองกำลังกัมพูชายังคงตั้งรับ รวมถึงขุดคูใกล้ชายแดนสระแก้ว ขณะที่กัมพูชาประท้วงการกระทำของไทยบริเวณชายแดนในโพธิสัตว์ ในช่วงล่าสุดยังไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่",
+    "postureRationaleKh": "កងកម្លាំងកម្ពុជានៅតែឈរជើងការពារ រួមទាំងជីកលេណដ្ឋានក្បែរស្រះកែវ ខណៈកម្ពុជាតវ៉ាចំពោះសកម្មភាពរបស់ថៃនៅព្រំដែនពោធិ៍សាត់។ ក្នុងរយៈពេលថ្មីៗនេះ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចដោយអាវុធថ្មីទេ។",
     "territorialContext": "BORDER_ZONE",
     "lastUpdatedAt": 1794099510000
   },
   "neutralAnalysis": {
-    "generalSummary": "The Thai-Cambodian border remains non-kinetic but diplomatically contentious as both nations reinforce defensive measures. Thailand continues constructing permanent border fencing in Chanthaburi and restructured its regional forces, while Cambodia excavated trenches near Sa Kaeo and lodged diplomatic protests over alleged territorial violations. ASEAN observer missions inspected sensitive frontier sectors in Pursat and Si Sa Ket, and foreign ministers engaged in bilateral confidence-building talks hosted by China.",
-    "generalSummaryTh": "ชายแดนไทย-กัมพูชายังคงไม่มีการปะทะด้วยอาวุธ แต่มีความตึงเครียดทางการทูตขณะที่ทั้งสองฝ่ายเสริมมาตรการตั้งรับ โดยไทยเดินหน้าสร้างรั้วชายแดนถาวรในจันทบุรีและปรับโครงสร้างกองกำลังในพื้นที่ ส่วนกัมพูชาได้ขุดคูสนามใกล้สระแก้วและยื่นประท้วงทางการทูตเกี่ยวกับการละเมิดดินแดน ขณะที่คณะผู้สังเกตการณ์อาเซียนได้เข้าตรวจพื้นที่ชายแดนในโพธิสัตว์และผลกระทบจากทุ่นระเบิดในศรีสะเกษ และรัฐมนตรีต่างประเทศของทั้งสองชาติได้ร่วมเจรจาสร้างความไว้เนื้อเชื่อใจที่จัดขึ้นโดยจีน",
-    "generalSummaryKh": "ព្រំដែនកម្ពុជា-ថៃនៅតែមិនមានការប៉ះទង្គិចប្រដាប់អាវុធ ប៉ុន្តែមានភាពតានតឹងផ្នែកការទូត ខណៈដែលប្រទេសទាំងពីរពង្រឹងវិធានការការពាររៀងៗខ្លួន។ ភាគីថៃបន្តសាងសង់របងព្រំដែនអចិន្ត្រៃយ៍នៅខេត្តចាន់បុរី និងរៀបចំរចនាសម្ព័ន្ធកងទ័ពឡើងវិញ រីឯកម្ពុជាបានជីកលេណដ្ឋានក្បែរខេត្តស្រះកែវ និងបានដាក់ពាក្យតវ៉ាការទូតជុំវិញការចោទប្រកាន់ពីការរំលោភដែនដី។ ក្រុមអ្នកសង្កេតការណ៍អាស៊ានបានចុះត្រួតពិនិត្យតំបន់ព្រំដែនដែលងាយរងគ្រោះនៅពោធិ៍សាត់ និងផលប៉ះពាល់នៃគ្រាប់មីននៅស៊ីសាកេត ហើយរដ្ឋមន្ត្រីការបរទេសទាំងពីរបានចូលរួមកិច្ចពិភាក្សាកសាងទំនុកចិត្តដែលរៀបចំដោយប្រទេសចិន។",
+    "generalSummary": "The Thai-Cambodian border is calm for now, with no armed clashes reported, but political tension remains. Thailand is building a permanent border fence in Chanthaburi and has reorganized some forces in the area. Cambodia has dug defensive trenches near Sa Kaeo and protested what it says are Thai violations of Cambodian territory. ASEAN observers have inspected sensitive border areas in Pursat and Si Sa Ket. The two foreign ministers also joined talks in Beijing aimed at reducing tension and rebuilding trust.",
+    "generalSummaryEn": "The Thai-Cambodian border is calm for now, with no armed clashes reported, but political tension remains. Thailand is building a permanent border fence in Chanthaburi and has reorganized some forces in the area. Cambodia has dug defensive trenches near Sa Kaeo and protested what it says are Thai violations of Cambodian territory. ASEAN observers have inspected sensitive border areas in Pursat and Si Sa Ket. The two foreign ministers also joined talks in Beijing aimed at reducing tension and rebuilding trust.",
+    "generalSummaryTh": "ชายแดนไทย-กัมพูชายังสงบ ไม่มีรายงานการปะทะด้วยอาวุธ แต่ความตึงเครียดทางการเมืองยังมีอยู่ ไทยกำลังสร้างรั้วถาวรในจันทบุรีและปรับกำลังบางส่วนในพื้นที่ ส่วนกัมพูชาขุดคูป้องกันใกล้สระแก้ว และประท้วงสิ่งที่กัมพูชาระบุว่าเป็นการละเมิดดินแดนของตน ผู้สังเกตการณ์อาเซียนได้เข้าตรวจพื้นที่ชายแดนที่อ่อนไหวในโพธิสัตว์และศรีสะเกษ รัฐมนตรีต่างประเทศของทั้งสองฝ่ายยังได้หารือกันที่ปักกิ่งเพื่อช่วยลดความตึงเครียดและสร้างความไว้ใจกันอีกครั้ง",
+    "generalSummaryKh": "ព្រំដែនកម្ពុជា-ថៃនៅស្ងប់ស្ងាត់សម្រាប់ពេលនេះ ហើយមិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចដោយអាវុធទេ ប៉ុន្តែភាពតានតឹងផ្នែកនយោបាយនៅតែមាន។ ថៃកំពុងសាងសង់របងអចិន្ត្រៃយ៍នៅចាន់បុរី និងកែសម្រួលកម្លាំងមួយចំនួននៅតំបន់ព្រំដែន។ កម្ពុជាបានជីកលេណដ្ឋានការពារក្បែរស្រះកែវ និងតវ៉ាចំពោះអ្វីដែលកម្ពុជានិយាយថាជាការរំលោភដែនដីរបស់ខ្លួន។ អ្នកសង្កេតការណ៍អាស៊ានបានចុះពិនិត្យតំបន់ព្រំដែនសំខាន់ៗនៅពោធិ៍សាត់ និងស៊ីសាកេត។ រដ្ឋមន្ត្រីការបរទេសរបស់ប្រទេសទាំងពីរក៏បានជួបគ្នានៅប៉េកាំង ដើម្បីបន្ថយភាពតានតឹង និងកសាងទំនុកចិត្តឡើងវិញ។",
     "conflictLevel": "Low",
     "keyEvents": [
-      "Chanthaburi border fence construction reaches 45 percent completion",
-      "ASEAN observers inspect Pursat border sector after reported post movement",
-      "Cambodian forces dig defensive trenches near Sa Kaeo border",
-      "Cambodian and Thai foreign ministers attend confidence-building talks in Beijing"
+      "Thailand says its Chanthaburi border fence is 45% complete",
+      "ASEAN observers inspect the Pursat border after reports that a post was moved",
+      "Cambodian forces dig defensive trenches near the Sa Kaeo border",
+      "Thai and Cambodian foreign ministers meet in Beijing to reduce tensions"
+    ],
+    "keyEventsEn": [
+      "Thailand says its Chanthaburi border fence is 45% complete",
+      "ASEAN observers inspect the Pursat border after reports that a post was moved",
+      "Cambodian forces dig defensive trenches near the Sa Kaeo border",
+      "Thai and Cambodian foreign ministers meet in Beijing to reduce tensions"
     ],
     "keyEventsTh": [
-      "การก่อสร้างรั้วชายแดนจันทบุรีมีความคืบหน้าร้อยละ 45",
-      "ผู้สังเกตการณ์อาเซียนตรวจแนวชายแดนโพธิสัตว์หลังรายงานการขยับฐานตรวจการณ์",
-      "กองกำลังกัมพูชาขุดคูสนามตั้งรับใกล้ชายแดนสระแก้ว",
-      "รัฐมนตรีต่างประเทศกัมพูชาและไทยร่วมเจรจาสร้างความไว้เนื้อเชื่อใจในปักกิ่ง"
+      "ไทยระบุว่าการสร้างรั้วชายแดนในจันทบุรีคืบหน้าแล้ว 45%",
+      "ผู้สังเกตการณ์อาเซียนตรวจชายแดนโพธิสัตว์ หลังมีรายงานว่าจุดตรวจถูกขยับ",
+      "กองกำลังกัมพูชาขุดคูป้องกันใกล้ชายแดนสระแก้ว",
+      "รัฐมนตรีต่างประเทศไทยและกัมพูชาพบกันที่ปักกิ่งเพื่อลดความตึงเครียด"
     ],
     "keyEventsKh": [
-      "ការសាងសង់របងព្រំដែនខេត្តចាន់បុរីសម្រេចបាន 45 ភាគរយ",
-      "អ្នកសង្កេតការណ៍អាស៊ានចុះពិនិត្យតំបន់ព្រំដែនពោធិ៍សាត់ក្រោយរបាយការណ៍អំពីការរំកិលប៉ុស្តិ៍យាម",
+      "ថៃនិយាយថាការសាងសង់របងព្រំដែននៅចាន់បុរីសម្រេចបាន 45%",
+      "អ្នកសង្កេតការណ៍អាស៊ានចុះពិនិត្យព្រំដែនពោធិ៍សាត់ បន្ទាប់ពីមានសេចក្តីរាយការណ៍ថាប៉ុស្តិ៍មួយត្រូវបានរំកិល",
       "កងកម្លាំងកម្ពុជាជីកលេណដ្ឋានការពារក្បែរព្រំដែនស្រះកែវ",
-      "រដ្ឋមន្ត្រីការបរទេសកម្ពុជានិងថៃចូលរួមកិច្ចចរចាកសាងទំនុកចិត្តនៅទីក្រុងប៉េកាំង"
+      "រដ្ឋមន្ត្រីការបរទេសថៃ និងកម្ពុជាជួបគ្នានៅប៉េកាំង ដើម្បីបន្ថយភាពតានតឹង"
     ],
     "displacedCount": 0,
     "displacedTrend": 0,
@@ -594,9 +630,9 @@
     "schedulingReason": "Border conditions remain non-kinetic with ongoing ASEAN observer monitoring and bilateral confidence-building dialogue."
   },
   "articleCounts": {
-    "thailand": 752,
-    "cambodia": 704,
+    "thailand": 750,
+    "cambodia": 700,
     "international": 592,
-    "total": 2048
+    "total": 2042
   }
 }
