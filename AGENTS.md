@@ -55,6 +55,8 @@ For any UI change, localization/UI-text change, or production cutover, visual in
 4. On both sizes, switch through English, Khmer, and Thai. Check the language selector, header, navigation, sidebar, cards, long localized text, clipping, overlap, horizontal overflow, mojibake, missing fonts, and obvious console/network errors.
 5. Scroll through the main page at least once. If a layout defect is visible, fix it before push/deploy.
 
+Use the local static preview for routine visual QA. Do not push temporary proof/preview branches just to inspect rendering; Vercel is configured to auto-deploy only `main` so test branches do not consume deployment quota.
+
 The source test rejects common mojibake signatures, but screenshots remain required because encoding tests cannot catch spacing, clipping, wrapping, or responsive-layout failures.
 
 ## Research cycle
