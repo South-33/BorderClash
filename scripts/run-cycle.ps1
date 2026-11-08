@@ -192,12 +192,18 @@ try {
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\validate.mjs")) $worktree
     Invoke-Checked "git" @("-C", $worktree, "diff", "--check") $worktree
 
-    $changes = @(git -C $worktree status --porcelain)
-    if ($LASTEXITCODE -ne 0) { throw "Could not inspect validated changes" }
     $cycleHead = (git -C $worktree rev-parse HEAD).Trim()
     $hasCommittedChanges = $cycleHead -ne $baseHead
 
-    if (-not $changes -and -not $hasCommittedChanges) {
+    Invoke-Checked "git" @("-C", $worktree, "add", "-A") $worktree
+    & git -C $worktree diff --cached --quiet
+    $stagedDiffExit = $LASTEXITCODE
+    if ($stagedDiffExit -notin @(0, 1)) {
+        throw "Could not inspect staged cycle changes"
+    }
+    $hasStagedChanges = $stagedDiffExit -eq 1
+
+    if (-not $hasStagedChanges -and -not $hasCommittedChanges) {
         Write-RuntimeState "success" $runId "Cycle completed with no changes"
         Remove-CycleWorktree $worktree $branch
         Write-Output "SUCCESS: no changes conversation=$($result.conversation_id)"
@@ -208,21 +214,14 @@ try {
     if ($hasCommittedChanges) {
         git -C $worktree log --oneline "$baseHead..$cycleHead"
     }
-    if ($changes) {
-        git -C $worktree diff --stat
-        Invoke-Checked "git" @("-C", $worktree, "add", "-A") $worktree
-        & git -C $worktree diff --cached --quiet
-        $stagedDiffExit = $LASTEXITCODE
-        if ($stagedDiffExit -eq 1) {
-            Invoke-Checked "git" @(
-                "-C", $worktree,
-                "-c", "user.name=BorderClash Research",
-                "-c", "user.email=borderclash-research@local.invalid",
-                "commit", "-m", "research: complete BorderClash cycle ($runId)"
-            ) $worktree
-        } elseif ($stagedDiffExit -ne 0) {
-            throw "Could not inspect staged cycle changes"
-        }
+    if ($hasStagedChanges) {
+        git -C $worktree diff --cached --stat
+        Invoke-Checked "git" @(
+            "-C", $worktree,
+            "-c", "user.name=BorderClash Research",
+            "-c", "user.email=borderclash-research@local.invalid",
+            "commit", "-m", "research: complete BorderClash cycle ($runId)"
+        ) $worktree
     }
     $cycleCommit = (git -C $worktree rev-parse HEAD).Trim()
 
