@@ -78,6 +78,8 @@ function hardIssues(response) {
     }
     if (item.TH && /[\u1780-\u17FF]/u.test(item.TH)) issues.push(`item-${number}-thai-contains-khmer`);
     if (item.KH && /[\u0E00-\u0E7F]/u.test(item.KH)) issues.push(`item-${number}-khmer-contains-thai`);
+    if (item.TH && /[\u0E50-\u0E59]/u.test(item.TH)) issues.push(`item-${number}-thai-native-digits`);
+    if (item.KH && /[\u17E0-\u17E9]/u.test(item.KH)) issues.push(`item-${number}-khmer-native-digits`);
   }
 
   const item1 = items.get(1)?.EN || "";
