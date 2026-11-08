@@ -3,6 +3,7 @@ param(
     [switch]$Publish,
     [int]$TimeoutMinutes = 45,
     [string]$Prompt = "",
+    [string]$Model = "",
     [string]$AgyPath = "",
     [string]$RunsRoot = "",
     [string]$RuntimeDir = "",
@@ -20,6 +21,7 @@ $runnerRoot = Join-Path $repoRoot ".work\runner"
 $runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $runnerRoot "runtime" }
 $logDir = if ($LogDir) { [IO.Path]::GetFullPath($LogDir) } else { Join-Path $runnerRoot "logs" }
 $runsRoot = if ($RunsRoot) { [IO.Path]::GetFullPath($RunsRoot) } else { Join-Path $runnerRoot "runs" }
+$agyModel = if ($Model) { $Model } elseif ($env:BORDERCLASH_AGY_MODEL) { $env:BORDERCLASH_AGY_MODEL } else { "gemini-3.8-flash-medium" }
 
 New-Item -ItemType Directory -Force -Path $runtimeDir, $logDir, $runsRoot | Out-Null
 
@@ -29,6 +31,7 @@ function Write-RuntimeState {
         updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         status = $Status
         runId = $RunId
+        model = $agyModel
         message = $Message
         worktree = $Worktree
     } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
@@ -192,7 +195,7 @@ try {
     try {
         [Console]::OutputEncoding = $utf8NoBom
         $OutputEncoding = $utf8NoBom
-        $stdout = & $agy -p $effectivePrompt --dangerously-skip-permissions --output-format json --model gemini-3.8-flash-medium --print-timeout "$($TimeoutMinutes)m" 2> $stderrPath
+        $stdout = & $agy -p $effectivePrompt --dangerously-skip-permissions --output-format json --model $agyModel --print-timeout "$($TimeoutMinutes)m" 2> $stderrPath
         $agyExit = $LASTEXITCODE
         [IO.File]::WriteAllText($stdoutPath, [string]::Join([Environment]::NewLine, [string[]]$stdout), $utf8NoBom)
     } finally {
