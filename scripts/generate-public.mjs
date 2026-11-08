@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../lib/files.mjs";
 
@@ -177,12 +178,15 @@ const dashboard = {
   articleCounts: articleCounts(news),
 };
 
-await writeJson(join(publicRoot, "dashboard.json"), dashboard);
-await writeJsonArrayOnePerLine(join(publicRoot, "timeline.json"), timeline);
+const dashboardPath = join(publicRoot, "dashboard.json");
+const timelinePath = join(publicRoot, "timeline.json");
+await writeJson(dashboardPath, dashboard);
+await writeJsonArrayOnePerLine(timelinePath, timeline);
+const [dashboardFile, timelineFile] = await Promise.all([stat(dashboardPath), stat(timelinePath)]);
 
 console.log(JSON.stringify({
-  dashboardBytes: Buffer.byteLength(JSON.stringify(dashboard)),
-  timelineBytes: Buffer.byteLength(JSON.stringify(timeline)),
+  dashboardBytes: dashboardFile.size,
+  timelineBytes: timelineFile.size,
   timelineEvents: timeline.length,
   articleCounts: dashboard.articleCounts,
 }, null, 2));
