@@ -760,7 +760,7 @@ const MilitaryIntensityGauge = ({
                 lineHeight: '1',
                 transform: showAnalysis ? 'rotate(90deg)' : 'rotate(180deg)'
               }}
-            >â€º</span>
+            >&rsaquo;</span>
           </button>
         )}
       </div>
@@ -1130,12 +1130,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const [isScrollJump, setIsScrollJump] = useState(false);
   const [showMinorEvents, setShowMinorEventsRaw] = useState(false); // Toggle for showing events with importance < 70
   const [isFilterTransitioning, setIsFilterTransitioning] = useState(false); // For fade animation
-  const IMPORTANCE_THRESHOLD = 70; // Events below this are considered "minor" â€” gives meaningful 65/35 split
+  const IMPORTANCE_THRESHOLD = 70; // Events below this are considered "minor" - gives meaningful 65/35 split
 
   // Ref to remember date during filter toggle (for scroll restoration)
   const filterToggleDateRef = useRef<string | null>(null);
 
-  // Animated filter toggle handler â€” fade out, remember date, update, fade in
+  // Animated filter toggle handler - fade out, remember date, update, fade in
   const setShowMinorEvents = useCallback((value: boolean) => {
     if (value === showMinorEvents) return;
     // Remember current date before transition
@@ -1899,13 +1899,15 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
             <div className="flex gap-2">
               {[
-                { id: 'kh', label: 'ážáŸ’áž˜áŸ‚ážš' },
-                { id: 'en', label: 'EN' },
-                { id: 'th', label: 'à¹„à¸—à¸¢' }
+                { id: 'kh', label: '\u1781\u17d2\u1798\u17c2\u179a', htmlLang: 'km' },
+                { id: 'en', label: 'EN', htmlLang: 'en' },
+                { id: 'th', label: '\u0e44\u0e17\u0e22', htmlLang: 'th' }
               ].map((l) => (
                 <button
                   key={l.id}
                   onClick={() => setLang(l.id as any)}
+                  aria-label={`Switch language to ${l.label}`}
+                  data-language-option={l.id}
                   className={`
                     flex-1 flex items-center justify-center py-2 px-1 border-2 active:scale-95
                     transition-all duration-100 ease-out
@@ -1915,7 +1917,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     }
                   `}
                 >
-                  <span className={`font-bold tracking-tight ${l.id === 'en' ? 'text-sm' : 'text-base'}`}>
+                  <span lang={l.htmlLang} className={`font-bold tracking-tight whitespace-nowrap leading-none ${l.id === 'en' ? 'text-sm' : 'text-[13px]'}`}>
                     {l.label}
                   </span>
                 </button>
@@ -2159,7 +2161,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                               <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
                                 "{getNarrative(cambodiaMeta)}"
                               </p>
-                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">â€” {cambodiaMeta?.narrativeSource || t.aiAnalysis}</p>
+                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {cambodiaMeta?.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2206,7 +2208,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                               <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
                                 "{getNarrative(thailandMeta)}"
                               </p>
-                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">â€” {thailandMeta?.narrativeSource || t.aiAnalysis}</p>
+                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {thailandMeta?.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2593,7 +2595,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                     >
                                       <span className="text-gray-900">{s.name}</span>
                                       <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
-                                      <span className="opacity-30 group-hover:opacity-60 transition-opacity">â†—</span>
+                                      <span className="opacity-30 group-hover:opacity-60 transition-opacity">&nearr;</span>
                                     </a>
                                   ) : (
                                     <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono">
@@ -2629,7 +2631,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                         >
                                           <span className="text-gray-800">{s.name}</span>
                                           <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
-                                          <span className="opacity-30 group-hover:opacity-60 transition-opacity">â†—</span>
+                                          <span className="opacity-30 group-hover:opacity-60 transition-opacity">&nearr;</span>
                                         </a>
                                       ) : (
                                         <span key={idx + 3} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono text-gray-700">
@@ -2644,7 +2646,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                     onClick={() => setShowAllSources(false)}
                                     className="flex items-center gap-1 text-[10px] font-mono text-gray-400 hover:text-gray-600 transition-colors uppercase tracking-wider"
                                   >
-                                    â†‘ {t.hide}
+                                    &uarr; {t.hide}
                                   </button>
                                 </div>
                               )}
@@ -2661,7 +2663,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                             disabled={!evtHasPrev}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasPrev ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                           >
-                            <span>â†</span>
+                            <span>&larr;</span>
                             <span className="hidden sm:inline">{t.prev}</span>
                           </button>
 
@@ -2675,7 +2677,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasNext ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                           >
                             <span className="hidden sm:inline">{t.next}</span>
-                            <span>â†’</span>
+                            <span>&rarr;</span>
                           </button>
                         </div>
                       </div>

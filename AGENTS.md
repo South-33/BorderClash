@@ -45,6 +45,18 @@ JSONL is one object per line. Monthly files are intentional: they keep Git diffs
 
 If the layout stops being intuitive, simplify it. Do not add side databases, queues, duplicate state, or abstractions unless they clearly remove more complexity than they add.
 
+## Visual QA
+
+For any UI change, localization/UI-text change, or production cutover, visual inspection is a release gate, not an optional polish step.
+
+1. Run `pnpm test`, then `pnpm build`.
+2. Run `pnpm visual:preview` to serve the exact static export from `out/`.
+3. Open the preview in a real browser and inspect rendered screenshots at desktop (about 1440x900) and mobile (about 390x844). Do not rely only on DOM text, TypeScript, or build success.
+4. On both sizes, switch through English, Khmer, and Thai. Check the language selector, header, navigation, sidebar, cards, long localized text, clipping, overlap, horizontal overflow, mojibake, missing fonts, and obvious console/network errors.
+5. Scroll through the main page at least once. If a layout defect is visible, fix it before push/deploy.
+
+The source test rejects common mojibake signatures, but screenshots remain required because encoding tests cannot catch spacing, clipping, wrapping, or responsive-layout failures.
+
 ## Research cycle
 
 1. Run `node scripts/research.mjs`.

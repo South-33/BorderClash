@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "start": "next start",
+    "visual:preview": "node scripts/serve-out.mjs",
+    "start": "node scripts/serve-out.mjs",
     "lint": "eslint",
     "research": "node scripts/research.mjs",
     "validate": "node scripts/validate.mjs",
