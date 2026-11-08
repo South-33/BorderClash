@@ -1,7 +1,6 @@
 import { type Metadata, type Viewport } from "next";
 import { Anton, JetBrains_Mono, Inter, Chakra_Petch, IBM_Plex_Sans_Thai, Moul, Kantumruy_Pro } from "next/font/google";
 import "./globals.css";
-import { ConvexClientProvider } from "./ConvexClientProvider";
 
 const anton = Anton({
   variable: "--font-anton",
@@ -82,7 +81,7 @@ export default function RootLayout({
         className={`${anton.variable} ${jetbrainsMono.variable} ${inter.variable} ${chakraPetch.variable} ${ibmPlexThai.variable} ${moul.variable} ${kantumruy.variable} antialiased`}
         style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
       >
-        <ConvexClientProvider>{children}</ConvexClientProvider>
+        {children}
       </body>
     </html>
   );

@@ -1,18 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
-import { useQuery, useConvex } from 'convex/react';
-import { FunctionReference } from 'convex/server';
-import { api } from '../../convex/_generated/api';
 import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle } from 'lucide-react';
-import type { BorderClashData } from '@/lib/convex-server';
+import type { BorderClashData, TimelineEvent } from '@/lib/data';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
-import { getLocalizedStyleIssue, isValidLocalizedText, normalizeLocalizedDigits } from '../../convex/language_quality';
+import { getLocalizedStyleIssue, isValidLocalizedText, normalizeLocalizedDigits } from '@/lib/language-quality';
 
-type DashboardSnapshot = Omit<BorderClashData, 'fetchedAt'>;
 const DASHBOARD_TIME_ZONE = 'Asia/Phnom_Penh';
 
 const localizedText = (
@@ -43,9 +39,8 @@ const localizedArray = (
 };
 
 
-// --- Error Boundary for Convex Crashes ---
-// Catches API errors and shows maintenance page, auto-retries every 30s
-class ConvexErrorBoundary extends React.Component<
+// --- Client Error Boundary ---
+class DashboardErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; retryCount: number }
 > {
@@ -59,7 +54,7 @@ class ConvexErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error) {
-    console.error('[ConvexErrorBoundary] Caught error:', error.message);
+    console.error('[DashboardErrorBoundary] Caught error:', error.message);
   }
 
   componentDidMount() {
@@ -287,226 +282,6 @@ const GuideIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: a
 
 // Constants and Translations moved to ./translations.ts
 
-
-// --- Custom Hooks ---
-// IMPORTANT: The 'skip' parameter allows completely bypassing Convex subscriptions
-// when ISR provides data. Pass skip=true when server data is available.
-const usePersistentQuery = (query: any, args: any, storageKey: string, skip: boolean = false) => {
-  // When skip is true, we use Convex's "skip" sentinel to prevent subscription
-  const convexData = useQuery(query, skip ? "skip" : args);
-  // Synchronous hydration attempt (for instant render on refresh)
-  // This avoids the "flash of loading" by reading localStorage immediately if available.
-  // Hydration-safe State Initialization:
-  // ALWAYS start with null to match Server-Side Rendering (SSR).
-  // This prevents Error #418 (Hydration Mismatch) in production.
-  const [localData, setLocalData] = useState<any>(null);
-
-  const [isHydrated, setIsHydrated] = useState(!!localData || skip);
-
-  // Fallback hydration effect (for SSR mismatch safety)
-  useEffect(() => {
-    if (skip || isHydrated) return; // Already hydrated synchronously
-
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem(storageKey);
-      if (cached) {
-        try {
-          // Update state ONLY after component has mounted on client
-          setLocalData(JSON.parse(cached));
-        } catch (e) { }
-      }
-      setIsHydrated(true);
-    }
-  }, [storageKey, skip, isHydrated]);
-
-  useEffect(() => {
-    // Skip localStorage writes when skipped
-    if (skip) return;
-
-    // Update local storage when convex data arrives
-    if (convexData !== undefined) {
-      setLocalData(convexData);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(storageKey, JSON.stringify(convexData));
-      }
-    }
-  }, [convexData, storageKey, skip]);
-
-  // When skipped, return immediately with no data (caller uses ISR data instead)
-  if (skip) {
-    return { data: null, isLoading: false, isRefreshing: false };
-  }
-
-  const data = convexData !== undefined ? convexData : localData;
-  // Loading = We have no data at all (neither local nor remote) AND we have finished hydration check
-  // Note: We show loading until hydration check is done to avoid flash of missing content
-  const isLoading = !isHydrated || (convexData === undefined && localData === null);
-  // Refreshing = We have local data (so we are showing something) BUT we are waiting for fresh remote data
-  const isRefreshing = isHydrated && convexData === undefined && localData !== null;
-
-  return { data, isLoading, isRefreshing };
-};
-
-// =============================================================================
-// CACHED QUERY HOOK
-// Fetches on mount and after a completed research cycle instead of maintaining
-// a live subscription. Pass skip=true when ISR already provides the data.
-// =============================================================================
-
-// Global ref to track lastResearchAt (updated by Home component)
-const globalLastResearchAt = { current: null as number | null };
-
-// The optimized query hook - NO live subscription, just cached data
-const useCachedQuery = <T,>(
-  queryFn: FunctionReference<"query">,
-  args: Record<string, unknown>,
-  storageKey: string,
-  lastResearchAt?: number | null, // Pass this from the component that has systemStats
-  skip: boolean = false // When true, completely bypass all fetching
-): { data: T | undefined; isLoading: boolean; isRefreshing: boolean } => {
-  const convex = useConvex();
-  const effectiveLastResearchAt = lastResearchAt ?? globalLastResearchAt.current;
-  // The first client render must match SSR exactly. Reading localStorage in a
-  // state initializer gives the browser data the server could not see and can
-  // trigger React hydration error #418. Load cached data after mount instead.
-  const [data, setData] = useState<T | undefined>(undefined);
-
-  const [isLoading, setIsLoading] = useState(!skip);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(skip);
-  const lastFetchedAt = useRef<number | null>(null);
-  const hasDoneInitialFetch = useRef(false);
-  const previousSkip = useRef(skip);
-
-  useEffect(() => {
-    if (previousSkip.current && !skip) {
-      hasDoneInitialFetch.current = false;
-    }
-    previousSkip.current = skip;
-  }, [skip]);
-
-  // Hydrate cached data only after mount so SSR and the first client render
-  // remain deterministic.
-  useEffect(() => {
-    if (skip || isHydrated) return;
-
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem(storageKey);
-      if (cached && data === undefined) {
-        try {
-          const parsed = JSON.parse(cached);
-          const cachedResearchAt = parsed.researchAt ?? parsed.fetchedAt ?? 0;
-          if (effectiveLastResearchAt !== null && cachedResearchAt < effectiveLastResearchAt) {
-            setIsHydrated(true);
-            return;
-          }
-
-          setData(parsed.data);
-          lastFetchedAt.current = parsed.fetchedAt || 0;
-        } catch (e) { }
-      }
-      setIsHydrated(true);
-    }
-  }, [storageKey, skip, isHydrated, effectiveLastResearchAt]);
-
-  // Fetch data function (skip if ISR provides data)
-  const fetchData = useCallback(async () => {
-    if (skip) return;
-
-    try {
-      let result: unknown;
-      let lastError: unknown;
-
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          result = await convex.query(queryFn, args);
-          break;
-        } catch (error) {
-          lastError = error;
-          if (attempt < 2) {
-            console.warn(`⚠️ [${storageKey}] Fetch attempt ${attempt}/2 failed, retrying...`, error);
-            await new Promise(resolve => setTimeout(resolve, 700));
-          }
-        }
-      }
-
-      if (result === undefined && lastError) {
-        throw lastError;
-      }
-
-      setData(result as T);
-      lastFetchedAt.current = Date.now();
-
-      // Save to localStorage with timestamp
-      if (typeof window !== 'undefined') {
-        const now = Date.now();
-        localStorage.setItem(storageKey, JSON.stringify({
-          data: result,
-          fetchedAt: now,
-          researchAt: effectiveLastResearchAt ?? now
-        }));
-      }
-    } catch (error) {
-      console.error("Failed to fetch data for", storageKey, error);
-    }
-  }, [convex, queryFn, JSON.stringify(args), storageKey, skip, effectiveLastResearchAt]);
-
-  useEffect(() => {
-    if (effectiveLastResearchAt === null || lastFetchedAt.current === null) return;
-    if (effectiveLastResearchAt > lastFetchedAt.current) {
-      setData(undefined);
-      lastFetchedAt.current = null;
-      hasDoneInitialFetch.current = false;
-      setIsHydrated(!skip);
-    }
-  }, [effectiveLastResearchAt, skip]);
-
-  // Initial fetch after hydration (skip if ISR provides data)
-  useEffect(() => {
-    if (skip) return;
-    if (!isHydrated || hasDoneInitialFetch.current) return;
-
-    const doInitialFetch = async () => {
-      hasDoneInitialFetch.current = true;
-      setIsLoading(data === undefined);
-      setIsRefreshing(data !== undefined);
-      await fetchData();
-      setIsLoading(false);
-      setIsRefreshing(false);
-    };
-
-    doInitialFetch();
-  }, [isHydrated, fetchData, data, skip]);
-
-  // Refresh when research cycle completes (skip if ISR provides data)
-  useEffect(() => {
-    if (skip) return;
-    if (!isHydrated || effectiveLastResearchAt === null) return;
-
-    // Skip if we haven't done initial fetch yet
-    if (lastFetchedAt.current === null) return;
-
-    // Only refresh if cycle completed AFTER our last fetch
-    if (effectiveLastResearchAt > lastFetchedAt.current) {
-      console.log(`🔄 [${storageKey}] Cycle completed, refreshing data...`);
-      setIsRefreshing(true);
-      fetchData().then(() => setIsRefreshing(false));
-    }
-  }, [effectiveLastResearchAt, isHydrated, fetchData, storageKey, skip]);
-
-  // When skipped, avoid network work but keep locally cached data available.
-  if (skip) {
-    return { data, isLoading: false, isRefreshing: false };
-  }
-
-  const isAwaitingInitialFetch = data === undefined && !hasDoneInitialFetch.current;
-
-  return {
-    data,
-    isLoading: !isHydrated || isAwaitingInitialFetch || (isLoading && data === undefined),
-    isRefreshing,
-  };
-};
 
 // --- Reusable Components ---
 const Card = ({ children, className = "", title, icon: Icon, loading = false, refreshing = false }: any) => {
@@ -985,7 +760,7 @@ const MilitaryIntensityGauge = ({
                 lineHeight: '1',
                 transform: showAnalysis ? 'rotate(90deg)' : 'rotate(180deg)'
               }}
-            >›</span>
+            >â€º</span>
           </button>
         )}
       </div>
@@ -1029,15 +804,13 @@ const HackerScramble = ({ duration = 3000, className = "" }: any) => {
 };
 
 // --- Main Application ---
-// Props interface for ISR data injection
 interface DashboardClientProps {
-  initialData: BorderClashData | null;
-  serverError?: string | null;
+  initialData: BorderClashData;
 }
 
 
 
-function DashboardClientInner({ initialData, serverError }: DashboardClientProps) {
+function DashboardClientInner({ initialData }: DashboardClientProps) {
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
@@ -1139,192 +912,96 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
 
   // =============================================================================
-  // ISR-AWARE DATA LOADING
-  // If initialData is provided (from server-side ISR), we normally skip Convex calls.
-  // Once a newer research cycle is detected, we switch to a single live snapshot query.
+  // STATIC REPOSITORY DATA
+  // Dashboard data is baked into the deployment. The full timeline is fetched
+  // lazily from the same deployment only when the Timeline view is opened.
   // =============================================================================
 
-  const hasServerData = initialData !== null;
-
-  // =============================================================================
-  // STALE LOCALSTORAGE CLEANUP
-  // When ISR data is available, check if localStorage has older data and clear it.
-  // This prevents showing stale cached data when fresh ISR data exists.
-  // =============================================================================
-  useEffect(() => {
-    if (!hasServerData || typeof window === 'undefined') return;
-
-    const isrLastResearchAt = initialData?.systemStats?.lastResearchAt;
-    if (!isrLastResearchAt) return;
-    
-    // Check localStorage for cached system stats
-    const cachedStats = localStorage.getItem('borderclash_system_stats');
-    if (cachedStats) {
-      try {
-        const parsed = JSON.parse(cachedStats);
-        const localLastResearchAt = parsed?.lastResearchAt;
-
-        // If ISR data is NEWER than localStorage, clear all stale caches
-        if (localLastResearchAt && isrLastResearchAt > localLastResearchAt) {
-          console.log('🧹 [BorderClash] ISR data is newer than localStorage, clearing stale caches...');
-          // Clear all borderclash caches
-          const keysToRemove = Object.keys(localStorage).filter(k => k.startsWith('borderclash_'));
-          keysToRemove.forEach(k => localStorage.removeItem(k));
-        }
-      } catch (e) {
-        // Invalid cache, clear it
-        localStorage.removeItem('borderclash_system_stats');
-      }
-    }
-  }, [hasServerData, initialData?.systemStats?.lastResearchAt]);
-
-  const [forceClientMode, setForceClientMode] = useState(false);
   const [tabFocusKey, setTabFocusKey] = useState(0);
-  const lastVisibilityCheck = useRef<number>(Date.now());
-  const isRefreshingPage = useRef<boolean>(false);
+  const [clientTimelineEvents, setClientTimelineEvents] = useState<TimelineEvent[] | undefined>(undefined);
+  const [clientTimelineLoading, setClientTimelineLoading] = useState(false);
 
-  // Re-sync data when tab regains focus (handles browser cache staleness)
-  // If user was away for >2 minutes, do a soft page reload to get fresh ISR
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isRefreshingPage.current) {
-        const now = Date.now();
-        const timeSinceLastCheck = now - lastVisibilityCheck.current;
-        const TWO_MINUTES = 2 * 60 * 1000;
-        
-        console.log(`👁️ [BorderClash] Tab became visible after ${Math.round(timeSinceLastCheck / 1000)}s`);
-        
-        // If away for more than 2 minutes, reload to get fresh ISR cache
-        if (timeSinceLastCheck > TWO_MINUTES && hasServerData) {
-          console.log("🔄 [BorderClash] Away for >2min with ISR data, reloading for fresh cache...");
-          isRefreshingPage.current = true;
-          window.location.reload();
-          return;
-        }
-        
-        // Otherwise just refresh the countdown timer
-        lastVisibilityCheck.current = now;
+      if (document.visibilityState === 'visible') {
         setTabFocusKey(prev => prev + 1);
       }
     };
-
-    // Also track when tab becomes hidden to measure away time accurately
-    const handleVisibilityHidden = () => {
-      if (document.visibilityState === 'hidden') {
-        lastVisibilityCheck.current = Date.now();
-      }
-    };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    document.addEventListener('visibilitychange', handleVisibilityHidden);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  const systemStats = initialData.systemStats;
+  const activeSnapshot = initialData;
+  const timelineVersion = systemStats?.lastResearchAt ?? initialData.fetchedAt;
+
+  useEffect(() => {
+    if (!shouldFetchFullTimeline || clientTimelineEvents !== undefined) return;
+
+    const controller = new AbortController();
+    let active = true;
+    setClientTimelineLoading(true);
+
+    fetch(`/data/timeline.json?v=${timelineVersion}`, {
+      cache: 'force-cache',
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Timeline fetch failed: ${response.status}`);
+        }
+        return response.json() as Promise<TimelineEvent[]>;
+      })
+      .then((events) => {
+        if (active) setClientTimelineEvents(events);
+      })
+      .catch((error) => {
+        if (active && error instanceof Error && error.name !== 'AbortError') {
+          console.error('[BorderClash] Failed to load timeline:', error);
+        }
+      })
+      .finally(() => {
+        if (active) setClientTimelineLoading(false);
+      });
+
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      document.removeEventListener('visibilitychange', handleVisibilityHidden);
+      active = false;
+      controller.abort();
     };
-  }, [hasServerData]);
+  }, [shouldFetchFullTimeline, clientTimelineEvents, timelineVersion]);
 
-  // SystemStats subscription - NEVER skip this!
-  // This is our "heartbeat" to detect when static ISR data becomes stale.
-  const {
-    data: clientSystemStats,
-    isLoading: clientSysStatsLoading,
-    isRefreshing: sysStatsRefreshing
-  } = usePersistentQuery(
-    api.api.getStats,
-    {},
-    "borderclash_system_stats",
-    false // ALWAYS subscribe to status to detect new research cycles
-  ) as any;
+  const thailandNews = activeSnapshot.thailandNews ?? [];
+  const cambodiaNews = activeSnapshot.cambodiaNews ?? [];
+  const thailandMeta = activeSnapshot.thailandAnalysis;
+  const cambodiaMeta = activeSnapshot.cambodiaAnalysis;
+  const neutralMeta = activeSnapshot.neutralAnalysis;
+  const dashboardStats = activeSnapshot.dashboardStats;
+  const articleCounts = activeSnapshot.articleCounts;
 
-  const preferServerSnapshot = hasServerData && !forceClientMode;
-
-  // Use live client stats when possible, but keep ISR stats as a fallback shell.
-  const systemStats = preferServerSnapshot ? initialData.systemStats : (clientSystemStats ?? initialData?.systemStats);
-  const sysStatsLoading = hasServerData ? false : clientSysStatsLoading;
-
-  // Detect when new research data exists on the server compared to our static ISR load
-  useEffect(() => {
-    if (hasServerData && !forceClientMode && clientSystemStats?.lastResearchAt && initialData?.systemStats?.lastResearchAt) {
-      if (clientSystemStats.lastResearchAt > initialData.systemStats.lastResearchAt) {
-        console.log("🚀 [BorderClash] New research cycle detected via heartbeat. Switching to live mode...");
-        setForceClientMode(true);
-      }
-    }
-  }, [clientSystemStats?.lastResearchAt, hasServerData, forceClientMode, initialData?.systemStats?.lastResearchAt]);
-
-  // All other queries - skip if we have valid server data AND no newer cycle has been detected
-  const shouldSkip = preferServerSnapshot;
-
-  // Update global ref so any remaining cached queries can access it
-  useEffect(() => {
-    if (systemStats?.lastResearchAt) {
-      globalLastResearchAt.current = systemStats.lastResearchAt;
-    }
-  }, [systemStats?.lastResearchAt]);
-
-  // All other queries - SKIP entirely when we have server data
-  // The 5th parameter is the skip flag
-
-  const {
-    data: clientSnapshot,
-    isLoading: clientSnapshotLoading,
-    isRefreshing: snapshotRefreshing
-  } = useCachedQuery<DashboardSnapshot>(
-    api.api.getDashboardSnapshot,
-    {},
-    "borderclash_dashboard_snapshot_v1",
-    systemStats?.lastResearchAt,
-    shouldSkip
-  );
-
-  const {
-    data: clientTimelineEvents,
-    isLoading: clientTimelineLoading,
-    isRefreshing: clientTimelineRefreshing
-  } = useCachedQuery<any[]>(
-    api.api.getTimeline,
-    {},
-    "borderclash_timeline_full_v1",
-    systemStats?.lastResearchAt,
-    !shouldFetchFullTimeline
-  );
-
-  // Final data: prefer server data if skipping, otherwise use client data WITH fallback to server
-  // This ensures we never show empty/placeholder states when valid cached data exists
-  const activeSnapshot = shouldSkip ? initialData : (clientSnapshot ?? initialData);
-  const thailandNews = activeSnapshot?.thailandNews ?? [];
-  const cambodiaNews = activeSnapshot?.cambodiaNews ?? [];
-  const thailandMeta = activeSnapshot?.thailandAnalysis;
-  const cambodiaMeta = activeSnapshot?.cambodiaAnalysis;
-  const neutralMeta = activeSnapshot?.neutralAnalysis;
-  const dashboardStats = activeSnapshot?.dashboardStats;
-  const articleCounts = activeSnapshot?.articleCounts;
   const isAwaitingInitialFullTimeline = viewMode === 'TIMELINE'
     && shouldFetchFullTimeline
     && clientTimelineEvents === undefined
     && clientTimelineLoading;
   const timelineEvents = viewMode === 'TIMELINE'
-    ? (isAwaitingInitialFullTimeline ? [] : (clientTimelineEvents ?? []))
+    ? (clientTimelineEvents ?? [])
     : [];
 
-  // Loading states: if we have server data, we're never "loading"
-  const thNewsLoading = hasServerData ? false : clientSnapshotLoading;
-  const khNewsLoading = hasServerData ? false : clientSnapshotLoading;
-  const thMetaLoading = hasServerData ? false : clientSnapshotLoading;
-  const khMetaLoading = hasServerData ? false : clientSnapshotLoading;
-  const neutralMetaLoading = hasServerData ? false : clientSnapshotLoading;
-  const dashboardLoading = hasServerData ? false : clientSnapshotLoading;
-  const countsLoading = hasServerData ? false : clientSnapshotLoading;
-  const timelineLoading = viewMode === 'TIMELINE'
-    ? isAwaitingInitialFullTimeline
-    : (hasServerData ? false : clientSnapshotLoading);
-  const thNewsRefreshing = snapshotRefreshing;
-  const khNewsRefreshing = snapshotRefreshing;
-  const thMetaRefreshing = snapshotRefreshing;
-  const khMetaRefreshing = snapshotRefreshing;
-  const neutralMetaRefreshing = snapshotRefreshing;
-  const dashboardRefreshing = snapshotRefreshing;
-  const timelineRefreshing = viewMode === 'TIMELINE' && clientTimelineEvents !== undefined ? clientTimelineRefreshing : false;
+  const sysStatsLoading = false;
+  const thNewsLoading = false;
+  const khNewsLoading = false;
+  const thMetaLoading = false;
+  const khMetaLoading = false;
+  const neutralMetaLoading = false;
+  const dashboardLoading = false;
+  const countsLoading = false;
+  const timelineLoading = viewMode === 'TIMELINE' && isAwaitingInitialFullTimeline;
+  const thNewsRefreshing = false;
+  const khNewsRefreshing = false;
+  const thMetaRefreshing = false;
+  const khMetaRefreshing = false;
+  const neutralMetaRefreshing = false;
+  const dashboardRefreshing = false;
+  const timelineRefreshing = false;
 
 
   // --- CASCADE LAYOUT CONTROL ---
@@ -1453,12 +1130,12 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   const [isScrollJump, setIsScrollJump] = useState(false);
   const [showMinorEvents, setShowMinorEventsRaw] = useState(false); // Toggle for showing events with importance < 70
   const [isFilterTransitioning, setIsFilterTransitioning] = useState(false); // For fade animation
-  const IMPORTANCE_THRESHOLD = 70; // Events below this are considered "minor" — gives meaningful 65/35 split
+  const IMPORTANCE_THRESHOLD = 70; // Events below this are considered "minor" â€” gives meaningful 65/35 split
 
   // Ref to remember date during filter toggle (for scroll restoration)
   const filterToggleDateRef = useRef<string | null>(null);
 
-  // Animated filter toggle handler — fade out, remember date, update, fade in
+  // Animated filter toggle handler â€” fade out, remember date, update, fade in
   const setShowMinorEvents = useCallback((value: boolean) => {
     if (value === showMinorEvents) return;
     // Remember current date before transition
@@ -2061,61 +1738,6 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
     political: 'ring-purple-500/70',
   };
 
-  // Show error state if server-side fetching failed and we have no fallback data
-  // FIXED: If we have cached data (neutralMeta), we show that instead of the error screen
-  if (serverError && !hasServerData && !neutralMeta) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-riso-paper p-8">
-        <div className="max-w-lg w-full text-center">
-          {/* Logo / Icon */}
-          <div className="mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-riso-ink/10 rounded-full mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-riso-ink/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h1 className="font-display text-4xl md:text-5xl text-riso-ink uppercase tracking-wider">
-              Scheduled Maintenance
-            </h1>
-          </div>
-
-          {/* Status Message */}
-          <div className="bg-riso-ink/5 border border-riso-ink/20 p-6 mb-6">
-            <p className="font-mono text-sm md:text-base text-riso-ink/80 leading-relaxed mb-4">
-              We're performing routine maintenance on our data systems.
-              The dashboard will be back online shortly.
-            </p>
-            <div className="flex items-center justify-center gap-2 text-riso-ink/60">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-              <span className="font-mono text-xs uppercase tracking-wider">Systems Updating</span>
-            </div>
-          </div>
-
-          {/* ETA */}
-          <p className="font-mono text-xs text-riso-ink/50 mb-6 uppercase tracking-wider">
-            Expected Resolution: Within a few hours
-          </p>
-
-          {/* Retry Button */}
-          <button
-            onClick={() => window.location.reload()}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-riso-ink text-riso-paper font-mono font-bold uppercase tracking-wider hover:bg-riso-ink/80 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Check Again
-          </button>
-
-          {/* Footer */}
-          <p className="mt-8 font-mono text-[10px] text-riso-ink/30 uppercase">
-            BorderClash Conflict Monitor
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // Language class for font-size boost (Thai/Khmer need larger text)
   const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
   const isLocalLang = lang === 'kh' || lang === 'th';
@@ -2277,9 +1899,9 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
 
             <div className="flex gap-2">
               {[
-                { id: 'kh', label: 'ខ្មែរ' },
+                { id: 'kh', label: 'ážáŸ’áž˜áŸ‚ážš' },
                 { id: 'en', label: 'EN' },
-                { id: 'th', label: 'ไทย' }
+                { id: 'th', label: 'à¹„à¸—à¸¢' }
               ].map((l) => (
                 <button
                   key={l.id}
@@ -2537,7 +2159,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                               <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
                                 "{getNarrative(cambodiaMeta)}"
                               </p>
-                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {cambodiaMeta?.narrativeSource || t.aiAnalysis}</p>
+                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">â€” {cambodiaMeta?.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2584,7 +2206,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                               <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
                                 "{getNarrative(thailandMeta)}"
                               </p>
-                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">— {thailandMeta?.narrativeSource || t.aiAnalysis}</p>
+                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">â€” {thailandMeta?.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2834,7 +2456,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                         <div className="mt-2 flex items-center gap-1">
                                           <div className="flex -space-x-1">
                                             {[...Array(Math.min(3, event.sources.length))].map((_, i) => (
-                                              <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-mono">📄</div>
+                                              <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-mono">ðŸ“„</div>
                                             ))}
                                           </div>
                                           <span className="text-[9px] font-mono opacity-50">+{event.sources.length} {t.sources}</span>
@@ -2971,7 +2593,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                     >
                                       <span className="text-gray-900">{s.name}</span>
                                       <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
-                                      <span className="opacity-30 group-hover:opacity-60 transition-opacity">↗</span>
+                                      <span className="opacity-30 group-hover:opacity-60 transition-opacity">â†—</span>
                                     </a>
                                   ) : (
                                     <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono">
@@ -3007,7 +2629,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                         >
                                           <span className="text-gray-800">{s.name}</span>
                                           <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
-                                          <span className="opacity-30 group-hover:opacity-60 transition-opacity">↗</span>
+                                          <span className="opacity-30 group-hover:opacity-60 transition-opacity">â†—</span>
                                         </a>
                                       ) : (
                                         <span key={idx + 3} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono text-gray-700">
@@ -3022,7 +2644,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                                     onClick={() => setShowAllSources(false)}
                                     className="flex items-center gap-1 text-[10px] font-mono text-gray-400 hover:text-gray-600 transition-colors uppercase tracking-wider"
                                   >
-                                    ↑ {t.hide}
+                                    â†‘ {t.hide}
                                   </button>
                                 </div>
                               )}
@@ -3039,7 +2661,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                             disabled={!evtHasPrev}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasPrev ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                           >
-                            <span>←</span>
+                            <span>â†</span>
                             <span className="hidden sm:inline">{t.prev}</span>
                           </button>
 
@@ -3053,7 +2675,7 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-sm transition-all ${evtHasNext ? 'bg-riso-ink text-riso-paper hover:bg-riso-ink/80' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                           >
                             <span className="hidden sm:inline">{t.next}</span>
-                            <span>→</span>
+                            <span>â†’</span>
                           </button>
                         </div>
                       </div>
@@ -3270,11 +2892,10 @@ function DashboardClientInner({ initialData, serverError }: DashboardClientProps
   );
 }
 
-// Wrapped export with Error Boundary for Convex crash protection
 export function DashboardClient(props: DashboardClientProps) {
   return (
-    <ConvexErrorBoundary>
+    <DashboardErrorBoundary>
       <DashboardClientInner {...props} />
-    </ConvexErrorBoundary>
+    </DashboardErrorBoundary>
   );
 }
