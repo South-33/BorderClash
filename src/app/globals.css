@@ -205,6 +205,52 @@
 
     .dashboard-neutral-content {
         overflow-y: auto !important;
+        gap: 0.25rem !important;
+    }
+
+    .dashboard-neutral-header {
+        margin-bottom: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+    }
+
+    .dashboard-neutral-title {
+        font-size: 1.25rem !important;
+        line-height: 1.25rem !important;
+    }
+
+    .lang-th .dashboard-neutral-title,
+    .lang-kh .dashboard-neutral-title {
+        font-size: 1.0625rem !important;
+        line-height: 1.35 !important;
+    }
+
+    .dashboard-neutral-badge {
+        padding: 0.25rem 0.5rem !important;
+    }
+
+    .dashboard-neutral-summary,
+    .dashboard-neutral-events-title,
+    .dashboard-neutral-event {
+        font-size: 0.875rem !important;
+        line-height: 1.4 !important;
+    }
+
+    .lang-th .dashboard-neutral-summary,
+    .lang-th .dashboard-neutral-events-title,
+    .lang-th .dashboard-neutral-event,
+    .lang-kh .dashboard-neutral-summary,
+    .lang-kh .dashboard-neutral-events-title,
+    .lang-kh .dashboard-neutral-event {
+        font-size: 1rem !important;
+        line-height: 1.4 !important;
+    }
+
+    .dashboard-neutral-events {
+        padding-top: 0.25rem !important;
+    }
+
+    .dashboard-neutral-events-title {
+        margin-bottom: 0.25rem !important;
     }
 }
 

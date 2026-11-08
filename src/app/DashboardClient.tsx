@@ -2051,27 +2051,27 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
                       <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
-                        <div className="mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
-                          <h3 className={`font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
+                        <div className="dashboard-neutral-header mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
+                          <h3 className={`dashboard-neutral-title font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
                             {t.situationReport}
                           </h3>
-                          <div className="px-3 py-1.5 border border-dashed border-riso-ink/40 bg-riso-ink/[0.03] flex items-center justify-center">
+                          <div className="dashboard-neutral-badge px-3 py-1.5 border border-dashed border-riso-ink/40 bg-riso-ink/[0.03] flex items-center justify-center">
                             <span className={`font-mono font-black uppercase tracking-[0.2em] leading-none text-riso-ink/70 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>
                               {t.aiSynthesis}
                             </span>
                           </div>
                         </div>
 
-                        <div className={`font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
+                        <div className={`dashboard-neutral-summary font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
                           {getSummary(neutralMeta) || t.analyzingFeeds}
                         </div>
 
                         {getKeyEvents(neutralMeta).length > 0 && (
-                          <div className="mt-auto pt-2 border-t border-riso-ink/10">
-                            <p className={`font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{t.keyDevelopments}:</p>
+                          <div className="dashboard-neutral-events mt-auto pt-2 border-t border-riso-ink/10">
+                            <p className={`dashboard-neutral-events-title font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{t.keyDevelopments}:</p>
                             <ul className="list-disc pl-4 space-y-1">
                               {getKeyEvents(neutralMeta).map((event: string, i: number) => (
-                                <li key={i} className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{event}</li>
+                                <li key={i} className={`dashboard-neutral-event font-mono ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{event}</li>
                               ))}
                             </ul>
                           </div>
