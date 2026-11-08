@@ -46,13 +46,13 @@ function Reset-TestArtifacts {
             Start-Sleep -Milliseconds 200
         }
     }
-    & git -C $repoRoot worktree prune 2>$null | Out-Null
+    if (Test-Path -LiteralPath $testRoot) {
+        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    & git -C $repoRoot worktree prune --expire now 2>$null | Out-Null
     & git -C $repoRoot for-each-ref --format="%(refname:short)" "refs/heads/$branchPrefix/" | ForEach-Object {
         $name = $_.Trim()
         if ($name) { & git -C $repoRoot branch -D $name 2>$null | Out-Null }
-    }
-    if (Test-Path -LiteralPath $testRoot) {
-        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
     $ErrorActionPreference = $previousErrorAction
 }

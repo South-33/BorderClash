@@ -158,6 +158,7 @@ function Remove-CycleWorktree {
         }
     }
     if ($Branch) {
+        & git -C $repoRoot worktree prune --expire now | Out-Null
         & git -C $repoRoot branch -D $Branch | Out-Null
     }
 }
