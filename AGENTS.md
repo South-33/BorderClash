@@ -96,16 +96,15 @@ You may improve any part of this research repository when that genuinely makes t
 
 - Write for ordinary civilians, not analysts. Assume the reader has no specialist background and only everyday context.
 - English, Thai, and Khmer are three reader-facing rewrites of the same verified facts, not word-for-word translations of one master sentence.
-- English: natural, neutral, concise, everyday wording. Prefer "armed fighting" over "kinetic", "talks to reduce tension" over "confidence-building", and similarly plain alternatives.
+- English: natural, neutral, concise, everyday wording.
 - Thai: natural everyday Thai for a Thai civilian. Thai plus Latin/English and ASCII digits only; never Khmer.
 - Khmer: natural everyday Khmer for a Cambodian civilian. Khmer plus Latin/English and ASCII digits only; never Thai.
-- Preserve facts, attribution, uncertainty, names, dates, and numbers exactly in meaning. Simplifying language must never strengthen a claim or remove an important caveat.
-- Do not infer missing consequences while simplifying. `Displaced` does not automatically mean `unable to return home`; `moved forward` does not mean `crossed the border`; an allegation must stay attributed as an allegation.
+- Preserve facts, attribution, uncertainty, names, dates, numbers, relationships, and claim strength exactly in meaning. Change expression, never information.
 - If a specialist term is genuinely necessary, explain it in plain language the first time instead of assuming the reader knows it.
 - For news that appears in the current dashboard window, always provide natural `titleTh` and `titleKh`. Add `titleEn` when the source headline is not already clear everyday English (for example non-English, sensational, jargon-heavy, or context-poor). `title` always preserves the source headline.
 - Keep `active` / `unverified` news materially tied to the Thailand-Cambodia border situation: fighting or defense, ceasefire, mines, territory, border closure/checkpoints, displacement, diplomacy/legal action, or a direct economic/humanitarian effect of the border situation. General country news belongs in history as `archived` or should be omitted.
 - If a story is relevant but its source headline hides the border connection, make that verified connection clear in `titleEn` / `titleTh` / `titleKh` without adding facts.
-- Prefer short sentences with one main idea. Current English analysis sentences should normally stay at or below about 32 words.
+- Prefer short sentences with one main idea.
 - Use established local place/person names when confident. If a proper-name translation is uncertain, preserve the source/Latin spelling rather than invent a local spelling.
 - Normalize Thai/Khmer native numerals to ASCII `0-9`.
 - Use actual current time for created/updated/fetched/verified timestamps. Never write future timestamps; `nextRunAt` is the intentional exception.
@@ -124,7 +123,7 @@ You may improve any part of this research repository when that genuinely makes t
 ## Hill-climbing
 
 - Benchmark the smallest representative slice before changing prompts, models, research strategy, or validation. Do not run a full research cycle for every experiment.
-- Use `pnpm content:bench` for deterministic reader-copy/relevance signals and `pnpm bench:copy` for one bounded unpublished AGY copy check. Use `pnpm bench:copy:tournament` only when deliberately comparing prompt/model variants. Bench output stays under `.work/benchmarks/` and may be deleted at any time.
+- Use `pnpm content:bench` for hard reader-copy/relevance signals and `pnpm bench:copy` for one unpublished candidate plus blind-review check. Override `BENCH_MODEL`, `BENCH_JUDGE`, or `BENCH_PROMPT` to compare alternatives without editing the harness. Bench output stays under `.work/benchmarks/`.
 - Compare baseline vs candidate on factual fidelity first, then reader quality, runtime, unnecessary diff size, and complexity. A faster or prettier result that strengthens a claim, drops attribution, or invents context loses.
 - Keep production on the simplest configuration that passes representative benches. Escalate model effort only for a demonstrated hard case, not by default.
 - The scheduled runner defaults to `gemini-3.8-flash-medium`. For a deliberate benchmarked model change, use runner `-Model` or `BORDERCLASH_AGY_MODEL`; do not edit the runner just to try a model.

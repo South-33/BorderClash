@@ -11,7 +11,6 @@
     "research": "node scripts/research.mjs",
     "content:bench": "node scripts/content-bench.mjs",
     "bench:copy": "node scripts/bench-reader.mjs",
-    "bench:copy:tournament": "node scripts/bench-reader.mjs --tournament",
     "validate": "node scripts/validate.mjs",
     "generate": "node scripts/generate-public.mjs",
     "test": "node --test tests/*.test.mjs",

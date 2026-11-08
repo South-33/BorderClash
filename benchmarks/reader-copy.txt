@@ -7,7 +7,3 @@ This fixture tests plain-language rewriting without research.
 3. Cambodia position: Cambodia says Thai troops moved military posts forward, dug trenches in Pursat, built border fencing without permission, and carried out military surveys near Chouk Chey. Cambodia protested these actions, supports ASEAN ceasefire monitoring, and is joining talks with Thailand in Beijing to reduce tension.
 
 4. Displacement: Cambodia says nearly 8,000 people remain displaced along the Thai border despite the ceasefire.
-
-5. Diplomacy: China hosted informal talks intended to help Cambodia and Thailand rebuild trust.
-
-6. Border economy: A company shifted supplies for Cambodia from Thailand to Malaysia while the land border remained closed.
