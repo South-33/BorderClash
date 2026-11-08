@@ -127,6 +127,13 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "git status failed" }
     if ($dirty) { throw "Root checkout must be clean before a research cycle" }
 
+    if ($Publish) {
+        $currentBranch = (git -C $repoRoot branch --show-current).Trim()
+        if ($currentBranch -ne "main") {
+            throw "Publication requires the root checkout to be on main (current: $currentBranch)"
+        }
+    }
+
     Invoke-Checked "pnpm" @("test") $repoRoot
     Invoke-Checked "pnpm" @("validate") $repoRoot
 
