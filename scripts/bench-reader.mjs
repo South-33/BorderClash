@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(".");
@@ -16,6 +16,31 @@ const itemCount = [...fixture.matchAll(/^\d+\.\s/gmu)].length;
 const prompt = process.env.BENCH_PROMPT || "Rewrite each item for ordinary civilians in English, Thai, and Khmer. Write naturally for each audience rather than translating literally. Change expression, never information: preserve facts, attribution, uncertainty, names, numbers, and relationships. Add nothing.";
 
 await mkdir(work, { recursive: true });
+
+// A duplicate invocation costs two AI calls and can compete with the first.
+const lockPath = resolve(work, ".lock");
+async function acquireLock() {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await open(lockPath, "wx");
+      await handle.writeFile(String(process.pid));
+      return handle;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const owner = Number((await readFile(lockPath, "utf8").catch(() => "")).trim());
+      // A blank PID may be a different process still writing its lock.
+      if (!Number.isSafeInteger(owner) || owner <= 0) throw new Error("Reader benchmark lock is in use");
+      try {
+        process.kill(owner, 0);
+        throw new Error(`Reader benchmark already running (pid ${owner})`);
+      } catch (checkError) {
+        if (checkError?.code !== "ESRCH") throw checkError;
+      }
+      await unlink(lockPath).catch(() => {});
+    }
+  }
+  throw new Error("Could not acquire reader benchmark lock");
+}
 
 function runAgy(runModel, runPrompt) {
   return new Promise((done) => {
@@ -154,64 +179,70 @@ function validScore(score) {
       .every((name) => typeof score[name] === "number" && score[name] >= 0 && score[name] <= 10);
 }
 
-const candidatePrompt = `${prompt}\n\nReturn the ${itemCount} numbered items. For each item provide EN:, TH:, and KH:.\n\nSOURCE ITEMS:\n${fixture}`;
-const candidate = await runCached(model, candidatePrompt);
-const hard = candidate.ok ? hardIssues(candidate.response) : ["run-failed"];
+const lock = await acquireLock();
+try {
+  const candidatePrompt = `${prompt}\n\nReturn the ${itemCount} numbered items. For each item provide EN:, TH:, and KH:.\n\nSOURCE ITEMS:\n${fixture}`;
+  const candidate = await runCached(model, candidatePrompt);
+  const hard = candidate.ok ? hardIssues(candidate.response) : ["run-failed"];
 
-let judgment = null;
-if (candidate.ok && hard.length === 0) {
-  const judgePrompt = `Evaluate this rewrite only against the source. Factual fidelity dominates. Mark fatal=true if meaning changes through added implications, stronger or weaker claims, lost attribution or uncertainty, changed names/numbers/places, or mistranslation. Neutrality means the same evidence standard, not forced equal blame. Score 0-10 for fidelity, neutrality, clarity, naturalness across English/Thai/Khmer, and concision. Return JSON only: {"fidelity":0,"neutrality":0,"clarity":0,"naturalness":0,"concision":0,"fatal":false,"issues":[]}\n\nSOURCE ITEMS:\n${fixture}\n\nREWRITE:\n${candidate.response}`;
-  const judge = await runCached(judgeModel, judgePrompt);
-  if (judge.ok) {
-    try {
-      const score = extractJson(judge.response);
-      if (!validScore(score)) throw new Error("invalid judge score");
-      judgment = { ok: true, seconds: judge.seconds, cached: judge.cached, score };
-    } catch (error) {
-      judgment = { ok: false, seconds: judge.seconds, error: String(error) };
+  let judgment = null;
+  if (candidate.ok && hard.length === 0) {
+    const judgePrompt = `Evaluate this rewrite only against the source. Factual fidelity dominates. Mark fatal=true if meaning changes through added implications, stronger or weaker claims, lost attribution or uncertainty, changed names/numbers/places, or mistranslation. Neutrality means the same evidence standard, not forced equal blame. Score 0-10 for fidelity, neutrality, clarity, naturalness across English/Thai/Khmer, and concision. Return JSON only: {"fidelity":0,"neutrality":0,"clarity":0,"naturalness":0,"concision":0,"fatal":false,"issues":[]}\n\nSOURCE ITEMS:\n${fixture}\n\nREWRITE:\n${candidate.response}`;
+    const judge = await runCached(judgeModel, judgePrompt);
+    if (judge.ok) {
+      try {
+        const score = extractJson(judge.response);
+        if (!validScore(score)) throw new Error("invalid judge score");
+        judgment = { ok: true, seconds: judge.seconds, cached: judge.cached, score };
+      } catch (error) {
+        judgment = { ok: false, seconds: judge.seconds, error: String(error) };
+      }
+    } else {
+      judgment = judge;
     }
-  } else {
-    judgment = judge;
   }
+
+  const hash = createHash("sha256").update(JSON.stringify({ fixture, prompt, model, judgeModel })).digest("hex").slice(0, 12);
+  const reportPath = resolve(work, `${hash}.json`);
+  const report = {
+    model,
+    judgeModel,
+    prompt,
+    candidate: {
+      ok: candidate.ok,
+      seconds: candidate.seconds,
+      cached: candidate.cached,
+      tokens: Number(candidate.usage?.total_tokens || 0),
+      error: candidate.error || null,
+      response: candidate.response || null,
+    },
+    hardIssues: hard,
+    judgment,
+  };
+  await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n", "utf8");
+
+  const score = judgment?.score;
+  const passed = candidate.ok
+    && hard.length === 0
+    && judgment?.ok
+    && score?.fatal === false
+    && Number(score?.fidelity) >= 8
+    && Number(score?.neutrality) >= 8;
+
+  console.log(JSON.stringify({
+    ok: passed,
+    model,
+    judgeModel,
+    candidateSeconds: candidate.seconds,
+    candidateTokens: Number(candidate.usage?.total_tokens || 0),
+    hardIssues: hard,
+    judgeSeconds: judgment?.seconds || null,
+    score: score || null,
+    report: reportPath,
+  }, null, 2));
+
+  if (!passed) process.exitCode = 1;
+} finally {
+  await lock.close();
+  await unlink(lockPath);
 }
-
-const hash = createHash("sha256").update(JSON.stringify({ fixture, prompt, model, judgeModel })).digest("hex").slice(0, 12);
-const reportPath = resolve(work, `${hash}.json`);
-const report = {
-  model,
-  judgeModel,
-  prompt,
-  candidate: {
-    ok: candidate.ok,
-    seconds: candidate.seconds,
-    cached: candidate.cached,
-    tokens: Number(candidate.usage?.total_tokens || 0),
-    error: candidate.error || null,
-    response: candidate.response || null,
-  },
-  hardIssues: hard,
-  judgment,
-};
-await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n", "utf8");
-
-const score = judgment?.score;
-const passed = candidate.ok
-  && hard.length === 0
-  && judgment?.ok
-  && score?.fatal === false
-  && Number(score?.fidelity) >= 8
-  && Number(score?.neutrality) >= 8;
-
-console.log(JSON.stringify({
-  ok: passed,
-  model,
-  judgeModel,
-  candidateSeconds: candidate.seconds,
-  candidateTokens: Number(candidate.usage?.total_tokens || 0),
-  hardIssues: hard,
-  judgeSeconds: judgment?.seconds || null,
-  score: score || null,
-  report: reportPath,
-}, null, 2));
-
-if (!passed) process.exitCode = 1;
