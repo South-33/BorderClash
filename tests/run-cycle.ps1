@@ -35,9 +35,18 @@ function Invoke-TestRunner {
 function Reset-TestArtifacts {
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    Get-ChildItem $runsRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-        & git -C $repoRoot worktree remove --force $_.FullName 2>$null | Out-Null
+    $registeredWorktrees = @(& git -C $repoRoot worktree list --porcelain 2>$null) |
+        Where-Object { $_ -like "worktree *" } |
+        ForEach-Object { $_.Substring(9).Trim() } |
+        Where-Object { $_.StartsWith($testRoot, [StringComparison]::OrdinalIgnoreCase) }
+    foreach ($path in $registeredWorktrees) {
+        for ($attempt = 0; $attempt -lt 5; $attempt++) {
+            & git -C $repoRoot worktree remove --force $path 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Milliseconds 200
+        }
     }
+    & git -C $repoRoot worktree prune 2>$null | Out-Null
     & git -C $repoRoot for-each-ref --format="%(refname:short)" "refs/heads/$branchPrefix/" | ForEach-Object {
         $name = $_.Trim()
         if ($name) { & git -C $repoRoot branch -D $name 2>$null | Out-Null }
@@ -132,4 +141,11 @@ finally {
     Remove-Item Env:BORDERCLASH_FAKE_AGY_MODE -ErrorAction SilentlyContinue
     Reset-TestArtifacts
 }
+
+$leftoverWorktree = @(& git -C $repoRoot worktree list --porcelain) | Where-Object {
+    $_ -like "worktree *" -and $_.Substring(9).Trim().StartsWith($testRoot, [StringComparison]::OrdinalIgnoreCase)
+}
+$leftoverBranch = @(& git -C $repoRoot for-each-ref --format="%(refname:short)" "refs/heads/$branchPrefix/") | Where-Object { $_.Trim() }
+Assert-True ($leftoverWorktree.Count -eq 0) "test cleanup left a registered worktree"
+Assert-True ($leftoverBranch.Count -eq 0) "test cleanup left a branch"
 
