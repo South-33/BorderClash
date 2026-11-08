@@ -211,12 +211,18 @@ try {
     if ($changes) {
         git -C $worktree diff --stat
         Invoke-Checked "git" @("-C", $worktree, "add", "-A") $worktree
-        Invoke-Checked "git" @(
-            "-C", $worktree,
-            "-c", "user.name=BorderClash Research",
-            "-c", "user.email=borderclash-research@local.invalid",
-            "commit", "-m", "research: complete BorderClash cycle ($runId)"
-        ) $worktree
+        & git -C $worktree diff --cached --quiet
+        $stagedDiffExit = $LASTEXITCODE
+        if ($stagedDiffExit -eq 1) {
+            Invoke-Checked "git" @(
+                "-C", $worktree,
+                "-c", "user.name=BorderClash Research",
+                "-c", "user.email=borderclash-research@local.invalid",
+                "commit", "-m", "research: complete BorderClash cycle ($runId)"
+            ) $worktree
+        } elseif ($stagedDiffExit -ne 0) {
+            throw "Could not inspect staged cycle changes"
+        }
     }
     $cycleCommit = (git -C $worktree rev-parse HEAD).Trim()
 
