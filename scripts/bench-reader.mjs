@@ -1,23 +1,85 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 const root = resolve(".");
 const work = resolve(root, ".work", "benchmarks", "reader-copy");
-const fixture = await readFile(resolve(root, "benchmarks", "reader-copy.txt"), "utf8");
+const runDir = resolve(tmpdir(), "borderclash-reader-bench");
+const fixture = JSON.parse((await readFile(resolve(root, "benchmarks", "reader-copy.json"), "utf8")).replace(/^\uFEFF/u, ""));
+const agents = await readFile(resolve(root, "AGENTS.md"), "utf8");
+const section = agents.match(/## Reader contract\s*\n([\s\S]*?)(?=\n## |$)/u);
+if (!section) throw new Error("AGENTS.md is missing the Reader contract section");
+
 const agy = process.env.AGY_PATH || "agy";
-const model = process.env.BENCH_MODEL || "gemini-3.8-flash-low";
+const model = process.env.BENCH_MODEL || "gemini-3.8-flash-medium";
 const judgeModel = process.env.BENCH_JUDGE || "gpt-oss-120b-medium";
-const printTimeout = process.env.BENCH_TIMEOUT || "90s";
-const wallTimeoutMs = Math.max(10_000, Number(process.env.BENCH_WALL_TIMEOUT_MS || 100_000));
+const printTimeout = process.env.BENCH_TIMEOUT || "150s";
+const wallTimeoutMs = Math.max(30_000, Number(process.env.BENCH_WALL_TIMEOUT_MS || 180_000));
 const fresh = process.argv.includes("--fresh");
-const itemCount = [...fixture.matchAll(/^\d+\.\s/gmu)].length;
-const prompt = process.env.BENCH_PROMPT || "Rewrite each item for ordinary civilians in English, Thai, and Khmer. Write naturally for each audience rather than translating literally. Change expression, never information: preserve facts, attribution, uncertainty, names, numbers, and relationships. Add nothing.";
+const prompt = process.env.BENCH_PROMPT || section[1].trim();
+
+const candidateSchema = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      minItems: fixture.length,
+      maxItems: fixture.length,
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string", enum: fixture.map((item) => item.id) },
+          en: { type: "string", minLength: 1 },
+          th: { type: "string", minLength: 1 },
+          kh: { type: "string", minLength: 1 },
+        },
+        required: ["id", "en", "th", "kh"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["items"],
+  additionalProperties: false,
+};
+
+const judgeSchema = {
+  type: "object",
+  properties: {
+    fidelity: { type: "number", minimum: 0, maximum: 10 },
+    neutrality: { type: "number", minimum: 0, maximum: 10 },
+    scanClarity: { type: "number", minimum: 0, maximum: 10 },
+    naturalness: {
+      type: "object",
+      properties: {
+        en: { type: "number", minimum: 0, maximum: 10 },
+        th: { type: "number", minimum: 0, maximum: 10 },
+        kh: { type: "number", minimum: 0, maximum: 10 },
+      },
+      required: ["en", "th", "kh"],
+      additionalProperties: false,
+    },
+    translationese: {
+      type: "object",
+      properties: {
+        en: { type: "boolean" },
+        th: { type: "boolean" },
+        kh: { type: "boolean" },
+      },
+      required: ["en", "th", "kh"],
+      additionalProperties: false,
+    },
+    fatal: { type: "boolean" },
+    issues: { type: "array", items: { type: "string" } },
+  },
+  required: ["fidelity", "neutrality", "scanClarity", "naturalness", "translationese", "fatal", "issues"],
+  additionalProperties: false,
+};
 
 await mkdir(work, { recursive: true });
+await mkdir(runDir, { recursive: true });
 
-// A duplicate invocation costs two AI calls and can compete with the first.
 const lockPath = resolve(work, ".lock");
 async function acquireLock() {
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -28,7 +90,6 @@ async function acquireLock() {
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
       const owner = Number((await readFile(lockPath, "utf8").catch(() => "")).trim());
-      // A blank PID may be a different process still writing its lock.
       if (!Number.isSafeInteger(owner) || owner <= 0) throw new Error("Reader benchmark lock is in use");
       try {
         process.kill(owner, 0);
@@ -42,7 +103,7 @@ async function acquireLock() {
   throw new Error("Could not acquire reader benchmark lock");
 }
 
-function runAgy(runModel, runPrompt) {
+function runAgy(runModel, runPrompt, schema) {
   return new Promise((done) => {
     const started = performance.now();
     let settled = false;
@@ -50,10 +111,11 @@ function runAgy(runModel, runPrompt) {
     const child = spawn(agy, [
       "-p", runPrompt,
       "--output-format", "json",
+      "--json-schema", JSON.stringify(schema),
       "--model", runModel,
       "--print-timeout", printTimeout,
       "--disable-slash-commands",
-    ], { cwd: work, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    ], { cwd: runDir, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
 
     const stdout = [];
     const stderr = [];
@@ -84,8 +146,9 @@ function runAgy(runModel, runPrompt) {
       if (code !== 0) return finish({ ok: false, error: err || raw, seconds });
       try {
         const envelope = JSON.parse(raw);
-        if (envelope.status !== "SUCCESS") return finish({ ok: false, error: `status=${envelope.status}`, seconds });
-        finish({ ok: true, response: String(envelope.response || ""), usage: envelope.usage || null, seconds });
+        if (envelope.status !== "SUCCESS") return finish({ ok: false, error: envelope.error || `status=${envelope.status}`, seconds });
+        if (!envelope.structured_output) return finish({ ok: false, error: "missing structured_output", seconds });
+        finish({ ok: true, structured: envelope.structured_output, usage: envelope.usage || null, seconds });
       } catch (error) {
         finish({ ok: false, error: `invalid-json: ${error}`, seconds });
       }
@@ -93,140 +156,162 @@ function runAgy(runModel, runPrompt) {
   });
 }
 
-async function runCached(runModel, runPrompt) {
-  const key = createHash("sha256").update(JSON.stringify({ runModel, runPrompt })).digest("hex");
+async function runCached(runModel, runPrompt, schema) {
+  const key = createHash("sha256").update(JSON.stringify({ runModel, runPrompt, schema })).digest("hex");
   const path = resolve(work, "cache", `${key}.json`);
   let cached = null;
   try { cached = JSON.parse(await readFile(path, "utf8")); } catch {}
-  if (!fresh) {
-    if (cached?.ok) return { ...cached, cached: true };
-  }
-  const run = await runAgy(runModel, runPrompt);
+  if (!fresh && cached?.ok) return { ...cached, cached: true };
+
+  const run = await runAgy(runModel, runPrompt, schema);
   await mkdir(resolve(work, "cache"), { recursive: true });
   if (run.ok || !cached?.ok) await writeFile(path, JSON.stringify(run, null, 2) + "\n", "utf8");
   return { ...run, cached: false };
 }
 
-function parseItems(response) {
-  const items = new Map();
-  let current = null;
-  let pending = null;
-
-  for (const raw of String(response || "").split(/\r?\n/u)) {
-    const line = raw.trim().replace(/\*\*/gu, "").replace(/^[-*+]\s+/u, "");
-    if (!line) continue;
-
-    const heading = line.match(/^(?:#{1,6}\s*)?(?:Item\s+)?(\d+)(?:\s*[:.\-–—].*)?$/iu);
-    if (heading) {
-      current = Number(heading[1]);
-      pending = null;
-      if (!items.has(current)) items.set(current, {});
-      continue;
-    }
-
-    const language = line.match(/^(EN|TH|KH):\s*(.*)$/u);
-    if (!language) {
-      if (pending) {
-        items.get(pending.number)[pending.language] = line;
-        pending = null;
-      }
-      continue;
-    }
-
-    if (!current) {
-      current = items.size + 1;
-      if (!items.has(current)) items.set(current, {});
-    }
-    if (language[2]) items.get(current)[language[1]] = language[2];
-    else pending = { number: current, language: language[1] };
-  }
-  return items;
+function expectedNumbers(source) {
+  return [...new Set(String(source).match(/\b\d[\d,]*(?:\.\d+)?\b/gu) || [])];
 }
 
-function hardIssues(response) {
+function itemIssues(source, item) {
   const issues = [];
-  const text = String(response || "");
-  if (text.includes("\uFFFD")) issues.push("replacement-character");
-  const items = parseItems(text);
-  if (items.size !== itemCount) issues.push(`item-count-${items.size}`);
+  if (!item || item.id !== source.id) return [`${source.id}:missing`];
 
-  for (let number = 1; number <= itemCount; number += 1) {
-    const item = items.get(number) || {};
-    for (const language of ["EN", "TH", "KH"]) {
-      if (!item[language]) issues.push(`item-${number}-missing-${language.toLowerCase()}`);
-      if (item[language] && !item[language].includes("Chouk Chey")) issues.push(`item-${number}-${language.toLowerCase()}-lost-place-name`);
-      if (item[language] && !item[language].includes("8,000")) issues.push(`item-${number}-${language.toLowerCase()}-number-changed`);
+  for (const language of ["en", "th", "kh"]) {
+    const value = typeof item[language] === "string" ? item[language].trim() : "";
+    if (!value) {
+      issues.push(`${source.id}:${language}:missing`);
+      continue;
     }
-    if (item.EN && /[\u0E00-\u0E7F\u1780-\u17FF]/u.test(item.EN)) issues.push(`item-${number}-english-mixed-script`);
-    if (item.TH && /[\u1780-\u17FF]/u.test(item.TH)) issues.push(`item-${number}-thai-contains-khmer`);
-    if (item.KH && /[\u0E00-\u0E7F]/u.test(item.KH)) issues.push(`item-${number}-khmer-contains-thai`);
-    if (item.TH && /[\u0E50-\u0E59]/u.test(item.TH)) issues.push(`item-${number}-thai-native-digits`);
-    if (item.KH && /[\u17E0-\u17E9]/u.test(item.KH)) issues.push(`item-${number}-khmer-native-digits`);
+    if (value.includes("\uFFFD")) issues.push(`${source.id}:${language}:replacement-character`);
+    if (language === "en" && /[\u0E00-\u0E7F\u1780-\u17FF]/u.test(value)) issues.push(`${source.id}:en:mixed-script`);
+    if (language === "th" && !/[\u0E00-\u0E7F]/u.test(value)) issues.push(`${source.id}:th:missing-thai-script`);
+    if (language === "kh" && !/[\u1780-\u17FF]/u.test(value)) issues.push(`${source.id}:kh:missing-khmer-script`);
+    if (language === "th" && /[\u1780-\u17FF]/u.test(value)) issues.push(`${source.id}:th:contains-khmer`);
+    if (language === "kh" && /[\u0E00-\u0E7F]/u.test(value)) issues.push(`${source.id}:kh:contains-thai`);
+    if (language === "th" && /[\u0E50-\u0E59]/u.test(value)) issues.push(`${source.id}:th:native-digits`);
+    if (language === "kh" && /[\u17E0-\u17E9]/u.test(value)) issues.push(`${source.id}:kh:native-digits`);
+
+    for (const number of expectedNumbers(source.source)) {
+      if (!value.includes(number)) issues.push(`${source.id}:${language}:lost-number-${number}`);
+    }
+    for (const literal of source.literalMustKeep || []) {
+      if (!value.includes(literal)) issues.push(`${source.id}:${language}:lost-literal-${literal}`);
+    }
   }
   return [...new Set(issues)];
 }
 
-function extractJson(value) {
-  const text = String(value || "").replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "").trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("judge did not return JSON");
-  return JSON.parse(text.slice(start, end + 1));
+function hardIssues(candidate) {
+  const items = Array.isArray(candidate?.items) ? candidate.items : [];
+  const byId = new Map(items.map((item) => [item?.id, item]));
+  const issues = [];
+  if (items.length !== fixture.length) issues.push(`item-count-${items.length}`);
+  for (const source of fixture) issues.push(...itemIssues(source, byId.get(source.id)));
+  return [...new Set(issues)];
 }
 
 function validScore(score) {
-  return score && typeof score.fatal === "boolean" && Array.isArray(score.issues)
-    && ["fidelity", "neutrality", "naturalness"]
-      .every((name) => typeof score[name] === "number" && score[name] >= 0 && score[name] <= 10);
+  const validNumber = (value) => typeof value === "number" && value >= 0 && value <= 10;
+  return score
+    && typeof score.fatal === "boolean"
+    && validNumber(score.fidelity)
+    && validNumber(score.neutrality)
+    && validNumber(score.scanClarity)
+    && score.naturalness
+    && ["en", "th", "kh"].every((language) => validNumber(score.naturalness[language]))
+    && score.translationese
+    && ["en", "th", "kh"].every((language) => typeof score.translationese[language] === "boolean")
+    && Array.isArray(score.issues);
 }
 
 const lock = await acquireLock();
 try {
-  const candidatePrompt = `${prompt}\n\nReturn the ${itemCount} numbered items. For each item provide EN:, TH:, and KH:.\n\nSOURCE ITEMS:\n${fixture}`;
-  const candidate = await runCached(model, candidatePrompt);
-  const hard = candidate.ok ? hardIssues(candidate.response) : ["run-failed"];
+  const candidatePrompt = `This is a closed-book rewrite benchmark. Use only the source items below. Do not browse, research, inspect files, or use tools. Return the requested JSON immediately.
+
+${prompt}
+
+Rewrite every source item for the three reader audiences. Return JSON only:
+{"items":[{"id":"...","en":"...","th":"...","kh":"..."}]}
+
+SOURCE ITEMS:
+${JSON.stringify(fixture)}`;
+  const candidate = await runCached(model, candidatePrompt, candidateSchema);
+  const candidateOk = candidate.ok;
+  const parsedCandidate = candidateOk ? candidate.structured : null;
+  const hard = candidateOk ? hardIssues(parsedCandidate) : ["run-failed", candidate.error].filter(Boolean);
+  const candidateSeconds = Number(candidate.seconds || 0);
+  const candidateTokens = Number(candidate.usage?.total_tokens || 0);
+  const candidateCached = candidate.cached;
 
   let judgment = null;
-  if (candidate.ok && hard.length === 0) {
-    const judgePrompt = `Compare the rewrite with the source. Mark fatal=true for any changed fact, attribution, uncertainty, name, number, relationship, claim strength, added implication, or mistranslation. Score 0-10 for factual fidelity, neutrality, and natural everyday English/Thai/Khmer. Return JSON only: {"fidelity":0,"neutrality":0,"naturalness":0,"fatal":false,"issues":[]}\n\nSOURCE:\n${fixture}\n\nREWRITE:\n${candidate.response}`;
-    const judge = await runCached(judgeModel, judgePrompt);
+  if (candidateOk && parsedCandidate && hard.length === 0) {
+    const judgePrompt = `This is a closed-book evaluation. Use only the source and rewrite below. Do not browse, research, inspect files, or use tools. Return the requested JSON immediately.
+
+Evaluate public-facing crisis information for ordinary civilians, not translators or policy analysts.
+
+Fatal means any changed fact, number, name, attribution, uncertainty, relationship, claim strength, actor/object direction, or added implication.
+
+Judge each language independently:
+- English: clear everyday general-news writing.
+- Thai: natural Thai general-news writing for ordinary readers, not English syntax translated word-for-word and not bureaucratic unless necessary.
+- Khmer: natural Cambodian Khmer general-news writing for ordinary readers, not English syntax translated word-for-word and not bureaucratic unless necessary.
+- Scan clarity: can a normal reader quickly understand what happened, who says it, and what remains uncertain?
+- Simple language must never erase attribution or uncertainty.
+
+Be demanding. A 10 means genuinely excellent for ordinary civilians, not merely grammatical.
+
+Return JSON only:
+{"fidelity":0,"neutrality":0,"scanClarity":0,"naturalness":{"en":0,"th":0,"kh":0},"translationese":{"en":false,"th":false,"kh":false},"fatal":false,"issues":[]}
+
+SOURCE:
+${JSON.stringify(fixture)}
+
+REWRITE:
+${JSON.stringify(parsedCandidate)}`;
+
+    const judge = await runCached(judgeModel, judgePrompt, judgeSchema);
     if (judge.ok) {
-      try {
-        const score = extractJson(judge.response);
-        if (!validScore(score)) throw new Error("invalid judge score");
-        judgment = { ok: true, seconds: judge.seconds, cached: judge.cached, score };
-      } catch (error) {
-        judgment = { ok: false, seconds: judge.seconds, error: String(error) };
-      }
+      const score = judge.structured;
+      judgment = validScore(score)
+        ? { ok: true, seconds: judge.seconds, cached: judge.cached, score }
+        : { ok: false, seconds: judge.seconds, error: "invalid judge score" };
     } else {
       judgment = judge;
     }
   }
 
-  const hash = createHash("sha256").update(JSON.stringify({ fixture, prompt, model, judgeModel })).digest("hex").slice(0, 12);
+  const score = judgment?.score;
+  const passed = candidateOk
+    && hard.length === 0
+    && judgment?.ok
+    && score?.fatal === false
+    && score?.fidelity >= 9
+    && score?.neutrality >= 9
+    && score?.scanClarity >= 8
+    && ["en", "th", "kh"].every((language) => score?.naturalness?.[language] >= 8)
+    && ["en", "th", "kh"].every((language) => score?.translationese?.[language] === false);
+
+  const hash = createHash("sha256")
+    .update(JSON.stringify({ fixture, prompt, model, judgeModel }))
+    .digest("hex")
+    .slice(0, 12);
   const report = {
     model,
     judgeModel,
     prompt,
     candidate: {
-      ok: candidate.ok,
-      seconds: candidate.seconds,
-      cached: candidate.cached,
-      tokens: Number(candidate.usage?.total_tokens || 0),
-      error: candidate.error || null,
-      response: candidate.response || null,
+      ok: candidateOk,
+      seconds: candidateSeconds,
+      cached: candidateCached,
+      tokens: candidateTokens,
+      error: candidateOk ? null : hard.join("; "),
+      batches: 1,
+      response: parsedCandidate,
     },
     hardIssues: hard,
     judgment,
   };
-
-  const score = judgment?.score;
-  const passed = candidate.ok
-    && hard.length === 0
-    && judgment?.ok
-    && score?.fatal === false
-    && Number(score?.fidelity) >= 8
-    && Number(score?.neutrality) >= 8;
   const reportPath = resolve(work, `${hash}${passed ? "" : ".failed"}.json`);
   await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n", "utf8");
 
@@ -234,8 +319,9 @@ try {
     ok: passed,
     model,
     judgeModel,
-    candidateSeconds: candidate.seconds,
-    candidateTokens: Number(candidate.usage?.total_tokens || 0),
+    candidateSeconds,
+    candidateTokens,
+    candidateBatches: 1,
     hardIssues: hard,
     judgeSeconds: judgment?.seconds || null,
     score: score || null,
@@ -245,5 +331,5 @@ try {
   if (!passed) process.exitCode = 1;
 } finally {
   await lock.close();
-  await unlink(lockPath);
+  await unlink(lockPath).catch(() => {});
 }

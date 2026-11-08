@@ -1,0 +1,23 @@
+[
+  {
+    "id": "disputed-border",
+    "source": "No armed clashes are currently reported along the Thailand-Cambodia border. Thailand says its fence work in Chanthaburi is inside Thailand. Cambodia protests what it says are Thai violations of Cambodian territory and says Thai troops moved military posts forward near a place the source names only as Chouk Chey; the source does not say those troops crossed the border. Cambodia also says nearly 8,000 people remain displaced despite the ceasefire; the source does not say they are unable to return home.",
+    "literalMustKeep": ["Chouk Chey"]
+  },
+  {
+    "id": "diplomatic-process",
+    "source": "Cambodia sent a second Note Verbale asking Thailand to convene a Joint Boundary Commission meeting in Siem Reap. Cambodia wants the two sides to discuss land-boundary demarcation and Thai soldiers remaining in areas Cambodia claims. Thailand had postponed an earlier meeting. The source does not say the meeting has been accepted or scheduled."
+  },
+  {
+    "id": "military-posture",
+    "source": "Thai forces are mainly holding defensive positions, building permanent border fencing, and reorganizing units. No new armed clash is reported in the latest period. Cambodia says some Thai military posts were moved forward; Thailand disputes allegations that it crossed into Cambodian territory."
+  },
+  {
+    "id": "casualty-uncertainty",
+    "source": "Cambodian authorities say 3 civilians were killed and 11 were injured during shelling near the border. Thai authorities deny deliberately targeting civilians. Independent reporting confirms damage in the area but does not independently confirm who fired the rounds that caused the casualties."
+  },
+  {
+    "id": "humanitarian-update",
+    "source": "Cambodia says 113 schools remain closed across four border provinces, down from more than 1,300 in December. Temporary classrooms have been set up in displacement camps. The update shows schools are reopening, but it does not mean all displaced families have returned home."
+  }
+]
