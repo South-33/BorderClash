@@ -142,10 +142,10 @@ finally {
     Reset-TestArtifacts
 }
 
-$leftoverWorktree = @(& git -C $repoRoot worktree list --porcelain) | Where-Object {
+$leftoverWorktree = @(@(& git -C $repoRoot worktree list --porcelain) | Where-Object {
     $_ -like "worktree *" -and $_.Substring(9).Trim().StartsWith($testRoot, [StringComparison]::OrdinalIgnoreCase)
-}
-$leftoverBranch = @(& git -C $repoRoot for-each-ref --format="%(refname:short)" "refs/heads/$branchPrefix/") | Where-Object { $_.Trim() }
+})
+$leftoverBranch = @(@(& git -C $repoRoot for-each-ref --format="%(refname:short)" "refs/heads/$branchPrefix/") | Where-Object { $_.Trim() })
 Assert-True ($leftoverWorktree.Count -eq 0) "test cleanup left a registered worktree"
 Assert-True ($leftoverBranch.Count -eq 0) "test cleanup left a branch"
 
