@@ -206,6 +206,16 @@ try {
         throw "Antigravity did not confirm goal completion"
     }
 
+    $worktreeStatePath = Join-Path $worktree "data\state.json"
+    $worktreeState = Get-Content $worktreeStatePath -Raw | ConvertFrom-Json
+    if ([bool]$worktreeState.isPaused -ne [bool]$state.isPaused) {
+        $stateText = Get-Content $worktreeStatePath -Raw
+        $currentPause = if ([bool]$worktreeState.isPaused) { "true" } else { "false" }
+        $desiredPause = if ([bool]$state.isPaused) { "true" } else { "false" }
+        $stateText = $stateText -replace ('("isPaused"\s*:\s*)' + $currentPause), ('${1}' + $desiredPause)
+        [IO.File]::WriteAllText($worktreeStatePath, $stateText, [Text.UTF8Encoding]::new($false))
+    }
+
     $cycleHead = (git -C $worktree rev-parse HEAD).Trim()
     & git -C $worktree merge-base --is-ancestor $baseHead $cycleHead
     if ($LASTEXITCODE -ne 0) {

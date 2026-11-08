@@ -588,7 +588,7 @@
   "systemStats": {
     "lastResearchAt": 1794104560000,
     "systemStatus": "online",
-    "isPaused": false,
+    "isPaused": true,
     "nextRunAt": 1794190960000,
     "lastCycleInterval": 24,
     "schedulingReason": "Border conditions remain non-kinetic with ongoing ASEAN observer monitoring and bilateral confidence-building dialogue."

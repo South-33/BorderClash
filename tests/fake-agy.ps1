@@ -27,6 +27,14 @@ if ($mode -eq "non-data") {
     Add-Content -Path (Join-Path (Get-Location) "README.md") -Value "unexpected agent edit"
 }
 
+if ($mode -eq "flip-pause") {
+    $statePath = Join-Path (Get-Location) "data\state.json"
+    $state = Get-Content $statePath -Raw | ConvertFrom-Json
+    $state.isPaused = -not [bool]$state.isPaused
+    $json = $state | ConvertTo-Json -Depth 20
+    [IO.File]::WriteAllText($statePath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+}
+
 [ordered]@{
     conversation_id = "fake-test-conversation"
     status = "SUCCESS"

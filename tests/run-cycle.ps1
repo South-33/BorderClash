@@ -69,6 +69,20 @@ try {
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "shadow repo change advanced main HEAD"
 
     Reset-TestArtifacts
+    $rootPaused = [bool]((Get-Content (Join-Path $repoRoot "data\state.json") -Raw | ConvertFrom-Json).isPaused)
+    $env:BORDERCLASH_FAKE_AGY_MODE = "flip-pause"
+    $pause = Invoke-TestRunner $fakeExe
+    Assert-True ($pause.ExitCode -eq 0) "valid pause-control cycle should pass"
+    $pauseOutput = $pause.Output -join "`n"
+    Assert-True ($pauseOutput -match "SHADOW SUCCESS") "pause-control cycle did not reach validated shadow state"
+    $worktreeMatch = [regex]::Match($pauseOutput, '(?m)^worktree=(.+)$')
+    Assert-True $worktreeMatch.Success "pause-control cycle did not report its worktree"
+    $pauseWorktree = $worktreeMatch.Groups[1].Value.Trim()
+    $cyclePaused = [bool]((Get-Content (Join-Path $pauseWorktree "data\state.json") -Raw | ConvertFrom-Json).isPaused)
+    Assert-True ($cyclePaused -eq $rootPaused) "runner did not preserve operator pause state"
+    Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "pause-control shadow cycle advanced main HEAD"
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
     $job = Start-Job -ScriptBlock {
         param($runnerPath, $agyPath, $testRunsRoot, $testRuntimeDir, $testLogDir, $testMutexName, $testBranchPrefix)

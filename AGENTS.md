@@ -100,7 +100,8 @@ At successful completion:
 - choose `nextRunAt`;
 - set `lastCycleInterval` and a short factual `schedulingReason`;
 - increment `researchCycleCount`;
-- keep `scheduler: "external"`, `systemStatus: "online"`, and `isPaused: false`.
+- keep `scheduler: "external"` and `systemStatus: "online"`;
+- preserve `isPaused`. Pause/unpause is an operator control enforced by the outer runner, not a research decision.
 
 ## Judgment
 
