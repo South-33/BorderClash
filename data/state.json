@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "isPaused": true,
+  "isPaused": false,
   "systemStatus": "online",
   "lastResearchAt": 1794104560000,
   "nextRunAt": 1794190960000,
