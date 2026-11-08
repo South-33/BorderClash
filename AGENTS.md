@@ -18,15 +18,15 @@ The repository is durable memory. Do not depend on conversation history for fact
 
 Run:
 
-`pnpm research`
+`node scripts/research.mjs`
 
 It gives the current scheduler state, dashboard facts, analysis, recent timeline events, and recent news. Then inspect only the files and history relevant to what you find.
 
 Useful shortcuts:
 
-- `pnpm research find <text>` - find matching news or timeline records.
-- `pnpm research show <id>` - print one exact record by stable ID.
-- `pnpm research check` - run the deterministic exit checks.
+- `node scripts/research.mjs find <text>` - find matching news or timeline records.
+- `node scripts/research.mjs show <id>` - print one exact record by stable ID.
+- `node scripts/research.mjs check` - run the deterministic exit checks.
 
 ## Map
 
@@ -47,13 +47,13 @@ If the layout stops being intuitive, simplify it. Do not add side databases, que
 
 ## Research cycle
 
-1. Run `pnpm research`.
+1. Run `node scripts/research.mjs`.
 2. Research material developments since `lastResearchAt`. Search broadly enough to avoid one-sided coverage, then read the strongest sources directly.
 3. Follow important evidence backward when it changes an older fact. Correct historical records directly.
 4. Update canonical data. Keep stable IDs unless records are true duplicates.
 5. Update current analyses and dashboard only when evidence supports a change.
 6. Choose and store the next scan time in `data/state.json`.
-7. Run `pnpm research check`.
+7. Run `node scripts/research.mjs check`.
 8. Review the final diff. Remove accidental churn, temporary files, duplicate facts, stale scaffolding, and unnecessary complexity.
 9. Return a compact summary of findings, corrections, important source disagreements, validation, next scan, and changed files.
 

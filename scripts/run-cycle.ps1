@@ -18,7 +18,8 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $statePath = Join-Path $repoRoot "data\state.json"
 $runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $repoRoot ".state" }
 $logDir = if ($LogDir) { [IO.Path]::GetFullPath($LogDir) } else { Join-Path $repoRoot ".logs" }
-$runsRoot = if ($RunsRoot) { [IO.Path]::GetFullPath($RunsRoot) } else { Join-Path (Split-Path $repoRoot -Parent) "BorderClash-Research-runs" }
+$repoName = Split-Path $repoRoot -Leaf
+$runsRoot = if ($RunsRoot) { [IO.Path]::GetFullPath($RunsRoot) } else { Join-Path (Split-Path $repoRoot -Parent) "$repoName-runs" }
 
 New-Item -ItemType Directory -Force -Path $runtimeDir, $logDir, $runsRoot | Out-Null
 
@@ -89,7 +90,25 @@ function Remove-CycleWorktree {
     param([string]$Worktree, [string]$Branch)
 
     if ($Worktree -and (Test-Path $Worktree)) {
+        $nodeModules = Join-Path $Worktree "node_modules"
+        if (Test-Path $nodeModules) {
+            try {
+                Remove-Item -LiteralPath $nodeModules -Recurse -Force -ErrorAction Stop
+            } catch {
+                Write-Warning "Could not remove worktree node_modules cleanly: $($_.Exception.Message)"
+            }
+        }
         & git -C $repoRoot worktree remove --force $Worktree | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            & git -C $repoRoot worktree prune | Out-Null
+            if (Test-Path $Worktree) {
+                try {
+                    Remove-Item -LiteralPath $Worktree -Recurse -Force -ErrorAction Stop
+                } catch {
+                    Write-Warning "Could not fully remove stale worktree $Worktree"
+                }
+            }
+        }
     }
     if ($Branch) {
         & git -C $repoRoot branch -D $Branch | Out-Null
@@ -134,8 +153,8 @@ try {
         }
     }
 
-    Invoke-Checked "pnpm" @("test") $repoRoot
-    Invoke-Checked "pnpm" @("validate") $repoRoot
+    Invoke-Checked "node" @("--test", "tests/data-layout.test.mjs", "tests/language.test.mjs") $repoRoot
+    Invoke-Checked "node" @("scripts/validate.mjs") $repoRoot
 
     $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
     $agy = if ($AgyPath) {
@@ -193,7 +212,7 @@ try {
         throw "Agent rewrote branch history outside the cycle base."
     }
 
-    Invoke-Checked "pnpm" @("research", "check") $worktree
+    Invoke-Checked "node" @("scripts/research.mjs", "check") $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\validate.mjs")) $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\generate-public.mjs")) $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\validate.mjs")) $worktree

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { listFiles, readJson, readJsonl } from "../lib/files.mjs";
 
@@ -119,13 +119,7 @@ async function context() {
 }
 
 function run(name, args) {
-  const executable = process.platform === "win32"
-    ? (process.env.ComSpec || "cmd.exe")
-    : name;
-  const executableArgs = process.platform === "win32"
-    ? ["/d", "/s", "/c", [name, ...args].join(" ")]
-    : args;
-  const result = spawnSync(executable, executableArgs, {
+  const result = spawnSync(name, args, {
     cwd: process.cwd(),
     stdio: "inherit",
   });
@@ -134,10 +128,14 @@ function run(name, args) {
 }
 
 function check() {
-  run("pnpm", ["test"]);
-  run("pnpm", ["validate"]);
-  run("pnpm", ["generate"]);
-  run("pnpm", ["validate"]);
+  const tests = readdirSync(resolve("tests"))
+    .filter((name) => name.endsWith(".test.mjs"))
+    .sort()
+    .map((name) => join("tests", name));
+  run(process.execPath, ["--test", ...tests]);
+  run(process.execPath, [join("scripts", "validate.mjs")]);
+  run(process.execPath, [join("scripts", "generate-public.mjs")]);
+  run(process.execPath, [join("scripts", "validate.mjs")]);
   run("git", ["diff", "--check"]);
 }
 
@@ -224,6 +222,6 @@ if (command === "context") {
 } else if (command === "show") {
   await show(process.argv[3]);
 } else {
-  console.error("Usage: pnpm research [context|find <text>|show <id>|check]");
+  console.error("Usage: node scripts/research.mjs [context|find <text>|show <id>|check]");
   process.exit(2);
 }
