@@ -1,0 +1,18 @@
+[
+  {
+    "id": "goal",
+    "prompt": "Rewrite each item for ordinary civilians in English, Thai, and Khmer. Write naturally for each audience rather than translating literally. Change expression, never information: preserve facts, attribution, uncertainty, names, numbers, and relationships. Add nothing."
+  },
+  {
+    "id": "entailed",
+    "prompt": "Write clear everyday English, Thai, and Khmer for ordinary civilians. Every statement in the rewrite must be directly supported by the source. Preserve attribution and uncertainty. If a proper name or term is uncertain in a local language, keep the source form rather than guessing."
+  },
+  {
+    "id": "priority",
+    "prompt": "Optimize in this order: factual fidelity, neutrality, clarity, naturalness, brevity. Produce independent English, Thai, and Khmer rewrites for ordinary civilians. Preserve all claim boundaries, attribution, uncertainty, names, and numbers. Do not infer or add information."
+  },
+  {
+    "id": "conservative",
+    "prompt": "Make the source easy for an ordinary English, Thai, and Khmer reader to understand on first read. Use natural everyday language, but treat the source facts as immutable. Simplify wording only. When naturalness and factual precision conflict, keep the precise meaning and source spelling."
+  }
+]

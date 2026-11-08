@@ -11,5 +11,3 @@ This fixture tests plain-language rewriting without research.
 5. Diplomacy: China hosted informal talks intended to help Cambodia and Thailand rebuild trust.
 
 6. Border economy: A company shifted supplies for Cambodia from Thailand to Malaysia while the land border remained closed.
-
-Factual traps: "moved forward" does not mean "crossed the border"; "displaced" does not mean "unable to return home"; a government's claim must stay attributed; "no reported armed clashes" is not the same as "there is no fighting".

@@ -124,7 +124,7 @@ You may improve any part of this research repository when that genuinely makes t
 ## Hill-climbing
 
 - Benchmark the smallest representative slice before changing prompts, models, research strategy, or validation. Do not run a full research cycle for every experiment.
-- Use `pnpm content:bench` for deterministic reader-copy/relevance signals and `pnpm bench:copy` for the fixed unpublished AGY copy fixture. Bench output stays under `.work/benchmarks/` and may be deleted at any time.
+- Use `pnpm content:bench` for deterministic reader-copy/relevance signals and `pnpm bench:copy` for one bounded unpublished AGY copy check. Use `pnpm bench:copy:tournament` only when deliberately comparing prompt/model variants. Bench output stays under `.work/benchmarks/` and may be deleted at any time.
 - Compare baseline vs candidate on factual fidelity first, then reader quality, runtime, unnecessary diff size, and complexity. A faster or prettier result that strengthens a claim, drops attribution, or invents context loses.
 - Keep production on the simplest configuration that passes representative benches. Escalate model effort only for a demonstrated hard case, not by default.
 
