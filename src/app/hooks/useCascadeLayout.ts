@@ -18,6 +18,7 @@ const FADE_MS = 150;
 const MOBILE_BREAKPOINT = 1280; // Below this = automatic mobile view
 const MIN_SNUG_WIDTH = 1800;
 const MAX_RATIO = 1.35;
+const SHORT_DESKTOP_MAX_HEIGHT = 1064;
 
 // Precision Settings
 const SEARCH_PRECISION_PX = 100; // Stop searching when range is smaller than this
@@ -49,6 +50,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
     const isTransitioning = useRef(false);
     const prevLoading = useRef(isLoading);
     const lastProcessedWidth = useRef<number | null>(null);
+    const lastProcessedHeight = useRef<number | null>(null);
 
     // State
     const [layoutState, setLayoutState] = useState({
@@ -62,9 +64,9 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
     const [lang, setLangState] = useState<'en' | 'th' | 'kh'>('en');
 
     // Helper to update partial state
-    const updateState = (updates: Partial<typeof layoutState>) => {
+    const updateState = useCallback((updates: Partial<typeof layoutState>) => {
         setLayoutState(prev => ({ ...prev, ...updates }));
-    };
+    }, []);
 
     // Check if neutral card overflows
     const checkOverflow = useCallback((): boolean => {
@@ -86,10 +88,12 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
         const langToUse = newLang ?? lang;
         const isLanguageSwitchOutsideAnalysis = Boolean(newLang) && viewMode !== 'analysis';
         const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
         const isDesktopNow = windowWidth >= MOBILE_BREAKPOINT;
 
-        // Track processed width to prevent height-only resize events (mobile address bar) from triggering recalc
+        // Desktop height changes affect the snug-fit layout. Mobile height-only changes are usually browser chrome.
         lastProcessedWidth.current = windowWidth;
+        lastProcessedHeight.current = windowHeight;
 
 
 
@@ -224,26 +228,39 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
         }
 
         // === STEP 4: MOBILE FALLBACK ===
-        updateState({
-            forceMobile: true,
-            neutralRatio: 1.0,
-            containerWidth: null,
-            isMeasuring: false,
-            isLayoutReady: true
-        });
+        if (windowHeight <= SHORT_DESKTOP_MAX_HEIGHT) {
+            // Short desktop windows keep the three-column layout and compact fixed
+            // chrome so the scrollable news feeds absorb the remaining height.
+            updateState({
+                forceMobile: false,
+                neutralRatio: MAX_RATIO,
+                containerWidth: windowWidth,
+                isMeasuring: false,
+                isLayoutReady: true
+            });
+        } else {
+            updateState({
+                forceMobile: true,
+                neutralRatio: 1.0,
+                containerWidth: null,
+                isMeasuring: false,
+                isLayoutReady: true
+            });
+        }
         isTransitioning.current = false;
 
-    }, [lang, checkOverflow, awaitBeforeMeasure, viewMode]);
+    }, [lang, checkOverflow, awaitBeforeMeasure, updateState, viewMode]);
 
     // === HANDLERS ===
     useEffect(() => {
         let timeout: number;
         const handleResize = () => {
-            // Only recalculate if WIDTH changed (ignore height-only changes from mobile address bar)
             const currentWidth = window.innerWidth;
-            if (lastProcessedWidth.current !== null && lastProcessedWidth.current === currentWidth) {
-                return; // Width unchanged, skip (likely mobile scroll causing address bar hide/show)
-            }
+            const currentHeight = window.innerHeight;
+            const widthChanged = lastProcessedWidth.current === null || lastProcessedWidth.current !== currentWidth;
+            const heightChanged = lastProcessedHeight.current === null || lastProcessedHeight.current !== currentHeight;
+            const isDesktopNow = currentWidth >= MOBILE_BREAKPOINT;
+            if (!widthChanged && !(isDesktopNow && heightChanged)) return;
             clearTimeout(timeout);
             timeout = window.setTimeout(() => recalculate(), 150);
         };

@@ -54,6 +54,7 @@ For any UI change, localization/UI-text change, or production cutover, visual in
 3. Open the preview in a real browser and inspect rendered screenshots at desktop (about 1440x900) and mobile (about 390x844). Do not rely only on DOM text, TypeScript, or build success.
 4. On both sizes, switch through English, Khmer, and Thai. Check the language selector, header, navigation, sidebar, cards, long localized text, clipping, overlap, horizontal overflow, mojibake, missing fonts, and obvious console/network errors.
 5. Scroll through the main page at least once. If a layout defect is visible, fix it before push/deploy.
+6. If desktop height behavior changed, also inspect a short desktop viewport around 1536x760. Analysis should not need outer-page scrolling; the news feeds should absorb vertical pressure first.
 
 Use the local static preview for routine visual QA. Do not push temporary proof/preview branches just to inspect rendering; Vercel is configured to auto-deploy only `main` so test branches do not consume deployment quota.
 

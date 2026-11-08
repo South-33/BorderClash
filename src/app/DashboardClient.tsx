@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle } from 'lucide-react';
-import type { BorderClashData, TimelineEvent } from '@/lib/data';
+import type { Analysis, BorderClashData, NeutralAnalysis, NewsArticle, TimelineEvent } from '@/lib/data';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
@@ -10,6 +10,18 @@ import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
 import { getLocalizedStyleIssue, isValidLocalizedText, normalizeLocalizedDigits } from '@/lib/language-quality';
 
 const DASHBOARD_TIME_ZONE = 'Asia/Phnom_Penh';
+type ViewMode = 'ANALYSIS' | 'TIMELINE' | 'GUIDE';
+type DashboardNewsArticle = NewsArticle & {
+  isVerified?: boolean;
+};
+type DashboardIconProps = React.SVGProps<SVGSVGElement> & {
+  size?: number;
+  strokeWidth?: number;
+};
+type TimelineVirtualItem =
+  | { type: 'header'; date: string; eventsInDate: number; estimatedSize: number }
+  | { type: 'event'; date: string; event: TimelineEvent; eventIndex: number; estimatedSize: number };
+const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
 
 const localizedText = (
   lang: Lang,
@@ -44,7 +56,7 @@ class DashboardErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; retryCount: number }
 > {
-  constructor(props: any) {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, retryCount: 0 };
   }
@@ -62,7 +74,7 @@ class DashboardErrorBoundary extends React.Component<
     this.startAutoRetry();
   }
 
-  componentDidUpdate(_: any, prevState: { hasError: boolean }) {
+  componentDidUpdate(_: Readonly<{ children: React.ReactNode }>, prevState: { hasError: boolean }) {
     if (this.state.hasError && !prevState.hasError) {
       this.startAutoRetry();
     }
@@ -97,7 +109,7 @@ class DashboardErrorBoundary extends React.Component<
             </div>
             <div className="bg-riso-ink/5 border border-riso-ink/20 p-6 mb-6">
               <p className="font-mono text-sm md:text-base text-riso-ink/80 leading-relaxed mb-4">
-                We're performing routine maintenance on our data systems.
+                We’re performing routine maintenance on our data systems.
                 The dashboard will be back online shortly.
               </p>
               <div className="flex items-center justify-center gap-2 text-riso-ink/60">
@@ -129,7 +141,7 @@ class DashboardErrorBoundary extends React.Component<
 }
 
 // --- Icon Components ---
-const IconBase = ({ children, className = "", ...props }: any) => (
+const IconBase = ({ children, className = "", ...props }: React.SVGProps<SVGSVGElement> & { children: React.ReactNode }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width="24"
@@ -147,7 +159,7 @@ const IconBase = ({ children, className = "", ...props }: any) => (
   </svg>
 );
 
-const Crosshair = (props: any) => (
+const Crosshair = (props: React.SVGProps<SVGSVGElement>) => (
   <IconBase {...props}>
     <circle cx="12" cy="12" r="10" />
     <line x1="22" y1="12" x2="18" y2="12" />
@@ -158,7 +170,7 @@ const Crosshair = (props: any) => (
   </IconBase>
 );
 
-const XIcon = (props: any) => (
+const XIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <IconBase {...props}>
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />
@@ -166,7 +178,7 @@ const XIcon = (props: any) => (
 );
 
 
-const RefreshCw = (props: any) => (
+const RefreshCw = (props: React.SVGProps<SVGSVGElement>) => (
   <IconBase {...props}>
     <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
     <path d="M3 3v5h5" />
@@ -175,27 +187,15 @@ const RefreshCw = (props: any) => (
   </IconBase>
 );
 
-const Gear = (props: any) => (
-  <IconBase {...props}>
+const Gear = ({ size, ...props }: DashboardIconProps) => (
+  <IconBase width={size} height={size} {...props}>
     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
     <circle cx="12" cy="12" r="3" />
   </IconBase>
 );
 
-const ChevronLeft = (props: any) => (
-  <IconBase {...props}>
-    <polyline points="15 18 9 12 15 6" />
-  </IconBase>
-);
-
-const ChevronRight = (props: any) => (
-  <IconBase {...props}>
-    <polyline points="9 18 15 12 9 6" />
-  </IconBase>
-);
-
-const Scale = (props: any) => (
-  <IconBase {...props}>
+const Scale = ({ size, ...props }: DashboardIconProps) => (
+  <IconBase width={size} height={size} {...props}>
     <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
     <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
     <path d="M7 21h10" />
@@ -204,14 +204,14 @@ const Scale = (props: any) => (
   </IconBase>
 );
 
-const CheckCircle = (props: any) => (
+const CheckCircle = (props: React.SVGProps<SVGSVGElement>) => (
   <IconBase {...props}>
     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
     <polyline points="22 4 12 14.01 9 11.01" />
   </IconBase>
 );
 
-const ScanEye = (props: any) => (
+const ScanEye = (props: React.SVGProps<SVGSVGElement>) => (
   <IconBase {...props}>
     <path d="M3 7V5a2 2 0 0 1 2-2h2" />
     <path d="M17 3h2a2 2 0 0 1 2 2v2" />
@@ -223,7 +223,7 @@ const ScanEye = (props: any) => (
 );
 
 // Custom Timeline Icon (Hourglass)
-const TimelineIcon = ({ size = 24, strokeWidth = 2, className = "", ...props }: any) => (
+const TimelineIcon = ({ size = 24, strokeWidth = 2, className = "", ...props }: DashboardIconProps) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width={size}
@@ -242,7 +242,7 @@ const TimelineIcon = ({ size = 24, strokeWidth = 2, className = "", ...props }: 
 );
 
 // Custom Report/Analysis Icon (Newspaper)
-const ReportIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: any) => (
+const ReportIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: DashboardIconProps) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width={size}
@@ -261,7 +261,7 @@ const ReportIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: 
 );
 
 // Custom Guide Icon (Open Book)
-const GuideIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: any) => (
+const GuideIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: DashboardIconProps) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width={size}
@@ -284,7 +284,14 @@ const GuideIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: a
 
 
 // --- Reusable Components ---
-const Card = ({ children, className = "", title, icon: Icon, loading = false, refreshing = false }: any) => {
+const Card = ({ children, className = "", title, icon: Icon, loading = false, refreshing = false }: {
+  children: React.ReactNode;
+  className?: string;
+  title?: React.ReactNode;
+  icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  loading?: boolean;
+  refreshing?: boolean;
+}) => {
   // When h-full is used, we need flex layout to properly distribute space
   const isFlexLayout = className.includes('h-full');
 
@@ -304,7 +311,7 @@ const Card = ({ children, className = "", title, icon: Icon, loading = false, re
         </div>
       )}
       {(title || Icon) && (
-        <div className="flex items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0">
+        <div className="card-header flex items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0">
           <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{title}</h3>
           {Icon && <Icon className="w-6 h-6 text-riso-ink" />}
         </div>
@@ -320,45 +327,14 @@ const Card = ({ children, className = "", title, icon: Icon, loading = false, re
   );
 };
 
-const Badge = ({ children, type = "neutral", className = "" }: any) => {
-  const styles: any = {
-    neutral: "bg-riso-ink text-riso-paper",
-    alert: "bg-riso-accent text-white",
-    outline: "border border-riso-ink text-riso-ink"
-  };
-  return (
-    <span className={`px-2 py-0.5 text-xs font-mono font-bold uppercase tracking-wider ${styles[type]} ${className}`}>
-      {children}
-    </span>
-  );
-};
-
-const ProgressBar = ({ value, max = 100, label, color = "bg-riso-ink" }: any) => (
-  <div className="mb-3">
-    <div className="flex justify-between text-xs font-mono mb-1">
-      <span>{label}</span>
-      <span>{value}</span>
-    </div>
-    <div className="h-3 w-full border border-riso-ink p-[1px]">
-      <div
-        className={`h-full ${color} transition-all duration-1000 ease-out`}
-        style={{ width: `${(value / max) * 100}%` }}
-      ></div>
-    </div>
-  </div>
-);
-
 // Expandable News Article Component
-const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onToggle }: {
-  article: any;
+const NewsItem = ({ article, perspective, lang = 'en', now }: {
+  article: DashboardNewsArticle;
   perspective: 'thailand' | 'cambodia';
   lang?: 'en' | 'th' | 'kh';
-  isExpanded?: boolean;
-  onToggle?: () => void;
+  now: number;
 }) => {
   const borderColor = perspective === 'thailand' ? 'border-[#241D4F]' : 'border-[#032EA1]';
-  const hoverBg = perspective === 'thailand' ? 'hover:bg-[#241D4F]/5' : 'hover:bg-[#032EA1]/5';
-  const expandedBg = perspective === 'thailand' ? 'bg-[#241D4F]/5' : 'bg-[#032EA1]/5';
 
   const t = TRANSLATIONS[lang as Lang] || TRANSLATIONS.en;
   const titleClass = lang === 'kh'
@@ -370,13 +346,13 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
   // Format relative time with fallback: if publishedAt is in the future or very recent, use fetchedAt
   const formatRelativeTime = (publishedAt: number | undefined, fetchedAt: number) => {
     // Check if publishedAt would result in "Just now" (future date or < 1 min ago)
-    const publishedDiff = publishedAt ? Date.now() - publishedAt : -1;
+    const publishedDiff = publishedAt ? now - publishedAt : -1;
     const publishedMinutes = Math.floor(publishedDiff / 60000);
 
     // If publishedAt is missing, in the future, or would show "Just now", use fetchedAt instead
     const timestamp = (!publishedAt || publishedMinutes < 1) ? fetchedAt : publishedAt;
 
-    const diff = Date.now() - timestamp;
+    const diff = now - timestamp;
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 3600000 / 24);
@@ -392,14 +368,14 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
 
   return (
     <li
-      className="group relative border-b border-riso-ink/15 hover:bg-riso-ink/[0.02] transition-colors cursor-pointer last:border-0"
+      className="dashboard-news-item group relative border-b border-riso-ink/15 hover:bg-riso-ink/[0.02] transition-colors cursor-pointer last:border-0"
       onClick={() => article.sourceUrl && window.open(article.sourceUrl, '_blank')}
     >
       <div className="flex">
         {/* Subtle Accent Bar - Always on, but light */}
         <div className={`w-[2px] self-stretch ${borderColor} opacity-30 group-hover:opacity-100 transition-opacity`}></div>
 
-        <div className="flex-1 py-2 px-3 xl:py-2.5 xl:px-4">
+        <div className="dashboard-news-item-content flex-1 py-2 px-3 xl:py-2.5 xl:px-4">
           {/* Metadata Row - Condensed */}
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
@@ -419,7 +395,7 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
           </h5>
 
           {/* Minimal Stats Row - Always Visible */}
-          <div className="flex items-center gap-3 mt-1.5 transition-opacity">
+          <div className="dashboard-news-score flex items-center gap-3 mt-1.5 transition-opacity">
             <div className="flex items-center gap-2 flex-1">
               <span className="text-[9px] font-mono font-bold uppercase tracking-widest opacity-25">{t.credibility}</span>
               <div className="flex-1 h-[2px] bg-riso-ink/5">
@@ -432,14 +408,6 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
             <span className="text-[10px] font-mono text-riso-ink/30">{article.credibility ?? 50}%</span>
           </div>
 
-          {/* Detail Section */}
-          {isExpanded && (
-            <div className="mt-3 pt-3 border-t border-dashed border-riso-ink/20 space-y-3">
-              <p className={`text-[13px] text-riso-ink/70 leading-relaxed ${lang === 'kh' || lang === 'th' ? 'font-mono' : 'font-serif'}`}>
-                {localizedText(lang as Lang, article.summaryEn || article.summary, article.summaryTh, article.summaryKh)}
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </li>
@@ -451,14 +419,10 @@ const NewsItem = ({ article, perspective, lang = 'en', isExpanded = false, onTog
 const CategoryFilter = ({
   selected,
   onChange,
-  perspective,
-  itemCount,
   lang = 'en'
 }: {
   selected: string | null;
   onChange: (cat: string | null) => void;
-  perspective: 'thailand' | 'cambodia';
-  itemCount: number;
   lang?: 'en' | 'th' | 'kh';
 }) => {
   const categories = [
@@ -495,16 +459,17 @@ const IntelligenceLog = ({
   articles,
   perspective,
   lang = 'en',
-  isLoading
+  isLoading,
+  now,
 }: {
-  articles: any[] | undefined;
+  articles: DashboardNewsArticle[] | undefined;
   perspective: 'thailand' | 'cambodia';
   lang?: 'en' | 'th' | 'kh';
   isLoading: boolean;
+  now: number;
 }) => {
   const t = TRANSLATIONS[lang as Lang];
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filteredArticles = (articles?.filter(a =>
     categoryFilter ? a.category === categoryFilter : true
@@ -520,13 +485,11 @@ const IntelligenceLog = ({
         <CategoryFilter
           selected={categoryFilter}
           onChange={setCategoryFilter}
-          perspective={perspective}
-          itemCount={filteredArticles.length}
           lang={lang}
         />
 
         {/* Scrollable Feed */}
-        <div className="flex-1 max-h-[220px] xl:max-h-[350px] overflow-y-auto scrollbar-thin">
+        <div className="flex-1 min-h-0 max-h-[220px] xl:max-h-none overflow-y-auto scrollbar-thin">
           {isLoading ? (
             <div className="h-full flex items-center justify-center">
               <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
@@ -539,8 +502,7 @@ const IntelligenceLog = ({
                   article={article}
                   perspective={perspective}
                   lang={lang}
-                  isExpanded={expandedId === article._id}
-                  onToggle={() => setExpandedId(expandedId === article._id ? null : article._id)}
+                  now={now}
                 />
               ))}
             </ul>
@@ -640,8 +602,6 @@ const MilitaryIntensityGauge = ({
   postureRationale,
   postureRationaleTh,
   postureRationaleKh,
-  territorialContext,
-  perspective,
   lang = 'en'
 }: {
   intensity: number;
@@ -652,8 +612,6 @@ const MilitaryIntensityGauge = ({
   postureRationale?: string;
   postureRationaleTh?: string;
   postureRationaleKh?: string;
-  territorialContext?: "OWN_TERRITORY" | "DISPUTED_ZONE" | "FOREIGN_TERRITORY" | "BORDER_ZONE";
-  perspective: 'thailand' | 'cambodia';
   lang?: 'en' | 'th' | 'kh';
 }) => {
   const [showAnalysis, setShowAnalysis] = useState(false);
@@ -663,13 +621,6 @@ const MilitaryIntensityGauge = ({
 
   const displayLabel = localizedText(lang as Lang, postureLabel, postureLabelTh, postureLabelKh);
   const displayRationale = localizedText(lang as Lang, postureRationale, postureRationaleTh, postureRationaleKh);
-
-  const postureColors: Record<string, string> = {
-    PEACEFUL: 'text-green-600',
-    DEFENSIVE: 'text-yellow-600',
-    ESCALATED: 'text-orange-600',
-    AGGRESSIVE: 'text-red-600',
-  };
 
   const postureBgColors: Record<string, string> = {
     PEACEFUL: 'bg-green-600/10 border-green-600/30',
@@ -681,16 +632,16 @@ const MilitaryIntensityGauge = ({
   const labelFontSize = (lang === 'th' || lang === 'kh') ? 'text-[15px]' : 'text-[12px]';
 
   return (
-    <div className="mb-4">
+    <div className="dashboard-military-gauge mb-4">
       {/* Title and Intensity Number Row */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="dashboard-gauge-title flex items-center justify-between mb-2">
         <h4 className={`font-mono font-bold uppercase opacity-60 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.postureGaugeTitle || t.militaryIntensity}</h4>
         <span className={`font-mono opacity-80 font-bold ${lang === 'kh' || lang === 'th' ? 'text-[12px]' : 'text-[10px]'}`}>{displayIntensity}/100</span>
       </div>
 
       {/* Gradient Gauge Bar */}
       {/* Segmented LCD-style Gauge Bar */}
-      <div className="relative h-8 bg-riso-ink/5 border border-riso-ink/20 flex gap-[2px] p-[2px]">
+      <div className="dashboard-gauge-bar relative h-8 bg-riso-ink/5 border border-riso-ink/20 flex gap-[2px] p-[2px]">
         {/* 20 Segments (5% each for even split) */}
         {Array.from({ length: 20 }).map((_, i) => {
           const threshold = (i + 1) * 5;
@@ -719,9 +670,9 @@ const MilitaryIntensityGauge = ({
 
       </div>
 
-      <div className="flex items-center gap-2 mt-2">
+      <div className="dashboard-gauge-controls flex items-center gap-2 mt-2">
         {/* Low Key Tactical Label */}
-        <div className={`flex-shrink-0 h-8 flex items-center justify-center px-3 border ${labelFontSize} font-mono font-bold uppercase tracking-widest transition-colors duration-300 ${displayPosture === 'PEACEFUL' ? 'text-[#188d45] border-[#188d45]/30' :
+        <div className={`dashboard-gauge-chip flex-shrink-0 h-8 flex items-center justify-center px-3 border ${labelFontSize} font-mono font-bold uppercase tracking-widest transition-colors duration-300 ${displayPosture === 'PEACEFUL' ? 'text-[#188d45] border-[#188d45]/30' :
           displayPosture === 'DEFENSIVE' ? 'text-[#ca8a04] border-[#ca8a04]/30' :
             displayPosture === 'ESCALATED' ? 'text-[#ea580c] border-[#ea580c]/30' :
               'text-[#b91c1c] border-[#b91c1c]/30'
@@ -733,7 +684,7 @@ const MilitaryIntensityGauge = ({
         {displayLabel && (
           <AutoScrollLabel
             text={displayLabel}
-            className={`border ${postureBgColors[displayPosture]}`}
+            className={`dashboard-gauge-label border ${postureBgColors[displayPosture]}`}
             fontSizeClass={labelFontSize}
           />
         )}
@@ -742,7 +693,7 @@ const MilitaryIntensityGauge = ({
         {displayRationale && (
           <button
             onClick={() => setShowAnalysis(!showAnalysis)}
-            className={`
+            className={`dashboard-gauge-button
               ml-auto flex-shrink-0 h-8 flex items-center gap-1.5 px-4 border 
               font-mono uppercase transition-all duration-100 ease-out active:translate-y-px
               ${labelFontSize}
@@ -786,7 +737,7 @@ const MilitaryIntensityGauge = ({
 
 
 // Hacker Scramble Effect Component
-const HackerScramble = ({ duration = 3000, className = "" }: any) => {
+const HackerScramble = ({ className = "" }: { className?: string }) => {
   const [text, setText] = useState("00:00");
   const chars = "0123456789";
 
@@ -812,9 +763,10 @@ interface DashboardClientProps {
 
 function DashboardClientInner({ initialData }: DashboardClientProps) {
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
+  const [clockNow, setClockNow] = useState(initialData.fetchedAt);
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
-  const [viewMode, setViewModeRaw] = useState<'ANALYSIS' | 'TIMELINE' | 'GUIDE'>('ANALYSIS');
+  const [viewMode, setViewModeRaw] = useState<ViewMode>('ANALYSIS');
   const [isViewTransitioning, setIsViewTransitioning] = useState(false);
   const [shouldFetchFullTimeline, setShouldFetchFullTimeline] = useState(false);
   const hasInitializedFromHash = useRef(false);
@@ -894,7 +846,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
 
 
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   const [showAllSources, setShowAllSources] = useState(false);
   const [isModalClosing, setIsModalClosing] = useState(false);
 
@@ -983,8 +935,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     && clientTimelineEvents === undefined
     && clientTimelineLoading;
   const timelineEvents = viewMode === 'TIMELINE'
-    ? (clientTimelineEvents ?? [])
-    : [];
+    ? (clientTimelineEvents ?? EMPTY_TIMELINE_EVENTS)
+    : EMPTY_TIMELINE_EVENTS;
 
   const sysStatsLoading = false;
   const thNewsLoading = false;
@@ -1039,19 +991,19 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   }, [selectedEvent, isLayoutReady]);
 
   // Helper to get narrative based on language
-  const getNarrative = (meta: any) => {
+  const getNarrative = (meta: Analysis | null) => {
     if (!meta) return null;
     return localizedText(lang as Lang, meta.officialNarrativeEn || meta.officialNarrative, meta.officialNarrativeTh, meta.officialNarrativeKh);
   };
 
   // Helper to get summary based on language
-  const getSummary = (meta: any) => {
+  const getSummary = (meta: NeutralAnalysis | null) => {
     if (!meta) return null;
     return localizedText(lang as Lang, meta.generalSummaryEn || meta.generalSummary, meta.generalSummaryTh, meta.generalSummaryKh);
   };
 
   // Helper to get key events based on language
-  const getKeyEvents = (meta: any) => {
+  const getKeyEvents = (meta: NeutralAnalysis | null) => {
     if (!meta) return [];
     return localizedArray(lang as Lang, meta.keyEventsEn || meta.keyEvents || [], meta.keyEventsTh, meta.keyEventsKh);
   };
@@ -1062,7 +1014,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // Sort by date first, then by timeOfDay, then by importance (matching timeline display order)
   const sortedEvents = useMemo(() => {
     if (!timelineEvents) return [];
-    return [...timelineEvents].sort((a: any, b: any) => {
+    return [...timelineEvents].sort((a, b) => {
       // First sort by date
       const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
       if (dateCompare !== 0) return dateCompare;
@@ -1077,13 +1029,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     });
   }, [timelineEvents]);
 
-  const currentIndex = selectedEvent ? sortedEvents.findIndex((e: any) => e._id === selectedEvent._id) : -1;
+  const currentIndex = selectedEvent ? sortedEvents.findIndex((e) => e._id === selectedEvent._id) : -1;
   const hasNext = currentIndex !== -1 && currentIndex < sortedEvents.length - 1;
   const hasPrev = currentIndex > 0;
 
   // Navigation fade state
   const [isNavigating, setIsNavigating] = useState(false);
-  const [previousEvent, setPreviousEvent] = useState<any>(null);
+  const [previousEvent, setPreviousEvent] = useState<TimelineEvent | null>(null);
 
   // Crossfade navigation - overlap old and new
   const goToNext = () => {
@@ -1121,8 +1073,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') goToPrev();
   };
 
-  // Derived loading state updated to check combined loading states
-  const isLoading = thNewsLoading || khNewsLoading || neutralMetaLoading || dashboardLoading;
   const isSyncing = systemStats?.systemStatus === 'syncing';
 
   // --- TIMELINE STATE AND LOGIC ---
@@ -1160,16 +1110,16 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // Derive available dates and group events by date (filtered by importance)
   const { timelineDates, groupedEvents, dateCounts, totalEventsCount, filteredEventsCount } = useMemo(() => {
     if (!timelineEvents || timelineEvents.length === 0) {
-      return { timelineDates: [], groupedEvents: {} as Record<string, any[]>, dateCounts: {}, totalEventsCount: 0, filteredEventsCount: 0 };
+      return { timelineDates: [], groupedEvents: {} as Record<string, TimelineEvent[]>, dateCounts: {}, totalEventsCount: 0, filteredEventsCount: 0 };
     }
 
     // counts per date and group events (filtered by importance unless showMinorEvents is true)
     const counts: Record<string, number> = {};
-    const groups: Record<string, any[]> = {};
+    const groups: Record<string, TimelineEvent[]> = {};
     let total = 0;
     let filtered = 0;
 
-    timelineEvents.forEach((e: any) => {
+    timelineEvents.forEach((e) => {
       if (e.date) {
         total++;
         // Filter by importance threshold unless showMinorEvents is enabled
@@ -1185,7 +1135,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
     // Sort events within each group by time ascending (morning first)
     Object.keys(groups).forEach(date => {
-      groups[date].sort((a: any, b: any) => {
+      groups[date].sort((a, b) => {
         const timeA = a.timeOfDay || '23:59';
         const timeB = b.timeOfDay || '23:59';
         if (timeA !== timeB) return timeA.localeCompare(timeB);
@@ -1218,7 +1168,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [viewMode, timelineDates.length]);
+  }, [viewMode, timelineDates]);
 
   // Restore scroll position after filter toggle completes
   useEffect(() => {
@@ -1345,16 +1295,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     };
   }, [viewMode]);
 
-  const scrollDatePicker = (direction: 'left' | 'right') => {
-    if (datePickerRef.current) {
-      const scrollAmount = 300;
-      datePickerRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth'
-      });
-    }
-  };
-
   // Measure sidebar height for layout synchronization 
   useLayoutEffect(() => {
     const measureSidebarHeight = () => {
@@ -1390,11 +1330,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     if (!systemStats?.lastResearchAt) return;
 
     const updateCountdown = () => {
+      const now = Date.now();
+      setClockNow(now);
       if (systemStats?.nextRunAt) {
-        const remainingToRun = Math.max(0, systemStats.nextRunAt - Date.now());
+        const remainingToRun = Math.max(0, systemStats.nextRunAt - now);
         setNextUpdateIn(Math.floor(remainingToRun / 1000));
 
-        if (remainingToRun === 0 && Date.now() - systemStats.nextRunAt > 60000) {
+        if (remainingToRun === 0 && now - systemStats.nextRunAt > 60000) {
           setIsPossiblyStale(true);
         } else {
           setIsPossiblyStale(false);
@@ -1408,7 +1350,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         : 720 * 60 * 1000; // 12 hours default
 
       // Calculate elapsed time since last research completed
-      const timeSinceLastUpdate = Date.now() - (systemStats.lastResearchAt || 0);
+      const timeSinceLastUpdate = now - (systemStats.lastResearchAt || 0);
 
       // Remaining = interval - elapsed
       const remaining = Math.max(0, intervalMs - timeSinceLastUpdate);
@@ -1426,7 +1368,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, [systemStats?.lastResearchAt, systemStats?.lastCycleInterval, systemStats?.isPaused, tabFocusKey]);
+  }, [systemStats?.lastResearchAt, systemStats?.nextRunAt, systemStats?.lastCycleInterval, systemStats?.isPaused, tabFocusKey]);
 
   const formatTime = (seconds: number): React.ReactNode => {
     const h = Math.floor(seconds / 3600);
@@ -1449,13 +1391,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       </>
     );
   };
-
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString(undefined, { numberingSystem: 'latn' });
-  };
-
-
-
 
 
   // Helper to format dates correctly for all languages (fixing Chrome/Khmer issues)
@@ -1500,7 +1435,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // Build flat list for virtualization: [header, event, event, ..., header, event, ...]
   // Each item has { type: 'header' | 'event', date: string, event?: any, eventIndex?: number }
   const virtualItems = useMemo(() => {
-    const items: Array<{ type: 'header' | 'event'; date: string; event?: any; eventIndex?: number; eventsInDate?: number; estimatedSize: number }> = [];
+    const items: TimelineVirtualItem[] = [];
     let globalEventIndex = 0; // Running counter across all dates
 
     timelineDates.forEach(date => {
@@ -1714,7 +1649,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       container.removeEventListener('touchstart', unlockScroll);
       if (debounceTimer) clearTimeout(debounceTimer);
     };
-  }, [timelineDates, lang]); // keep simple dependencies
+  }, [timelineDates, lang, selectedTimelineDate]);
 
   // Category colors for event rendering
   const categoryColors: Record<string, string> = {
@@ -1785,12 +1720,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         <div className="riso-grain"></div>
 
         {/* Left Sidebar / Header (Mobile Top) */}
-        <aside ref={sidebarRef} className="w-full xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
-          <div className="border-4 border-riso-ink p-3 bg-riso-paper">
-            <h1 className="font-display text-5xl md:text-6xl leading-none tracking-tighter text-riso-ink mb-2">
+        <aside ref={sidebarRef} className="dashboard-sidebar w-full xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
+          <div className="dashboard-sidebar-header border-4 border-riso-ink p-3 bg-riso-paper">
+            <h1 className="dashboard-sidebar-title font-display text-5xl md:text-6xl leading-none tracking-tighter text-riso-ink mb-2">
               BORDER CLASH
             </h1>
-            <div className="flex items-center gap-2 mb-4">
+            <div className="dashboard-sidebar-status flex items-center gap-2 mb-4">
               <div className={`w-3 h-3 rounded-full ${isPossiblyStale ? 'bg-yellow-500 animate-pulse' :
                 isSyncing ? 'bg-riso-accent animate-ping' :
                   'bg-green-600'
@@ -1803,7 +1738,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               </span>
 
             </div>
-            <div className={`font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+            <div className={`dashboard-sidebar-description font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
               <p className="leading-relaxed">
                 {t.subTitle}
               </p>
@@ -1811,7 +1746,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           </div>
 
           {/* Control Panel */}
-          <div className="bg-riso-ink text-riso-paper p-3 rough-border-sm">
+          <div className="dashboard-scan-panel bg-riso-ink text-riso-paper p-3 rough-border-sm">
             <div className="flex justify-between items-stretch mb-2">
               <div className="flex flex-col justify-between">
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'} whitespace-nowrap`}>{t.nextAutoScan}</p>
@@ -1890,7 +1825,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           </div>
 
           {/* Language Selector */}
-          <div className="rough-border p-3 bg-white/50 font-mono flex flex-col gap-2">
+          <div className="dashboard-language-selector rough-border p-3 bg-white/50 font-mono flex flex-col gap-2">
             <div className={`flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[10px]'}`}>
               <div className="w-4 h-[1px] bg-riso-ink/20"></div>
               {t.language}
@@ -1905,7 +1840,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               ].map((l) => (
                 <button
                   key={l.id}
-                  onClick={() => setLang(l.id as any)}
+                  onClick={() => setLang(l.id as Lang)}
                   aria-label={`Switch language to ${l.label}`}
                   data-language-option={l.id}
                   className={`
@@ -1926,13 +1861,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           </div>
 
           {/* View Selector */}
-          <div className="rough-border p-3 bg-riso-ink/5 font-mono flex flex-col gap-2 text-xs">
+          <div className="dashboard-view-selector rough-border p-3 bg-riso-ink/5 font-mono flex flex-col gap-2 text-xs">
             <div className={`flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[10px]'}`}>
               <div className="w-4 h-[1px] bg-riso-ink/20"></div>
               {t.viewMode}
               <div className="flex-1 h-[1px] bg-riso-ink/20"></div>
             </div>
-            <div className={`grid grid-cols-1 gap-2 ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[12px]'}`}>
+            <div className={`dashboard-view-options grid grid-cols-1 gap-2 ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[12px]'}`}>
               {[
                 { id: 'ANALYSIS', label: t.analysis, icon: ReportIcon, size: 22 },
                 { id: 'TIMELINE', label: t.timeline, icon: TimelineIcon, size: 20 },
@@ -1949,8 +1884,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   onTouchStart={() => {
                     if (mode.id === 'TIMELINE') setShouldFetchFullTimeline(true);
                   }}
-                  onClick={() => setViewMode(mode.id as any)}
-                  className={`
+                  onClick={() => setViewMode(mode.id as ViewMode)}
+                  className={`dashboard-view-button
                     flex items-center gap-3 p-2.5 border-2 active:scale-[0.98]
                     transition-all duration-100 ease-out
                     ${viewMode === mode.id
@@ -1970,7 +1905,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
           {/* Automation Disclaimer - Technical "System Status" Look */}
           <div className="flex flex-col">
-            <div className="relative border border-riso-ink/20 bg-riso-ink/5 p-3">
+              <div className="dashboard-disclaimer relative border border-riso-ink/20 bg-riso-ink/5 p-3">
               {/* Technical Corner Accents */}
               <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-riso-ink"></div>
               <div className="absolute top-0 right-0 w-1.5 h-1.5 border-t border-r border-riso-ink"></div>
@@ -1986,7 +1921,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               </div>
 
               {/* Body */}
-              <p className={`font-mono text-riso-ink leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-[15px] leading-6' : 'text-[13px]'}`}>
+                <p className={`dashboard-disclaimer-body font-mono text-riso-ink leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-[15px] leading-6' : 'text-[13px]'}`}>
                 {t.disclaimerBody.split(`'${t.guide}'`).map((part, i, arr) => (
                   <span key={i}>
                     {part}
@@ -1996,7 +1931,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         className="text-riso-ink font-bold border-b border-riso-ink hover:bg-riso-ink hover:text-riso-paper px-0.5 transition-colors cursor-pointer"
                         title={`Go to ${t.guide}`}
                       >
-                        '{t.guide}'
+                        &apos;{t.guide}&apos;
                       </button>
                     )}
                   </span>
@@ -2012,14 +1947,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
           {/* ANALYSIS VIEW - Always render during measuring phase for overflow measurement */}
           <div className={`xl:col-span-3 ${(isMeasuring || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
-            <div className="flex flex-col gap-4" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="dashboard-analysis flex flex-col gap-4" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
-                <Card title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
+                <Card className="dashboard-stats-card" title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
 
                   <div className="stats-grid grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                     {/* Displaced Civilians */}
-                    <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                    <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.displacedCivilians}</h4>
                       <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString('en-US')}</span>
                       {/* Trend Indicator - Show last updated instead */}
@@ -2063,14 +1998,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     </div>
 
                     {/* Fatalities (Replaces old Injuries box position) */}
-                    <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                    <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.fatalities}</h4>
                       <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{dashboardStats?.casualtyCount || 0}</span>
                       <div className={`mt-3 font-mono text-riso-accent font-bold uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.confirmedOnly}</div>
                     </div>
 
                     {/* Injuries - Split into Civilian / Military */}
-                    <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                    <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       {/* Top: Title + Numbers */}
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.injured}</h4>
                       <div className="flex items-start gap-6">
@@ -2088,7 +2023,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     </div>
 
                     {/* Status / Threat Level - Uses dashboardStats for conflict level */}
-                    <div className="bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                    <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.threatLevel}</h4>
                       <span className={`font-display text-3xl md:text-5xl leading-none uppercase ${(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
                         (dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'
@@ -2115,7 +2050,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div ref={neutralCardRef} className="flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
+                      <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
                         <div className="mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
                           <h3 className={`font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
                             {t.situationReport}
@@ -2151,17 +2086,17 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.cambodia}
                     </div>
-                    <Card className="flex-1 flex flex-col overflow-hidden !pb-2" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
-                      <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
+                    <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
+                      <div className="dashboard-perspective-content flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         {/* Official Narrative */}
                         <div>
                           <h4 className={`font-mono font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.officialNarrative}</h4>
                           {getNarrative(cambodiaMeta) ? (
                             <>
-                              <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
-                                "{getNarrative(cambodiaMeta)}"
+                              <p className={`dashboard-side-narrative italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
+                                “{getNarrative(cambodiaMeta)}”
                               </p>
-                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {cambodiaMeta?.narrativeSource || t.aiAnalysis}</p>
+                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {cambodiaMeta?.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2178,8 +2113,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           postureRationale={cambodiaMeta?.postureRationale}
                           postureRationaleTh={cambodiaMeta?.postureRationaleTh}
                           postureRationaleKh={cambodiaMeta?.postureRationaleKh}
-                          territorialContext={cambodiaMeta?.territorialContext}
-                          perspective="cambodia"
                           lang={lang}
                         />
                         {/* Intelligence Log - Scrollable & Filterable */}
@@ -2188,6 +2121,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           perspective="cambodia"
                           lang={lang}
                           isLoading={cambodiaNews === undefined}
+                          now={clockNow}
                         />
                       </div>
                     </Card>
@@ -2198,17 +2132,17 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.thailand}
                     </div>
-                    <Card className="flex-1 flex flex-col overflow-hidden !pb-2" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
-                      <div className="flex-1 flex flex-col space-y-3 min-h-0 pb-2">
+                    <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
+                      <div className="dashboard-perspective-content flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         {/* Official Narrative */}
                         <div>
                           <h4 className={`font-mono font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.officialNarrative}</h4>
                           {getNarrative(thailandMeta) ? (
                             <>
-                              <p className={`italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
-                                "{getNarrative(thailandMeta)}"
+                              <p className={`dashboard-side-narrative italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
+                                “{getNarrative(thailandMeta)}”
                               </p>
-                              <p className="text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {thailandMeta?.narrativeSource || t.aiAnalysis}</p>
+                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {thailandMeta?.narrativeSource || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2225,8 +2159,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           postureRationale={thailandMeta?.postureRationale}
                           postureRationaleTh={thailandMeta?.postureRationaleTh}
                           postureRationaleKh={thailandMeta?.postureRationaleKh}
-                          territorialContext={thailandMeta?.territorialContext}
-                          perspective="thailand"
                           lang={lang}
                         />
 
@@ -2236,6 +2168,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           perspective="thailand"
                           lang={lang}
                           isLoading={thailandNews === undefined}
+                          now={clockNow}
                         />
                       </div>
                     </Card>
@@ -2493,10 +2426,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               {/* --- MODAL (Kept outside loop but assumes selectedEvent is global in this scope) --- */}
               {/* Event Details Modal - Bottom Sheet with Swipe logic preserved */}
               {selectedEvent && (() => {
-                const getEventTitle = (event: any) => {
+                const getEventTitle = (event: TimelineEvent) => {
                   return localizedText(lang as Lang, event.title, event.titleTh, event.titleKh);
                 };
-                const getEventDescription = (event: any) => {
+                const getEventDescription = (event: TimelineEvent) => {
                   return localizedText(lang as Lang, event.description, event.descriptionTh, event.descriptionKh);
                 };
                 const categoryColors: Record<string, string> = {
@@ -2506,7 +2439,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   political: 'bg-purple-500',
                 };
 
-                const renderInnerContent = (evt: any, isGhost: boolean) => {
+                const renderInnerContent = (evt: TimelineEvent, isGhost: boolean) => {
                   if (!evt) return null;
                   const evtIndex = sortedEvents.indexOf(evt);
                   const evtHasNext = evtIndex !== -1 && evtIndex < sortedEvents.length - 1;
@@ -2573,7 +2506,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         {/* Sources */}
                         {evt.sources?.length > 0 && (() => {
                           // Sort by credibility (highest first)
-                          const sortedSources = [...evt.sources].sort((a: any, b: any) => (b.credibility || 0) - (a.credibility || 0));
+                          const sortedSources = [...evt.sources].sort((a, b) => (b.credibility || 0) - (a.credibility || 0));
                           // If 4 or fewer sources, show all. Only hide behind toggle if 5+ sources.
                           const showAllInline = sortedSources.length <= 4;
                           const topSources = showAllInline ? sortedSources : sortedSources.slice(0, 3);
@@ -2584,7 +2517,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                               <p className="font-mono text-[10px] uppercase opacity-50">{t.topSources} ({evt.sources.length} {t.total})</p>
 
                               <div className="flex flex-wrap gap-2">
-                                {topSources.map((s: any, idx: number) => (
+                                {topSources.map((s, idx: number) => (
                                   s.url ? (
                                     <a
                                       key={idx}
@@ -2620,7 +2553,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                               {remainingSources.length > 0 && showAllSources && (
                                 <div className="space-y-3 pt-1">
                                   <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-1 duration-300">
-                                    {remainingSources.map((s: any, idx: number) => (
+                                    {remainingSources.map((s, idx: number) => (
                                       s.url ? (
                                         <a
                                           key={idx + 3}

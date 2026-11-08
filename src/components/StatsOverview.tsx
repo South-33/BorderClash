@@ -5,9 +5,7 @@ import {
     Users,
     Home,
     AlertTriangle,
-    TrendingUp,
-    Clock,
-    MapPin
+    Clock
 } from "lucide-react";
 import { OverviewStats } from "@/types";
 

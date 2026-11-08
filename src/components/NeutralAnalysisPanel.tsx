@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import {
     Brain,
     Scale,
-    AlertTriangle,
     CheckCircle2,
     TrendingUp,
     Clock,
