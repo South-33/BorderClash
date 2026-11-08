@@ -69,6 +69,13 @@ try {
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "failed cycle changed main HEAD"
 
     Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "stale-state"
+    $staleState = Invoke-TestRunner $fakeExe
+    Assert-True ($staleState.ExitCode -eq 1) "cycle without scheduler-state advancement must fail"
+    Assert-True (($staleState.Output -join "`n") -match "did not advance lastResearchAt") "stale-state failure did not name the invariant"
+    Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "stale-state cycle changed main HEAD"
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "invalid-data"
     $invalid = Invoke-TestRunner $fakeExe
     Assert-True ($invalid.ExitCode -eq 1) "invalid canonical data must fail validation"
@@ -77,9 +84,9 @@ try {
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "non-data"
     $nonData = Invoke-TestRunner $fakeExe
-    Assert-True ($nonData.ExitCode -eq 0) "valid repo-level cleanup should be allowed in shadow mode"
-    Assert-True (($nonData.Output -join "`n") -match "SHADOW SUCCESS") "repo-level cleanup did not reach validated shadow state"
-    Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "shadow repo change advanced main HEAD"
+    Assert-True ($nonData.ExitCode -eq 1) "routine cycle must reject non-data edits"
+    Assert-True (($nonData.Output -join "`n") -match "Routine research may only change data/") "non-data rejection did not name the boundary"
+    Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "rejected repo change advanced main HEAD"
 
     Reset-TestArtifacts
     $rootPaused = [bool]((Get-Content (Join-Path $repoRoot "data\state.json") -Raw | ConvertFrom-Json).isPaused)
@@ -109,6 +116,14 @@ try {
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "UTF-8 shadow cycle changed main HEAD"
 
     Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "note"
+    $note = Invoke-TestRunner $fakeExe
+    Assert-True ($note.ExitCode -eq 0) "harness-note cycle should pass"
+    $noteFile = Get-ChildItem $logDir -File -Filter "*.note.txt" | Select-Object -First 1
+    Assert-True ($null -ne $noteFile) "runner did not extract HARNESS_NOTE"
+    Assert-True ((Get-Content $noteFile.FullName -Raw).Trim() -eq "Fake harness feedback.") "runner changed HARNESS_NOTE text"
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
     $job = Start-Job -ScriptBlock {
         param($runnerPath, $agyPath, $testRunsRoot, $testRuntimeDir, $testLogDir, $testMutexName, $testBranchPrefix)
@@ -129,7 +144,7 @@ try {
     Wait-Job $job | Out-Null
     $firstOutput = Receive-Job $job
     Assert-True ($job.State -eq "Completed") "first lock-holder job did not complete"
-    Assert-True (($firstOutput -join "`n") -match "SUCCESS: no changes") "first fake cycle did not complete normally"
+    Assert-True (($firstOutput -join "`n") -match "SHADOW SUCCESS") "first fake cycle did not complete normally"
 
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "shadow tests changed main HEAD"
     Write-Output "run-cycle tests passed"

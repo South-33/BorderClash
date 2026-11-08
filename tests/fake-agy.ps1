@@ -15,6 +15,14 @@ if ($mode -eq "fail") {
     exit 23
 }
 
+if ($mode -ne "stale-state") {
+    & node scripts/research.mjs finish 12 "Fake cycle completed for runner validation." | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        [Console]::Error.WriteLine("fake cycle could not finalize scheduler state")
+        exit 24
+    }
+}
+
 if ($mode -eq "invalid-data") {
     $statePath = Join-Path (Get-Location) "data\state.json"
     $state = Get-Content $statePath -Raw | ConvertFrom-Json
@@ -37,6 +45,8 @@ if ($mode -eq "flip-pause") {
 
 $response = if ($mode -eq "unicode") {
     [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("4LiX4LiU4Liq4Lit4Lia4Lig4Liy4Lip4Liy4LmE4LiX4LiiIOGen+GetuGegOGem+GfkuGelOGehOGel+GetuGen+GetuGegeGfkuGemOGfguGemiA8IS0tIEdPQUxfQ09NUExFVEUgLS0+"))
+} elseif ($mode -eq "note") {
+    "HARNESS_NOTE: Fake harness feedback." + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
 } else {
     "fake cycle complete <!-- GOAL_COMPLETE -->"
 }

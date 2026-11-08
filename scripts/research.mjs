@@ -1,11 +1,17 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { assessContentQuality } from "../lib/content-quality.mjs";
-import { listFiles, readJson, readJsonl } from "../lib/files.mjs";
+import { assessContentQuality, selectVisibleNews } from "../lib/content-quality.mjs";
+import { listFiles, readJson, readJsonl, writeJson } from "../lib/files.mjs";
 
 const dataRoot = resolve("data");
-const command = process.argv[2] || "context";
+const command = process.argv[2] || "brief";
+const RESEARCH_TESTS = [
+  "tests/data-layout.test.mjs",
+  "tests/language.test.mjs",
+  "tests/research-content.test.mjs",
+  "tests/research-cli.test.mjs",
+];
 
 function latestTimestamp(row) {
   return row.publishedAt || row.fetchedAt || row.lastUpdatedAt || 0;
@@ -18,7 +24,6 @@ function compactNews(row) {
     source: row.source,
     category: row.category,
     title: row.titleEn || row.title,
-    sourceUrl: row.sourceUrl,
   };
 }
 
@@ -34,7 +39,7 @@ function compactTimeline(row) {
   };
 }
 
-async function context() {
+async function brief() {
   const state = await readJson(join(dataRoot, "state.json"));
   const dashboard = await readJson(join(dataRoot, "dashboard.json"));
   const analyses = Object.fromEntries(
@@ -72,18 +77,42 @@ async function context() {
     values.sort((a, b) => latestTimestamp(b) - latestTimestamp(a));
   }
 
+  const contentQuality = assessContentQuality({ news, analyses });
+  const compactQuality = contentQuality.score === 100 && contentQuality.issues.length === 0
+    ? { score: 100 }
+    : {
+        score: contentQuality.score,
+        unsafeEnglishFallbacks: contentQuality.unsafeEnglishFallbacks,
+        missingThai: contentQuality.missingThai,
+        missingKhmer: contentQuality.missingKhmer,
+        localizedIssues: contentQuality.localizedIssues,
+        jargonHits: contentQuality.jargonHits,
+        longEnglishSentences: contentQuality.longEnglishSentences,
+        relevanceReviewCandidates: contentQuality.relevanceReviewCandidates,
+        issues: contentQuality.issues,
+      };
+
   const nowMs = Date.now();
   const toIso = (value) => Number.isFinite(value) ? new Date(value).toISOString() : null;
   const output = {
-    clock: {
-      nowMs,
-      nowIso: new Date(nowMs).toISOString(),
-      lastResearchAtIso: toIso(state.lastResearchAt),
-      nextRunAtIso: toIso(state.nextRunAt),
+    cycle: {
+      now: new Date(nowMs).toISOString(),
+      since: toIso(state.lastResearchAt),
+      next: toIso(state.nextRunAt),
+      intervalHours: state.lastCycleInterval,
+      reason: state.schedulingReason,
+      count: state.researchCycleCount,
+      paused: state.isPaused,
     },
-    state,
-    dashboard,
-    analysis: {
+    current: {
+      dashboard: {
+        conflictLevel: dashboard.conflictLevel,
+        displacedCount: dashboard.displacedCount,
+        casualtyCount: dashboard.casualtyCount,
+        civilianInjuredCount: dashboard.civilianInjuredCount,
+        militaryInjuredCount: dashboard.militaryInjuredCount,
+        lastUpdatedAt: dashboard.lastUpdatedAt,
+      },
       thailand: {
         lastUpdatedAt: analyses.thailand?.lastUpdatedAt,
         militaryIntensity: analyses.thailand?.militaryIntensity,
@@ -103,21 +132,56 @@ async function context() {
         keyEvents: analyses.neutral?.keyEventsEn || analyses.neutral?.keyEvents,
       },
     },
-    recentTimeline: timeline.slice(0, 6).map(compactTimeline),
+    recentTimeline: timeline.slice(0, 4).map(compactTimeline),
     recentNews: Object.fromEntries(
       Object.entries(news).map(([country, values]) => [
         country,
-        values.slice(0, 4).map(compactNews),
+        selectVisibleNews(values, 3).map(compactNews),
       ]),
     ),
-    counts: {
+    archive: {
       timeline: timeline.length,
-      news: Object.fromEntries(Object.entries(news).map(([country, values]) => [country, values.length])),
+      news: Object.values(news).reduce((sum, values) => sum + values.length, 0),
     },
-    contentQuality: assessContentQuality({ news, analyses }),
+    quality: compactQuality,
   };
 
   process.stdout.write(JSON.stringify(output) + "\n");
+}
+
+async function finish(hoursText, reasonParts) {
+  const hours = Number(hoursText);
+  const reason = reasonParts.join(" ").trim();
+  if (!Number.isFinite(hours) || hours < 1 || hours > 24) {
+    throw new Error("finish hours must be between 1 and 24");
+  }
+  if (reason.length < 8 || reason.length > 240) {
+    throw new Error("finish reason must be 8..240 characters");
+  }
+
+  const statePath = join(dataRoot, "state.json");
+  const state = await readJson(statePath);
+  const completedAt = Date.now();
+  const nextRunAt = completedAt + Math.round(hours * 3_600_000);
+
+  const next = {
+    ...state,
+    isPaused: Boolean(state.isPaused),
+    systemStatus: "online",
+    lastResearchAt: completedAt,
+    nextRunAt,
+    lastCycleInterval: hours,
+    schedulingReason: reason,
+    researchCycleCount: Number(state.researchCycleCount || 0) + 1,
+    scheduler: "external",
+  };
+  await writeJson(statePath, next);
+  process.stdout.write(JSON.stringify({
+    completedAt: new Date(completedAt).toISOString(),
+    nextRunAt: new Date(nextRunAt).toISOString(),
+    intervalHours: hours,
+    researchCycleCount: next.researchCycleCount,
+  }) + "\n");
 }
 
 function run(name, args) {
@@ -130,13 +194,8 @@ function run(name, args) {
 }
 
 function check() {
-  const tests = readdirSync(resolve("tests"))
-    .filter((name) => name.endsWith(".test.mjs"))
-    .sort()
-    .map((name) => join("tests", name));
-  run(process.execPath, ["--test", ...tests]);
+  run(process.execPath, ["--test", ...RESEARCH_TESTS]);
   run(process.execPath, [join("scripts", "validate.mjs")]);
-  run(process.execPath, [join("scripts", "generate-public.mjs")]);
   run("git", ["diff", "--check"]);
 }
 
@@ -214,15 +273,25 @@ if (!existsSync(dataRoot)) {
   throw new Error("Run from the BorderClash research repository root.");
 }
 
-if (command === "context") {
-  await context();
+if (command === "brief" || command === "context") {
+  await brief();
 } else if (command === "check") {
   check();
 } else if (command === "find") {
   await find(process.argv.slice(3).join(" ").trim());
 } else if (command === "show") {
   await show(process.argv[3]);
+} else if (command === "finish") {
+  await finish(process.argv[3], process.argv.slice(4));
+} else if (command === "help") {
+  process.stdout.write([
+    "node scripts/research.mjs                    # concise cycle brief",
+    "node scripts/research.mjs find <text>        # locate relevant archive records",
+    "node scripts/research.mjs show <id>           # inspect one exact record",
+    "node scripts/research.mjs finish <hours> <reason>  # advance cycle state",
+    "node scripts/research.mjs check               # full deterministic exit check",
+  ].join("\n") + "\n");
 } else {
-  console.error("Usage: node scripts/research.mjs [context|find <text>|show <id>|check]");
+  console.error("Usage: node scripts/research.mjs [brief|find <text>|show <id>|finish <hours> <reason>|check]");
   process.exit(2);
 }

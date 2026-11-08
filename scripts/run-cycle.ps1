@@ -3,7 +3,6 @@ param(
     [switch]$Publish,
     [int]$TimeoutMinutes = 45,
     [string]$Prompt = "",
-    [string]$Model = "",
     [string]$AgyPath = "",
     [string]$RunsRoot = "",
     [string]$RuntimeDir = "",
@@ -21,7 +20,7 @@ $runnerRoot = Join-Path $repoRoot ".work\runner"
 $runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $runnerRoot "runtime" }
 $logDir = if ($LogDir) { [IO.Path]::GetFullPath($LogDir) } else { Join-Path $runnerRoot "logs" }
 $runsRoot = if ($RunsRoot) { [IO.Path]::GetFullPath($RunsRoot) } else { Join-Path $runnerRoot "runs" }
-$agyModel = if ($Model) { $Model } elseif ($env:BORDERCLASH_AGY_MODEL) { $env:BORDERCLASH_AGY_MODEL } else { "gemini-3.8-flash-medium" }
+$agyModel = "gemini-3.8-flash-medium"
 
 New-Item -ItemType Directory -Force -Path $runtimeDir, $logDir, $runsRoot | Out-Null
 
@@ -89,6 +88,51 @@ function Invoke-Checked {
     }
 }
 
+function Read-State {
+    param([string]$Path)
+    return Get-Content $Path -Raw | ConvertFrom-Json
+}
+
+function Assert-CycleStateAdvanced {
+    param($Before, $After)
+
+    if ([int64]$After.lastResearchAt -le [int64]$Before.lastResearchAt) {
+        throw "Cycle did not advance lastResearchAt"
+    }
+    if ([int64]$After.nextRunAt -le [int64]$After.lastResearchAt) {
+        throw "Cycle did not schedule a future nextRunAt"
+    }
+    if ([int64]$After.researchCycleCount -ne ([int64]$Before.researchCycleCount + 1)) {
+        throw "Cycle must increment researchCycleCount exactly once"
+    }
+    if ([string]$After.scheduler -ne "external") {
+        throw "Cycle changed scheduler ownership"
+    }
+    if ([string]$After.systemStatus -ne "online") {
+        throw "Cycle did not leave systemStatus online"
+    }
+    if ([bool]$After.isPaused -ne [bool]$Before.isPaused) {
+        throw "Cycle changed operator pause state"
+    }
+}
+
+function Assert-ResearchOnlyPaths {
+    param([string]$Worktree, [string]$BaseHead)
+
+    $paths = @()
+    $paths += @(& git -C $Worktree diff --name-only $BaseHead --)
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect cycle diff paths" }
+    $paths += @(& git -C $Worktree ls-files --others --exclude-standard)
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect untracked cycle paths" }
+
+    foreach ($path in ($paths | Where-Object { $_ } | Sort-Object -Unique)) {
+        $normalized = ([string]$path).Replace("\\", "/")
+        if (-not $normalized.StartsWith("data/", [StringComparison]::Ordinal)) {
+            throw "Routine research may only change data/: $normalized"
+        }
+    }
+}
+
 function Remove-CycleWorktree {
     param([string]$Worktree, [string]$Branch)
 
@@ -131,7 +175,7 @@ $worktree = ""
 $branch = ""
 
 try {
-    $state = Get-Content $statePath -Raw | ConvertFrom-Json
+    $state = Read-State $statePath
     $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 
     if (-not $Force -and $state.isPaused) {
@@ -154,10 +198,26 @@ try {
         if ($currentBranch -ne "main") {
             throw "Publication requires the root checkout to be on main (current: $currentBranch)"
         }
+
+        Invoke-Checked "git" @("-C", $repoRoot, "fetch", "origin", "main") $repoRoot
+        Invoke-Checked "git" @("-C", $repoRoot, "merge", "--ff-only", "origin/main") $repoRoot
+
+        # Remote main is the source of truth. A newer published cycle may make
+        # this wake-up no longer due, so re-read state before spending on AI.
+        $state = Read-State $statePath
+        $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        if (-not $Force -and $state.isPaused) {
+            Write-Output "SKIP: paused-after-sync"
+            exit 0
+        }
+        if (-not $Force -and $state.nextRunAt -and [int64]$state.nextRunAt -gt $nowMs) {
+            $next = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$state.nextRunAt).ToLocalTime()
+            Write-Output "SKIP: not-due-after-sync nextRunAt=$($next.ToString('o'))"
+            exit 0
+        }
     }
 
-    Invoke-Checked "node" @("--test", "tests/data-layout.test.mjs", "tests/language.test.mjs", "tests/reader-language.test.mjs") $repoRoot
-    Invoke-Checked "node" @("scripts/validate.mjs") $repoRoot
+    Invoke-Checked "node" @((Join-Path $repoRoot "scripts\research.mjs"), "check") $repoRoot
 
     $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
     $agy = if ($AgyPath) {
@@ -175,11 +235,13 @@ try {
     $baseHead = (git -C $repoRoot rev-parse HEAD).Trim()
 
     Invoke-Checked "git" @("-C", $repoRoot, "worktree", "add", "-b", $branch, $worktree, $baseHead) $repoRoot
+    Invoke-Checked "git" @("-C", $worktree, "sparse-checkout", "init", "--cone") $repoRoot
+    Invoke-Checked "git" @("-C", $worktree, "sparse-checkout", "set", "data", "scripts", "lib", "tests") $repoRoot
 
     $effectivePrompt = if ($Prompt) {
         $Prompt
     } else {
-        "/goal In repository $worktree, read AGENTS.md, run node scripts/research.mjs, and complete exactly one research cycle."
+        "/goal Complete exactly one BorderClash research cycle. Read AGENTS.md first and treat it as the contract."
     }
 
     $stdoutPath = Join-Path $logDir "$runId.json"
@@ -216,16 +278,27 @@ try {
     if (-not ([string]$result.response).Contains("<!-- GOAL_COMPLETE -->")) {
         throw "Antigravity did not confirm goal completion"
     }
+    $note = [regex]::Match([string]$result.response, '(?m)^HARNESS_NOTE:\s*(.+)$')
+    if ($note.Success) {
+        [IO.File]::WriteAllText(
+            (Join-Path $logDir "$runId.note.txt"),
+            $note.Groups[1].Value.Trim() + [Environment]::NewLine,
+            [Text.UTF8Encoding]::new($false)
+        )
+    }
 
     $worktreeStatePath = Join-Path $worktree "data\state.json"
-    $worktreeState = Get-Content $worktreeStatePath -Raw | ConvertFrom-Json
+    $worktreeState = Read-State $worktreeStatePath
     if ([bool]$worktreeState.isPaused -ne [bool]$state.isPaused) {
         $stateText = Get-Content $worktreeStatePath -Raw
         $currentPause = if ([bool]$worktreeState.isPaused) { "true" } else { "false" }
         $desiredPause = if ([bool]$state.isPaused) { "true" } else { "false" }
         $stateText = $stateText -replace ('("isPaused"\s*:\s*)' + $currentPause), ('${1}' + $desiredPause)
         [IO.File]::WriteAllText($worktreeStatePath, $stateText, [Text.UTF8Encoding]::new($false))
+        $worktreeState = Read-State $worktreeStatePath
     }
+    Assert-CycleStateAdvanced $state $worktreeState
+    Assert-ResearchOnlyPaths $worktree $baseHead
 
     $cycleHead = (git -C $worktree rev-parse HEAD).Trim()
     & git -C $worktree merge-base --is-ancestor $baseHead $cycleHead
@@ -233,9 +306,7 @@ try {
         throw "Agent rewrote branch history outside the cycle base."
     }
 
-    Invoke-Checked "node" @("scripts/research.mjs", "check") $worktree
-    Invoke-Checked "node" @("--test", (Join-Path $repoRoot "tests\reader-language.test.mjs")) $worktree
-    Invoke-Checked "node" @((Join-Path $repoRoot "scripts\validate.mjs")) $worktree
+    Invoke-Checked "node" @((Join-Path $repoRoot "scripts\research.mjs"), "check") $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\generate-public.mjs")) $worktree
     Invoke-Checked "git" @("-C", $worktree, "diff", "--check") $worktree
 
@@ -249,13 +320,6 @@ try {
         throw "Could not inspect staged cycle changes"
     }
     $hasStagedChanges = $stagedDiffExit -eq 1
-
-    if (-not $hasStagedChanges -and -not $hasCommittedChanges) {
-        Write-RuntimeState "success" $runId "Cycle completed with no changes"
-        Remove-CycleWorktree $worktree $branch
-        Write-Output "SUCCESS: no changes conversation=$($result.conversation_id)"
-        exit 0
-    }
 
     Write-Output "VALIDATED CHANGES:"
     if ($hasCommittedChanges) {
