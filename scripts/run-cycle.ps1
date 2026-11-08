@@ -237,7 +237,6 @@ try {
     Invoke-Checked "node" @("--test", (Join-Path $repoRoot "tests\reader-language.test.mjs")) $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\validate.mjs")) $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\generate-public.mjs")) $worktree
-    Invoke-Checked "node" @((Join-Path $repoRoot "scripts\validate.mjs")) $worktree
     Invoke-Checked "git" @("-C", $worktree, "diff", "--check") $worktree
 
     $cycleHead = (git -C $worktree rev-parse HEAD).Trim()

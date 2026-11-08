@@ -137,7 +137,6 @@ function check() {
   run(process.execPath, ["--test", ...tests]);
   run(process.execPath, [join("scripts", "validate.mjs")]);
   run(process.execPath, [join("scripts", "generate-public.mjs")]);
-  run(process.execPath, [join("scripts", "validate.mjs")]);
   run("git", ["diff", "--check"]);
 }
 
