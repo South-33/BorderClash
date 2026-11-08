@@ -9,4 +9,4 @@ Thailand-Cambodia border monitor with one repository as the system of record.
 - Windows Task Scheduler wakes Antigravity; `data/state.json` decides whether a real cycle is due.
 - A validated Git push updates both the research history and the Vercel deployment.
 
-Start with `AGENTS.md`. Scheduled research uses `node scripts/research.mjs` directly so temporary worktrees do not need the website dependency tree. `pnpm research` remains a convenient root-checkout alias.
+Start with `AGENTS.md`. Scheduled research uses `node scripts/research.mjs` directly so temporary worktrees do not need the website dependency tree. `pnpm research` remains a convenient root-checkout alias. On Windows, install the task from the same signed-in user that authenticated `agy`; the installer keeps that interactive user token so Antigravity can read its cached credentials.

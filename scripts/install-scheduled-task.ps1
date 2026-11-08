@@ -15,7 +15,8 @@ $arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}"{1}' -f $runner, $pu
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $repoRoot
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes)
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 2)
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Description "Checks BorderClash nextRunAt and starts one Antigravity research cycle when due." -Force | Out-Null
+$principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Checks BorderClash nextRunAt and starts one Antigravity research cycle when due." -Force | Out-Null
 
-Write-Output "installed task='$TaskName' every=${EveryMinutes}m publish=$($Publish.IsPresent)"
+Write-Output "installed task='$TaskName' every=${EveryMinutes}m publish=$($Publish.IsPresent) logon=interactive"
 
