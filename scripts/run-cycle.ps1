@@ -16,10 +16,10 @@ Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $statePath = Join-Path $repoRoot "data\state.json"
-$runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $repoRoot ".state" }
-$logDir = if ($LogDir) { [IO.Path]::GetFullPath($LogDir) } else { Join-Path $repoRoot ".logs" }
-$repoName = Split-Path $repoRoot -Leaf
-$runsRoot = if ($RunsRoot) { [IO.Path]::GetFullPath($RunsRoot) } else { Join-Path (Split-Path $repoRoot -Parent) "$repoName-runs" }
+$runnerRoot = Join-Path $repoRoot ".work\runner"
+$runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $runnerRoot "runtime" }
+$logDir = if ($LogDir) { [IO.Path]::GetFullPath($LogDir) } else { Join-Path $runnerRoot "logs" }
+$runsRoot = if ($RunsRoot) { [IO.Path]::GetFullPath($RunsRoot) } else { Join-Path $runnerRoot "runs" }
 
 New-Item -ItemType Directory -Force -Path $runtimeDir, $logDir, $runsRoot | Out-Null
 
@@ -153,7 +153,7 @@ try {
         }
     }
 
-    Invoke-Checked "node" @("--test", "tests/data-layout.test.mjs", "tests/language.test.mjs") $repoRoot
+    Invoke-Checked "node" @("--test", "tests/data-layout.test.mjs", "tests/language.test.mjs", "tests/reader-language.test.mjs") $repoRoot
     Invoke-Checked "node" @("scripts/validate.mjs") $repoRoot
 
     $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
@@ -223,6 +223,7 @@ try {
     }
 
     Invoke-Checked "node" @("scripts/research.mjs", "check") $worktree
+    Invoke-Checked "node" @("--test", (Join-Path $repoRoot "tests\reader-language.test.mjs")) $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\validate.mjs")) $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\generate-public.mjs")) $worktree
     Invoke-Checked "node" @((Join-Path $repoRoot "scripts\validate.mjs")) $worktree

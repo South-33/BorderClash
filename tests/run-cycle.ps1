@@ -4,10 +4,10 @@ Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $runner = Join-Path $repoRoot "scripts\run-cycle.ps1"
 $fakeExe = Join-Path $PSScriptRoot "fake-agy.cmd"
-$repoName = Split-Path $repoRoot -Leaf
-$runsRoot = Join-Path (Split-Path $repoRoot -Parent) "$repoName-test-runs-$PID"
-$runtimeDir = Join-Path $repoRoot ".work\runner-test-state"
-$logDir = Join-Path $repoRoot ".work\runner-test-logs"
+$testRoot = Join-Path $repoRoot ".work\tests\run-cycle-$PID"
+$runsRoot = Join-Path $testRoot "runs"
+$runtimeDir = Join-Path $testRoot "runtime"
+$logDir = Join-Path $testRoot "logs"
 $mutexName = "Global\BorderClashResearchCycleTest-$PID"
 $branchPrefix = "test-cycle-$PID"
 
@@ -42,11 +42,15 @@ function Reset-TestArtifacts {
         $name = $_.Trim()
         if ($name) { & git -C $repoRoot branch -D $name 2>$null | Out-Null }
     }
+    if (Test-Path -LiteralPath $testRoot) {
+        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
     $ErrorActionPreference = $previousErrorAction
 }
 
 $headBefore = (git -C $repoRoot rev-parse HEAD).Trim()
 $job = $null
+Assert-True ($runsRoot.StartsWith((Join-Path $repoRoot ".work"), [StringComparison]::OrdinalIgnoreCase)) "test runs must stay inside repo .work"
 Reset-TestArtifacts
 
 try {
