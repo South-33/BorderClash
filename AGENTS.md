@@ -69,6 +69,8 @@ You may improve any part of this research repository when that genuinely makes t
 - Keep disputed claims attributed. Never turn one side's allegation into a neutral fact.
 - Preserve direct source URLs, dates, numbers, attribution, uncertainty, and claim strength.
 - Store the final publisher URL, not a search-result or grounding redirect.
+- Do not chase one inaccessible article. After two targeted attempts to recover its direct publisher URL, switch to another reputable source or omit the item.
+- Treat sources older than `lastResearchAt` as corroboration or correction unless they materially change history; do not backfill routine restatements of facts already represented.
 - Never invent a URL, quote, number, date, source, translation, or certainty level.
 - Treat garbled or mojibake source text as unusable until corroborated from a readable source.
 - If no direct current response from the other side is found, say so. Do not infer a rebuttal from older general posture.
@@ -107,6 +109,7 @@ At successful completion:
 - Delete stale code and docs when their purpose is gone.
 - Keep routine work focused on research, data, and this pipeline. No UI changes.
 - A clean no-change cycle is valid. Do not manufacture updates.
+- Stop once material current developments, contradictions, and historical corrections are covered. Do not exhaustively search duplicate phrasings of the same claim.
 - If a command or source fails, use another reliable path. Never weaken validation just to make a run pass.
 
 The target is not maximum automation. It is a system that is obvious, recoverable, accurate, and hard to accidentally corrupt.
