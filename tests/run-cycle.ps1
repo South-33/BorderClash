@@ -103,7 +103,7 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "stale-state"
     $staleState = Invoke-TestRunner $fakeExe
     Assert-True ($staleState.ExitCode -eq 1) "cycle without scheduler-state advancement must fail"
-    Assert-True (($staleState.Output -join "`n") -match "did not advance lastResearchAt") "stale-state failure did not name the invariant"
+    Assert-True (($staleState.Output -join "`n") -match "did not advance lastResearchAt") "stale-state failure did not name the invariant: $($staleState.Output -join ' | ')"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "stale-state cycle changed main HEAD"
 
     Reset-TestArtifacts

@@ -190,19 +190,19 @@ async function brief() {
         lastUpdatedAt: analyses.thailand?.lastUpdatedAt,
         militaryIntensity: analyses.thailand?.militaryIntensity,
         militaryPosture: analyses.thailand?.militaryPosture,
-        officialNarrative: analyses.thailand?.officialNarrativeEn || analyses.thailand?.officialNarrative,
+        officialNarrative: analyses.thailand?.officialNarrative,
       },
       cambodia: {
         lastUpdatedAt: analyses.cambodia?.lastUpdatedAt,
         militaryIntensity: analyses.cambodia?.militaryIntensity,
         militaryPosture: analyses.cambodia?.militaryPosture,
-        officialNarrative: analyses.cambodia?.officialNarrativeEn || analyses.cambodia?.officialNarrative,
+        officialNarrative: analyses.cambodia?.officialNarrative,
       },
       neutral: {
         lastUpdatedAt: analyses.neutral?.lastUpdatedAt,
         conflictLevel: analyses.neutral?.conflictLevel,
-        generalSummary: analyses.neutral?.generalSummaryEn || analyses.neutral?.generalSummary,
-        keyEvents: analyses.neutral?.keyEventsEn || analyses.neutral?.keyEvents,
+        generalSummary: analyses.neutral?.generalSummary,
+        keyEvents: analyses.neutral?.keyEvents,
       },
     },
     contextWindow: {

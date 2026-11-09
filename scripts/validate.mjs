@@ -1,4 +1,5 @@
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
+import { selectVisibleNews } from "../lib/content-quality.mjs";
 import { isCanonicalDataPath } from "../lib/data-layout.mjs";
 import { getLocalizedTextIssue } from "../lib/language.mjs";
 import { listFiles, readJson, readJsonl } from "../lib/files.mjs";
@@ -72,25 +73,44 @@ for (const file of timelineFiles) {
     localized(location + ".titleKh", event.titleKh, "kh", true);
     localized(location + ".descriptionTh", event.descriptionTh, "th", true);
     localized(location + ".descriptionKh", event.descriptionKh, "kh", true);
+    for (const field of ["impactRescoreProcessed", "impactRescoreProcessedAt", "impactRescoreRunId"]) {
+      if (event[field] !== undefined) add(location + "." + field, "legacy timeline field");
+    }
     if (!Array.isArray(event.sources) || event.sources.length === 0) add(location, "missing sources");
+    const sourceUrls = new Set();
     for (const [index, source] of (event.sources || []).entries()) {
       directSourceUrl(location + ".sources[" + index + "]", source.url);
       notFuture(location + ".sources[" + index + "].addedAt", source.addedAt);
+      const normalizedUrl = String(source.url || "").replace(/\/$/u, "");
+      if (normalizedUrl && sourceUrls.has(normalizedUrl)) add(location, "duplicate source URL");
+      if (normalizedUrl) sourceUrls.add(normalizedUrl);
     }
   }
 }
 
 const newsFiles = await listFiles(join(dataRoot, "news"), ".jsonl");
 const newsIds = new Set();
-const newsStatuses = new Set(["active", "archived", "false", "outdated", "unverified"]);
+const newsStatuses = new Set(["active", "archived", "unverified"]);
+const newsByCountry = { thailand: [], cambodia: [], international: [] };
+const newsLocations = new Map();
 for (const file of newsFiles) {
   const expectedMonth = basename(dirname(file));
+  const country = file.endsWith("thailand.jsonl")
+    ? "thailand"
+    : file.endsWith("cambodia.jsonl")
+      ? "cambodia"
+      : "international";
   for (const article of await readJsonl(file)) {
     const location = file + ":" + article.id;
+    newsByCountry[country].push(article);
+    newsLocations.set(article.id, location);
     if (!article.id) add(location, "missing id");
     if (newsIds.has(article.id)) add(location, "duplicate id");
     newsIds.add(article.id);
     if (!(article.titleEn || article.title)) add(location, "missing title");
+    if (typeof article.titleEn === "string" && article.titleEn.trim() === String(article.title || "").trim()) {
+      add(location + ".titleEn", "duplicate of source title");
+    }
     if (!article.source) add(location, "missing source");
     if (!newsStatuses.has(article.status)) add(location, "invalid status");
     const articleTime = article.publishedAt || article.fetchedAt;
@@ -104,8 +124,28 @@ for (const file of newsFiles) {
     notFuture(location + ".sourceVerifiedAt", article.sourceVerifiedAt);
     localized(location + ".titleTh", article.titleTh, "th");
     localized(location + ".titleKh", article.titleKh, "kh");
-    localized(location + ".summaryTh", article.summaryTh, "th");
-    localized(location + ".summaryKh", article.summaryKh, "kh");
+    for (const field of [
+      "summaryEn", "summaryTh", "summaryKh",
+      "processedToTimeline", "lastReviewedAt", "hasConflict", "nextReviewAt", "conflictsWith",
+    ]) {
+      if (article[field] !== undefined) add(location + "." + field, "legacy news field");
+    }
+  }
+}
+
+const visibleNewsIds = new Set([
+  ...selectVisibleNews(newsByCountry.cambodia).map((article) => article.id),
+  ...selectVisibleNews(newsByCountry.thailand).map((article) => article.id),
+]);
+for (const [country, articles] of Object.entries(newsByCountry)) {
+  for (const article of articles) {
+    const location = newsLocations.get(article.id) || country + ":" + article.id;
+    if (visibleNewsIds.has(article.id)) {
+      localized(location + ".titleTh", article.titleTh, "th", true);
+      localized(location + ".titleKh", article.titleKh, "kh", true);
+    } else if (article.titleTh !== undefined || article.titleKh !== undefined) {
+      add(location, "non-visible news must not keep localized titles");
+    }
   }
 }
 
@@ -113,6 +153,12 @@ for (const [name, kind] of [["thailand", "perspective"], ["cambodia", "perspecti
   const value = await readJson(join(dataRoot, "analysis", name + ".json"));
   notFuture("analysis/" + name + ".lastUpdatedAt", value.lastUpdatedAt);
   if (kind === "perspective") {
+    if (!value.officialNarrative) add("analysis/" + name + ".officialNarrative", "missing");
+    if (!value.postureLabel) add("analysis/" + name + ".postureLabel", "missing");
+    if (!value.postureRationale) add("analysis/" + name + ".postureRationale", "missing");
+    for (const field of ["officialNarrativeEn", "postureLabelEn", "postureRationaleEn"]) {
+      if (value[field] !== undefined) add("analysis/" + name + "." + field, "legacy English alias");
+    }
     localized("analysis/" + name + ".officialNarrativeTh", value.officialNarrativeTh, "th", true);
     localized("analysis/" + name + ".officialNarrativeKh", value.officialNarrativeKh, "kh", true);
     localized("analysis/" + name + ".postureLabelTh", value.postureLabelTh, "th", true);
@@ -120,6 +166,11 @@ for (const [name, kind] of [["thailand", "perspective"], ["cambodia", "perspecti
     localized("analysis/" + name + ".postureRationaleTh", value.postureRationaleTh, "th", true);
     localized("analysis/" + name + ".postureRationaleKh", value.postureRationaleKh, "kh", true);
   } else {
+    if (!value.generalSummary) add("analysis/neutral.generalSummary", "missing");
+    if (!Array.isArray(value.keyEvents)) add("analysis/neutral.keyEvents", "missing");
+    for (const field of ["generalSummaryEn", "keyEventsEn"]) {
+      if (value[field] !== undefined) add("analysis/neutral." + field, "legacy English alias");
+    }
     localized("analysis/neutral.generalSummaryTh", value.generalSummaryTh, "th", true);
     localized("analysis/neutral.generalSummaryKh", value.generalSummaryKh, "kh", true);
     for (const [index, item] of (value.keyEventsTh || []).entries()) localized("analysis/neutral.keyEventsTh[" + index + "]", item, "th", true);

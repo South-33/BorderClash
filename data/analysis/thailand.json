@@ -5,16 +5,13 @@
   "militaryPosture": "DEFENSIVE",
   "narrativeSource": "Spring News, Khaosod English, Bangkok Post, Naewna, Cambodianess",
   "officialNarrative": "Thailand says it has not crossed into Cambodian territory. It says the new permanent fencing and other security work in Chanthaburi and Buri Ram are inside Thailand. Thai authorities are also reorganizing border forces, working with ASEAN teams that monitor landmine areas, and joining talks with Cambodia to reduce tension.",
-  "officialNarrativeKh": "ថៃនិយាយថាខ្លួនមិនបានឆ្លងចូលដែនកម្ពុជាទេ ហើយអះអាងថារបងអចិន្ត្រៃយ៍ និងការងារសន្តិសុខនៅចាន់បុរី និងបុរីរ៉ាំ ស្ថិតនៅក្នុងទឹកដីថៃ។ អាជ្ញាធរថៃក៏កំពុងកែសម្រួលកម្លាំងតាមព្រំដែន សហការជាមួយក្រុមអាស៊ានដែលត្រួតពិនិត្យតំបន់មីន និងពិភាក្សាជាមួយកម្ពុជា ដើម្បីបន្ថយភាពតានតឹង។",
-  "officialNarrativeTh": "ไทยระบุว่าไม่ได้รุกล้ำเข้าไปในดินแดนกัมพูชา และยืนยันว่ารั้วถาวรกับงานด้านความปลอดภัยในจันทบุรีและบุรีรัมย์ทำอยู่ในฝั่งไทย ทางการไทยยังปรับกำลังตามแนวชายแดน ทำงานร่วมกับทีมอาเซียนที่ตรวจพื้นที่ทุ่นระเบิด และพูดคุยกับกัมพูชาเพื่อลดความตึงเครียด",
+  "officialNarrativeKh": "ថៃលើកឡើងថា ខ្លួនមិនបានឆ្លងចូលទៅក្នុងទឹកដីកម្ពុជាទេ។ ថៃលើកឡើងទៀតថា របងអចិន្ត្រៃយ៍ថ្មី និងការងារសន្តិសុខផ្សេងទៀតនៅខេត្តចន្ទបុរី និងបុរីរម្យ គឺស្ថិតនៅក្នុងទឹកដីថៃ។ អាជ្ញាធរថៃក៏កំពុងរៀបចំកងកម្លាំងព្រំដែនឡើងវិញ ធ្វើការជាមួយក្រុមការងារអាស៊ានដែលឃ្លាំមើលតំបន់មីន និងចូលរួមក្នុងកិច្ចចរចាជាមួយកម្ពុជាដើម្បីកាត់បន្ថយភាពតានតឹង។",
+  "officialNarrativeTh": "ไทยระบุว่าตนไม่ได้ข้ามเข้าไปในดินแดนกัมพูชา และระบุว่ารั้วถาวรใหม่รวมถึงงานด้านความมั่นคงอื่น ๆ ในจันทบุรีและบุรีรัมย์นั้นอยู่ภายในประเทศไทย ทางการไทยยังกำลังจัดกำลังพลชายแดนใหม่ ทำงานร่วมกับคณะทำงานอาเซียนที่ตรวจสอบพื้นที่ทุ่นระเบิด และเข้าร่วมการเจรจากับกัมพูชาเพื่อลดความตึงเครียด",
   "postureLabel": "Border defense and fencing",
-  "postureLabelEn": "Border defense and fencing",
   "postureLabelKh": "ការការពារព្រំដែន និងសង់របង",
   "postureLabelTh": "การป้องกันชายแดนและสร้างรั้ว",
   "postureRationale": "Thai forces are mainly holding defensive positions, building permanent border fencing, and reorganizing units. No new armed clash is reported in the latest period.",
-  "postureRationaleEn": "Thai forces are mainly holding defensive positions, building permanent border fencing, and reorganizing units. No new armed clash is reported in the latest period.",
   "postureRationaleKh": "កងកម្លាំងថៃផ្តោតលើការការពារ សាងសង់របងព្រំដែនអចិន្ត្រៃយ៍ និងកែសម្រួលអង្គភាពយោធា។ ក្នុងរយៈពេលថ្មីៗនេះ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចដោយអាវុធថ្មីទេ។",
   "postureRationaleTh": "กองกำลังไทยเน้นตั้งรับ สร้างรั้วถาวรตามแนวชายแดน และปรับหน่วยทหาร ในช่วงล่าสุดยังไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่",
-  "territorialContext": "BORDER_ZONE",
-  "officialNarrativeEn": "Thailand says it has not crossed into Cambodian territory. It says the new permanent fencing and other security work in Chanthaburi and Buri Ram are inside Thailand. Thai authorities are also reorganizing border forces, working with ASEAN teams that monitor landmine areas, and joining talks with Cambodia to reduce tension."
+  "territorialContext": "BORDER_ZONE"
 }

@@ -78,7 +78,6 @@ function perspectivePublic(value) {
   if (!value) return null;
   return {
     officialNarrative: value.officialNarrative,
-    officialNarrativeEn: value.officialNarrativeEn,
     officialNarrativeTh: value.officialNarrativeTh,
     officialNarrativeKh: value.officialNarrativeKh,
     narrativeSource: value.narrativeSource,
@@ -99,12 +98,10 @@ function neutralPublic(value) {
   if (!value) return null;
   return {
     generalSummary: value.generalSummary,
-    generalSummaryEn: value.generalSummaryEn,
     generalSummaryTh: value.generalSummaryTh,
     generalSummaryKh: value.generalSummaryKh,
     conflictLevel: value.conflictLevel,
     keyEvents: value.keyEvents,
-    keyEventsEn: value.keyEventsEn,
     keyEventsTh: value.keyEventsTh,
     keyEventsKh: value.keyEventsKh,
     displacedCount: value.displacedCount,

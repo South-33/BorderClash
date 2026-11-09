@@ -993,19 +993,19 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // Helper to get narrative based on language
   const getNarrative = (meta: Analysis | null) => {
     if (!meta) return null;
-    return localizedText(lang as Lang, meta.officialNarrativeEn || meta.officialNarrative, meta.officialNarrativeTh, meta.officialNarrativeKh);
+    return localizedText(lang as Lang, meta.officialNarrative, meta.officialNarrativeTh, meta.officialNarrativeKh);
   };
 
   // Helper to get summary based on language
   const getSummary = (meta: NeutralAnalysis | null) => {
     if (!meta) return null;
-    return localizedText(lang as Lang, meta.generalSummaryEn || meta.generalSummary, meta.generalSummaryTh, meta.generalSummaryKh);
+    return localizedText(lang as Lang, meta.generalSummary, meta.generalSummaryTh, meta.generalSummaryKh);
   };
 
   // Helper to get key events based on language
   const getKeyEvents = (meta: NeutralAnalysis | null) => {
     if (!meta) return [];
-    return localizedArray(lang as Lang, meta.keyEventsEn || meta.keyEvents || [], meta.keyEventsTh, meta.keyEventsKh);
+    return localizedArray(lang as Lang, meta.keyEvents || [], meta.keyEventsTh, meta.keyEventsKh);
   };
 
   // --- Modal Navigation & Touch State ---

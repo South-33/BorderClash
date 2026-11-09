@@ -20,7 +20,6 @@ export interface NewsArticle {
 
 export interface Analysis {
     officialNarrative: string;
-    officialNarrativeEn?: string;
     officialNarrativeTh?: string;
     officialNarrativeKh?: string;
     narrativeSource?: string;
@@ -38,12 +37,10 @@ export interface Analysis {
 
 export interface NeutralAnalysis {
     generalSummary: string;
-    generalSummaryEn?: string;
     generalSummaryTh?: string;
     generalSummaryKh?: string;
     conflictLevel: string;
     keyEvents: string[];
-    keyEventsEn?: string[];
     keyEventsTh?: string[];
     keyEventsKh?: string[];
     displacedCount?: number;

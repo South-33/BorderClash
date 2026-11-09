@@ -60,11 +60,8 @@ async function makeBriefFixture({ lastResearchAt, lastCycleInterval = 24, news, 
       militaryIntensity: 10,
       militaryPosture: "DEFENSIVE",
       officialNarrative: "Border situation remains calm.",
-      officialNarrativeEn: "Border situation remains calm.",
       generalSummary: "Border situation remains calm.",
-      generalSummaryEn: "Border situation remains calm.",
       keyEvents: [],
-      keyEventsEn: [],
     });
   }
   for (const country of ["thailand", "cambodia", "international"]) {
