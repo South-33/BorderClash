@@ -7,6 +7,8 @@ import { listFiles, readJson, readJsonl } from "../lib/files.mjs";
 const dataRoot = resolve("data");
 const errors = [];
 const nativeDigits = /[\u0E50-\u0E59\u17E0-\u17E9\u17F0-\u17F9]/u;
+const thaiTimelineChatVoice = /(ครับ|ค่ะ|เพื่อนบอกต่อ|ไทยเรา|บ้านเรา|ของเรา|ฝั่งเรา|กองทัพเรา|ทหารเรา|พวกเขมร)/u;
+const khmerTimelinePartisanVoice = /(យើង|ពួកសៀម)/u;
 const validationNow = Date.now();
 const futureToleranceMs = 5 * 60_000;
 
@@ -22,6 +24,12 @@ function localized(location, value, language, required = false) {
   const issue = getLocalizedTextIssue(value, language);
   if (issue) add(location, issue);
   if (nativeDigits.test(value)) add(location, "native-digit");
+}
+
+function timelineReaderVoice(location, value, language) {
+  if (typeof value !== "string") return;
+  if (language === "th" && thaiTimelineChatVoice.test(value)) add(location, "conversational-or-partisan-voice");
+  if (language === "kh" && khmerTimelinePartisanVoice.test(value)) add(location, "conversational-or-partisan-voice");
 }
 
 function httpUrl(location, value) {
@@ -73,6 +81,10 @@ for (const file of timelineFiles) {
     localized(location + ".titleKh", event.titleKh, "kh", true);
     localized(location + ".descriptionTh", event.descriptionTh, "th", true);
     localized(location + ".descriptionKh", event.descriptionKh, "kh", true);
+    timelineReaderVoice(location + ".titleTh", event.titleTh, "th");
+    timelineReaderVoice(location + ".titleKh", event.titleKh, "kh");
+    timelineReaderVoice(location + ".descriptionTh", event.descriptionTh, "th");
+    timelineReaderVoice(location + ".descriptionKh", event.descriptionKh, "kh");
     for (const field of ["impactRescoreProcessed", "impactRescoreProcessedAt", "impactRescoreRunId"]) {
       if (event[field] !== undefined) add(location + "." + field, "legacy timeline field");
     }
