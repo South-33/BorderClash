@@ -12,7 +12,6 @@ $arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $runner
 
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $repoRoot
 $recurring = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes)
-$startup = New-ScheduledTaskTrigger -AtStartup
 $logon = New-ScheduledTaskTrigger -AtLogOn -User ([Security.Principal.WindowsIdentity]::GetCurrent().Name)
 $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
@@ -26,10 +25,10 @@ $principal = New-ScheduledTaskPrincipal `
 Register-ScheduledTask `
     -TaskName $TaskName `
     -Action $action `
-    -Trigger @($recurring, $startup, $logon) `
+    -Trigger @($recurring, $logon) `
     -Settings $settings `
     -Principal $principal `
     -Description "Keeps the SouthServer BorderClash checkout on main and runs one due AGY research cycle." `
     -Force | Out-Null
 
-Write-Output "installed task='$TaskName' every=${EveryMinutes}m with startup/logon recovery"
+Write-Output "installed task='$TaskName' every=${EveryMinutes}m with logon recovery"

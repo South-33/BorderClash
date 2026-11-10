@@ -19,7 +19,7 @@ test('production research runs from SouthServer main through one Windows task', 
 
   assert.match(installer, /BorderClashResearch/);
   assert.match(installer, /ops\\run-production\.ps1/);
-  assert.match(installer, /New-ScheduledTaskTrigger -AtStartup/);
+  assert.doesNotMatch(installer, /New-ScheduledTaskTrigger -AtStartup/);
   assert.match(installer, /New-ScheduledTaskTrigger -AtLogOn/);
   assert.match(installer, /RepetitionInterval/);
   assert.match(installer, /MultipleInstances IgnoreNew/);

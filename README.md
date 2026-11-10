@@ -32,7 +32,7 @@ Install or repair the task from the SouthServer checkout:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\install-production-task.ps1
 ```
 
-The task wakes every 10 minutes and after startup/logon. `data/state.json` decides whether research is actually due, so most wake-ups exit quickly.
+SouthServer auto-logs into the `nyxy` session after boot. The task wakes on that logon and every 10 minutes afterward. `data/state.json` decides whether research is actually due, so most wake-ups exit quickly.
 
 If AGY authentication expires, sign in once from the interactive `nyxy` SouthServer session by running `agy` in PowerShell and completing the Google login, then enable the task with `Enable-ScheduledTask -TaskName BorderClashResearch`.
 
