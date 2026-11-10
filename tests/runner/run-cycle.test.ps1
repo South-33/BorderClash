@@ -140,9 +140,9 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "note"
     $note = Invoke-TestRunner $fakeExe
     Assert-True ($note.ExitCode -eq 0) "harness-note cycle should pass"
-    $noteFile = Get-ChildItem $logDir -File -Filter "*.note.txt" | Select-Object -First 1
-    Assert-True ($null -ne $noteFile) "runner did not extract HARNESS_NOTE"
-    Assert-True ((Get-Content $noteFile.FullName -Raw).Trim() -eq "Fake harness feedback.") "runner changed HARNESS_NOTE text"
+    $feedbackFile = Get-ChildItem $logDir -File -Filter "*.feedback.txt" | Select-Object -First 1
+    Assert-True ($null -ne $feedbackFile) "runner did not extract HARNESS_FEEDBACK"
+    Assert-True ((Get-Content $feedbackFile.FullName -Raw).Trim() -eq "Fake harness feedback.") "runner changed HARNESS_FEEDBACK text"
 
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
@@ -153,7 +153,21 @@ try {
         exit $LASTEXITCODE
     } -ArgumentList $runner, $fakeExe, $runsRoot, $runtimeDir, $logDir, $mutexName
 
-    Start-Sleep -Seconds 2
+    $observedRunning = $false
+    for ($attempt = 0; $attempt -lt 100; $attempt++) {
+        $runtimePath = Join-Path $runtimeDir "runtime.json"
+        if (Test-Path $runtimePath) {
+            try {
+                $runtimeState = Get-Content $runtimePath -Raw | ConvertFrom-Json
+                if ($runtimeState.status -eq "running") {
+                    $observedRunning = $true
+                    break
+                }
+            } catch { }
+        }
+        Start-Sleep -Milliseconds 100
+    }
+    Assert-True $observedRunning "first lock-holder never reached running state"
     $second = Invoke-TestRunner $fakeExe
     if ($second.ExitCode -ne 0) {
         Write-Output ("second trigger exit=" + $second.ExitCode)

@@ -9,8 +9,8 @@ const work = resolve(root, ".work", "benchmarks", "reader-copy");
 const runDir = resolve(tmpdir(), "borderclash-reader-bench");
 const fixture = JSON.parse((await readFile(resolve(root, "benchmarks", "reader-copy.json"), "utf8")).replace(/^\uFEFF/u, ""));
 const agents = await readFile(resolve(root, "AGENTS.md"), "utf8");
-const section = agents.match(/## Reader contract\s*\n([\s\S]*?)(?=\n## |$)/u);
-if (!section) throw new Error("AGENTS.md is missing the Reader contract section");
+const section = agents.match(/## Reader copy\s*\n([\s\S]*?)(?=\n## |$)/u);
+if (!section) throw new Error("AGENTS.md is missing the Reader copy section");
 
 const agy = process.env.AGY_PATH || "agy";
 const model = process.env.BENCH_MODEL || "gemini-3.8-flash-medium";

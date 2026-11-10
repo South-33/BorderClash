@@ -74,13 +74,18 @@ async function makeBriefFixture({ lastResearchAt, lastCycleInterval = 24, news, 
   return root;
 }
 
-function runBrief(root) {
-  const result = spawnSync(process.execPath, [script], { cwd: root, encoding: "utf8" });
+function runBrief(root, nowMs) {
+  const result = spawnSync(process.execPath, [script], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, BORDERCLASH_NOW_MS: String(nowMs) },
+  });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 }
 
-test("brief uses bounded material fallback when the cycle window is empty", async () => {
+test("brief always gives at least seven days of compact local context", async () => {
+  const now = Date.parse("2026-11-10T12:00:00Z");
   const lastResearchAt = Date.parse("2026-11-08T12:00:00Z");
   const old = Date.parse("2026-11-06T12:00:00Z");
   const root = await makeBriefFixture({
@@ -100,14 +105,20 @@ test("brief uses bounded material fallback when the cycle window is empty", asyn
     ],
   });
   try {
-    const brief = runBrief(root);
-    assert.equal(brief.contextWindow.mode, "fallback-anchors");
-    assert.equal(brief.contextWindow.start, "2026-11-08T00:00:00.000Z");
-    assert.deepEqual(brief.contextWindow.windowCounts, {
+    const brief = runBrief(root, now);
+    assert.equal(brief.contextWindow.start, "2026-11-03T12:00:00.000Z");
+    assert.equal(brief.contextWindow.end, "2026-11-10T12:00:00.000Z");
+    assert.equal(brief.contextWindow.lookbackDays, 7);
+    assert.equal(brief.contextWindow.cappedAt30Days, false);
+    assert.deepEqual(brief.contextWindow.counts, {
+      timeline: 3,
+      news: { thailand: 1, cambodia: 1, international: 1 },
+    });
+    assert.deepEqual(brief.contextWindow.sinceLastCycleCounts, {
       timeline: 0,
       news: { thailand: 0, cambodia: 0, international: 0 },
     });
-    assert.equal(brief.recentTimeline.length, 2);
+    assert.equal(brief.recentTimeline.length, 3);
     assert.equal(brief.recentNews.thailand.length, 1);
     assert.equal(brief.recentNews.cambodia.length, 1);
     assert.equal(brief.recentNews.international.length, 1);
@@ -118,6 +129,7 @@ test("brief uses bounded material fallback when the cycle window is empty", asyn
 });
 
 test("brief surfaces fresh material context and counts newly fetched older reporting", async () => {
+  const now = Date.parse("2026-11-10T12:00:00Z");
   const lastResearchAt = Date.parse("2026-11-08T12:00:00Z");
   const recent = Date.parse("2026-11-08T14:00:00Z");
   const old = Date.parse("2026-11-01T12:00:00Z");
@@ -145,20 +157,40 @@ test("brief surfaces fresh material context and counts newly fetched older repor
     })),
   });
   try {
-    const brief = runBrief(root);
-    assert.equal(brief.contextWindow.mode, "cycle-window");
-    assert.equal(brief.contextWindow.overlapHours, 2);
-    assert.equal(brief.contextWindow.start, "2026-11-08T10:00:00.000Z");
-    assert.deepEqual(brief.contextWindow.windowCounts, {
+    const brief = runBrief(root, now);
+    assert.equal(brief.contextWindow.start, "2026-11-03T12:00:00.000Z");
+    assert.deepEqual(brief.contextWindow.counts, {
       timeline: 5,
       news: { thailand: 3, cambodia: 1, international: 1 },
     });
-    assert.equal(brief.recentTimeline.length, 4);
+    assert.deepEqual(brief.contextWindow.sinceLastCycleCounts, {
+      timeline: 5,
+      news: { thailand: 3, cambodia: 1, international: 1 },
+    });
+    assert.equal(brief.recentTimeline.length, 5);
     assert.deepEqual(
       brief.recentNews.thailand.map((row) => row.id),
       ["th-1", "th-2", "th-fetched"],
     );
     assert.deepEqual(brief.recentNews.international.map((row) => row.id), ["intl-1"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("brief extends to the previous cycle but caps automatic context at thirty days", async () => {
+  const now = Date.parse("2026-11-10T12:00:00Z");
+  const lastResearchAt = now - 45 * 24 * 3_600_000;
+  const root = await makeBriefFixture({
+    lastResearchAt,
+    news: { thailand: [], cambodia: [], international: [] },
+    timeline: [],
+  });
+  try {
+    const brief = runBrief(root, now);
+    assert.equal(brief.contextWindow.start, "2026-10-11T12:00:00.000Z");
+    assert.equal(brief.contextWindow.lookbackDays, 30);
+    assert.equal(brief.contextWindow.cappedAt30Days, true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -204,20 +236,28 @@ test("finish owns cycle timestamps and preserves pause state", async () => {
   }
 });
 
-test("finish rejects scheduling outside 1..24 hours", async () => {
+test("finish allows long quiet intervals and rejects scheduling beyond one week", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
     await mkdir(join(root, "data"), { recursive: true });
-    await writeFile(join(root, "data", "state.json"), "{}\n");
+    await writeFile(join(root, "data", "state.json"), JSON.stringify({ researchCycleCount: 3 }) + "\n");
+    const accepted = spawnSync(process.execPath, [
+      script,
+      "finish",
+      "80",
+      "Conditions are quiet and no near-term trigger is visible.",
+    ], { cwd: root, encoding: "utf8" });
+    assert.equal(accepted.status, 0, accepted.stderr);
+
     const result = spawnSync(process.execPath, [
       script,
       "finish",
-      "25",
+      "169",
       "Too far away.",
     ], { cwd: root, encoding: "utf8" });
 
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /between 1 and 24/u);
+    assert.match(result.stderr, /between 1 and 168/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

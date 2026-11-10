@@ -34,6 +34,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\install-production-t
 
 The task wakes every 10 minutes and after startup/logon. `data/state.json` decides whether research is actually due, so most wake-ups exit quickly.
 
+Each real cycle gets an ignored `.work/CYCLE_CONTEXT.json` generated from the canonical data before AGY starts. The disposable cycle directory is removed after success, so no per-run context file is committed.
+
 Vercel deploys production only from `main`. A completed research cycle therefore updates both the durable research record and the public site with one validated push.
 
 ## Local checks

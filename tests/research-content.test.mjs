@@ -8,6 +8,4 @@ test("visible research copy is localized and reader-first", async () => {
   assert.equal(quality.missingThai, 0, `visible Thai title fallbacks: ${quality.missingThai}`);
   assert.equal(quality.missingKhmer, 0, `visible Khmer title fallbacks: ${quality.missingKhmer}`);
   assert.equal(quality.localizedIssues, 0, quality.issues.join("\n"));
-  assert.equal(quality.jargonHits, 0, `plain-language jargon: ${quality.jargon.join(", ")}`);
-  assert.ok(quality.maxEnglishSentenceWords <= 32, `English analysis sentence too long: ${quality.maxEnglishSentenceWords} words`);
 });

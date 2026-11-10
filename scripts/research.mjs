@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { assessContentQuality, isBorderRelevantNews, selectVisibleNews } from "../lib/content-quality.mjs";
+import { isBorderRelevantNews, selectVisibleNews } from "../lib/content-quality.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "../lib/files.mjs";
 
 const dataRoot = resolve("data");
@@ -12,10 +12,12 @@ const RESEARCH_TESTS = [
   "tests/research-content.test.mjs",
   "tests/research-cli.test.mjs",
 ];
-const BRIEF_NEWS_LIMIT = 3;
-const BRIEF_TIMELINE_LIMIT = 4;
-const BRIEF_FALLBACK_NEWS_LIMIT = 1;
-const BRIEF_FALLBACK_TIMELINE_LIMIT = 2;
+const DAY_MS = 24 * 3_600_000;
+const BRIEF_MIN_DAYS = 7;
+const BRIEF_MAX_DAYS = 30;
+const BRIEF_NEWS_LIMIT = 6;
+const BRIEF_TIMELINE_LIMIT = 12;
+const MAX_SCHEDULE_HOURS = 168;
 
 function latestTimestamp(row) {
   return row.publishedAt || row.fetchedAt || row.lastUpdatedAt || 0;
@@ -32,7 +34,11 @@ function compactNews(row) {
   return {
     id: row.id,
     publishedAt: row.publishedAt,
+    fetchedAt: row.fetchedAt,
     source: row.source,
+    sourceUrl: row.sourceUrl,
+    credibility: row.credibility,
+    status: row.status,
     category: row.category,
     title: row.titleEn || row.title,
   };
@@ -47,6 +53,7 @@ function compactTimeline(row) {
     importance: row.importance,
     status: row.status,
     title: row.title,
+    sourceCount: Array.isArray(row.sources) ? row.sources.length : 0,
   };
 }
 
@@ -62,52 +69,55 @@ function timelineTimestamp(row) {
   );
 }
 
-function briefOverlapHours(state) {
-  const interval = Number(state?.lastCycleInterval || 24);
-  return Math.min(12, Math.max(1, interval / 2));
-}
-
-function selectBriefContext({ state, news, timeline }) {
-  const overlapHours = briefOverlapHours(state);
-  const overlapMs = overlapHours * 3_600_000;
-  const windowStart = Math.max(0, Number(state.lastResearchAt || 0) - overlapMs);
+function selectBriefContext({ state, news, timeline, nowMs }) {
+  const lastResearchAt = Number(state.lastResearchAt || 0);
+  const minimumStart = nowMs - BRIEF_MIN_DAYS * DAY_MS;
+  const maximumStart = nowMs - BRIEF_MAX_DAYS * DAY_MS;
+  const desiredStart = lastResearchAt > 0 ? Math.min(lastResearchAt, minimumStart) : minimumStart;
+  const windowStart = Math.max(maximumStart, desiredStart);
   const eligibleNews = Object.fromEntries(
     Object.entries(news).map(([country, rows]) => [
       country,
       selectVisibleNews(rows, rows.length).filter(isBorderRelevantNews),
     ]),
   );
-  const windowNews = Object.fromEntries(
+  const contextNews = Object.fromEntries(
     Object.entries(eligibleNews).map(([country, rows]) => [
       country,
       rows.filter((row) => newsContextTimestamp(row) >= windowStart),
     ]),
   );
-  const windowTimeline = timeline.filter((row) => timelineTimestamp(row) >= windowStart);
-  const hasWindowNews = Object.values(windowNews).some((rows) => rows.length > 0);
-  const hasWindowContext = hasWindowNews || windowTimeline.length > 0;
-
-  const selectedNews = Object.fromEntries(
-    Object.entries(hasWindowContext ? windowNews : eligibleNews).map(([country, rows]) => [
+  const contextTimeline = timeline.filter((row) => timelineTimestamp(row) >= windowStart);
+  const sinceNews = Object.fromEntries(
+    Object.entries(eligibleNews).map(([country, rows]) => [
       country,
-      rows.slice(0, hasWindowContext ? BRIEF_NEWS_LIMIT : BRIEF_FALLBACK_NEWS_LIMIT),
+      rows.filter((row) => newsContextTimestamp(row) >= lastResearchAt),
     ]),
   );
-  const selectedTimeline = (hasWindowContext ? windowTimeline : timeline)
-    .slice(0, hasWindowContext ? BRIEF_TIMELINE_LIMIT : BRIEF_FALLBACK_TIMELINE_LIMIT);
+  const sinceTimeline = lastResearchAt > 0
+    ? timeline.filter((row) => timelineTimestamp(row) >= lastResearchAt)
+    : contextTimeline;
 
   return {
-    mode: hasWindowContext ? "cycle-window" : "fallback-anchors",
     windowStart,
-    overlapHours,
-    newCounts: {
-      timeline: windowTimeline.length,
+    lookbackDays: Math.ceil((nowMs - windowStart) / DAY_MS),
+    cappedAt30Days: desiredStart < maximumStart,
+    counts: {
+      timeline: contextTimeline.length,
       news: Object.fromEntries(
-        Object.entries(windowNews).map(([country, rows]) => [country, rows.length]),
+        Object.entries(contextNews).map(([country, rows]) => [country, rows.length]),
       ),
     },
-    news: selectedNews,
-    timeline: selectedTimeline,
+    sinceLastCycleCounts: {
+      timeline: sinceTimeline.length,
+      news: Object.fromEntries(
+        Object.entries(sinceNews).map(([country, rows]) => [country, rows.length]),
+      ),
+    },
+    news: Object.fromEntries(
+      Object.entries(contextNews).map(([country, rows]) => [country, rows.slice(0, BRIEF_NEWS_LIMIT)]),
+    ),
+    timeline: contextTimeline.slice(0, BRIEF_TIMELINE_LIMIT),
   };
 }
 
@@ -148,24 +158,9 @@ async function brief() {
   for (const values of Object.values(news)) {
     values.sort((a, b) => latestTimestamp(b) - latestTimestamp(a));
   }
-  const context = selectBriefContext({ state, news, timeline });
-
-  const contentQuality = assessContentQuality({ news, analyses });
-  const compactQuality = contentQuality.score === 100 && contentQuality.issues.length === 0
-    ? { score: 100 }
-    : {
-        score: contentQuality.score,
-        unsafeEnglishFallbacks: contentQuality.unsafeEnglishFallbacks,
-        missingThai: contentQuality.missingThai,
-        missingKhmer: contentQuality.missingKhmer,
-        localizedIssues: contentQuality.localizedIssues,
-        jargonHits: contentQuality.jargonHits,
-        longEnglishSentences: contentQuality.longEnglishSentences,
-        relevanceReviewCandidates: contentQuality.relevanceReviewCandidates,
-        issues: contentQuality.issues,
-      };
-
-  const nowMs = Date.now();
+  const configuredNow = Number(process.env.BORDERCLASH_NOW_MS || 0);
+  const nowMs = configuredNow > 0 ? configuredNow : Date.now();
+  const context = selectBriefContext({ state, news, timeline, nowMs });
   const toIso = (value) => Number.isFinite(value) ? new Date(value).toISOString() : null;
   const output = {
     cycle: {
@@ -206,10 +201,12 @@ async function brief() {
       },
     },
     contextWindow: {
-      mode: context.mode,
       start: toIso(context.windowStart),
-      overlapHours: context.overlapHours,
-      windowCounts: context.newCounts,
+      end: toIso(nowMs),
+      lookbackDays: context.lookbackDays,
+      cappedAt30Days: context.cappedAt30Days,
+      counts: context.counts,
+      sinceLastCycleCounts: context.sinceLastCycleCounts,
     },
     recentTimeline: context.timeline.map(compactTimeline),
     recentNews: Object.fromEntries(
@@ -222,7 +219,6 @@ async function brief() {
       timeline: timeline.length,
       news: Object.values(news).reduce((sum, values) => sum + values.length, 0),
     },
-    quality: compactQuality,
   };
 
   process.stdout.write(JSON.stringify(output) + "\n");
@@ -231,8 +227,8 @@ async function brief() {
 async function finish(hoursText, reasonParts) {
   const hours = Number(hoursText);
   const reason = reasonParts.join(" ").trim();
-  if (!Number.isFinite(hours) || hours < 1 || hours > 24) {
-    throw new Error("finish hours must be between 1 and 24");
+  if (!Number.isFinite(hours) || hours < 1 || hours > MAX_SCHEDULE_HOURS) {
+    throw new Error(`finish hours must be between 1 and ${MAX_SCHEDULE_HOURS}`);
   }
   if (reason.length < 8 || reason.length > 240) {
     throw new Error("finish reason must be 8..240 characters");
@@ -367,7 +363,7 @@ if (command === "brief" || command === "context") {
     "node scripts/research.mjs                    # concise cycle brief",
     "node scripts/research.mjs find <text>        # locate relevant archive records",
     "node scripts/research.mjs show <id>           # inspect one exact record",
-    "node scripts/research.mjs finish <hours> <reason>  # advance cycle state",
+    "node scripts/research.mjs finish <hours> <reason>  # schedule next cycle (1..168h)",
     "node scripts/research.mjs check               # full deterministic exit check",
   ].join("\n") + "\n");
 } else {

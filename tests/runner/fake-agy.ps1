@@ -6,6 +6,12 @@ param(
 $mode = $env:BORDERCLASH_FAKE_AGY_MODE
 if (-not $mode) { $mode = "success" }
 
+$cycleContext = Join-Path (Get-Location) ".work\CYCLE_CONTEXT.json"
+if (-not (Test-Path $cycleContext)) {
+    [Console]::Error.WriteLine("missing generated cycle context")
+    exit 22
+}
+
 if ($mode -eq "sleep") {
     Start-Sleep -Seconds 8
 }
@@ -46,7 +52,7 @@ if ($mode -eq "flip-pause") {
 $response = if ($mode -eq "unicode") {
     [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("4LiX4LiU4Liq4Lit4Lia4Lig4Liy4Lip4Liy4LmE4LiX4LiiIOGen+GetuGegOGem+GfkuGelOGehOGel+GetuGen+GetuGegeGfkuGemOGfguGemiA8IS0tIEdPQUxfQ09NUExFVEUgLS0+"))
 } elseif ($mode -eq "note") {
-    "HARNESS_NOTE: Fake harness feedback." + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
+    "HARNESS_FEEDBACK: Fake harness feedback." + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
 } else {
     "fake cycle complete <!-- GOAL_COMPLETE -->"
 }

@@ -196,13 +196,13 @@ notFuture("dashboard.lastUpdatedAt", dashboard.lastUpdatedAt);
 const state = await readJson(join(dataRoot, "state.json"));
 notFuture("state.lastResearchAt", state.lastResearchAt);
 if (state.nextRunAt !== undefined && !Number.isFinite(state.nextRunAt)) add("state.nextRunAt", "not finite");
-if (state.lastCycleInterval !== undefined && (state.lastCycleInterval < 1 || state.lastCycleInterval > 24)) {
-  add("state.lastCycleInterval", "outside 1..24 hours");
+if (state.lastCycleInterval !== undefined && (state.lastCycleInterval < 1 || state.lastCycleInterval > 168)) {
+  add("state.lastCycleInterval", "outside 1..168 hours");
 }
 if (Number.isFinite(state.lastResearchAt) && Number.isFinite(state.nextRunAt)) {
   const intervalHours = (state.nextRunAt - state.lastResearchAt) / 3_600_000;
-  if (intervalHours < 1 || intervalHours > 24) {
-    add("state.nextRunAt", "must be 1..24 hours after lastResearchAt");
+  if (intervalHours < 1 || intervalHours > 168) {
+    add("state.nextRunAt", "must be 1..168 hours after lastResearchAt");
   }
 }
 
