@@ -114,6 +114,21 @@ function Invoke-Checked {
     }
 }
 
+function Invoke-NonInteractiveGit {
+    param([string[]]$Arguments, [string]$WorkingDirectory)
+
+    $previousGcmInteractive = $env:GCM_INTERACTIVE
+    $previousTerminalPrompt = $env:GIT_TERMINAL_PROMPT
+    try {
+        $env:GCM_INTERACTIVE = "never"
+        $env:GIT_TERMINAL_PROMPT = "0"
+        Invoke-Checked "git" $Arguments $WorkingDirectory
+    } finally {
+        $env:GCM_INTERACTIVE = $previousGcmInteractive
+        $env:GIT_TERMINAL_PROMPT = $previousTerminalPrompt
+    }
+}
+
 function Read-State {
     param([string]$Path)
     return Get-Content $Path -Raw | ConvertFrom-Json
@@ -253,6 +268,9 @@ try {
         $remoteUrl = (& git -C $repoRoot remote get-url $RemoteName).Trim()
         if ($LASTEXITCODE -ne 0 -or -not $remoteUrl) { throw "Could not resolve remote URL for $RemoteName" }
         Invoke-Checked "git" @("-C", $runDir, "remote", "set-url", "origin", $remoteUrl) $runDir
+        # Prove write authentication before spending model time. This dry-run
+        # targets the already-current main commit and cannot mutate the remote.
+        Invoke-NonInteractiveGit @("-C", $runDir, "push", "--dry-run", "origin", "${baseHead}:refs/heads/main") $runDir
     }
     Invoke-Checked "node" @((Join-Path $runDir "scripts\research.mjs"), "check") $runDir
 
@@ -396,7 +414,7 @@ Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.
     if ($remoteHead -ne $baseHead) {
         throw "Remote main advanced during the cycle; refusing to publish stale research"
     }
-    Invoke-Checked "git" @("-C", $runDir, "push", "origin", "${cycleCommit}:refs/heads/main") $runDir
+    Invoke-NonInteractiveGit @("-C", $runDir, "push", "origin", "${cycleCommit}:refs/heads/main") $runDir
 
     $publishedRunDir = ""
     try { Remove-RunDirectory $runDir } catch { Write-Warning $_.Exception.Message; $publishedRunDir = $runDir }
