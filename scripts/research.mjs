@@ -221,7 +221,7 @@ async function brief() {
     },
   };
 
-  process.stdout.write(JSON.stringify(output) + "\n");
+  process.stdout.write(JSON.stringify(output, null, 2) + "\n");
 }
 
 async function finish(hoursText, reasonParts) {

@@ -11,6 +11,17 @@ if (-not (Test-Path $cycleContext)) {
     [Console]::Error.WriteLine("missing generated cycle context")
     exit 22
 }
+$cycleContextLines = @(Get-Content $cycleContext)
+if ($cycleContextLines.Count -lt 2) {
+    [Console]::Error.WriteLine("cycle context must be multiline so AGY can read it without line truncation")
+    exit 21
+}
+try {
+    Get-Content $cycleContext -Raw | ConvertFrom-Json | Out-Null
+} catch {
+    [Console]::Error.WriteLine("cycle context is not valid JSON")
+    exit 20
+}
 
 if ($mode -eq "sleep") {
     Start-Sleep -Seconds 8
