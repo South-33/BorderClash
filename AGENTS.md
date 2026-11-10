@@ -27,7 +27,7 @@ Each cycle should leave the repository in the best current state, not merely app
 ## One cycle
 
 1. Read `.work/CYCLE_CONTEXT.md`. It is generated for the run and contains the current state, current synthesis, and compact recent evidence. If it is missing in a manual session, run `node scripts/research.mjs context` to generate the same view. Start external discovery from there. Use `find` and `show` only when exact archive context would improve a decision; direct file reads are also fine when they are simpler.
-2. Discover what changed since the last completed cycle from three perspectives. Sample all three before deep-reading one, and do not repeat equivalent searches once a candidate is established:
+2. Discover what changed since the last completed cycle from three perspectives. Default to one broad/international search, one Cambodia-national search, and one Thailand-national search; then stop discovery and verify concrete candidates. Search again only to resolve a specific material contradiction, and do not repeat equivalent searches once a candidate is established:
    - **Cambodia national:** reporting and primary sources an ordinary Cambodian reader is likely to encounter.
    - **Thailand national:** reporting and primary sources an ordinary Thai reader is likely to encounter.
    - **International/regional:** independent, regional, and global reporting outside the two national information environments.
