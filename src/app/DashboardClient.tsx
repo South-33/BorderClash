@@ -489,7 +489,7 @@ const IntelligenceLog = ({
         />
 
         {/* Scrollable Feed */}
-        <div className="flex-1 min-h-0 max-h-[220px] xl:max-h-none overflow-y-auto overscroll-contain scrollbar-thin">
+        <div className="flex-1 max-h-[220px] xl:max-h-[350px] overflow-y-auto scrollbar-thin">
           {isLoading ? (
             <div className="h-full flex items-center justify-center">
               <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
@@ -951,6 +951,31 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const dashboardRefreshing = false;
   const timelineRefreshing = false;
 
+  // Keep all desktop views capped to the rendered sidebar height. This is the
+  // original dashboard behavior from before the short-desktop layout rewrite.
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const measureSidebarHeight = () => {
+      if (window.innerWidth >= 1280 && sidebarRef.current) {
+        setSidebarHeight(sidebarRef.current.offsetHeight);
+      } else {
+        setSidebarHeight(undefined);
+      }
+    };
+
+    measureSidebarHeight();
+    const resizeObserver = new ResizeObserver(measureSidebarHeight);
+    if (sidebarRef.current) resizeObserver.observe(sidebarRef.current);
+    window.addEventListener('resize', measureSidebarHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', measureSidebarHeight);
+    };
+  }, []);
+
 
   // --- CASCADE LAYOUT CONTROL ---
   // All layout logic (mobile detecting, width, ratios) is handled inside the hook
@@ -1303,15 +1328,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const now = Date.now();
       setClockNow(now);
       if (systemStats?.nextRunAt) {
-        let remainingToRun = systemStats.nextRunAt - now;
-        if (remainingToRun <= 0) {
-          // Display-only fallback: if production missed a scheduled scan, keep
-          // the public countdown moving in 24h cycles. The real last-updated
-          // timestamp and scheduler state remain unchanged.
-          const displayCycleMs = 24 * 60 * 60 * 1000;
-          const overdueBy = now - systemStats.nextRunAt;
-          remainingToRun = displayCycleMs - (overdueBy % displayCycleMs);
-        }
+        const remainingToRun = Math.max(0, systemStats.nextRunAt - now);
         setNextUpdateIn(Math.floor(remainingToRun / 1000));
 
         return;
@@ -1680,14 +1697,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       <div />
       <div
         ref={containerRef}
-        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full xl:h-screen xl:overflow-hidden"
+        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full"
         style={{ maxWidth: containerWidth ? `${containerWidth}px` : undefined }}
       >
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
 
         {/* Left Sidebar / Header (Mobile Top) */}
-        <aside className="dashboard-sidebar w-full xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start xl:h-full xl:overflow-y-auto xl:overscroll-contain">
+        <aside ref={sidebarRef} className="dashboard-sidebar w-full xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
           <div className="dashboard-sidebar-header border-4 border-riso-ink p-3 bg-riso-paper">
             <h1 className="dashboard-sidebar-title font-display text-5xl md:text-6xl leading-none tracking-tighter text-riso-ink mb-2">
               BORDER CLASH
@@ -1905,12 +1922,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         </aside>
 
         {/* Main Content Grid */}
-        <main className={`flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch transition-opacity duration-150 ${isViewTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+        <main className={`flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch transition-opacity duration-150 ${isViewTransitioning ? 'opacity-0' : 'opacity-100'}`}>
 
 
           {/* ANALYSIS VIEW - Always render during measuring phase for overflow measurement */}
-          <div className={`xl:col-span-3 min-h-0 xl:h-full ${(isMeasuring || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
-            <div className="dashboard-analysis flex flex-col gap-4 min-h-0 xl:h-full">
+          <div className={`xl:col-span-3 ${(isMeasuring || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
+            <div className="dashboard-analysis flex flex-col gap-4" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
                 <Card className="dashboard-stats-card" title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
@@ -2013,7 +2030,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-y-auto overscroll-contain">
+                      <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
                         <div className="dashboard-neutral-header mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
                           <h3 className={`dashboard-neutral-title font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
                             {t.situationReport}
@@ -2142,8 +2159,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           </div>
 
           {/* LOSSES VIEW */}
-          <div className={`xl:col-span-3 min-h-0 xl:h-full ${(viewMode !== 'TIMELINE' || isMeasuring) ? 'hidden' : ''}`}>
-            <div className="xl:col-span-3 flex flex-col gap-4 h-full min-h-0">
+          <div className={`xl:col-span-3 ${(viewMode !== 'TIMELINE' || isMeasuring) ? 'hidden' : ''}`}>
+            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               <Card loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
@@ -2619,8 +2636,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           </div>
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
-          <div className={`xl:col-span-3 min-h-0 xl:h-full ${(viewMode !== 'GUIDE' || isMeasuring) ? 'hidden' : ''}`}>
-            <div className="flex flex-col bg-riso-paper rough-border h-full min-h-0">
+          <div className={`xl:col-span-3 ${(viewMode !== 'GUIDE' || isMeasuring) ? 'hidden' : ''}`}>
+            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
                 <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">
