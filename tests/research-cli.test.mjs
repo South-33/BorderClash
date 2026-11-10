@@ -299,6 +299,7 @@ test("source follows a redirect and returns publisher metadata", async () => {
       url: `http://127.0.0.1:${address.port}/publisher/article`,
       status: 200,
       ok: true,
+      usable: true,
       title: "Border update & talks",
       publishedAt: "2026-11-10T09:30:00Z",
       description: "A concise publisher description.",

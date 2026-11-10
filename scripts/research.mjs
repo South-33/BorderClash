@@ -458,10 +458,12 @@ async function inspectSource(value) {
   const contentType = response.headers.get("content-type") ?? "";
   const html = contentType.includes("html") ? await response.text() : "";
   const metadata = html ? pageMetadata(html) : { title: null, publishedAt: null, description: null };
+  const usable = response.ok && Boolean(metadata.title || metadata.publishedAt || metadata.description);
   process.stdout.write(JSON.stringify({
     url: response.url || url.href,
     status: response.status,
     ok: response.ok,
+    usable,
     ...metadata,
   }, null, 2) + "\n");
 }
