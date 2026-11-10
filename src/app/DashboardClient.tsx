@@ -1303,7 +1303,15 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const now = Date.now();
       setClockNow(now);
       if (systemStats?.nextRunAt) {
-        const remainingToRun = Math.max(0, systemStats.nextRunAt - now);
+        let remainingToRun = systemStats.nextRunAt - now;
+        if (remainingToRun <= 0) {
+          // Display-only fallback: if production missed a scheduled scan, keep
+          // the public countdown moving in 24h cycles. The real last-updated
+          // timestamp and scheduler state remain unchanged.
+          const displayCycleMs = 24 * 60 * 60 * 1000;
+          const overdueBy = now - systemStats.nextRunAt;
+          remainingToRun = displayCycleMs - (overdueBy % displayCycleMs);
+        }
         setNextUpdateIn(Math.floor(remainingToRun / 1000));
 
         return;
