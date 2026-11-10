@@ -16,7 +16,7 @@ function Invoke-Checked {
     }
 }
 
-# SouthServer is a dedicated production checkout. Always run the current
+# This is a dedicated production checkout. Always run the current
 # committed production code; research state and scratch live outside tracked
 # files or are committed by run-cycle.ps1.
 Invoke-Checked "git" @("-C", $repoRoot, "fetch", $RemoteName, "main")

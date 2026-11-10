@@ -137,7 +137,7 @@ function Read-State {
 function Read-StateFromRef {
     param([string]$Ref)
 
-    $spec = "${Ref}:data/state.json"
+    $spec = "${Ref}:data/research-state.json"
     $json = & git -C $repoRoot show $spec
     if ($LASTEXITCODE -ne 0) { throw "Could not read scheduler state from $Ref" }
     return ([string]::Join([Environment]::NewLine, [string[]]$json) | ConvertFrom-Json)
@@ -347,7 +347,7 @@ Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.
         )
     }
 
-    $runStatePath = Join-Path $runDir "data\state.json"
+    $runStatePath = Join-Path $runDir "data\research-state.json"
     $runState = Read-State $runStatePath
     if ([bool]$runState.isPaused -ne [bool]$state.isPaused) {
         $stateText = Get-Content $runStatePath -Raw

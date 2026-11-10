@@ -21,7 +21,6 @@ export type Lang = 'en' | 'th' | 'kh';
 // --- Translations ---
 export const TRANSLATIONS = {
     en: {
-        officialNarrative: "What This Side Says",
         militaryIntensity: "Border Tension",
         peaceful: "PEACEFUL",
         defensive: "DEFENSIVE",
@@ -205,7 +204,6 @@ export const TRANSLATIONS = {
         labelTH: "TH",
     },
     th: {
-        officialNarrative: "สิ่งที่ฝ่ายนี้ระบุ",
         militaryIntensity: "ความตึงเครียดชายแดน",
         peaceful: "สงบ",
         defensive: "ตั้งรับ",
@@ -389,7 +387,6 @@ export const TRANSLATIONS = {
         labelTH: "ไทย",
     },
     kh: {
-        officialNarrative: "អ្វីដែលភាគីនេះនិយាយ",
         militaryIntensity: "ភាពតានតឹងតាមព្រំដែន",
         peaceful: "សន្តិភាព", // Normal
         defensive: "ការពារ", // Defend

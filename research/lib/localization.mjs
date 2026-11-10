@@ -30,26 +30,3 @@ export function getLocalizedTextIssue(value, language) {
   if (!KHMER_RE.test(value)) return "no-target-script";
   return null;
 }
-
-export function isValidLocalizedText(value, language) {
-  return getLocalizedTextIssue(value, language) === null;
-}
-
-export function normalizeLocalizedRecord(value) {
-  if (Array.isArray(value)) {
-    return value.map(normalizeLocalizedRecord);
-  }
-  if (!value || typeof value !== "object") {
-    return typeof value === "string" ? normalizeLocalizedDigits(value) : value;
-  }
-
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [
-      key,
-      typeof item === "string" && /(?:Th|Kh)$/u.test(key)
-        ? normalizeLocalizedDigits(item)
-        : normalizeLocalizedRecord(item),
-    ]),
-  );
-}
-

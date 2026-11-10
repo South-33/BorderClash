@@ -1,7 +1,6 @@
 const CANONICAL_DATA_PATHS = [
-  /^state\.json$/u,
-  /^dashboard\.json$/u,
-  /^analysis\/(?:thailand|cambodia|neutral)\.json$/u,
+  /^research-state\.json$/u,
+  /^current\/(?:impact|thailand|cambodia|summary)\.json$/u,
   /^news\/\d{4}-\d{2}\/(?:thailand|cambodia|international)\.jsonl$/u,
   /^timeline\/\d{4}-\d{2}\.jsonl$/u,
 ];

@@ -4,11 +4,11 @@ import { isCanonicalDataPath } from "../research/lib/data-paths.mjs";
 
 test("accepts only documented canonical data paths", () => {
   for (const path of [
-    "state.json",
-    "dashboard.json",
-    "analysis/thailand.json",
-    "analysis/cambodia.json",
-    "analysis/neutral.json",
+    "research-state.json",
+    "current/impact.json",
+    "current/thailand.json",
+    "current/cambodia.json",
+    "current/summary.json",
     "news/2026-11/thailand.jsonl",
     "news/2026-11/cambodia.jsonl",
     "news/2026-11/international.jsonl",
@@ -23,7 +23,7 @@ test("rejects side files and malformed archive paths", () => {
     "migration.json",
     "_agent-write-probe.json",
     "notes.txt",
-    "analysis/extra.json",
+    "analysis/thailand.json",
     "current/dashboard.json",
     "current/state.json",
     "news/2026-11/other.jsonl",

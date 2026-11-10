@@ -28,7 +28,7 @@ Register-ScheduledTask `
     -Trigger @($recurring, $logon) `
     -Settings $settings `
     -Principal $principal `
-    -Description "Keeps the SouthServer BorderClash checkout on main and runs one due AGY research cycle." `
+    -Description "Keeps the BorderClash production checkout on main and runs one due AGY research cycle." `
     -Force | Out-Null
 
 Write-Output "installed task='$TaskName' every=${EveryMinutes}m with logon recovery"

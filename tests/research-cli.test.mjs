@@ -35,7 +35,7 @@ function localizedNews(id, title, publishedAt, fetchedAt = publishedAt) {
 
 async function makeBriefFixture({ lastResearchAt, lastCycleInterval = 24, news, timeline }) {
   const root = await mkdtemp(join(tmpdir(), "borderclash-brief-"));
-  await writeJsonFile(join(root, "data", "state.json"), {
+  await writeJsonFile(join(root, "data", "research-state.json"), {
     schemaVersion: 1,
     isPaused: false,
     systemStatus: "online",
@@ -46,25 +46,27 @@ async function makeBriefFixture({ lastResearchAt, lastCycleInterval = 24, news, 
     researchCycleCount: 1,
     scheduler: "external",
   });
-  await writeJsonFile(join(root, "data", "dashboard.json"), {
-    conflictLevel: "LOW",
+  await writeJsonFile(join(root, "data", "current", "impact.json"), {
+    riskLevel: "LOW",
     displacedCount: 0,
-    casualtyCount: 0,
+    deathCount: 0,
     civilianInjuredCount: 0,
     militaryInjuredCount: 0,
-    lastUpdatedAt: lastResearchAt,
+    updatedAt: lastResearchAt,
   });
-  for (const name of ["thailand", "cambodia", "neutral"]) {
-    await writeJsonFile(join(root, "data", "analysis", `${name}.json`), {
-      lastUpdatedAt: lastResearchAt,
-      conflictLevel: "Low",
-      militaryIntensity: 10,
-      militaryPosture: "DEFENSIVE",
-      officialNarrative: "Border situation remains calm.",
-      generalSummary: "Border situation remains calm.",
-      keyEvents: [],
+  for (const name of ["thailand", "cambodia"]) {
+    await writeJsonFile(join(root, "data", "current", `${name}.json`), {
+      updatedAt: lastResearchAt,
+      tensionScore: 10,
+      posture: "DEFENSIVE",
+      summary: "Border situation remains calm.",
     });
   }
+  await writeJsonFile(join(root, "data", "current", "summary.json"), {
+    updatedAt: lastResearchAt,
+    summary: "Border situation remains calm.",
+    keyUpdates: [],
+  });
   for (const country of ["thailand", "cambodia", "international"]) {
     await writeJsonlFile(
       join(root, "data", "news", "2026-11", `${country}.jsonl`),
@@ -213,7 +215,7 @@ test("finish owns cycle timestamps and preserves pause state", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
     await mkdir(join(root, "data"), { recursive: true });
-    await writeFile(join(root, "data", "state.json"), JSON.stringify({
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({
       schemaVersion: 1,
       isPaused: true,
       systemStatus: "online",
@@ -235,7 +237,7 @@ test("finish owns cycle timestamps and preserves pause state", async () => {
     const after = Date.now();
 
     assert.equal(result.status, 0, result.stderr);
-    const state = JSON.parse(await readFile(join(root, "data", "state.json"), "utf8"));
+    const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
     assert.equal(state.isPaused, true);
     assert.equal(state.systemStatus, "online");
     assert.equal(state.scheduler, "external");
@@ -253,7 +255,7 @@ test("finish allows long quiet intervals and rejects scheduling beyond one week"
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
     await mkdir(join(root, "data"), { recursive: true });
-    await writeFile(join(root, "data", "state.json"), JSON.stringify({ researchCycleCount: 3 }) + "\n");
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({ researchCycleCount: 3 }) + "\n");
     const accepted = spawnSync(process.execPath, [
       script,
       "finish",

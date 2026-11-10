@@ -1,4 +1,4 @@
-import { loadDashboardData } from '@/lib/data';
+import { loadDashboardData } from '@/lib/dashboard-data';
 import { DashboardClient } from './DashboardClient';
 
 export const dynamic = 'force-static';

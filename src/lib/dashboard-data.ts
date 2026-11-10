@@ -18,49 +18,39 @@ export interface NewsArticle {
     fetchedAt: number;
 }
 
-export interface Analysis {
-    officialNarrative: string;
-    officialNarrativeTh?: string;
-    officialNarrativeKh?: string;
-    narrativeSource?: string;
-    militaryIntensity: number;
-    militaryPosture: "PEACEFUL" | "DEFENSIVE" | "ESCALATED" | "AGGRESSIVE";
+export interface Perspective {
+    summary: string;
+    summaryTh?: string;
+    summaryKh?: string;
+    sourceNames: string[];
+    tensionScore: number;
+    posture: "PEACEFUL" | "DEFENSIVE" | "ESCALATED" | "AGGRESSIVE";
     postureLabel?: string;
     postureLabelTh?: string;
     postureLabelKh?: string;
-    postureRationale?: string;
-    postureRationaleTh?: string;
-    postureRationaleKh?: string;
-    territorialContext?: "OWN_TERRITORY" | "DISPUTED_ZONE" | "FOREIGN_TERRITORY" | "BORDER_ZONE";
-    lastUpdatedAt: number;
+    postureReason?: string;
+    postureReasonTh?: string;
+    postureReasonKh?: string;
+    updatedAt: number;
 }
 
-export interface NeutralAnalysis {
-    generalSummary: string;
-    generalSummaryTh?: string;
-    generalSummaryKh?: string;
-    conflictLevel: string;
-    keyEvents: string[];
-    keyEventsTh?: string[];
-    keyEventsKh?: string[];
-    displacedCount?: number;
-    displacedTrend?: number;
-    civilianInjuredCount?: number;
-    militaryInjuredCount?: number;
-    injuredCount?: number;
-    casualtyCount?: number;
-    lastUpdatedAt: number;
+export interface CurrentSummary {
+    summary: string;
+    summaryTh?: string;
+    summaryKh?: string;
+    keyUpdates: string[];
+    keyUpdatesTh?: string[];
+    keyUpdatesKh?: string[];
+    updatedAt: number;
 }
 
-export interface DashboardStats {
-    conflictLevel: string;
+export interface Impact {
+    riskLevel: string;
     displacedCount: number;
-    displacedTrend: number;
     civilianInjuredCount: number;
     militaryInjuredCount: number;
-    casualtyCount: number;
-    summary?: string;
-    lastUpdatedAt: number;
+    deathCount: number;
+    updatedAt: number;
 }
 
 export interface TimelineEvent {
@@ -83,13 +73,13 @@ export interface TimelineEvent {
     }>;
 }
 
-export interface SystemStats {
+export interface ResearchState {
     lastResearchAt: number;
     nextRunAt?: number;
-    lastCycleInterval?: number;
-    schedulingReason?: string;
-    systemStatus: string;
-    isPaused?: boolean;
+    intervalHours?: number;
+    reason?: string;
+    status: string;
+    paused?: boolean;
 }
 
 export interface ArticleCounts {
@@ -102,23 +92,23 @@ export interface ArticleCounts {
 export interface BorderClashData {
     thailandNews: NewsArticle[];
     cambodiaNews: NewsArticle[];
-    thailandAnalysis: Analysis | null;
-    cambodiaAnalysis: Analysis | null;
-    neutralAnalysis: NeutralAnalysis | null;
-    dashboardStats: DashboardStats | null;
+    thailandPerspective: Perspective | null;
+    cambodiaPerspective: Perspective | null;
+    summary: CurrentSummary | null;
+    impact: Impact | null;
     timelineEvents: TimelineEvent[];
-    systemStats: SystemStats | null;
+    researchState: ResearchState | null;
     articleCounts: ArticleCounts | null;
-    fetchedAt: number;
+    snapshotAt: number;
 }
 
-type DashboardSnapshot = Omit<BorderClashData, "fetchedAt">;
+type DashboardSnapshot = Omit<BorderClashData, "snapshotAt">;
 
 export async function loadDashboardData(): Promise<BorderClashData> {
     const file = join(process.cwd(), "public", "data", "dashboard.json");
     const snapshot = JSON.parse(await readFile(file, "utf8")) as DashboardSnapshot;
     return {
         ...snapshot,
-        fetchedAt: snapshot.systemStats?.lastResearchAt ?? 0,
+        snapshotAt: snapshot.researchState?.lastResearchAt ?? 0,
     };
 }

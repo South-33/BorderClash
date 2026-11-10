@@ -161,48 +161,59 @@ for (const [country, articles] of Object.entries(newsByCountry)) {
   }
 }
 
-for (const [name, kind] of [["thailand", "perspective"], ["cambodia", "perspective"], ["neutral", "neutral"]]) {
-  const value = await readJson(join(dataRoot, "analysis", name + ".json"));
-  notFuture("analysis/" + name + ".lastUpdatedAt", value.lastUpdatedAt);
-  if (kind === "perspective") {
-    if (!value.officialNarrative) add("analysis/" + name + ".officialNarrative", "missing");
-    if (!value.postureLabel) add("analysis/" + name + ".postureLabel", "missing");
-    if (!value.postureRationale) add("analysis/" + name + ".postureRationale", "missing");
-    for (const field of ["officialNarrativeEn", "postureLabelEn", "postureRationaleEn"]) {
-      if (value[field] !== undefined) add("analysis/" + name + "." + field, "legacy English alias");
-    }
-    localized("analysis/" + name + ".officialNarrativeTh", value.officialNarrativeTh, "th", true);
-    localized("analysis/" + name + ".officialNarrativeKh", value.officialNarrativeKh, "kh", true);
-    localized("analysis/" + name + ".postureLabelTh", value.postureLabelTh, "th", true);
-    localized("analysis/" + name + ".postureLabelKh", value.postureLabelKh, "kh", true);
-    localized("analysis/" + name + ".postureRationaleTh", value.postureRationaleTh, "th", true);
-    localized("analysis/" + name + ".postureRationaleKh", value.postureRationaleKh, "kh", true);
-  } else {
-    if (!value.generalSummary) add("analysis/neutral.generalSummary", "missing");
-    if (!Array.isArray(value.keyEvents)) add("analysis/neutral.keyEvents", "missing");
-    for (const field of ["generalSummaryEn", "keyEventsEn"]) {
-      if (value[field] !== undefined) add("analysis/neutral." + field, "legacy English alias");
-    }
-    localized("analysis/neutral.generalSummaryTh", value.generalSummaryTh, "th", true);
-    localized("analysis/neutral.generalSummaryKh", value.generalSummaryKh, "kh", true);
-    for (const [index, item] of (value.keyEventsTh || []).entries()) localized("analysis/neutral.keyEventsTh[" + index + "]", item, "th", true);
-    for (const [index, item] of (value.keyEventsKh || []).entries()) localized("analysis/neutral.keyEventsKh[" + index + "]", item, "kh", true);
+for (const name of ["thailand", "cambodia"]) {
+  const value = await readJson(join(dataRoot, "current", name + ".json"));
+  const location = "current/" + name;
+  notFuture(location + ".updatedAt", value.updatedAt);
+  if (!value.summary) add(location + ".summary", "missing");
+  if (!Array.isArray(value.sourceNames)) add(location + ".sourceNames", "missing");
+  if (!Number.isFinite(value.tensionScore) || value.tensionScore < 0 || value.tensionScore > 100) add(location + ".tensionScore", "must be 0..100");
+  if (!["PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"].includes(value.posture)) add(location + ".posture", "invalid");
+  if (!value.postureLabel) add(location + ".postureLabel", "missing");
+  if (!value.postureReason) add(location + ".postureReason", "missing");
+  localized(location + ".summaryTh", value.summaryTh, "th", true);
+  localized(location + ".summaryKh", value.summaryKh, "kh", true);
+  localized(location + ".postureLabelTh", value.postureLabelTh, "th", true);
+  localized(location + ".postureLabelKh", value.postureLabelKh, "kh", true);
+  localized(location + ".postureReasonTh", value.postureReasonTh, "th", true);
+  localized(location + ".postureReasonKh", value.postureReasonKh, "kh", true);
+  for (const field of ["officialNarrative", "narrativeSource", "militaryIntensity", "militaryPosture", "postureRationale", "territorialContext", "lastUpdatedAt"]) {
+    if (value[field] !== undefined) add(location + "." + field, "legacy field");
   }
 }
 
-const dashboard = await readJson(join(dataRoot, "dashboard.json"));
-notFuture("dashboard.lastUpdatedAt", dashboard.lastUpdatedAt);
+const summary = await readJson(join(dataRoot, "current", "summary.json"));
+notFuture("current/summary.updatedAt", summary.updatedAt);
+if (!summary.summary) add("current/summary.summary", "missing");
+if (!Array.isArray(summary.keyUpdates)) add("current/summary.keyUpdates", "missing");
+localized("current/summary.summaryTh", summary.summaryTh, "th", true);
+localized("current/summary.summaryKh", summary.summaryKh, "kh", true);
+for (const [index, item] of (summary.keyUpdatesTh || []).entries()) localized("current/summary.keyUpdatesTh[" + index + "]", item, "th", true);
+for (const [index, item] of (summary.keyUpdatesKh || []).entries()) localized("current/summary.keyUpdatesKh[" + index + "]", item, "kh", true);
+for (const field of ["generalSummary", "keyEvents", "conflictLevel", "displacedCount", "casualtyCount", "lastUpdatedAt"]) {
+  if (summary[field] !== undefined) add("current/summary." + field, "legacy field");
+}
 
-const state = await readJson(join(dataRoot, "state.json"));
-notFuture("state.lastResearchAt", state.lastResearchAt);
-if (state.nextRunAt !== undefined && !Number.isFinite(state.nextRunAt)) add("state.nextRunAt", "not finite");
+const impact = await readJson(join(dataRoot, "current", "impact.json"));
+notFuture("current/impact.updatedAt", impact.updatedAt);
+if (!["LOW", "ELEVATED", "CRITICAL"].includes(impact.riskLevel)) add("current/impact.riskLevel", "invalid");
+for (const field of ["displacedCount", "deathCount", "civilianInjuredCount", "militaryInjuredCount"]) {
+  if (!Number.isFinite(impact[field]) || impact[field] < 0) add("current/impact." + field, "must be a non-negative number");
+}
+for (const field of ["id", "key", "conflictLevel", "casualtyCount", "displacedTrend", "lastUpdatedAt"]) {
+  if (impact[field] !== undefined) add("current/impact." + field, "legacy field");
+}
+
+const state = await readJson(join(dataRoot, "research-state.json"));
+notFuture("research-state.lastResearchAt", state.lastResearchAt);
+if (state.nextRunAt !== undefined && !Number.isFinite(state.nextRunAt)) add("research-state.nextRunAt", "not finite");
 if (state.lastCycleInterval !== undefined && (state.lastCycleInterval < 1 || state.lastCycleInterval > 168)) {
-  add("state.lastCycleInterval", "outside 1..168 hours");
+  add("research-state.lastCycleInterval", "outside 1..168 hours");
 }
 if (Number.isFinite(state.lastResearchAt) && Number.isFinite(state.nextRunAt)) {
   const intervalHours = (state.nextRunAt - state.lastResearchAt) / 3_600_000;
   if (intervalHours < 1 || intervalHours > 168) {
-    add("state.nextRunAt", "must be 1..168 hours after lastResearchAt");
+    add("research-state.nextRunAt", "must be 1..168 hours after lastResearchAt");
   }
 }
 

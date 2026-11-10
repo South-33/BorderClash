@@ -77,64 +77,54 @@ function timelinePublic(event) {
 function perspectivePublic(value) {
   if (!value) return null;
   return {
-    officialNarrative: value.officialNarrative,
-    officialNarrativeTh: value.officialNarrativeTh,
-    officialNarrativeKh: value.officialNarrativeKh,
-    narrativeSource: value.narrativeSource,
-    militaryIntensity: value.militaryIntensity,
-    militaryPosture: value.militaryPosture,
+    summary: value.summary,
+    summaryTh: value.summaryTh,
+    summaryKh: value.summaryKh,
+    sourceNames: value.sourceNames,
+    tensionScore: value.tensionScore,
+    posture: value.posture,
     postureLabel: value.postureLabel,
     postureLabelTh: value.postureLabelTh,
     postureLabelKh: value.postureLabelKh,
-    postureRationale: value.postureRationale,
-    postureRationaleTh: value.postureRationaleTh,
-    postureRationaleKh: value.postureRationaleKh,
-    territorialContext: value.territorialContext,
-    lastUpdatedAt: value.lastUpdatedAt,
+    postureReason: value.postureReason,
+    postureReasonTh: value.postureReasonTh,
+    postureReasonKh: value.postureReasonKh,
+    updatedAt: value.updatedAt,
   };
 }
 
-function neutralPublic(value) {
+function summaryPublic(value) {
   if (!value) return null;
   return {
-    generalSummary: value.generalSummary,
-    generalSummaryTh: value.generalSummaryTh,
-    generalSummaryKh: value.generalSummaryKh,
-    conflictLevel: value.conflictLevel,
-    keyEvents: value.keyEvents,
-    keyEventsTh: value.keyEventsTh,
-    keyEventsKh: value.keyEventsKh,
-    displacedCount: value.displacedCount,
-    displacedTrend: value.displacedTrend,
-    civilianInjuredCount: value.civilianInjuredCount,
-    militaryInjuredCount: value.militaryInjuredCount,
-    injuredCount: value.injuredCount,
-    casualtyCount: value.casualtyCount,
-    lastUpdatedAt: value.lastUpdatedAt,
-  };
-}
-
-function dashboardStatsPublic(value) {
-  if (!value) return null;
-  return {
-    conflictLevel: value.conflictLevel,
-    displacedCount: value.displacedCount,
-    displacedTrend: value.displacedTrend,
-    civilianInjuredCount: value.civilianInjuredCount,
-    militaryInjuredCount: value.militaryInjuredCount,
-    casualtyCount: value.casualtyCount,
     summary: value.summary,
-    lastUpdatedAt: value.lastUpdatedAt,
+    summaryTh: value.summaryTh,
+    summaryKh: value.summaryKh,
+    keyUpdates: value.keyUpdates,
+    keyUpdatesTh: value.keyUpdatesTh,
+    keyUpdatesKh: value.keyUpdatesKh,
+    updatedAt: value.updatedAt,
   };
 }
 
-const [news, thailandAnalysis, cambodiaAnalysis, neutralAnalysis, dashboardStats, systemState] = await Promise.all([
+function impactPublic(value) {
+  if (!value) return null;
+  return {
+    riskLevel: value.riskLevel,
+    displacedCount: value.displacedCount,
+    civilianInjuredCount: value.civilianInjuredCount,
+    militaryInjuredCount: value.militaryInjuredCount,
+    deathCount: value.deathCount,
+    updatedAt: value.updatedAt,
+  };
+}
+
+const [news, thailandPerspective, cambodiaPerspective, currentSummary, impact, researchState] = await Promise.all([
   readAllNews(),
-  readJson(join(dataRoot, "analysis", "thailand.json")),
-  readJson(join(dataRoot, "analysis", "cambodia.json")),
-  readJson(join(dataRoot, "analysis", "neutral.json")),
-  readJson(join(dataRoot, "dashboard.json")),
-  readJson(join(dataRoot, "state.json")),
+  readJson(join(dataRoot, "current", "thailand.json")),
+  readJson(join(dataRoot, "current", "cambodia.json")),
+  readJson(join(dataRoot, "current", "summary.json")),
+  readJson(join(dataRoot, "current", "impact.json")),
+  readJson(join(dataRoot, "research-state.json")),
 ]);
 
 const timeline = [];
@@ -149,28 +139,28 @@ timeline.sort((a, b) => {
   return String(b.timeOfDay || "").localeCompare(String(a.timeOfDay || ""));
 });
 
-const dashboard = {
+const snapshot = {
   thailandNews: visibleNews(news.thailand),
   cambodiaNews: visibleNews(news.cambodia),
-  thailandAnalysis: perspectivePublic(thailandAnalysis),
-  cambodiaAnalysis: perspectivePublic(cambodiaAnalysis),
-  neutralAnalysis: neutralPublic(neutralAnalysis),
-  dashboardStats: dashboardStatsPublic(dashboardStats),
+  thailandPerspective: perspectivePublic(thailandPerspective),
+  cambodiaPerspective: perspectivePublic(cambodiaPerspective),
+  summary: summaryPublic(currentSummary),
+  impact: impactPublic(impact),
   timelineEvents: [],
-  systemStats: {
-    lastResearchAt: systemState.lastResearchAt,
-    systemStatus: systemState.systemStatus,
-    isPaused: systemState.isPaused,
-    nextRunAt: systemState.nextRunAt,
-    lastCycleInterval: systemState.lastCycleInterval,
-    schedulingReason: systemState.schedulingReason,
+  researchState: {
+    lastResearchAt: researchState.lastResearchAt,
+    status: researchState.systemStatus,
+    paused: researchState.isPaused,
+    nextRunAt: researchState.nextRunAt,
+    intervalHours: researchState.lastCycleInterval,
+    reason: researchState.schedulingReason,
   },
   articleCounts: articleCounts(news),
 };
 
 const dashboardPath = join(publicRoot, "dashboard.json");
 const timelinePath = join(publicRoot, "timeline.json");
-await writeJson(dashboardPath, dashboard);
+await writeJson(dashboardPath, snapshot);
 await writeJsonArrayOnePerLine(timelinePath, timeline);
 const [dashboardFile, timelineFile] = await Promise.all([stat(dashboardPath), stat(timelinePath)]);
 
@@ -178,6 +168,6 @@ console.log(JSON.stringify({
   dashboardBytes: dashboardFile.size,
   timelineBytes: timelineFile.size,
   timelineEvents: timeline.length,
-  articleCounts: dashboard.articleCounts,
+  articleCounts: snapshot.articleCounts,
 }, null, 2));
 

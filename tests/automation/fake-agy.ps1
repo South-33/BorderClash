@@ -39,7 +39,7 @@ if ($mode -ne "stale-state") {
 }
 
 if ($mode -eq "invalid-data") {
-    $statePath = Join-Path (Get-Location) "data\state.json"
+    $statePath = Join-Path (Get-Location) "data\research-state.json"
     $state = Get-Content $statePath -Raw | ConvertFrom-Json
     $state.lastCycleInterval = 999
     $json = $state | ConvertTo-Json -Depth 20
@@ -51,7 +51,7 @@ if ($mode -eq "non-data") {
 }
 
 if ($mode -eq "flip-pause") {
-    $statePath = Join-Path (Get-Location) "data\state.json"
+    $statePath = Join-Path (Get-Location) "data\research-state.json"
     $state = Get-Content $statePath -Raw | ConvertFrom-Json
     $state.isPaused = -not [bool]$state.isPaused
     $json = $state | ConvertTo-Json -Depth 20

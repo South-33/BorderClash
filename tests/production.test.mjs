@@ -8,7 +8,7 @@ test('Vercel auto-deploys only main', () => {
   assert.equal(config.git?.deploymentEnabled?.main, true);
 });
 
-test('production research runs from SouthServer main through one Windows task', () => {
+test('production research runs from main through one Windows task', () => {
   const production = fs.readFileSync('research/automation/run-scheduled.ps1', 'utf8');
   const installer = fs.readFileSync('research/automation/install-scheduler.ps1', 'utf8');
 

@@ -122,13 +122,13 @@ function selectBriefContext({ state, news, timeline, nowMs }) {
 }
 
 async function brief() {
-  const state = await readJson(join(dataRoot, "state.json"));
-  const dashboard = await readJson(join(dataRoot, "dashboard.json"));
-  const analyses = Object.fromEntries(
+  const state = await readJson(join(dataRoot, "research-state.json"));
+  const impact = await readJson(join(dataRoot, "current", "impact.json"));
+  const current = Object.fromEntries(
     await Promise.all(
-      ["thailand", "cambodia", "neutral"].map(async (name) => [
+      ["thailand", "cambodia", "summary"].map(async (name) => [
         name,
-        await readJson(join(dataRoot, "analysis", name + ".json")),
+        await readJson(join(dataRoot, "current", name + ".json")),
       ]),
     ),
   );
@@ -173,31 +173,30 @@ async function brief() {
       paused: state.isPaused,
     },
     current: {
-      dashboard: {
-        conflictLevel: dashboard.conflictLevel,
-        displacedCount: dashboard.displacedCount,
-        casualtyCount: dashboard.casualtyCount,
-        civilianInjuredCount: dashboard.civilianInjuredCount,
-        militaryInjuredCount: dashboard.militaryInjuredCount,
-        lastUpdatedAt: dashboard.lastUpdatedAt,
+      impact: {
+        riskLevel: impact.riskLevel,
+        displacedCount: impact.displacedCount,
+        deathCount: impact.deathCount,
+        civilianInjuredCount: impact.civilianInjuredCount,
+        militaryInjuredCount: impact.militaryInjuredCount,
+        updatedAt: impact.updatedAt,
       },
       thailand: {
-        lastUpdatedAt: analyses.thailand?.lastUpdatedAt,
-        militaryIntensity: analyses.thailand?.militaryIntensity,
-        militaryPosture: analyses.thailand?.militaryPosture,
-        officialNarrative: analyses.thailand?.officialNarrative,
+        updatedAt: current.thailand?.updatedAt,
+        tensionScore: current.thailand?.tensionScore,
+        posture: current.thailand?.posture,
+        summary: current.thailand?.summary,
       },
       cambodia: {
-        lastUpdatedAt: analyses.cambodia?.lastUpdatedAt,
-        militaryIntensity: analyses.cambodia?.militaryIntensity,
-        militaryPosture: analyses.cambodia?.militaryPosture,
-        officialNarrative: analyses.cambodia?.officialNarrative,
+        updatedAt: current.cambodia?.updatedAt,
+        tensionScore: current.cambodia?.tensionScore,
+        posture: current.cambodia?.posture,
+        summary: current.cambodia?.summary,
       },
-      neutral: {
-        lastUpdatedAt: analyses.neutral?.lastUpdatedAt,
-        conflictLevel: analyses.neutral?.conflictLevel,
-        generalSummary: analyses.neutral?.generalSummary,
-        keyEvents: analyses.neutral?.keyEvents,
+      summary: {
+        updatedAt: current.summary?.updatedAt,
+        summary: current.summary?.summary,
+        keyUpdates: current.summary?.keyUpdates,
       },
     },
     contextWindow: {
@@ -240,10 +239,10 @@ function renderContext(output) {
     "Finish with: pnpm research finish <hours> \"<reason>\". The outer runner validates and publishes.",
     "",
     "## Current picture",
-    `Overall: ${output.current.dashboard.conflictLevel}; displaced ${output.current.dashboard.displacedCount}; casualties ${output.current.dashboard.casualtyCount}.`,
-    `Thailand: ${output.current.thailand.militaryPosture || "unknown"} / intensity ${output.current.thailand.militaryIntensity ?? "unknown"}. ${output.current.thailand.officialNarrative || ""}`,
-    `Cambodia: ${output.current.cambodia.militaryPosture || "unknown"} / intensity ${output.current.cambodia.militaryIntensity ?? "unknown"}. ${output.current.cambodia.officialNarrative || ""}`,
-    `Neutral synthesis: ${output.current.neutral.generalSummary || ""}`,
+    `Overall: ${output.current.impact.riskLevel}; displaced ${output.current.impact.displacedCount}; deaths ${output.current.impact.deathCount}.`,
+    `Thailand: ${output.current.thailand.posture || "unknown"} / tension ${output.current.thailand.tensionScore ?? "unknown"}. ${output.current.thailand.summary || ""}`,
+    `Cambodia: ${output.current.cambodia.posture || "unknown"} / tension ${output.current.cambodia.tensionScore ?? "unknown"}. ${output.current.cambodia.summary || ""}`,
+    `Summary: ${output.current.summary.summary || ""}`,
   ];
 
   const counts = output.contextWindow.counts;
@@ -294,7 +293,7 @@ async function finish(hoursText, reasonParts) {
     throw new Error("finish reason must be 8..240 characters");
   }
 
-  const statePath = join(dataRoot, "state.json");
+  const statePath = join(dataRoot, "research-state.json");
   const state = await readJson(statePath);
   const completedAt = Date.now();
   const nextRunAt = completedAt + Math.round(hours * 3_600_000);

@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle } from 'lucide-react';
-import type { Analysis, BorderClashData, NeutralAnalysis, NewsArticle, TimelineEvent } from '@/lib/data';
+import type { BorderClashData, CurrentSummary, NewsArticle, Perspective, TimelineEvent } from '@/lib/dashboard-data';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
-import { getLocalizedStyleIssue, isValidLocalizedText, normalizeLocalizedDigits } from '@/lib/language-quality';
+import { getLocalizedStyleIssue, isValidLocalizedText, normalizeLocalizedDigits } from '@/lib/localized-display';
 
 const DASHBOARD_TIME_ZONE = 'Asia/Phnom_Penh';
 type ViewMode = 'ANALYSIS' | 'TIMELINE' | 'GUIDE';
@@ -764,7 +764,7 @@ interface DashboardClientProps {
 function DashboardClientInner({ initialData }: DashboardClientProps) {
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
   const [isPossiblyStale, setIsPossiblyStale] = useState(false);
-  const [clockNow, setClockNow] = useState(initialData.fetchedAt);
+  const [clockNow, setClockNow] = useState(initialData.snapshotAt);
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
   const [viewMode, setViewModeRaw] = useState<ViewMode>('ANALYSIS');
@@ -880,9 +880,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  const systemStats = initialData.systemStats;
+  const researchState = initialData.researchState;
   const activeSnapshot = initialData;
-  const timelineVersion = systemStats?.lastResearchAt ?? initialData.fetchedAt;
+  const timelineVersion = researchState?.lastResearchAt ?? initialData.snapshotAt;
 
   useEffect(() => {
     if (!shouldFetchFullTimeline || clientTimelineEvents !== undefined) return;
@@ -921,10 +921,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
   const thailandNews = activeSnapshot.thailandNews ?? [];
   const cambodiaNews = activeSnapshot.cambodiaNews ?? [];
-  const thailandMeta = activeSnapshot.thailandAnalysis;
-  const cambodiaMeta = activeSnapshot.cambodiaAnalysis;
-  const neutralMeta = activeSnapshot.neutralAnalysis;
-  const dashboardStats = activeSnapshot.dashboardStats;
+  const thailandPerspective = activeSnapshot.thailandPerspective;
+  const cambodiaPerspective = activeSnapshot.cambodiaPerspective;
+  const currentSummary = activeSnapshot.summary;
+  const impact = activeSnapshot.impact;
   const articleCounts = activeSnapshot.articleCounts;
 
   const isAwaitingInitialFullTimeline = viewMode === 'TIMELINE'
@@ -940,7 +940,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const khNewsLoading = false;
   const thMetaLoading = false;
   const khMetaLoading = false;
-  const neutralMetaLoading = false;
+  const summaryLoading = false;
   const dashboardLoading = false;
   const countsLoading = false;
   const timelineLoading = viewMode === 'TIMELINE' && isAwaitingInitialFullTimeline;
@@ -948,7 +948,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const khNewsRefreshing = false;
   const thMetaRefreshing = false;
   const khMetaRefreshing = false;
-  const neutralMetaRefreshing = false;
+  const summaryRefreshing = false;
   const dashboardRefreshing = false;
   const timelineRefreshing = false;
 
@@ -993,7 +993,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     setLang
   } = useCascadeLayout({
     viewMode: viewMode.toLowerCase() as 'analysis' | 'timeline' | 'guide',
-    isLoading: neutralMetaLoading,
+    isLoading: summaryLoading,
     awaitBeforeMeasure: waitForCascadeFadeOut
   });
 
@@ -1012,22 +1012,19 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     };
   }, [selectedEvent]);
 
-  // Helper to get narrative based on language
-  const getNarrative = (meta: Analysis | null) => {
-    if (!meta) return null;
-    return localizedText(lang as Lang, meta.officialNarrative, meta.officialNarrativeTh, meta.officialNarrativeKh);
+  const getPerspectiveSummary = (perspective: Perspective | null) => {
+    if (!perspective) return null;
+    return localizedText(lang as Lang, perspective.summary, perspective.summaryTh, perspective.summaryKh);
   };
 
-  // Helper to get summary based on language
-  const getSummary = (meta: NeutralAnalysis | null) => {
-    if (!meta) return null;
-    return localizedText(lang as Lang, meta.generalSummary, meta.generalSummaryTh, meta.generalSummaryKh);
+  const getSummary = (summary: CurrentSummary | null) => {
+    if (!summary) return null;
+    return localizedText(lang as Lang, summary.summary, summary.summaryTh, summary.summaryKh);
   };
 
-  // Helper to get key events based on language
-  const getKeyEvents = (meta: NeutralAnalysis | null) => {
-    if (!meta) return [];
-    return localizedArray(lang as Lang, meta.keyEvents || [], meta.keyEventsTh, meta.keyEventsKh);
+  const getKeyUpdates = (summary: CurrentSummary | null) => {
+    if (!summary) return [];
+    return localizedArray(lang as Lang, summary.keyUpdates || [], summary.keyUpdatesTh, summary.keyUpdatesKh);
   };
 
   // --- Modal Navigation & Touch State ---
@@ -1095,7 +1092,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') goToPrev();
   };
 
-  const isSyncing = systemStats?.systemStatus === 'syncing';
+  const isSyncing = researchState?.status === 'syncing';
 
   // --- TIMELINE STATE AND LOGIC ---
   const [selectedTimelineDate, setSelectedTimelineDate] = useState<string | null>(null);
@@ -1321,29 +1318,29 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // the existing indeterminate animation instead of looking frozen at 00:00.
 
   useEffect(() => {
-    // Use lastCycleInterval if available (adaptive scheduling), otherwise fall back to fixed 12h
-    const hasAdaptiveScheduling = systemStats?.lastCycleInterval && systemStats.lastCycleInterval > 0;
+    // Use the last adaptive interval when available, otherwise fall back to 12h.
+    const hasAdaptiveScheduling = researchState?.intervalHours && researchState.intervalHours > 0;
 
-    if (!systemStats?.lastResearchAt) return;
+    if (!researchState?.lastResearchAt) return;
 
     const updateCountdown = () => {
       const now = Date.now();
       setClockNow(now);
-      if (systemStats?.nextRunAt) {
-        const remainingToRun = Math.max(0, systemStats.nextRunAt - now);
+      if (researchState?.nextRunAt) {
+        const remainingToRun = Math.max(0, researchState.nextRunAt - now);
         setNextUpdateIn(Math.floor(remainingToRun / 1000));
-        setIsPossiblyStale(remainingToRun === 0 && now >= systemStats.nextRunAt);
+        setIsPossiblyStale(remainingToRun === 0 && now >= researchState.nextRunAt);
 
         return;
       }
 
       // Get the interval in milliseconds (from server-stored hours)
       const intervalMs = hasAdaptiveScheduling
-        ? (systemStats.lastCycleInterval || 12) * 60 * 60 * 1000
+        ? (researchState.intervalHours || 12) * 60 * 60 * 1000
         : 720 * 60 * 1000; // 12 hours default
 
       // Calculate elapsed time since last research completed
-      const timeSinceLastUpdate = now - (systemStats.lastResearchAt || 0);
+      const timeSinceLastUpdate = now - (researchState.lastResearchAt || 0);
 
       // Remaining = interval - elapsed
       const remaining = Math.max(0, intervalMs - timeSinceLastUpdate);
@@ -1356,7 +1353,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     updateCountdown();
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, [systemStats?.lastResearchAt, systemStats?.nextRunAt, systemStats?.lastCycleInterval, systemStats?.isPaused, tabFocusKey]);
+  }, [researchState?.lastResearchAt, researchState?.nextRunAt, researchState?.intervalHours, researchState?.paused, tabFocusKey]);
 
   const formatTime = (seconds: number): React.ReactNode => {
     const h = Math.floor(seconds / 3600);
@@ -1714,10 +1711,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               BORDER CLASH
             </h1>
             <div className="dashboard-sidebar-status flex items-center gap-2 mb-4">
-              <div className={`w-3 h-3 rounded-full ${isSyncing ? 'bg-riso-accent animate-ping' : systemStats?.systemStatus === 'error' ? 'bg-red-600' : 'bg-green-600'}`}></div>
+              <div className={`w-3 h-3 rounded-full ${isSyncing ? 'bg-riso-accent animate-ping' : researchState?.status === 'error' ? 'bg-red-600' : 'bg-green-600'}`}></div>
               <span className="font-mono text-xs font-bold tracking-widest">
                 {isSyncing ? t.syncing :
-                  systemStats?.systemStatus === 'error' ? t.error :
+                  researchState?.status === 'error' ? t.error :
                     t.systemOnline}
               </span>
 
@@ -1735,7 +1732,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               <div className="flex flex-col justify-between">
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'} whitespace-nowrap`}>{t.nextAutoScan}</p>
                 <p className="font-mono text-3xl font-bold" suppressHydrationWarning>
-                  {systemStats?.isPaused ? (
+                  {researchState?.paused ? (
                     <span className="text-yellow-600">{t.paused}</span>
                   ) : isSyncing ? (
                     <span className="animate-pulse text-riso-accent">{t.running}</span>
@@ -1942,10 +1939,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     {/* Displaced Civilians */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.displacedCivilians}</h4>
-                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{(dashboardStats?.displacedCount || 0).toLocaleString('en-US')}</span>
+                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{(impact?.displacedCount || 0).toLocaleString('en-US')}</span>
                       {/* Trend Indicator - Show last updated instead */}
                       <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} leading-tight`}>
-                        {dashboardStats?.lastUpdatedAt ? (
+                        {impact?.updatedAt ? (
                           <span className="block" title={`${t.lastUpdated}: ${new Intl.DateTimeFormat('en-GB', {
                             timeZone: DASHBOARD_TIME_ZONE,
                             year: 'numeric',
@@ -1953,9 +1950,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                             day: 'numeric',
                             hour: '2-digit',
                             minute: '2-digit',
-                          }).format(new Date(dashboardStats.lastUpdatedAt))}`}>
+                          }).format(new Date(impact.updatedAt))}`}>
                             {t.lastUpdated} {(() => {
-                              const d = new Date(dashboardStats.lastUpdatedAt);
+                              const d = new Date(impact.updatedAt);
                               const dateParts = new Intl.DateTimeFormat('en-US', {
                                 timeZone: DASHBOARD_TIME_ZONE,
                                 month: 'numeric',
@@ -1986,7 +1983,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     {/* Fatalities (Replaces old Injuries box position) */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.fatalities}</h4>
-                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{dashboardStats?.casualtyCount || 0}</span>
+                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{impact?.deathCount || 0}</span>
                       <div className={`mt-3 font-mono text-riso-accent font-bold uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.confirmedOnly}</div>
                     </div>
 
@@ -1997,25 +1994,25 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                       <div className="flex items-start gap-6">
                         {/* Civilian */}
                         <div className="text-left">
-                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{dashboardStats?.civilianInjuredCount || 0}</span>
+                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{impact?.civilianInjuredCount || 0}</span>
                           <span className={`mt-2 font-mono opacity-50 uppercase tracking-tighter md:tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.civilian}</span>
                         </div>
                         {/* Military */}
                         <div className="text-left">
-                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{dashboardStats?.militaryInjuredCount || 0}</span>
+                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{impact?.militaryInjuredCount || 0}</span>
                           <span className={`mt-2 font-mono opacity-50 uppercase tracking-tighter md:tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.military}</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Status / Threat Level - Uses dashboardStats for conflict level */}
+                    {/* Status / risk level */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.threatLevel}</h4>
-                      <span className={`font-display text-3xl md:text-5xl leading-none uppercase ${(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
-                        (dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'
+                      <span className={`font-display text-3xl md:text-5xl leading-none uppercase ${(impact?.riskLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
+                        (impact?.riskLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'
                         }`}>
-                        {(dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'CRITICAL' ? t.critical :
-                          (dashboardStats?.conflictLevel || 'Low').toUpperCase() === 'ELEVATED' ? t.elevated :
+                        {(impact?.riskLevel || 'Low').toUpperCase() === 'CRITICAL' ? t.critical :
+                          (impact?.riskLevel || 'Low').toUpperCase() === 'ELEVATED' ? t.elevated :
                             t.low}
                       </span>
                       <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.estimated}</div>
@@ -2030,12 +2027,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   className={`perspectives-grid grid gap-4 ${isDesktop && !forceMobile ? 'h-full' : 'grid-cols-1'}`}
                   style={isDesktop && !forceMobile ? { gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${neutralRatio}fr) minmax(0, 1fr)` } : undefined}
                 >
-                  {/* Section 3: Neutral Analysis (Center) - ORDER 1 ON MOBILE */}
+                  {/* Current summary (center) */}
                   <div className="flex flex-col gap-2 order-1 xl:order-2 perspective-neutral min-h-0 min-w-0">
                     <div className="bg-riso-ink text-riso-paper py-2 px-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
                       <Scale size={18} /> {t.neutralAI}
                     </div>
-                    <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
+                    <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={summaryLoading} refreshing={summaryRefreshing}>
                       <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
                         <div className="dashboard-neutral-header mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
                           <h3 className={`dashboard-neutral-title font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
@@ -2049,14 +2046,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         </div>
 
                         <div className={`dashboard-neutral-summary font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
-                          {getSummary(neutralMeta) || t.analyzingFeeds}
+                          {getSummary(currentSummary) || t.analyzingFeeds}
                         </div>
 
-                        {getKeyEvents(neutralMeta).length > 0 && (
+                        {getKeyUpdates(currentSummary).length > 0 && (
                           <div className="dashboard-neutral-events mt-auto pt-2 border-t border-riso-ink/10">
                             <p className={`dashboard-neutral-events-title font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{t.keyDevelopments}:</p>
                             <ul className="list-disc pl-4 space-y-1">
-                              {getKeyEvents(neutralMeta).map((event: string, i: number) => (
+                              {getKeyUpdates(currentSummary).map((event: string, i: number) => (
                                 <li key={i} className={`dashboard-neutral-event font-mono ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{event}</li>
                               ))}
                             </ul>
@@ -2075,12 +2072,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
                       <div className="dashboard-perspective-content flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         <div>
-                          {getNarrative(cambodiaMeta) ? (
+                          {getPerspectiveSummary(cambodiaPerspective) ? (
                             <>
                               <p className={`dashboard-side-narrative italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
-                                “{getNarrative(cambodiaMeta)}”
+                                “{getPerspectiveSummary(cambodiaPerspective)}”
                               </p>
-                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {cambodiaMeta?.narrativeSource || t.aiAnalysis}</p>
+                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {cambodiaPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2089,14 +2086,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
                         {/* Military Intensity */}
                         <MilitaryIntensityGauge
-                          intensity={cambodiaMeta?.militaryIntensity ?? 50}
-                          posture={cambodiaMeta?.militaryPosture}
-                          postureLabel={cambodiaMeta?.postureLabel}
-                          postureLabelTh={cambodiaMeta?.postureLabelTh}
-                          postureLabelKh={cambodiaMeta?.postureLabelKh}
-                          postureRationale={cambodiaMeta?.postureRationale}
-                          postureRationaleTh={cambodiaMeta?.postureRationaleTh}
-                          postureRationaleKh={cambodiaMeta?.postureRationaleKh}
+                          intensity={cambodiaPerspective?.tensionScore ?? 50}
+                          posture={cambodiaPerspective?.posture}
+                          postureLabel={cambodiaPerspective?.postureLabel}
+                          postureLabelTh={cambodiaPerspective?.postureLabelTh}
+                          postureLabelKh={cambodiaPerspective?.postureLabelKh}
+                          postureRationale={cambodiaPerspective?.postureReason}
+                          postureRationaleTh={cambodiaPerspective?.postureReasonTh}
+                          postureRationaleKh={cambodiaPerspective?.postureReasonKh}
                           lang={lang}
                         />
                         {/* Intelligence Log - Scrollable & Filterable */}
@@ -2119,12 +2116,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
                       <div className="dashboard-perspective-content flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         <div>
-                          {getNarrative(thailandMeta) ? (
+                          {getPerspectiveSummary(thailandPerspective) ? (
                             <>
                               <p className={`dashboard-side-narrative italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
-                                “{getNarrative(thailandMeta)}”
+                                “{getPerspectiveSummary(thailandPerspective)}”
                               </p>
-                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {thailandMeta?.narrativeSource || t.aiAnalysis}</p>
+                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {thailandPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
                             </>
                           ) : (
                             <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
@@ -2133,14 +2130,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
                         {/* Military Intensity */}
                         <MilitaryIntensityGauge
-                          intensity={thailandMeta?.militaryIntensity ?? 50}
-                          posture={thailandMeta?.militaryPosture}
-                          postureLabel={thailandMeta?.postureLabel}
-                          postureLabelTh={thailandMeta?.postureLabelTh}
-                          postureLabelKh={thailandMeta?.postureLabelKh}
-                          postureRationale={thailandMeta?.postureRationale}
-                          postureRationaleTh={thailandMeta?.postureRationaleTh}
-                          postureRationaleKh={thailandMeta?.postureRationaleKh}
+                          intensity={thailandPerspective?.tensionScore ?? 50}
+                          posture={thailandPerspective?.posture}
+                          postureLabel={thailandPerspective?.postureLabel}
+                          postureLabelTh={thailandPerspective?.postureLabelTh}
+                          postureLabelKh={thailandPerspective?.postureLabelKh}
+                          postureRationale={thailandPerspective?.postureReason}
+                          postureRationaleTh={thailandPerspective?.postureReasonTh}
+                          postureRationaleKh={thailandPerspective?.postureReasonKh}
                           lang={lang}
                         />
 
