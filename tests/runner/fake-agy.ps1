@@ -6,20 +6,18 @@ param(
 $mode = $env:BORDERCLASH_FAKE_AGY_MODE
 if (-not $mode) { $mode = "success" }
 
-$cycleContext = Join-Path (Get-Location) ".work\CYCLE_CONTEXT.json"
+$cycleContext = Join-Path (Get-Location) ".work\CYCLE_CONTEXT.md"
 if (-not (Test-Path $cycleContext)) {
     [Console]::Error.WriteLine("missing generated cycle context")
     exit 22
 }
-$cycleContextLines = @(Get-Content $cycleContext)
-if ($cycleContextLines.Count -lt 2) {
-    [Console]::Error.WriteLine("cycle context must be multiline so AGY can read it without line truncation")
+$cycleContextText = Get-Content $cycleContext -Raw
+if (($cycleContextText -split "`r?`n").Count -lt 10) {
+    [Console]::Error.WriteLine("cycle context must be compact multiline text")
     exit 21
 }
-try {
-    Get-Content $cycleContext -Raw | ConvertFrom-Json | Out-Null
-} catch {
-    [Console]::Error.WriteLine("cycle context is not valid JSON")
+if (-not $cycleContextText.Contains("# BorderClash cycle context")) {
+    [Console]::Error.WriteLine("cycle context is missing its heading")
     exit 20
 }
 

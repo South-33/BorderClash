@@ -26,7 +26,7 @@ Each cycle should leave the repository in the best current state, not merely app
 
 ## One cycle
 
-1. Read `.work/CYCLE_CONTEXT.json`. It is generated for the run and contains the current state, current synthesis, and compact recent evidence. If it is missing in a manual session, run `node scripts/research.mjs` to generate the same brief. Use `find` and `show` only when exact archive context would improve a decision; direct file reads are also fine when they are simpler.
+1. Read `.work/CYCLE_CONTEXT.md`. It is generated for the run and contains the current state, current synthesis, and compact recent evidence. If it is missing in a manual session, run `node scripts/research.mjs context` to generate the same view. Use `find` and `show` only when exact archive context would improve a decision; direct file reads are also fine when they are simpler.
 2. Discover what changed since the last completed cycle from three perspectives:
    - **Cambodia national:** reporting and primary sources an ordinary Cambodian reader is likely to encounter.
    - **Thailand national:** reporting and primary sources an ordinary Thai reader is likely to encounter.

@@ -221,7 +221,65 @@ async function brief() {
     },
   };
 
-  process.stdout.write(JSON.stringify(output, null, 2) + "\n");
+  return output;
+}
+
+function isoDate(value) {
+  return Number.isFinite(value) ? new Date(value).toISOString() : "unknown";
+}
+
+function renderContext(output) {
+  const lines = [
+    "# BorderClash cycle context",
+    "",
+    `Now: ${output.cycle.now}`,
+    `Last completed: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
+    `Scheduled next: ${output.cycle.next || "unset"}`,
+    `Previous cadence: ${output.cycle.intervalHours || "unknown"}h — ${output.cycle.reason || "no reason recorded"}`,
+    "",
+    "## Current picture",
+    `Overall: ${output.current.dashboard.conflictLevel}; displaced ${output.current.dashboard.displacedCount}; casualties ${output.current.dashboard.casualtyCount}.`,
+    `Thailand: ${output.current.thailand.militaryPosture || "unknown"} / intensity ${output.current.thailand.militaryIntensity ?? "unknown"}. ${output.current.thailand.officialNarrative || ""}`,
+    `Cambodia: ${output.current.cambodia.militaryPosture || "unknown"} / intensity ${output.current.cambodia.militaryIntensity ?? "unknown"}. ${output.current.cambodia.officialNarrative || ""}`,
+    `Neutral synthesis: ${output.current.neutral.generalSummary || ""}`,
+  ];
+
+  const counts = output.contextWindow.counts;
+  const since = output.contextWindow.sinceLastCycleCounts;
+  lines.push(
+    "",
+    "## Research window",
+    `${output.contextWindow.lookbackDays} days from ${output.contextWindow.start} to ${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (automatic context capped at 30 days)" : ""}.`,
+    `In window: timeline ${counts.timeline}; news TH ${counts.news.thailand}, KH ${counts.news.cambodia}, INTL ${counts.news.international}.`,
+    `Since last completed cycle: timeline ${since.timeline}; news TH ${since.news.thailand}, KH ${since.news.cambodia}, INTL ${since.news.international}.`,
+    "",
+    "## Recent timeline anchors",
+  );
+
+  for (const row of output.recentTimeline.slice(0, 6)) {
+    lines.push(`- ${row.date} ${row.timeOfDay || ""} [${row.id}] ${row.title}`.trim());
+  }
+  if (!output.recentTimeline.length) lines.push("- none");
+
+  lines.push("", "## Recent evidence anchors");
+  for (const [label, key] of [["Thailand", "thailand"], ["Cambodia", "cambodia"], ["International", "international"]]) {
+    lines.push(`${label}:`);
+    const rows = output.recentNews[key].slice(0, 4);
+    if (!rows.length) {
+      lines.push("- none");
+      continue;
+    }
+    for (const row of rows) {
+      lines.push(`- ${isoDate(row.publishedAt || row.fetchedAt).slice(0, 10)} [${row.id}] ${row.source}: ${row.title}`);
+    }
+  }
+
+  lines.push(
+    "",
+    `Archive: ${output.archive.timeline} timeline events; ${output.archive.news} news records. Use \`node scripts/research.mjs find <text>\` or \`show <id>\` only when deeper local context would improve a decision.`,
+    "",
+  );
+  return lines.join("\n");
 }
 
 async function finish(hoursText, reasonParts) {
@@ -348,8 +406,10 @@ if (!existsSync(dataRoot)) {
   throw new Error("Run from the BorderClash research repository root.");
 }
 
-if (command === "brief" || command === "context") {
-  await brief();
+if (command === "brief") {
+  process.stdout.write(JSON.stringify(await brief(), null, 2) + "\n");
+} else if (command === "context") {
+  process.stdout.write(renderContext(await brief()) + "\n");
 } else if (command === "check") {
   check();
 } else if (command === "find") {
@@ -360,7 +420,8 @@ if (command === "brief" || command === "context") {
   await finish(process.argv[3], process.argv.slice(4));
 } else if (command === "help") {
   process.stdout.write([
-    "node scripts/research.mjs                    # concise cycle brief",
+    "node scripts/research.mjs                    # concise structured brief",
+    "node scripts/research.mjs context            # compact human-readable cycle context",
     "node scripts/research.mjs find <text>        # locate relevant archive records",
     "node scripts/research.mjs show <id>           # inspect one exact record",
     "node scripts/research.mjs finish <hours> <reason>  # schedule next cycle (1..168h)",

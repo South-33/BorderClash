@@ -242,11 +242,11 @@ try {
     Invoke-Checked "node" @((Join-Path $runDir "scripts\research.mjs"), "check") $runDir
 
     $cycleContextDir = Join-Path $runDir ".work"
-    $cycleContextPath = Join-Path $cycleContextDir "CYCLE_CONTEXT.json"
+    $cycleContextPath = Join-Path $cycleContextDir "CYCLE_CONTEXT.md"
     New-Item -ItemType Directory -Force -Path $cycleContextDir | Out-Null
     Push-Location $runDir
     try {
-        $contextOutput = & node "scripts\research.mjs" 2>&1
+        $contextOutput = & node "scripts\research.mjs" "context" 2>&1
         $contextExit = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -257,13 +257,13 @@ try {
         [string]::Join([Environment]::NewLine, [string[]]$contextOutput) + [Environment]::NewLine,
         [Text.UTF8Encoding]::new($false)
     )
-    Copy-Item -LiteralPath $cycleContextPath -Destination (Join-Path $logDir "$runId.context.json") -Force
+    Copy-Item -LiteralPath $cycleContextPath -Destination (Join-Path $logDir "$runId.context.md") -Force
 
     $effectivePrompt = if ($Prompt) {
         $Prompt
     } else {
         @'
-You have been woken up for one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.json, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Use the archive CLI or direct file reads only when you need more context. Stop when further work is unlikely to improve the record. Work only on research data; the outer runner owns Git publication and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
+You have been woken up for one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Use the archive CLI or direct file reads only when you need more context. Stop when further work is unlikely to improve the record. Work only on research data; the outer runner owns Git publication and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
 '@
     }
 
