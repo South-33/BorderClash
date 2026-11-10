@@ -763,6 +763,7 @@ interface DashboardClientProps {
 
 function DashboardClientInner({ initialData }: DashboardClientProps) {
   const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
+  const [isPossiblyStale, setIsPossiblyStale] = useState(false);
   const [clockNow, setClockNow] = useState(initialData.fetchedAt);
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
@@ -1316,7 +1317,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     };
   }, [viewMode]);
 
-  // Timer Logic for countdown display. An overdue scheduled scan is not a live sync state.
+  // Timer Logic for countdown display. Once a scheduled scan is overdue, use
+  // the existing indeterminate animation instead of looking frozen at 00:00.
 
   useEffect(() => {
     // Use lastCycleInterval if available (adaptive scheduling), otherwise fall back to fixed 12h
@@ -1330,6 +1332,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       if (systemStats?.nextRunAt) {
         const remainingToRun = Math.max(0, systemStats.nextRunAt - now);
         setNextUpdateIn(Math.floor(remainingToRun / 1000));
+        setIsPossiblyStale(remainingToRun === 0 && now >= systemStats.nextRunAt);
 
         return;
       }
@@ -1346,6 +1349,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const remaining = Math.max(0, intervalMs - timeSinceLastUpdate);
 
       setNextUpdateIn(Math.floor(remaining / 1000));
+      setIsPossiblyStale(remaining === 0 && timeSinceLastUpdate >= intervalMs);
 
     };
 
@@ -1737,6 +1741,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <span className="animate-pulse text-riso-accent">{t.running}</span>
                   ) : (sysStatsLoading || nextUpdateIn === null) ? (
                     <HackerScramble />
+                  ) : isPossiblyStale ? (
+                    <span className="animate-pulse">--:--</span>
                   ) : (
                     formatTime(nextUpdateIn)
                   )}

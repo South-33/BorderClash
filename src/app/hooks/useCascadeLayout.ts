@@ -70,6 +70,12 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
     const checkOverflow = useCallback((): boolean => {
         const el = neutralCardRef.current;
         if (!el) return false;
+        // Short desktop layouts intentionally make the neutral synthesis an
+        // internal scroll area so the whole dashboard can remain one viewport.
+        // That vertical overflow is expected and must not trigger mobile mode.
+        if (window.innerWidth >= MOBILE_BREAKPOINT && window.innerHeight <= 960) {
+            return false;
+        }
         return el.scrollHeight > el.clientHeight + 2;
     }, []);
 
