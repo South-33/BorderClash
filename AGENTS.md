@@ -23,7 +23,7 @@ Treat the record as a maintained knowledge base, not an append-only feed:
 
 For each cycle:
 1. Read `.work/CYCLE_CONTEXT.md` (`pnpm research context` is the manual fallback). Start discovery from there; inspect deeper archive/repo context only when it can change a decision.
-2. Check three information environments: one broad international/regional search, one Cambodia-national search, and one Thailand-national search. Then verify concrete candidates. Search again only to resolve a material contradiction or missing fact.
+2. Check three information environments: one broad international/regional search, one Cambodia-national search, and one Thailand-national search. The national searches should represent domestic media people in that country actually read; use Khmer/Thai queries when useful and do not default to only a pair of English-facing outlets. Then verify concrete candidates. Search again only to resolve a material contradiction or missing fact.
 3. Deep-read the strongest material evidence, edit the smallest justified set under `data/`, and stop when more searching is unlikely to improve the record.
 4. Run `pnpm research finish <hours> "<reason>"`. Choose when another run is likely to add information; 1-168 hours is only a safety range. Then stop—the runner validates and publishes.
 
