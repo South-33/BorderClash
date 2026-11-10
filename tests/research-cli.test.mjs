@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const script = resolve("scripts", "research.mjs");
@@ -82,6 +83,18 @@ function runBrief(root, nowMs) {
   });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
+}
+
+function runAsync(args, cwd = process.cwd()) {
+  return new Promise((resolveResult, reject) => {
+    const child = spawn(process.execPath, [script, ...args], { cwd, encoding: "utf8" });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (status) => resolveResult({ status, stdout, stderr }));
+  });
 }
 
 test("brief always gives at least seven days of compact local context", async () => {
@@ -261,4 +274,34 @@ test("finish allows long quiet intervals and rejects scheduling beyond one week"
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("resolve follows a redirect and prints the final publisher URL", async () => {
+  const server = createServer((request, response) => {
+    if (request.url === "/grounding") {
+      response.writeHead(302, { location: "/publisher/article" });
+      response.end();
+      return;
+    }
+    response.writeHead(200, { "content-type": "text/plain" });
+    response.end("publisher");
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  try {
+    const address = server.address();
+    const result = await runAsync(["resolve", `http://127.0.0.1:${address.port}/grounding`]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), `http://127.0.0.1:${address.port}/publisher/article`);
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+  }
+});
+
+test("resolve rejects non-http URLs", () => {
+  const result = spawnSync(process.execPath, [script, "resolve", "file:///tmp/source"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /HTTP\(S\)/u);
 });

@@ -404,6 +404,28 @@ async function show(id) {
   })), null, 2) + "\n");
 }
 
+async function resolveSourceUrl(value) {
+  if (!value) throw new Error("Usage: node scripts/research.mjs resolve <url>");
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("resolve requires a valid HTTP(S) URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("resolve requires a valid HTTP(S) URL");
+  }
+
+  const response = await fetch(url, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(15_000),
+    headers: { "user-agent": "BorderClash research source resolver" },
+  });
+  const resolved = response.url || url.href;
+  await response.body?.cancel();
+  process.stdout.write(resolved + "\n");
+}
+
 if (!existsSync(dataRoot)) {
   throw new Error("Run from the BorderClash research repository root.");
 }
@@ -418,6 +440,8 @@ if (command === "brief") {
   await find(process.argv.slice(3).join(" ").trim());
 } else if (command === "show") {
   await show(process.argv[3]);
+} else if (command === "resolve") {
+  await resolveSourceUrl(process.argv[3]);
 } else if (command === "finish") {
   await finish(process.argv[3], process.argv.slice(4));
 } else if (command === "help") {
@@ -426,10 +450,11 @@ if (command === "brief") {
     "node scripts/research.mjs context            # compact human-readable cycle context",
     "node scripts/research.mjs find <text>        # locate relevant archive records",
     "node scripts/research.mjs show <id>           # inspect one exact record",
+    "node scripts/research.mjs resolve <url>        # resolve a discovery redirect to its publisher URL",
     "node scripts/research.mjs finish <hours> <reason>  # schedule next cycle (1..168h)",
     "node scripts/research.mjs check               # full deterministic exit check",
   ].join("\n") + "\n");
 } else {
-  console.error("Usage: node scripts/research.mjs [brief|find <text>|show <id>|finish <hours> <reason>|check]");
+  console.error("Usage: node scripts/research.mjs [brief|context|find <text>|show <id>|resolve <url>|finish <hours> <reason>|check]");
   process.exit(2);
 }
