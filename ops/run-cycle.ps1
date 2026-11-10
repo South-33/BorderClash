@@ -257,6 +257,7 @@ try {
         [string]::Join([Environment]::NewLine, [string[]]$contextOutput) + [Environment]::NewLine,
         [Text.UTF8Encoding]::new($false)
     )
+    Copy-Item -LiteralPath $cycleContextPath -Destination (Join-Path $logDir "$runId.context.json") -Force
 
     $effectivePrompt = if ($Prompt) {
         $Prompt
@@ -332,6 +333,14 @@ You have been woken up for one BorderClash research cycle. Read AGENTS.md and .w
     Invoke-Checked "node" @((Join-Path $runDir "scripts\research.mjs"), "check") $runDir
     Invoke-Checked "node" @((Join-Path $runDir "scripts\generate-public.mjs")) $runDir
     Invoke-Checked "git" @("-C", $runDir, "diff", "--check") $runDir
+
+    $dataPatch = & git -C $runDir diff --binary $baseHead -- data
+    if ($LASTEXITCODE -ne 0) { throw "Could not capture research data diff" }
+    [IO.File]::WriteAllText(
+        (Join-Path $logDir "$runId.data.patch"),
+        [string]::Join([Environment]::NewLine, [string[]]$dataPatch) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
 
     $cycleHead = (git -C $runDir rev-parse HEAD).Trim()
     $hasCommittedChanges = $cycleHead -ne $baseHead

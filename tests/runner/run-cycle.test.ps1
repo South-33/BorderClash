@@ -140,6 +140,8 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "note"
     $note = Invoke-TestRunner $fakeExe
     Assert-True ($note.ExitCode -eq 0) "harness-note cycle should pass"
+    Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.context.json" | Select-Object -First 1)) "runner did not preserve cycle context"
+    Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.data.patch" | Select-Object -First 1)) "runner did not preserve research data diff"
     $feedbackFile = Get-ChildItem $logDir -File -Filter "*.feedback.txt" | Select-Object -First 1
     Assert-True ($null -ne $feedbackFile) "runner did not extract HARNESS_FEEDBACK"
     Assert-True ((Get-Content $feedbackFile.FullName -Raw).Trim() -eq "Fake harness feedback.") "runner changed HARNESS_FEEDBACK text"
