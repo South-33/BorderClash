@@ -2074,9 +2074,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     </div>
                     <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
                       <div className="dashboard-perspective-content flex-1 flex flex-col space-y-3 min-h-0 pb-2">
-                        {/* Official Narrative */}
                         <div>
-                          <h4 className={`font-mono font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.officialNarrative}</h4>
                           {getNarrative(cambodiaMeta) ? (
                             <>
                               <p className={`dashboard-side-narrative italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
@@ -2120,9 +2118,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     </div>
                     <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
                       <div className="dashboard-perspective-content flex-1 flex flex-col space-y-3 min-h-0 pb-2">
-                        {/* Official Narrative */}
                         <div>
-                          <h4 className={`font-mono font-bold uppercase mb-2 border-b border-riso-ink/20 pb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.officialNarrative}</h4>
                           {getNarrative(thailandMeta) ? (
                             <>
                               <p className={`dashboard-side-narrative italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
