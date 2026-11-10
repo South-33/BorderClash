@@ -8,8 +8,7 @@ param(
     [string]$RunsRoot = "",
     [string]$RuntimeDir = "",
     [string]$LogDir = "",
-    [string]$MutexName = "Global\BorderClashResearchCycle",
-    [string]$BranchPrefix = "cycle"
+    [string]$MutexName = "Global\BorderClashResearchCycle"
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,8 +28,7 @@ function Write-RuntimeState {
         [string]$Status,
         [string]$RunId,
         [string]$Message,
-        [string]$Worktree = "",
-        [string]$Branch = ""
+        [string]$RunDir = ""
     )
     [ordered]@{
         updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -38,8 +36,7 @@ function Write-RuntimeState {
         runId = $RunId
         model = $agyModel
         message = $Message
-        worktree = $Worktree
-        branch = $Branch
+        runDir = $RunDir
     } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
 }
 
@@ -70,35 +67,37 @@ function Recover-StaleRuntimeState {
     if ($previous.status -ne "running") { return }
 
     $previousRunId = if ($previous.runId) { [string]$previous.runId } else { "unknown" }
-    $previousWorktree = if ($previous.worktree) { [string]$previous.worktree } else { "" }
+    $previousRunDir = if ($previous.PSObject.Properties["runDir"] -and $previous.runDir) {
+        [string]$previous.runDir
+    } elseif ($previous.PSObject.Properties["worktree"] -and $previous.worktree) {
+        # Compatibility with runtime state written by the old worktree runner.
+        [string]$previous.worktree
+    } else { "" }
     $previousBranch = if ($previous.PSObject.Properties["branch"]) { [string]$previous.branch } else { "" }
-
-    if (-not $previousBranch -and $previousWorktree -and (Test-Path -LiteralPath $previousWorktree)) {
-        $detectedBranch = & git -C $previousWorktree branch --show-current 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            $previousBranch = ([string]$detectedBranch).Trim()
-        }
-    }
 
     [ordered]@{
         detectedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         status = "interrupted"
         runId = $previousRunId
         message = "Previous runner ended without a final status; the cycle mutex is no longer owned."
-        worktree = $previousWorktree
-        branch = $previousBranch
+        runDir = $previousRunDir
     } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $logDir "$previousRunId.interrupted.json")
 
-    if ($previousWorktree) {
-        $candidate = [IO.Path]::GetFullPath($previousWorktree).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    if ($previousRunDir) {
+        $candidate = [IO.Path]::GetFullPath($previousRunDir).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
         $ownedRoot = [IO.Path]::GetFullPath($runsRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
         $ownedPrefix = $ownedRoot + [IO.Path]::DirectorySeparatorChar
         if ($candidate.StartsWith($ownedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-            Remove-CycleWorktree $candidate $previousBranch
+            if ($previousBranch) {
+                & git -C $repoRoot worktree remove --force $candidate 2>$null | Out-Null
+                & git -C $repoRoot worktree prune --expire now 2>$null | Out-Null
+                & git -C $repoRoot branch -D $previousBranch 2>$null | Out-Null
+            }
+            Remove-RunDirectory $candidate
         }
     }
 
-    Write-RuntimeState "interrupted" $previousRunId "Recovered stale running state from an interrupted process" $previousWorktree $previousBranch
+    Write-RuntimeState "interrupted" $previousRunId "Recovered stale running state from an interrupted process" $previousRunDir
 }
 
 function Invoke-Checked {
@@ -153,12 +152,12 @@ function Assert-CycleStateAdvanced {
 }
 
 function Assert-ResearchOnlyPaths {
-    param([string]$Worktree, [string]$BaseHead)
+    param([string]$RunDir, [string]$BaseHead)
 
     $paths = @()
-    $paths += @(& git -C $Worktree diff --name-only $BaseHead --)
+    $paths += @(& git -C $RunDir diff --name-only $BaseHead --)
     if ($LASTEXITCODE -ne 0) { throw "Could not inspect cycle diff paths" }
-    $paths += @(& git -C $Worktree ls-files --others --exclude-standard)
+    $paths += @(& git -C $RunDir ls-files --others --exclude-standard)
     if ($LASTEXITCODE -ne 0) { throw "Could not inspect untracked cycle paths" }
 
     foreach ($path in ($paths | Where-Object { $_ } | Sort-Object -Unique)) {
@@ -169,34 +168,17 @@ function Assert-ResearchOnlyPaths {
     }
 }
 
-function Remove-CycleWorktree {
-    param([string]$Worktree, [string]$Branch)
+function Remove-RunDirectory {
+    param([string]$RunDir)
 
-    if ($Worktree -and (Test-Path $Worktree)) {
-        $nodeModules = Join-Path $Worktree "node_modules"
-        if (Test-Path $nodeModules) {
-            try {
-                Remove-Item -LiteralPath $nodeModules -Recurse -Force -ErrorAction Stop
-            } catch {
-                Write-Warning "Could not remove worktree node_modules cleanly: $($_.Exception.Message)"
-            }
-        }
-        & git -C $repoRoot worktree remove --force $Worktree | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            & git -C $repoRoot worktree prune | Out-Null
-            if (Test-Path $Worktree) {
-                try {
-                    Remove-Item -LiteralPath $Worktree -Recurse -Force -ErrorAction Stop
-                } catch {
-                    Write-Warning "Could not fully remove stale worktree $Worktree"
-                }
-            }
-        }
+    if (-not $RunDir -or -not (Test-Path -LiteralPath $RunDir)) { return }
+    Remove-Item -LiteralPath $RunDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $RunDir) {
+        $full = [IO.Path]::GetFullPath($RunDir)
+        $extended = if ($full.StartsWith("\\")) { "\\?\UNC\" + $full.Substring(2) } else { "\\?\" + $full }
+        & cmd.exe /d /c "rd /s /q `"$extended`"" | Out-Null
     }
-    if ($Branch) {
-        & git -C $repoRoot worktree prune --expire now | Out-Null
-        & git -C $repoRoot branch -D $Branch | Out-Null
-    }
+    if (Test-Path -LiteralPath $RunDir) { throw "Could not remove run directory $RunDir" }
 }
 
 $lock = Acquire-CycleLock
@@ -208,8 +190,7 @@ if ($null -eq $lock) {
 Recover-StaleRuntimeState
 
 $runId = ""
-$worktree = ""
-$branch = ""
+$runDir = ""
 
 try {
     if ($Publish) {
@@ -250,10 +231,15 @@ try {
     if (-not (Test-Path $agy)) { throw "Antigravity CLI not found" }
 
     $runId = [DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmssfffZ")
-    $branch = "$BranchPrefix/$runId"
-    $worktree = Join-Path $runsRoot $runId
-    Invoke-Checked "git" @("-C", $repoRoot, "worktree", "add", "-b", $branch, $worktree, $baseHead) $repoRoot
-    Invoke-Checked "node" @((Join-Path $worktree "scripts\research.mjs"), "check") $worktree
+    $runDir = Join-Path $runsRoot $runId
+    Invoke-Checked "git" @("clone", "--quiet", "--no-checkout", "--no-hardlinks", $repoRoot, $runDir) $repoRoot
+    Invoke-Checked "git" @("-C", $runDir, "checkout", "--quiet", "--detach", $baseHead) $runDir
+    if ($Publish) {
+        $remoteUrl = (& git -C $repoRoot remote get-url $RemoteName).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $remoteUrl) { throw "Could not resolve remote URL for $RemoteName" }
+        Invoke-Checked "git" @("-C", $runDir, "remote", "set-url", "origin", $remoteUrl) $runDir
+    }
+    Invoke-Checked "node" @((Join-Path $runDir "scripts\research.mjs"), "check") $runDir
 
     $effectivePrompt = if ($Prompt) {
         $Prompt
@@ -263,9 +249,9 @@ try {
 
     $stdoutPath = Join-Path $logDir "$runId.json"
     $stderrPath = Join-Path $logDir "$runId.stderr.log"
-    Write-RuntimeState "running" $runId "Antigravity cycle started" $worktree $branch
+    Write-RuntimeState "running" $runId "Antigravity cycle started" $runDir
 
-    Push-Location $worktree
+    Push-Location $runDir
     $previousErrorAction = $ErrorActionPreference
     $previousConsoleEncoding = [Console]::OutputEncoding
     $previousOutputEncoding = $OutputEncoding
@@ -304,34 +290,34 @@ try {
         )
     }
 
-    $worktreeStatePath = Join-Path $worktree "data\state.json"
-    $worktreeState = Read-State $worktreeStatePath
-    if ([bool]$worktreeState.isPaused -ne [bool]$state.isPaused) {
-        $stateText = Get-Content $worktreeStatePath -Raw
-        $currentPause = if ([bool]$worktreeState.isPaused) { "true" } else { "false" }
+    $runStatePath = Join-Path $runDir "data\state.json"
+    $runState = Read-State $runStatePath
+    if ([bool]$runState.isPaused -ne [bool]$state.isPaused) {
+        $stateText = Get-Content $runStatePath -Raw
+        $currentPause = if ([bool]$runState.isPaused) { "true" } else { "false" }
         $desiredPause = if ([bool]$state.isPaused) { "true" } else { "false" }
         $stateText = $stateText -replace ('("isPaused"\s*:\s*)' + $currentPause), ('${1}' + $desiredPause)
-        [IO.File]::WriteAllText($worktreeStatePath, $stateText, [Text.UTF8Encoding]::new($false))
-        $worktreeState = Read-State $worktreeStatePath
+        [IO.File]::WriteAllText($runStatePath, $stateText, [Text.UTF8Encoding]::new($false))
+        $runState = Read-State $runStatePath
     }
-    Assert-CycleStateAdvanced $state $worktreeState
-    Assert-ResearchOnlyPaths $worktree $baseHead
+    Assert-CycleStateAdvanced $state $runState
+    Assert-ResearchOnlyPaths $runDir $baseHead
 
-    $cycleHead = (git -C $worktree rev-parse HEAD).Trim()
-    & git -C $worktree merge-base --is-ancestor $baseHead $cycleHead
+    $cycleHead = (git -C $runDir rev-parse HEAD).Trim()
+    & git -C $runDir merge-base --is-ancestor $baseHead $cycleHead
     if ($LASTEXITCODE -ne 0) {
         throw "Agent rewrote branch history outside the cycle base."
     }
 
-    Invoke-Checked "node" @((Join-Path $repoRoot "scripts\research.mjs"), "check") $worktree
-    Invoke-Checked "node" @((Join-Path $repoRoot "scripts\generate-public.mjs")) $worktree
-    Invoke-Checked "git" @("-C", $worktree, "diff", "--check") $worktree
+    Invoke-Checked "node" @((Join-Path $runDir "scripts\research.mjs"), "check") $runDir
+    Invoke-Checked "node" @((Join-Path $runDir "scripts\generate-public.mjs")) $runDir
+    Invoke-Checked "git" @("-C", $runDir, "diff", "--check") $runDir
 
-    $cycleHead = (git -C $worktree rev-parse HEAD).Trim()
+    $cycleHead = (git -C $runDir rev-parse HEAD).Trim()
     $hasCommittedChanges = $cycleHead -ne $baseHead
 
-    Invoke-Checked "git" @("-C", $worktree, "add", "-A") $worktree
-    & git -C $worktree diff --cached --quiet
+    Invoke-Checked "git" @("-C", $runDir, "add", "-A") $runDir
+    & git -C $runDir diff --cached --quiet
     $stagedDiffExit = $LASTEXITCODE
     if ($stagedDiffExit -notin @(0, 1)) {
         throw "Could not inspect staged cycle changes"
@@ -340,44 +326,44 @@ try {
 
     Write-Output "VALIDATED CHANGES:"
     if ($hasCommittedChanges) {
-        git -C $worktree log --oneline "$baseHead..$cycleHead"
+        git -C $runDir log --oneline "$baseHead..$cycleHead"
     }
     if ($hasStagedChanges) {
-        git -C $worktree diff --cached --stat
+        git -C $runDir diff --cached --stat
         Invoke-Checked "git" @(
-            "-C", $worktree,
+            "-C", $runDir,
             "-c", "user.name=BorderClash Research",
             "-c", "user.email=borderclash-research@local.invalid",
             "commit", "-m", "research: complete BorderClash cycle ($runId)"
-        ) $worktree
+        ) $runDir
     }
-    $cycleCommit = (git -C $worktree rev-parse HEAD).Trim()
+    $cycleCommit = (git -C $runDir rev-parse HEAD).Trim()
 
     if (-not $Publish) {
-        Write-RuntimeState "validated" $runId "Shadow cycle passed; publication disabled" $worktree $branch
+        Write-RuntimeState "validated" $runId "Shadow cycle passed; publication disabled" $runDir
         Write-Output "SHADOW SUCCESS: conversation=$($result.conversation_id)"
         Write-Output "commit=$cycleCommit"
-        Write-Output "worktree=$worktree"
+        Remove-RunDirectory $runDir
         exit 0
     }
 
     # Publishing never mutates the developer checkout. Recheck remote main to
     # avoid racing another deployment, then fast-forward the validated commit.
-    Invoke-Checked "git" @("-C", $repoRoot, "fetch", $RemoteName, "main") $repoRoot
-    $remoteHead = (& git -C $repoRoot rev-parse "$RemoteName/main").Trim()
-    if ($LASTEXITCODE -ne 0) { throw "Could not resolve $RemoteName/main before publication" }
+    Invoke-Checked "git" @("-C", $runDir, "fetch", "origin", "main") $runDir
+    $remoteHead = (& git -C $runDir rev-parse "origin/main").Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve origin/main before publication" }
     if ($remoteHead -ne $baseHead) {
         throw "Remote main advanced during the cycle; refusing to publish stale research"
     }
-    Invoke-Checked "git" @("-C", $repoRoot, "push", $RemoteName, "${cycleCommit}:refs/heads/main") $repoRoot
+    Invoke-Checked "git" @("-C", $runDir, "push", "origin", "${cycleCommit}:refs/heads/main") $runDir
 
-    Write-RuntimeState "published" $runId "Published validated cycle $cycleCommit" $worktree $branch
-    Remove-CycleWorktree $worktree $branch
+    Write-RuntimeState "published" $runId "Published validated cycle $cycleCommit" $runDir
+    Remove-RunDirectory $runDir
     Write-Output "PUBLISHED: $cycleCommit conversation=$($result.conversation_id)"
 }
 catch {
     $message = $_.Exception.Message
-    Write-RuntimeState "failed" $runId $message $worktree $branch
+    Write-RuntimeState "failed" $runId $message $runDir
     Write-Error $message
     exit 1
 }

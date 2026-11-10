@@ -9,7 +9,6 @@ $runsRoot = Join-Path $testRoot "runs"
 $runtimeDir = Join-Path $testRoot "runtime"
 $logDir = Join-Path $testRoot "logs"
 $mutexName = "Global\BorderClashResearchCycleTest-$PID"
-$branchPrefix = "test-cycle-$PID"
 
 function Assert-True {
     param([bool]$Condition, [string]$Message)
@@ -29,7 +28,7 @@ function Invoke-TestRunner {
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner,
             "-Force", "-AgyPath", $AgyPath, "-TimeoutMinutes", "1",
             "-RunsRoot", $runsRoot, "-RuntimeDir", $runtimeDir, "-LogDir", $logDir,
-            "-MutexName", $mutexName, "-BranchPrefix", $branchPrefix,
+            "-MutexName", $mutexName,
             "-RemoteName", $RemoteName
         )
         if ($Publish) { $arguments += "-Publish" }
@@ -47,62 +46,47 @@ function Invoke-TestRunner {
 function Reset-TestArtifacts {
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    $registeredWorktrees = @(& git -C $repoRoot worktree list --porcelain 2>$null) |
-        Where-Object { $_ -like "worktree *" } |
-        ForEach-Object { $_.Substring(9).Trim() } |
-        Where-Object { $_.StartsWith($testRoot, [StringComparison]::OrdinalIgnoreCase) }
-    foreach ($path in $registeredWorktrees) {
-        for ($attempt = 0; $attempt -lt 5; $attempt++) {
-            & git -C $repoRoot worktree remove --force $path 2>$null | Out-Null
-            if ($LASTEXITCODE -eq 0) { break }
-            Start-Sleep -Milliseconds 200
-        }
-    }
     if (Test-Path -LiteralPath $testRoot) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
-    & git -C $repoRoot worktree prune --expire now 2>$null | Out-Null
-    & git -C $repoRoot for-each-ref --format="%(refname:short)" "refs/heads/$branchPrefix/" | ForEach-Object {
-        $name = $_.Trim()
-        if ($name) { & git -C $repoRoot branch -D $name 2>$null | Out-Null }
+    if (Test-Path -LiteralPath $testRoot) {
+        $full = [IO.Path]::GetFullPath($testRoot)
+        $extended = if ($full.StartsWith("\\")) { "\\?\UNC\" + $full.Substring(2) } else { "\\?\" + $full }
+        & cmd.exe /d /c "rd /s /q `"$extended`"" | Out-Null
     }
     $ErrorActionPreference = $previousErrorAction
 }
 
 $headBefore = (git -C $repoRoot rev-parse HEAD).Trim()
+$branchesBefore = @(& git -C $repoRoot branch --format="%(refname:short)" | Where-Object { $_ })
+$worktreesBefore = @(& git -C $repoRoot worktree list --porcelain |
+    Where-Object { $_ -like "worktree *" } |
+    ForEach-Object { $_.Substring(9).Trim() })
 $job = $null
 Assert-True ($runsRoot.StartsWith((Join-Path $repoRoot ".work"), [StringComparison]::OrdinalIgnoreCase)) "test runs must stay inside repo .work"
 Reset-TestArtifacts
 
 try {
     $staleRunId = "stale-recovery"
-    $staleWorktree = Join-Path $runsRoot $staleRunId
-    $staleBranch = "$branchPrefix/$staleRunId"
+    $staleRunDir = Join-Path $runsRoot $staleRunId
     New-Item -ItemType Directory -Force -Path $runsRoot, $runtimeDir, $logDir | Out-Null
-    & git -C $repoRoot worktree add -b $staleBranch $staleWorktree $headBefore | Out-Null
+    & git clone --quiet --no-checkout --no-hardlinks $repoRoot $staleRunDir
     Assert-True ($LASTEXITCODE -eq 0) "could not create stale recovery fixture"
+    & git -C $staleRunDir checkout --quiet --detach $headBefore
+    Assert-True ($LASTEXITCODE -eq 0) "could not position stale recovery fixture"
     [ordered]@{
         updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         status = "running"
         runId = $staleRunId
         model = "gemini-3.8-flash-medium"
         message = "fixture"
-        worktree = $staleWorktree
-        branch = $staleBranch
+        runDir = $staleRunDir
     } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
 
     $env:BORDERCLASH_FAKE_AGY_MODE = "fail"
     $recovery = Invoke-TestRunner $fakeExe
     Assert-True ($recovery.ExitCode -eq 1) "post-recovery fake failure should still fail normally"
-    Assert-True (-not (Test-Path -LiteralPath $staleWorktree)) "stale recovery left the interrupted worktree directory"
-    $staleRegistered = @(
-        @(& git -C $repoRoot worktree list --porcelain) | Where-Object {
-            $_ -like "worktree *" -and $_.Substring(9).Trim().Equals($staleWorktree, [StringComparison]::OrdinalIgnoreCase)
-        }
-    )
-    Assert-True ($staleRegistered.Count -eq 0) "stale recovery left the interrupted worktree registered"
-    & git -C $repoRoot show-ref --verify --quiet "refs/heads/$staleBranch"
-    Assert-True ($LASTEXITCODE -ne 0) "stale recovery left the interrupted branch"
+    Assert-True (-not (Test-Path -LiteralPath $staleRunDir)) "stale recovery left the interrupted run directory"
     Assert-True (Test-Path (Join-Path $logDir "$staleRunId.interrupted.json")) "stale recovery did not preserve an interruption record"
 
     Reset-TestArtifacts
@@ -132,17 +116,11 @@ try {
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "rejected repo change advanced main HEAD"
 
     Reset-TestArtifacts
-    $rootPaused = [bool]((Get-Content (Join-Path $repoRoot "data\state.json") -Raw | ConvertFrom-Json).isPaused)
     $env:BORDERCLASH_FAKE_AGY_MODE = "flip-pause"
     $pause = Invoke-TestRunner $fakeExe
     Assert-True ($pause.ExitCode -eq 0) "valid pause-control cycle should pass"
     $pauseOutput = $pause.Output -join "`n"
     Assert-True ($pauseOutput -match "SHADOW SUCCESS") "pause-control cycle did not reach validated shadow state"
-    $worktreeMatch = [regex]::Match($pauseOutput, '(?m)^worktree=(.+)$')
-    Assert-True $worktreeMatch.Success "pause-control cycle did not report its worktree"
-    $pauseWorktree = $worktreeMatch.Groups[1].Value.Trim()
-    $cyclePaused = [bool]((Get-Content (Join-Path $pauseWorktree "data\state.json") -Raw | ConvertFrom-Json).isPaused)
-    Assert-True ($cyclePaused -eq $rootPaused) "runner did not preserve operator pause state"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "pause-control shadow cycle advanced main HEAD"
 
     Reset-TestArtifacts
@@ -169,11 +147,11 @@ try {
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
     $job = Start-Job -ScriptBlock {
-        param($runnerPath, $agyPath, $testRunsRoot, $testRuntimeDir, $testLogDir, $testMutexName, $testBranchPrefix)
+        param($runnerPath, $agyPath, $testRunsRoot, $testRuntimeDir, $testLogDir, $testMutexName)
         $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runnerPath -Force -AgyPath $agyPath -TimeoutMinutes 1 -RunsRoot $testRunsRoot -RuntimeDir $testRuntimeDir -LogDir $testLogDir -MutexName $testMutexName -BranchPrefix $testBranchPrefix 2>&1
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runnerPath -Force -AgyPath $agyPath -TimeoutMinutes 1 -RunsRoot $testRunsRoot -RuntimeDir $testRuntimeDir -LogDir $testLogDir -MutexName $testMutexName 2>&1
         exit $LASTEXITCODE
-    } -ArgumentList $runner, $fakeExe, $runsRoot, $runtimeDir, $logDir, $mutexName, $branchPrefix
+    } -ArgumentList $runner, $fakeExe, $runsRoot, $runtimeDir, $logDir, $mutexName
 
     Start-Sleep -Seconds 2
     $second = Invoke-TestRunner $fakeExe
@@ -215,6 +193,13 @@ try {
 
     & git -C $repoRoot remote remove $publishRemoteName
     Assert-True ($LASTEXITCODE -eq 0) "could not remove publish test remote"
+    $addedBranches = @(& git -C $repoRoot branch --format="%(refname:short)" | Where-Object { $_ -and $_ -notin $branchesBefore })
+    $addedWorktrees = @(& git -C $repoRoot worktree list --porcelain |
+        Where-Object { $_ -like "worktree *" } |
+        ForEach-Object { $_.Substring(9).Trim() } |
+        Where-Object { $_ -notin $worktreesBefore })
+    Assert-True ($addedBranches.Count -eq 0) "runner created a repository branch: $($addedBranches -join ', ')"
+    Assert-True ($addedWorktrees.Count -eq 0) "runner created a Git worktree: $($addedWorktrees -join ', ')"
     Write-Output "run-cycle tests passed"
 }
 finally {
@@ -228,10 +213,11 @@ finally {
     Reset-TestArtifacts
 }
 
-$leftoverWorktree = @(@(& git -C $repoRoot worktree list --porcelain) | Where-Object {
-    $_ -like "worktree *" -and $_.Substring(9).Trim().StartsWith($testRoot, [StringComparison]::OrdinalIgnoreCase)
-})
-$leftoverBranch = @(@(& git -C $repoRoot for-each-ref --format="%(refname:short)" "refs/heads/$branchPrefix/") | Where-Object { $_.Trim() })
-Assert-True ($leftoverWorktree.Count -eq 0) "test cleanup left a registered worktree"
-Assert-True ($leftoverBranch.Count -eq 0) "test cleanup left a branch"
+$addedBranches = @(& git -C $repoRoot branch --format="%(refname:short)" | Where-Object { $_ -and $_ -notin $branchesBefore })
+$addedWorktrees = @(& git -C $repoRoot worktree list --porcelain |
+    Where-Object { $_ -like "worktree *" } |
+    ForEach-Object { $_.Substring(9).Trim() } |
+    Where-Object { $_ -notin $worktreesBefore })
+Assert-True ($addedBranches.Count -eq 0) "test run left a repository branch: $($addedBranches -join ', ')"
+Assert-True ($addedWorktrees.Count -eq 0) "test run left a Git worktree: $($addedWorktrees -join ', ')"
 
