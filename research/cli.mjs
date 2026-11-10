@@ -235,8 +235,9 @@ function renderContext(output) {
     `Last completed: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
     `Scheduled next: ${output.cycle.next || "unset"}`,
     `Previous cadence: ${output.cycle.intervalHours || "unknown"}h - ${output.cycle.reason || "no reason recorded"}`,
-    "Preflight passed. Start external discovery now. Do not inspect repo/CLI internals unless a command fails.",
-    "Finish with: pnpm research finish <hours> \"<reason>\". The outer runner validates and publishes.",
+    "No Git/checks/help, directory lists, or raw archive reads; the runner owns repo checks.",
+    "After 3 searches, finish no-change if results predate the last cycle or are already anchored. Source any candidate before changing data.",
+    "Finish: pnpm research finish <hours> \"<reason>\". Then stop.",
     "",
     "## Current picture",
     `Overall: ${output.current.impact.riskLevel}; displaced ${output.current.impact.displacedCount}; deaths ${output.current.impact.deathCount}.`,
@@ -508,9 +509,8 @@ if (command === "brief") {
     "pnpm research show <id>          # inspect one exact record",
     "pnpm research source <url>       # resolve and inspect one publisher source",
     "pnpm research finish <hours> <reason>  # schedule next cycle (1..168h)",
-    "pnpm research check              # full deterministic exit check",
   ].join("\n") + "\n");
 } else {
-  console.error("Usage: pnpm research [brief|context|find <text>|show <id>|source <url>|finish <hours> <reason>|check]");
+  console.error("Usage: pnpm research [brief|context|find <text>|show <id>|source <url>|finish <hours> <reason>]");
   process.exit(2);
 }

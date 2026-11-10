@@ -345,4 +345,5 @@ test("--help is a successful alias for help", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /source <url>/u);
+  assert.doesNotMatch(result.stdout, /research check/u);
 });

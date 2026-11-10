@@ -28,6 +28,7 @@ For each cycle:
 4. Run `pnpm research finish <hours> "<reason>"`. Choose when another run is likely to add information; 1-168 hours is only a safety range. Then stop—the runner validates and publishes.
 
 Use `pnpm research find <text>` / `show <id>` only when exact archive context helps a decision.
+During a routine cycle, do not run Git, tests/validation/builds, CLI help, directory listings, or raw archive reads just to orient yourself. The cycle context and research CLI already provide that view. Read/edit a raw data file only when a specific evidence-backed change requires it.
 
 ## Evidence
 

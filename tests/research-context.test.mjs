@@ -8,6 +8,9 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^# BorderClash cycle context/mu);
+  assert.match(result.stdout, /No Git\/checks\/help, directory lists, or raw archive reads/u);
+  assert.match(result.stdout, /finish no-change if results predate the last cycle or are already anchored/u);
+  assert.match(result.stdout, /Finish:.*Then stop/u);
   const productionText = result.stdout.trimEnd().split(/\r?\n/u).join(EOL) + EOL;
   assert.ok(Buffer.byteLength(productionText, "utf8") <= 3500, `cycle context too large: ${Buffer.byteLength(productionText, "utf8")} bytes`);
   assert.doesNotMatch(result.stdout, /https?:\/\//u, "cycle context should keep source URLs on demand");

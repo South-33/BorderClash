@@ -299,7 +299,7 @@ try {
         # then exits before the first planner response. Keep the normal print
         # turn bounded instead; AGENTS.md is written to finish within that budget.
         @'
-Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Use the archive CLI or direct file reads only when you need more context. Stop when further work is unlikely to improve the record. Work only on research data; the outer runner owns Git publication and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
+Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Stay inside the research boundary: use the research CLI for archive/source lookup, do not do Git or validation work, finish once, then stop. The outer runner owns repository checks, publication, and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
 '@
     }
 
