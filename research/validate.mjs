@@ -262,6 +262,12 @@ for (const field of ["displaced", "deaths", "injuries"]) {
   } else if (!Number.isFinite(metric.value) || metric.value < 0) {
     add("current/impact." + field + ".value", "must be a non-negative number");
   }
+  if (metric.claimantName !== undefined) {
+    localized("current/impact." + field + ".claimantNameTh", metric.claimantNameTh, "th", true);
+    localized("current/impact." + field + ".claimantNameKh", metric.claimantNameKh, "kh", true);
+  } else if (metric.claimantNameTh !== undefined || metric.claimantNameKh !== undefined) {
+    add("current/impact." + field + ".claimantName", "missing while localized claimant exists");
+  }
   if (metric.sourceUrl !== undefined) directSourceUrl("current/impact." + field + ".sourceUrl", metric.sourceUrl);
   if (metric.sourceDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/u.test(metric.sourceDate)) {
     add("current/impact." + field + ".sourceDate", "invalid date");

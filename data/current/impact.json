@@ -3,6 +3,9 @@
   "displaced": {
     "value": 20000,
     "qualifier": "MORE_THAN",
+    "claimantName": "Cambodia Ministry of Interior",
+    "claimantNameTh": "กระทรวงมหาดไทยกัมพูชา",
+    "claimantNameKh": "ក្រសួងមហាផ្ទៃកម្ពុជា",
     "sourceName": "Kampuchea Thmey Daily",
     "sourceUrl": "https://en.kampucheathmey.com/national/1151284/",
     "sourceDate": "2026-11-10"

@@ -127,6 +127,7 @@ export const TRANSLATIONS = {
         territoryDisputed: "Disputed Area",
         territoryForeign: "Foreign Territory",
         details: "DETAILS",
+        reportedBy: "via",
         // Timeline & Map
         historicalTimeline: "OPERATIONAL TIMELINE",
         noTimelineEvents: "NO INTEL LOGGED",
@@ -301,6 +302,7 @@ export const TRANSLATIONS = {
         territoryDisputed: "พื้นที่ทับซ้อน",
         territoryForeign: "ในเขตเพื่อนบ้าน",
         details: "รายละเอียด",
+        reportedBy: "รายงานโดย",
         // Timeline & Map
         historicalTimeline: "เหตุการณ์ตามวันที่", // Events by date
         noTimelineEvents: "ยังไม่มีรายงานข่าวกรอง",
@@ -475,6 +477,7 @@ export const TRANSLATIONS = {
         territoryDisputed: "តំបន់ជម្លោះ",
         territoryForeign: "ទឹកដីគេ",
         details: "ព័ត៌មានលម្អិត",
+        reportedBy: "រាយការណ៍ដោយ",
         // Timeline & Map
         historicalTimeline: "ព្រឹត្តិការណ៍តាមថ្ងៃ", // Events by day
         noTimelineEvents: "មិនទាន់មានរបាយការណ៍ចារកម្ម",

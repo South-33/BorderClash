@@ -1901,13 +1901,24 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           ? `${impact.displaced.qualifier === 'MORE_THAN' ? '>' : impact.displaced.qualifier === 'AT_LEAST' ? '≥' : ''}${impact.displaced.value.toLocaleString('en-US')}`
                           : '—'}
                       </span>
+                      {impact?.displaced?.claimantName && (
+                        <span className={`mt-3 font-mono opacity-60 leading-tight ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>
+                          {localizedText(
+                            lang as Lang,
+                            impact.displaced.claimantName,
+                            impact.displaced.claimantNameTh,
+                            impact.displaced.claimantNameKh,
+                          )}
+                        </span>
+                      )}
                       {impact?.displaced?.sourceUrl && (
                         <a
-                          className="mt-3 font-mono text-[10px] opacity-50 hover:opacity-80 underline underline-offset-2"
+                          className={`${impact.displaced.claimantName ? 'mt-1' : 'mt-3'} font-mono text-[10px] opacity-50 hover:opacity-80 underline underline-offset-2`}
                           href={impact.displaced.sourceUrl}
                           target="_blank"
                           rel="noreferrer"
                         >
+                          {impact.displaced.claimantName ? `${t.reportedBy} ` : ''}
                           {impact.displaced.sourceName}
                           {formatSourceDate(impact.displaced.sourceDate) ? ` · ${formatSourceDate(impact.displaced.sourceDate)}` : ''}
                         </a>

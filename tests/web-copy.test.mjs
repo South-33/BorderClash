@@ -36,6 +36,18 @@ test("dashboard does not restore unsourced conflict classifications", () => {
   }
 });
 
+test("government impact figures preserve the claimant separately from the reporting outlet", () => {
+  const impact = JSON.parse(fs.readFileSync("data/current/impact.json", "utf8"));
+  const dashboard = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
+  assert.equal(impact.displaced.claimantName, "Cambodia Ministry of Interior");
+  assert.equal(impact.displaced.sourceName, "Kampuchea Thmey Daily");
+  assert.notEqual(impact.displaced.claimantName, impact.displaced.sourceName);
+  assert.ok(impact.displaced.claimantNameTh, "Thai claimant attribution missing");
+  assert.ok(impact.displaced.claimantNameKh, "Khmer claimant attribution missing");
+  assert.match(dashboard, /impact\.displaced\.claimantName/u, "dashboard does not render claimant attribution");
+  assert.match(dashboard, /t\.reportedBy/u, "dashboard does not explain the reporting relationship");
+});
+
 test("guide explains the real research system and evidence score", () => {
   const source = fs.readFileSync("src/app/translations.ts", "utf8");
   for (const phrase of [

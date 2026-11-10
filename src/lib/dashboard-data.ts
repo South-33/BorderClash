@@ -52,6 +52,9 @@ export interface Impact {
 export interface ImpactMetric {
     value: number | null;
     qualifier: "MORE_THAN" | "AT_LEAST" | "NO_COMBINED_TOTAL";
+    claimantName?: string;
+    claimantNameTh?: string;
+    claimantNameKh?: string;
     sourceName?: string;
     sourceUrl?: string;
     sourceDate?: string;
