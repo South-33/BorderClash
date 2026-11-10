@@ -277,8 +277,11 @@ try {
     $effectivePrompt = if ($Prompt) {
         $Prompt
     } else {
+        # Do not prefix this with /goal. AGY 1.5.5 headless expands the command,
+        # then exits before the first planner response. Keep the normal print
+        # turn bounded instead; AGENTS.md is written to finish within that budget.
         @'
-/goal Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Use the archive CLI or direct file reads only when you need more context. Stop when further work is unlikely to improve the record. Work only on research data; the outer runner owns Git publication and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
+Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Use the archive CLI or direct file reads only when you need more context. Stop when further work is unlikely to improve the record. Work only on research data; the outer runner owns Git publication and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
 '@
     }
 
