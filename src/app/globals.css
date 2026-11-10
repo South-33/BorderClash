@@ -51,8 +51,8 @@
     max-width: none !important;
 }
 
-/* Keep the desktop dashboard inside shorter browser windows without shrinking text everywhere.
-   The news feeds remain the flexible pressure valve; fixed sidebar chrome becomes denser first. */
+/* Short desktop windows keep the original type scale. Only spacing becomes denser;
+   the news and neutral panes absorb the remaining height with native scrolling. */
 @media (min-width: 1280px) and (max-height: 1064px) {
     .dashboard-layout {
         padding-top: 1rem !important;
@@ -61,14 +61,15 @@
 
     .dashboard-sidebar {
         gap: 0.25rem !important;
-        min-height: calc(100dvh - 2rem);
     }
 
     .dashboard-sidebar-header,
     .dashboard-scan-panel,
     .dashboard-language-selector,
     .dashboard-view-selector,
-    .dashboard-disclaimer {
+    .dashboard-disclaimer,
+    .dashboard-stats-card,
+    .dashboard-perspective-card {
         padding: 0.5rem !important;
     }
 
@@ -101,28 +102,14 @@
         line-height: 1.35 !important;
     }
 
-    .dashboard-stats-card,
-    .dashboard-perspective-card {
-        padding: 0.5rem !important;
-    }
-
     .dashboard-stats-card .card-header {
         margin-bottom: 0.5rem !important;
         padding-bottom: 0.25rem !important;
     }
 
-    .dashboard-stats-card .card-header h3 {
-        font-size: 1.25rem !important;
-        line-height: 1.5rem !important;
-    }
-
     .dashboard-stat-box {
         min-height: 4.75rem !important;
         padding: 0.5rem !important;
-    }
-
-    .dashboard-stat-box .font-display {
-        font-size: 2rem !important;
     }
 
     .dashboard-stat-box > h4 {
@@ -150,13 +137,6 @@
     }
 
     .dashboard-side-narrative {
-        font-size: 0.84375rem !important;
-        line-height: 1.35 !important;
-    }
-
-    .lang-th .dashboard-side-narrative,
-    .lang-kh .dashboard-side-narrative {
-        font-size: 0.9375rem !important;
         line-height: 1.4 !important;
     }
 
@@ -175,18 +155,15 @@
         margin-bottom: 0.25rem !important;
     }
 
-    .dashboard-gauge-bar {
+    .dashboard-gauge-bar,
+    .dashboard-gauge-chip,
+    .dashboard-gauge-label,
+    .dashboard-gauge-button {
         height: 1.5rem !important;
     }
 
     .dashboard-gauge-controls {
         margin-top: 0.25rem !important;
-    }
-
-    .dashboard-gauge-chip,
-    .dashboard-gauge-label,
-    .dashboard-gauge-button {
-        height: 1.5rem !important;
     }
 
     .dashboard-gauge-button {
@@ -204,7 +181,6 @@
     }
 
     .dashboard-neutral-content {
-        overflow-y: auto !important;
         gap: 0.25rem !important;
     }
 
@@ -213,36 +189,8 @@
         padding-bottom: 0.25rem !important;
     }
 
-    .dashboard-neutral-title {
-        font-size: 1.25rem !important;
-        line-height: 1.25rem !important;
-    }
-
-    .lang-th .dashboard-neutral-title,
-    .lang-kh .dashboard-neutral-title {
-        font-size: 1.0625rem !important;
-        line-height: 1.35 !important;
-    }
-
     .dashboard-neutral-badge {
         padding: 0.25rem 0.5rem !important;
-    }
-
-    .dashboard-neutral-summary,
-    .dashboard-neutral-events-title,
-    .dashboard-neutral-event {
-        font-size: 0.875rem !important;
-        line-height: 1.4 !important;
-    }
-
-    .lang-th .dashboard-neutral-summary,
-    .lang-th .dashboard-neutral-events-title,
-    .lang-th .dashboard-neutral-event,
-    .lang-kh .dashboard-neutral-summary,
-    .lang-kh .dashboard-neutral-events-title,
-    .lang-kh .dashboard-neutral-event {
-        font-size: 1rem !important;
-        line-height: 1.4 !important;
     }
 
     .dashboard-neutral-events {
@@ -268,33 +216,9 @@
         padding: 0.375rem !important;
     }
 
-    .dashboard-sidebar-title {
-        font-size: 2.5rem !important;
-    }
-
-    .dashboard-sidebar-description {
-        font-size: 0.6875rem !important;
-        line-height: 1.25 !important;
-    }
-
-    .lang-th .dashboard-sidebar-description,
-    .lang-kh .dashboard-sidebar-description {
-        font-size: 0.75rem !important;
-    }
-
     .dashboard-view-button {
         padding-top: 0.25rem !important;
         padding-bottom: 0.25rem !important;
-    }
-
-    .dashboard-disclaimer-body {
-        font-size: 0.6875rem !important;
-        line-height: 1.25 !important;
-    }
-
-    .lang-th .dashboard-disclaimer-body,
-    .lang-kh .dashboard-disclaimer-body {
-        font-size: 0.75rem !important;
     }
 }
 

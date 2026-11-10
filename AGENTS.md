@@ -98,6 +98,7 @@ The `finish` command owns timestamps, cycle count, scheduler ownership, and next
 ## House rules
 
 - Prefer direct file edits over a custom CRUD API. The files are the inspectable system of record.
+- Use branches and worktrees only for temporary experiments; consolidate accepted work into `main` and remove the temporary branch/worktree afterward.
 - Use `find` and `show` before broad archive reads.
 - Prefer a few strong sources over duplicate coverage.
 - Keep experiments in `.work/`; only proven conclusions belong in durable instructions.

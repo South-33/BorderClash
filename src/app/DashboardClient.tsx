@@ -489,7 +489,7 @@ const IntelligenceLog = ({
         />
 
         {/* Scrollable Feed */}
-        <div className="flex-1 min-h-0 max-h-[220px] xl:max-h-none overflow-y-auto scrollbar-thin">
+        <div className="flex-1 min-h-0 max-h-[220px] xl:max-h-none overflow-y-auto overscroll-contain scrollbar-thin">
           {isLoading ? (
             <div className="h-full flex items-center justify-center">
               <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
@@ -859,10 +859,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     }, 300); // Give animation time to complete (200ms transition + buffer)
   };
 
-  // Sidebar ref and height sync
-  const sidebarRef = useRef<HTMLDivElement>(null);
-  const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
-
   // =============================================================================
   // STATIC REPOSITORY DATA
   // Dashboard data is baked into the deployment. The full timeline is fetched
@@ -978,9 +974,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // Get translations for current lang
   const t = TRANSLATIONS[lang as Lang];
 
-  // Lock root-page scroll during modal open and cascade fade/recalc.
+  // Only modals lock page scrolling. Layout measurement must never trap the page.
   useLayoutEffect(() => {
-    const shouldLockPageScroll = Boolean(selectedEvent) || !isLayoutReady;
+    const shouldLockPageScroll = Boolean(selectedEvent);
     const root = document.documentElement;
 
     root.style.overflowY = shouldLockPageScroll ? 'hidden' : '';
@@ -988,7 +984,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     return () => {
       root.style.overflowY = '';
     };
-  }, [selectedEvent, isLayoutReady]);
+  }, [selectedEvent]);
 
   // Helper to get narrative based on language
   const getNarrative = (meta: Analysis | null) => {
@@ -1295,33 +1291,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     };
   }, [viewMode]);
 
-  // Measure sidebar height for layout synchronization 
-  useLayoutEffect(() => {
-    const measureSidebarHeight = () => {
-      if (window.innerWidth >= 1280 && sidebarRef.current) {
-        setSidebarHeight(sidebarRef.current.offsetHeight);
-      } else {
-        setSidebarHeight(undefined);
-      }
-    };
-
-    measureSidebarHeight();
-
-    const resizeObserver = new ResizeObserver(measureSidebarHeight);
-    if (sidebarRef.current) {
-      resizeObserver.observe(sidebarRef.current);
-    }
-
-    window.addEventListener('resize', measureSidebarHeight);
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', measureSidebarHeight);
-    };
-  }, []); // Empty deps - only run once, ResizeObserver handles updates
-
-  // Timer Logic for countdown display
-  // Also detect "possibly stale" state when we think the cycle should have completed
-  const [isPossiblyStale, setIsPossiblyStale] = useState(false);
+  // Timer Logic for countdown display. An overdue scheduled scan is not a live sync state.
 
   useEffect(() => {
     // Use lastCycleInterval if available (adaptive scheduling), otherwise fall back to fixed 12h
@@ -1336,11 +1306,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         const remainingToRun = Math.max(0, systemStats.nextRunAt - now);
         setNextUpdateIn(Math.floor(remainingToRun / 1000));
 
-        if (remainingToRun === 0 && now - systemStats.nextRunAt > 60000) {
-          setIsPossiblyStale(true);
-        } else {
-          setIsPossiblyStale(false);
-        }
         return;
       }
 
@@ -1357,12 +1322,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
       setNextUpdateIn(Math.floor(remaining / 1000));
 
-      // If remaining is 0 and has been for more than 60 seconds, data might be stale
-      if (remaining === 0 && timeSinceLastUpdate > intervalMs + 60000) {
-        setIsPossiblyStale(true);
-      } else {
-        setIsPossiblyStale(false);
-      }
     };
 
     updateCountdown();
@@ -1713,28 +1672,24 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       <div />
       <div
         ref={containerRef}
-        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full"
+        className="dashboard-layout relative p-4 xl:p-6 2xl:p-8 flex flex-col xl:flex-row gap-4 xl:gap-6 mx-auto w-full xl:h-screen xl:overflow-hidden"
         style={{ maxWidth: containerWidth ? `${containerWidth}px` : undefined }}
       >
         {/* The Risograph Grain Overlay */}
         <div className="riso-grain"></div>
 
         {/* Left Sidebar / Header (Mobile Top) */}
-        <aside ref={sidebarRef} className="dashboard-sidebar w-full xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start">
+        <aside className="dashboard-sidebar w-full xl:w-64 flex-shrink-0 flex flex-col gap-2 self-start xl:h-full xl:overflow-y-auto xl:overscroll-contain">
           <div className="dashboard-sidebar-header border-4 border-riso-ink p-3 bg-riso-paper">
             <h1 className="dashboard-sidebar-title font-display text-5xl md:text-6xl leading-none tracking-tighter text-riso-ink mb-2">
               BORDER CLASH
             </h1>
             <div className="dashboard-sidebar-status flex items-center gap-2 mb-4">
-              <div className={`w-3 h-3 rounded-full ${isPossiblyStale ? 'bg-yellow-500 animate-pulse' :
-                isSyncing ? 'bg-riso-accent animate-ping' :
-                  'bg-green-600'
-                }`}></div>
+              <div className={`w-3 h-3 rounded-full ${isSyncing ? 'bg-riso-accent animate-ping' : systemStats?.systemStatus === 'error' ? 'bg-red-600' : 'bg-green-600'}`}></div>
               <span className="font-mono text-xs font-bold tracking-widest">
-                {isPossiblyStale ? 'REFRESHING...' :
-                  isSyncing ? t.syncing :
-                    systemStats?.systemStatus === 'error' ? t.error :
-                      t.systemOnline}
+                {isSyncing ? t.syncing :
+                  systemStats?.systemStatus === 'error' ? t.error :
+                    t.systemOnline}
               </span>
 
             </div>
@@ -1755,7 +1710,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <span className="text-yellow-600">{t.paused}</span>
                   ) : isSyncing ? (
                     <span className="animate-pulse text-riso-accent">{t.running}</span>
-                  ) : (sysStatsLoading || nextUpdateIn === null || isPossiblyStale) ? (
+                  ) : (sysStatsLoading || nextUpdateIn === null) ? (
                     <HackerScramble />
                   ) : (
                     formatTime(nextUpdateIn)
@@ -1942,12 +1897,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         </aside>
 
         {/* Main Content Grid */}
-        <main className={`flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch transition-opacity duration-150 ${isViewTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+        <main className={`flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch transition-opacity duration-150 ${isViewTransitioning ? 'opacity-0' : 'opacity-100'}`}>
 
 
           {/* ANALYSIS VIEW - Always render during measuring phase for overflow measurement */}
-          <div className={`xl:col-span-3 ${(isMeasuring || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
-            <div className="dashboard-analysis flex flex-col gap-4" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+          <div className={`xl:col-span-3 min-h-0 xl:h-full ${(isMeasuring || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
+            <div className="dashboard-analysis flex flex-col gap-4 min-h-0 xl:h-full">
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
                 <Card className="dashboard-stats-card" title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
@@ -2050,7 +2005,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                       <Scale size={18} /> {t.neutralAI}
                     </div>
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={neutralMetaLoading} refreshing={neutralMetaRefreshing}>
-                      <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
+                      <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-y-auto overscroll-contain">
                         <div className="dashboard-neutral-header mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
                           <h3 className={`dashboard-neutral-title font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
                             {t.situationReport}
@@ -2179,8 +2134,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           </div>
 
           {/* LOSSES VIEW */}
-          <div className={`xl:col-span-3 ${(viewMode !== 'TIMELINE' || isMeasuring) ? 'hidden' : ''}`}>
-            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+          <div className={`xl:col-span-3 min-h-0 xl:h-full ${(viewMode !== 'TIMELINE' || isMeasuring) ? 'hidden' : ''}`}>
+            <div className="xl:col-span-3 flex flex-col gap-4 h-full min-h-0">
               <Card loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
@@ -2656,8 +2611,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           </div>
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
-          <div className={`xl:col-span-3 ${(viewMode !== 'GUIDE' || isMeasuring) ? 'hidden' : ''}`}>
-            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+          <div className={`xl:col-span-3 min-h-0 xl:h-full ${(viewMode !== 'GUIDE' || isMeasuring) ? 'hidden' : ''}`}>
+            <div className="flex flex-col bg-riso-paper rough-border h-full min-h-0">
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
                 <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">
