@@ -278,7 +278,7 @@ try {
         $Prompt
     } else {
         @'
-You have been woken up for one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Use the archive CLI or direct file reads only when you need more context. Stop when further work is unlikely to improve the record. Work only on research data; the outer runner owns Git publication and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
+/goal Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Use the archive CLI or direct file reads only when you need more context. Stop when further work is unlikely to improve the record. Work only on research data; the outer runner owns Git publication and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
 '@
     }
 
