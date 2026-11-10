@@ -1,8 +1,21 @@
 {
-  "updatedAt": 1794065436379,
-  "riskLevel": "LOW",
-  "displacedCount": 8000,
-  "deathCount": 196,
-  "civilianInjuredCount": 96,
-  "militaryInjuredCount": 396
+  "updatedAt": 1794268800000,
+  "displaced": {
+    "value": 20000,
+    "qualifier": "MORE_THAN",
+    "sourceName": "Kampuchea Thmey Daily",
+    "sourceUrl": "https://en.kampucheathmey.com/national/1151284/",
+    "sourceDate": "2026-11-10"
+  },
+  "deaths": {
+    "value": 150,
+    "qualifier": "AT_LEAST",
+    "sourceName": "International Crisis Group",
+    "sourceUrl": "https://www.crisisgroup.org/sites/default/files/2026-10/359-cambodia-thailand-thaw.pdf",
+    "sourceDate": "2026-10-09"
+  },
+  "injuries": {
+    "value": null,
+    "qualifier": "NO_COMBINED_TOTAL"
+  }
 }

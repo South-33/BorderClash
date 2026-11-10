@@ -11,11 +11,45 @@ test("main dashboard labels avoid analyst jargon", () => {
     '"Key Developments"',
     '"Credibility"',
     '"Threat Level"',
+    '"Risk Level"',
     '"ESTIMATED LOSS"',
     "AI-verified intelligence",
     "absolutely zero human intervention",
+    "THE CURATOR",
+    "THE VERIFIER",
+    "THE HISTORIAN",
+    "THE SYNTHESIZER",
+    "TRUST NO ONE BLINDLY",
+    "Rumor/Fake",
+    "Likely true",
+    "Source Score",
+    "Every government has an incentive to lie",
   ]) {
     assert.equal(source.includes(phrase), false, `reader-facing jargon returned: ${phrase}`);
+  }
+});
+
+test("dashboard does not restore unsourced conflict classifications", () => {
+  const source = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
+  for (const phrase of ["riskLevel", "displayPosture", "PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"]) {
+    assert.equal(source.includes(phrase), false, `unsourced classification returned: ${phrase}`);
+  }
+});
+
+test("guide explains the real research system and evidence score", () => {
+  const source = fs.readFileSync("src/app/translations.ts", "utf8");
+  for (const phrase of [
+    "01 — DISCOVERY",
+    "02 — SOURCE CHECK",
+    "03 — RECORD UPDATE",
+    "04 — VALIDATION AND PUBLISH",
+    "NEUTRALITY IS A METHOD, NOT A GUARANTEE",
+    "It is not a probability that the story is true",
+    "85-100: Strong evidence",
+    "60-84: Useful attributable reporting",
+    "0-59: Limited, single-source",
+  ]) {
+    assert.equal(source.includes(phrase), true, `guide is missing: ${phrase}`);
   }
 });
 

@@ -1,17 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { isBorderRelevantNews, selectVisibleNews } from "./lib/news.mjs";
+import { selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
 
 const dataRoot = resolve("data");
 const command = process.argv[2] || "brief";
-const RESEARCH_TESTS = [
-  "tests/data-layout.test.mjs",
-  "tests/language.test.mjs",
-  "tests/research-content.test.mjs",
-  "tests/research-cli.test.mjs",
-];
 const DAY_MS = 24 * 3_600_000;
 const BRIEF_MIN_DAYS = 7;
 const BRIEF_MAX_DAYS = 30;
@@ -78,7 +72,7 @@ function selectBriefContext({ state, news, timeline, nowMs }) {
   const eligibleNews = Object.fromEntries(
     Object.entries(news).map(([country, rows]) => [
       country,
-      selectVisibleNews(rows, rows.length).filter(isBorderRelevantNews),
+      selectVisibleNews(rows, rows.length),
     ]),
   );
   const contextNews = Object.fromEntries(
@@ -174,23 +168,19 @@ async function brief() {
     },
     current: {
       impact: {
-        riskLevel: impact.riskLevel,
-        displacedCount: impact.displacedCount,
-        deathCount: impact.deathCount,
-        civilianInjuredCount: impact.civilianInjuredCount,
-        militaryInjuredCount: impact.militaryInjuredCount,
+        displaced: impact.displaced,
+        deaths: impact.deaths,
+        injuries: impact.injuries,
         updatedAt: impact.updatedAt,
       },
       thailand: {
         updatedAt: current.thailand?.updatedAt,
-        tensionScore: current.thailand?.tensionScore,
-        posture: current.thailand?.posture,
+        activityLabel: current.thailand?.activityLabel,
         summary: current.thailand?.summary,
       },
       cambodia: {
         updatedAt: current.cambodia?.updatedAt,
-        tensionScore: current.cambodia?.tensionScore,
-        posture: current.cambodia?.posture,
+        activityLabel: current.cambodia?.activityLabel,
         summary: current.cambodia?.summary,
       },
       summary: {
@@ -235,14 +225,14 @@ function renderContext(output) {
     `Last completed: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
     `Scheduled next: ${output.cycle.next || "unset"}`,
     `Previous cadence: ${output.cycle.intervalHours || "unknown"}h - ${output.cycle.reason || "no reason recorded"}`,
-    "No Git/checks/help, directory lists, or raw archive reads; the runner owns repo checks.",
+    "No Git/checks/help, directory lists, or raw archive reads.",
     "After 3 searches, finish no-change if results predate the last cycle or are already anchored. Source any candidate before changing data.",
     "Finish: pnpm research finish <hours> \"<reason>\". Then stop.",
     "",
     "## Current picture",
-    `Overall: ${output.current.impact.riskLevel}; displaced ${output.current.impact.displacedCount}; deaths ${output.current.impact.deathCount}.`,
-    `Thailand: ${output.current.thailand.posture || "unknown"} / tension ${output.current.thailand.tensionScore ?? "unknown"}. ${output.current.thailand.summary || ""}`,
-    `Cambodia: ${output.current.cambodia.posture || "unknown"} / tension ${output.current.cambodia.tensionScore ?? "unknown"}. ${output.current.cambodia.summary || ""}`,
+    `Impact: ${output.current.impact.displaced?.qualifier === "MORE_THAN" ? ">" : ""}${output.current.impact.displaced?.value ?? "unknown"} displaced; ${output.current.impact.deaths?.qualifier === "AT_LEAST" ? ">=" : ""}${output.current.impact.deaths?.value ?? "unknown"} 2025 deaths; injuries: no combined total`,
+    `Thailand: ${output.current.thailand.activityLabel || "current activity not labelled"}. ${output.current.thailand.summary || ""}`,
+    `Cambodia: ${output.current.cambodia.activityLabel || "current activity not labelled"}. ${output.current.cambodia.summary || ""}`,
     `Summary: ${output.current.summary.summary || ""}`,
   ];
 
@@ -329,7 +319,11 @@ function run(name, args) {
 }
 
 function check() {
-  run(process.execPath, ["--test", ...RESEARCH_TESTS]);
+  const tests = readdirSync(resolve("tests"))
+    .filter((name) => name.endsWith(".test.mjs"))
+    .sort()
+    .map((name) => join("tests", name));
+  run(process.execPath, ["--test", ...tests]);
   run(process.execPath, [join("research", "validate.mjs")]);
   run("git", ["diff", "--check"]);
 }

@@ -8,12 +8,10 @@
     "Phnom Penh Post",
     "Cambodianess"
   ],
-  "tensionScore": 40,
-  "posture": "DEFENSIVE",
-  "postureLabel": "Defense and protests",
-  "postureLabelTh": "การตั้งรับและการประท้วง",
-  "postureLabelKh": "ការការពារ និងការតវ៉ា",
-  "postureReason": "Cambodian forces are holding defensive positions, including trenches near Sa Kaeo, while Cambodia protests Thai border actions in Pursat. No new armed clash is reported in the latest period.",
-  "postureReasonTh": "กองกำลังกัมพูชากำลังรักษาที่ตั้งแนวรับ ซึ่งรวมถึงสนามเพลาะใกล้สระแก้ว ขณะที่กัมพูชาประท้วงการกระทำบริเวณชายแดนของไทยในโพธิสัตว์ ทั้งนี้ ไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่ในช่วงเวลาล่าสุด",
-  "postureReasonKh": "កងកម្លាំងកម្ពុជាកំពុងកាន់កាប់ទីតាំងការពារខ្លួន រួមទាំងលេណដ្ឋានក្បែរស្រះកែវ ខណៈដែលកម្ពុជាតវ៉ាចំពោះសកម្មភាពតាមព្រំដែនរបស់ថៃនៅពោធិ៍សាត់។ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចប្រដាប់អាវុធថ្មីណាមួយនៅក្នុងរយៈពេលចុងក្រោយនេះឡើយ។"
+  "activityLabel": "Trenches and border protests",
+  "activityLabelTh": "สนามเพลาะและการประท้วงเรื่องชายแดน",
+  "activityLabelKh": "លេណដ្ឋាន និងការតវ៉ាអំពីព្រំដែន",
+  "activityDetails": "Cambodian forces are holding defensive positions, including trenches near Sa Kaeo, while Cambodia protests Thai border actions in Pursat. No new armed clash is reported in the latest period.",
+  "activityDetailsTh": "กองกำลังกัมพูชากำลังรักษาที่ตั้งแนวรับ ซึ่งรวมถึงสนามเพลาะใกล้สระแก้ว ขณะที่กัมพูชาประท้วงการกระทำบริเวณชายแดนของไทยในโพธิสัตว์ ทั้งนี้ ไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่ในช่วงเวลาล่าสุด",
+  "activityDetailsKh": "កងកម្លាំងកម្ពុជាកំពុងកាន់កាប់ទីតាំងការពារខ្លួន រួមទាំងលេណដ្ឋានក្បែរស្រះកែវ ខណៈដែលកម្ពុជាតវ៉ាចំពោះសកម្មភាពតាមព្រំដែនរបស់ថៃនៅពោធិ៍សាត់។ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចប្រដាប់អាវុធថ្មីណាមួយនៅក្នុងរយៈពេលចុងក្រោយនេះឡើយ។"
 }

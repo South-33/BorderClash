@@ -18,10 +18,10 @@ async function writeJsonlFile(path, rows) {
   await writeFile(path, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
 }
 
-function localizedNews(id, title, publishedAt, fetchedAt = publishedAt) {
+function localizedNews(id, title, publishedAt, fetchedAt = publishedAt, status = "active") {
   return {
     id,
-    status: "active",
+    status,
     source: "Fixture",
     category: "military",
     title,
@@ -47,18 +47,15 @@ async function makeBriefFixture({ lastResearchAt, lastCycleInterval = 24, news, 
     scheduler: "external",
   });
   await writeJsonFile(join(root, "data", "current", "impact.json"), {
-    riskLevel: "LOW",
-    displacedCount: 0,
-    deathCount: 0,
-    civilianInjuredCount: 0,
-    militaryInjuredCount: 0,
+    displaced: { value: 0, qualifier: "MORE_THAN" },
+    deaths: { value: 0, qualifier: "AT_LEAST" },
+    injuries: { value: null, qualifier: "NO_COMBINED_TOTAL" },
     updatedAt: lastResearchAt,
   });
   for (const name of ["thailand", "cambodia"]) {
     await writeJsonFile(join(root, "data", "current", `${name}.json`), {
       updatedAt: lastResearchAt,
-      tensionScore: 10,
-      posture: "DEFENSIVE",
+      activityLabel: "No new armed clash reported",
       summary: "Border situation remains calm.",
     });
   }
@@ -109,7 +106,7 @@ test("brief always gives at least seven days of compact local context", async ()
       thailand: [localizedNews("th-old", "Thailand border talks continue", old)],
       cambodia: [localizedNews("kh-old", "Cambodia reports border monitoring", old)],
       international: [
-        localizedNews("intl-noise", "Singapore sand imports affect fishing community", old + 1_000),
+        localizedNews("intl-noise", "Singapore sand imports affect fishing community", old + 1_000, old + 1_000, "archived"),
         localizedNews("intl-old", "ASEAN border observers continue monitoring", old),
       ],
     },
@@ -156,6 +153,7 @@ test("brief surfaces fresh material context and counts newly fetched older repor
         localizedNews("th-1", "Thailand border troops hold position", recent + 3_000),
         localizedNews("th-2", "Thailand border talks continue", recent + 2_000),
         localizedNews("th-fetched", "Older border report newly discovered", old, recent + 1_000),
+        localizedNews("th-local", "กองทัพไทยยังคงเฝ้าระวังพื้นที่ชายแดน", recent + 500),
       ],
       cambodia: [localizedNews("kh-1", "Cambodia border monitoring continues", recent)],
       international: [
@@ -176,18 +174,18 @@ test("brief surfaces fresh material context and counts newly fetched older repor
     assert.equal(brief.contextWindow.start, "2026-11-03T12:00:00.000Z");
     assert.deepEqual(brief.contextWindow.counts, {
       timeline: 5,
-      news: { thailand: 3, cambodia: 1, international: 1 },
+      news: { thailand: 4, cambodia: 1, international: 2 },
     });
     assert.deepEqual(brief.contextWindow.sinceLastCycleCounts, {
       timeline: 5,
-      news: { thailand: 3, cambodia: 1, international: 1 },
+      news: { thailand: 4, cambodia: 1, international: 2 },
     });
     assert.equal(brief.recentTimeline.length, 5);
     assert.deepEqual(
       brief.recentNews.thailand.map((row) => row.id),
-      ["th-1", "th-2", "th-fetched"],
+      ["th-1", "th-2", "th-local", "th-fetched"],
     );
-    assert.deepEqual(brief.recentNews.international.map((row) => row.id), ["intl-1"]);
+    assert.deepEqual(brief.recentNews.international.map((row) => row.id), ["intl-noise", "intl-1"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

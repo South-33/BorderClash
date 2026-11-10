@@ -10,12 +10,10 @@
     "Naewna",
     "Cambodianess"
   ],
-  "tensionScore": 40,
-  "posture": "DEFENSIVE",
-  "postureLabel": "Border defense and fencing",
-  "postureLabelTh": "การป้องกันชายแดนและสร้างรั้ว",
-  "postureLabelKh": "ការការពារព្រំដែន និងសង់របង",
-  "postureReason": "Thai forces are mainly holding defensive positions, building permanent border fencing, and reorganizing units. No new armed clash is reported in the latest period.",
-  "postureReasonTh": "กองกำลังไทยเน้นตั้งรับ สร้างรั้วถาวรตามแนวชายแดน และปรับหน่วยทหาร ในช่วงล่าสุดยังไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่",
-  "postureReasonKh": "កងកម្លាំងថៃផ្តោតលើការការពារ សាងសង់របងព្រំដែនអចិន្ត្រៃយ៍ និងកែសម្រួលអង្គភាពយោធា។ ក្នុងរយៈពេលថ្មីៗនេះ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចដោយអាវុធថ្មីទេ។"
+  "activityLabel": "Border fencing and unit reorganization",
+  "activityLabelTh": "การสร้างรั้วชายแดนและปรับหน่วยทหาร",
+  "activityLabelKh": "ការសង់របងព្រំដែន និងការរៀបចំអង្គភាពយោធាឡើងវិញ",
+  "activityDetails": "Thai forces are mainly holding defensive positions, building permanent border fencing, and reorganizing units. No new armed clash is reported in the latest period.",
+  "activityDetailsTh": "กองกำลังไทยเน้นตั้งรับ สร้างรั้วถาวรตามแนวชายแดน และปรับหน่วยทหาร ในช่วงล่าสุดยังไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่",
+  "activityDetailsKh": "កងកម្លាំងថៃផ្តោតលើការការពារ សាងសង់របងព្រំដែនអចិន្ត្រៃយ៍ និងកែសម្រួលអង្គភាពយោធា។ ក្នុងរយៈពេលថ្មីៗនេះ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចដោយអាវុធថ្មីទេ។"
 }

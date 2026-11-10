@@ -12,6 +12,27 @@ const khmerTimelinePartisanVoice = /(យើង|ពួកសៀម)/u;
 const validationNow = Date.now();
 const futureToleranceMs = 5 * 60_000;
 
+function numericTokens(value) {
+  const normalized = String(value || "")
+    .replace(/(?<=\d)[,.](?=\d{3}(?:\D|$))/gu, "");
+  const counts = new Map();
+  for (const raw of normalized.match(/\d+/gu) || []) {
+    const token = String(Number.parseInt(raw, 10));
+    counts.set(token, (counts.get(token) || 0) + 1);
+  }
+  return counts;
+}
+
+function numericFidelity(location, english, localizedValue) {
+  const expected = numericTokens(english);
+  const actual = numericTokens(localizedValue);
+  for (const [token, count] of expected) {
+    if ((actual.get(token) || 0) < count) {
+      add(location, "lost-number-" + token);
+    }
+  }
+}
+
 function add(location, issue) {
   errors.push(location + ": " + issue);
 }
@@ -81,6 +102,10 @@ for (const file of timelineFiles) {
     localized(location + ".titleKh", event.titleKh, "kh", true);
     localized(location + ".descriptionTh", event.descriptionTh, "th", true);
     localized(location + ".descriptionKh", event.descriptionKh, "kh", true);
+    numericFidelity(location + ".titleTh", event.title, event.titleTh);
+    numericFidelity(location + ".titleKh", event.title, event.titleKh);
+    numericFidelity(location + ".descriptionTh", event.description, event.descriptionTh);
+    numericFidelity(location + ".descriptionKh", event.description, event.descriptionKh);
     timelineReaderVoice(location + ".titleTh", event.titleTh, "th");
     timelineReaderVoice(location + ".titleKh", event.titleKh, "kh");
     timelineReaderVoice(location + ".descriptionTh", event.descriptionTh, "th");
@@ -155,6 +180,8 @@ for (const [country, articles] of Object.entries(newsByCountry)) {
     if (visibleNewsIds.has(article.id)) {
       localized(location + ".titleTh", article.titleTh, "th", true);
       localized(location + ".titleKh", article.titleKh, "kh", true);
+      numericFidelity(location + ".titleTh", article.titleEn || article.title, article.titleTh);
+      numericFidelity(location + ".titleKh", article.titleEn || article.title, article.titleKh);
     } else if (article.titleTh !== undefined || article.titleKh !== undefined) {
       add(location, "non-visible news must not keep localized titles");
     }
@@ -167,17 +194,37 @@ for (const name of ["thailand", "cambodia"]) {
   notFuture(location + ".updatedAt", value.updatedAt);
   if (!value.summary) add(location + ".summary", "missing");
   if (!Array.isArray(value.sourceNames)) add(location + ".sourceNames", "missing");
-  if (!Number.isFinite(value.tensionScore) || value.tensionScore < 0 || value.tensionScore > 100) add(location + ".tensionScore", "must be 0..100");
-  if (!["PEACEFUL", "DEFENSIVE", "ESCALATED", "AGGRESSIVE"].includes(value.posture)) add(location + ".posture", "invalid");
-  if (!value.postureLabel) add(location + ".postureLabel", "missing");
-  if (!value.postureReason) add(location + ".postureReason", "missing");
+  if (value.tensionScore !== undefined) add(location + ".tensionScore", "legacy field");
+  if (value.posture !== undefined) add(location + ".posture", "legacy field");
+  if (!value.activityLabel) add(location + ".activityLabel", "missing");
+  if (!value.activityDetails) add(location + ".activityDetails", "missing");
   localized(location + ".summaryTh", value.summaryTh, "th", true);
   localized(location + ".summaryKh", value.summaryKh, "kh", true);
-  localized(location + ".postureLabelTh", value.postureLabelTh, "th", true);
-  localized(location + ".postureLabelKh", value.postureLabelKh, "kh", true);
-  localized(location + ".postureReasonTh", value.postureReasonTh, "th", true);
-  localized(location + ".postureReasonKh", value.postureReasonKh, "kh", true);
-  for (const field of ["officialNarrative", "narrativeSource", "militaryIntensity", "militaryPosture", "postureRationale", "territorialContext", "lastUpdatedAt"]) {
+  localized(location + ".activityLabelTh", value.activityLabelTh, "th", true);
+  localized(location + ".activityLabelKh", value.activityLabelKh, "kh", true);
+  localized(location + ".activityDetailsTh", value.activityDetailsTh, "th", true);
+  localized(location + ".activityDetailsKh", value.activityDetailsKh, "kh", true);
+  numericFidelity(location + ".summaryTh", value.summary, value.summaryTh);
+  numericFidelity(location + ".summaryKh", value.summary, value.summaryKh);
+  numericFidelity(location + ".activityLabelTh", value.activityLabel, value.activityLabelTh);
+  numericFidelity(location + ".activityLabelKh", value.activityLabel, value.activityLabelKh);
+  numericFidelity(location + ".activityDetailsTh", value.activityDetails, value.activityDetailsTh);
+  numericFidelity(location + ".activityDetailsKh", value.activityDetails, value.activityDetailsKh);
+  for (const field of [
+    "officialNarrative",
+    "narrativeSource",
+    "militaryIntensity",
+    "militaryPosture",
+    "postureLabel",
+    "postureLabelTh",
+    "postureLabelKh",
+    "postureReason",
+    "postureReasonTh",
+    "postureReasonKh",
+    "postureRationale",
+    "territorialContext",
+    "lastUpdatedAt",
+  ]) {
     if (value[field] !== undefined) add(location + "." + field, "legacy field");
   }
 }
@@ -188,19 +235,39 @@ if (!summary.summary) add("current/summary.summary", "missing");
 if (!Array.isArray(summary.keyUpdates)) add("current/summary.keyUpdates", "missing");
 localized("current/summary.summaryTh", summary.summaryTh, "th", true);
 localized("current/summary.summaryKh", summary.summaryKh, "kh", true);
+numericFidelity("current/summary.summaryTh", summary.summary, summary.summaryTh);
+numericFidelity("current/summary.summaryKh", summary.summary, summary.summaryKh);
 for (const [index, item] of (summary.keyUpdatesTh || []).entries()) localized("current/summary.keyUpdatesTh[" + index + "]", item, "th", true);
 for (const [index, item] of (summary.keyUpdatesKh || []).entries()) localized("current/summary.keyUpdatesKh[" + index + "]", item, "kh", true);
+for (const [index, item] of (summary.keyUpdatesTh || []).entries()) numericFidelity("current/summary.keyUpdatesTh[" + index + "]", summary.keyUpdates?.[index], item);
+for (const [index, item] of (summary.keyUpdatesKh || []).entries()) numericFidelity("current/summary.keyUpdatesKh[" + index + "]", summary.keyUpdates?.[index], item);
 for (const field of ["generalSummary", "keyEvents", "conflictLevel", "displacedCount", "casualtyCount", "lastUpdatedAt"]) {
   if (summary[field] !== undefined) add("current/summary." + field, "legacy field");
 }
 
 const impact = await readJson(join(dataRoot, "current", "impact.json"));
 notFuture("current/impact.updatedAt", impact.updatedAt);
-if (!["LOW", "ELEVATED", "CRITICAL"].includes(impact.riskLevel)) add("current/impact.riskLevel", "invalid");
-for (const field of ["displacedCount", "deathCount", "civilianInjuredCount", "militaryInjuredCount"]) {
-  if (!Number.isFinite(impact[field]) || impact[field] < 0) add("current/impact." + field, "must be a non-negative number");
+if (impact.riskLevel !== undefined) add("current/impact.riskLevel", "legacy field");
+for (const field of ["displaced", "deaths", "injuries"]) {
+  const metric = impact[field];
+  if (!metric || typeof metric !== "object") {
+    add("current/impact." + field, "missing metric");
+    continue;
+  }
+  if (!["MORE_THAN", "AT_LEAST", "NO_COMBINED_TOTAL"].includes(metric.qualifier)) {
+    add("current/impact." + field + ".qualifier", "invalid");
+  }
+  if (metric.qualifier === "NO_COMBINED_TOTAL") {
+    if (metric.value !== null) add("current/impact." + field + ".value", "must be null");
+  } else if (!Number.isFinite(metric.value) || metric.value < 0) {
+    add("current/impact." + field + ".value", "must be a non-negative number");
+  }
+  if (metric.sourceUrl !== undefined) directSourceUrl("current/impact." + field + ".sourceUrl", metric.sourceUrl);
+  if (metric.sourceDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/u.test(metric.sourceDate)) {
+    add("current/impact." + field + ".sourceDate", "invalid date");
+  }
 }
-for (const field of ["id", "key", "conflictLevel", "casualtyCount", "displacedTrend", "lastUpdatedAt"]) {
+for (const field of ["id", "key", "conflictLevel", "casualtyCount", "displacedTrend", "lastUpdatedAt", "displacedCount", "deathCount", "civilianInjuredCount", "militaryInjuredCount"]) {
   if (impact[field] !== undefined) add("current/impact." + field, "legacy field");
 }
 

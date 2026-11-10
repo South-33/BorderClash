@@ -81,14 +81,12 @@ function perspectivePublic(value) {
     summaryTh: value.summaryTh,
     summaryKh: value.summaryKh,
     sourceNames: value.sourceNames,
-    tensionScore: value.tensionScore,
-    posture: value.posture,
-    postureLabel: value.postureLabel,
-    postureLabelTh: value.postureLabelTh,
-    postureLabelKh: value.postureLabelKh,
-    postureReason: value.postureReason,
-    postureReasonTh: value.postureReasonTh,
-    postureReasonKh: value.postureReasonKh,
+    activityLabel: value.activityLabel,
+    activityLabelTh: value.activityLabelTh,
+    activityLabelKh: value.activityLabelKh,
+    activityDetails: value.activityDetails,
+    activityDetailsTh: value.activityDetailsTh,
+    activityDetailsKh: value.activityDetailsKh,
     updatedAt: value.updatedAt,
   };
 }
@@ -109,11 +107,9 @@ function summaryPublic(value) {
 function impactPublic(value) {
   if (!value) return null;
   return {
-    riskLevel: value.riskLevel,
-    displacedCount: value.displacedCount,
-    civilianInjuredCount: value.civilianInjuredCount,
-    militaryInjuredCount: value.militaryInjuredCount,
-    deathCount: value.deathCount,
+    displaced: value.displaced,
+    deaths: value.deaths,
+    injuries: value.injuries,
     updatedAt: value.updatedAt,
   };
 }

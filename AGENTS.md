@@ -41,8 +41,17 @@ During a routine cycle, do not run Git, tests/validation/builds, CLI help, direc
 
 ## Reader copy
 
-Write for ordinary civilians, not analysts. English, Thai, and Khmer should each read naturally in that language. Prefer short concrete wording, but preserve names, numbers, dates, negation, attribution, uncertainty, actor/action/object, and claim strength. Keep the claimant in the same sentence as a disputed claim. Use ASCII digits; never mix Thai and Khmer scripts in one field.
+Write for ordinary civilians who want to understand the situation quickly.
+
+- English, Thai, and Khmer must each read like natural local general-news writing, not literal translation.
+- Prefer short, clear, concrete language. Avoid analyst, military, diplomatic, or bureaucratic jargon when everyday wording preserves the meaning.
+- Preserve actor/action/object, names, exact numeric values, Gregorian years, dates, negation, attribution, uncertainty, and claim strength.
+- Keep the side making a disputed claim in the same sentence as the claim.
+- Do not replace an exact figure with local shorthand or convert Gregorian years to another calendar.
+- Use ASCII digits. Thai must not contain Khmer script; Khmer must not contain Thai script.
 
 Deterministic validation protects mechanical correctness. `pnpm quality:reader` is the separate subjective benchmark for fidelity, clarity, neutrality, and naturalness.
+
+## Completion
 
 End a completed agent cycle with `<!-- GOAL_COMPLETE -->`. Add `HARNESS_FEEDBACK: <one concise actionable observation>` only when the harness materially made good research harder.
