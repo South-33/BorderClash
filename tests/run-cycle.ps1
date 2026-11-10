@@ -17,11 +17,23 @@ function Assert-True {
 }
 
 function Invoke-TestRunner {
-    param([string]$AgyPath)
+    param(
+        [string]$AgyPath,
+        [switch]$Publish,
+        [string]$RemoteName = "origin"
+    )
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Force -AgyPath $AgyPath -TimeoutMinutes 1 -RunsRoot $runsRoot -RuntimeDir $runtimeDir -LogDir $logDir -MutexName $mutexName -BranchPrefix $branchPrefix 2>&1
+        $arguments = @(
+            "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner,
+            "-Force", "-AgyPath", $AgyPath, "-TimeoutMinutes", "1",
+            "-RunsRoot", $runsRoot, "-RuntimeDir", $runtimeDir, "-LogDir", $logDir,
+            "-MutexName", $mutexName, "-BranchPrefix", $branchPrefix,
+            "-RemoteName", $RemoteName
+        )
+        if ($Publish) { $arguments += "-Publish" }
+        $output = & powershell.exe @arguments 2>&1
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousPreference
@@ -178,6 +190,31 @@ try {
     Assert-True (($firstOutput -join "`n") -match "SHADOW SUCCESS") "first fake cycle did not complete normally"
 
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "shadow tests changed main HEAD"
+
+    Reset-TestArtifacts
+    $publishRemoteName = "runner-test-$PID"
+    $publishRemotePath = Join-Path $testRoot "remote.git"
+    New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
+    & git init --bare $publishRemotePath | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) "could not create publish test remote"
+    & git -C $repoRoot remote add $publishRemoteName $publishRemotePath
+    Assert-True ($LASTEXITCODE -eq 0) "could not add publish test remote"
+    & git -C $repoRoot push $publishRemoteName "${headBefore}:refs/heads/main" | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) "could not seed publish test remote"
+
+    $statusBeforePublish = (@(& git -C $repoRoot status --porcelain) -join "`n")
+    $env:BORDERCLASH_FAKE_AGY_MODE = "success"
+    $published = Invoke-TestRunner $fakeExe -Publish -RemoteName $publishRemoteName
+    Assert-True ($published.ExitCode -eq 0) "publish cycle should succeed with a dirty developer checkout: $($published.Output -join ' | ')"
+    Assert-True (($published.Output -join "`n") -match "PUBLISHED:") "publish cycle did not report publication"
+    Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "publish cycle changed developer checkout HEAD"
+    $statusAfterPublish = (@(& git -C $repoRoot status --porcelain) -join "`n")
+    Assert-True ($statusAfterPublish -eq $statusBeforePublish) "publish cycle changed developer working-tree state"
+    $publishedHead = (& git --git-dir=$publishRemotePath rev-parse refs/heads/main).Trim()
+    Assert-True ($publishedHead -ne $headBefore) "publish cycle did not advance remote main"
+
+    & git -C $repoRoot remote remove $publishRemoteName
+    Assert-True ($LASTEXITCODE -eq 0) "could not remove publish test remote"
     Write-Output "run-cycle tests passed"
 }
 finally {
@@ -185,6 +222,9 @@ finally {
         Remove-Job $job -Force -ErrorAction SilentlyContinue
     }
     Remove-Item Env:BORDERCLASH_FAKE_AGY_MODE -ErrorAction SilentlyContinue
+    if ($null -ne (git -C $repoRoot remote | Where-Object { $_ -eq "runner-test-$PID" })) {
+        & git -C $repoRoot remote remove "runner-test-$PID" 2>$null | Out-Null
+    }
     Reset-TestArtifacts
 }
 

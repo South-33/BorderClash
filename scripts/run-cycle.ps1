@@ -1,6 +1,7 @@
 param(
     [switch]$Force,
     [switch]$Publish,
+    [string]$RemoteName = "origin",
     [int]$TimeoutMinutes = 45,
     [string]$Prompt = "",
     [string]$AgyPath = "",
@@ -15,7 +16,6 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$statePath = Join-Path $repoRoot "data\state.json"
 $runnerRoot = Join-Path $repoRoot ".work\runner"
 $runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $runnerRoot "runtime" }
 $logDir = if ($LogDir) { [IO.Path]::GetFullPath($LogDir) } else { Join-Path $runnerRoot "logs" }
@@ -120,6 +120,15 @@ function Read-State {
     return Get-Content $Path -Raw | ConvertFrom-Json
 }
 
+function Read-StateFromRef {
+    param([string]$Ref)
+
+    $spec = "${Ref}:data/state.json"
+    $json = & git -C $repoRoot show $spec
+    if ($LASTEXITCODE -ne 0) { throw "Could not read scheduler state from $Ref" }
+    return ([string]::Join([Environment]::NewLine, [string[]]$json) | ConvertFrom-Json)
+}
+
 function Assert-CycleStateAdvanced {
     param($Before, $After)
 
@@ -203,7 +212,16 @@ $worktree = ""
 $branch = ""
 
 try {
-    $state = Read-State $statePath
+    if ($Publish) {
+        Invoke-Checked "git" @("-C", $repoRoot, "fetch", $RemoteName, "main") $repoRoot
+        $baseRef = "$RemoteName/main"
+    } else {
+        $baseRef = "HEAD"
+    }
+
+    $baseHead = (& git -C $repoRoot rev-parse $baseRef).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $baseHead) { throw "Could not resolve cycle base $baseRef" }
+    $state = Read-StateFromRef $baseHead
     $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 
     if (-not $Force -and $state.isPaused) {
@@ -217,35 +235,9 @@ try {
         exit 0
     }
 
-    $dirty = git -C $repoRoot status --porcelain
-    if ($LASTEXITCODE -ne 0) { throw "git status failed" }
-    if ($dirty) { throw "Root checkout must be clean before a research cycle" }
-
     if ($Publish) {
-        $currentBranch = (git -C $repoRoot branch --show-current).Trim()
-        if ($currentBranch -ne "main") {
-            throw "Publication requires the root checkout to be on main (current: $currentBranch)"
-        }
-
-        Invoke-Checked "git" @("-C", $repoRoot, "fetch", "origin", "main") $repoRoot
-        Invoke-Checked "git" @("-C", $repoRoot, "merge", "--ff-only", "origin/main") $repoRoot
-
-        # Remote main is the source of truth. A newer published cycle may make
-        # this wake-up no longer due, so re-read state before spending on AI.
-        $state = Read-State $statePath
-        $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-        if (-not $Force -and $state.isPaused) {
-            Write-Output "SKIP: paused-after-sync"
-            exit 0
-        }
-        if (-not $Force -and $state.nextRunAt -and [int64]$state.nextRunAt -gt $nowMs) {
-            $next = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$state.nextRunAt).ToLocalTime()
-            Write-Output "SKIP: not-due-after-sync nextRunAt=$($next.ToString('o'))"
-            exit 0
-        }
+        Write-Output "PRODUCTION BASE: $baseHead ($baseRef)"
     }
-
-    Invoke-Checked "node" @((Join-Path $repoRoot "scripts\research.mjs"), "check") $repoRoot
 
     $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
     $agy = if ($AgyPath) {
@@ -260,9 +252,8 @@ try {
     $runId = [DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmssfffZ")
     $branch = "$BranchPrefix/$runId"
     $worktree = Join-Path $runsRoot $runId
-    $baseHead = (git -C $repoRoot rev-parse HEAD).Trim()
-
     Invoke-Checked "git" @("-C", $repoRoot, "worktree", "add", "-b", $branch, $worktree, $baseHead) $repoRoot
+    Invoke-Checked "node" @((Join-Path $worktree "scripts\research.mjs"), "check") $worktree
 
     $effectivePrompt = if ($Prompt) {
         $Prompt
@@ -370,8 +361,15 @@ try {
         exit 0
     }
 
-    Invoke-Checked "git" @("-C", $repoRoot, "merge", "--ff-only", $cycleCommit) $repoRoot
-    Invoke-Checked "git" @("-C", $repoRoot, "push", "origin", "main") $repoRoot
+    # Publishing never mutates the developer checkout. Recheck remote main to
+    # avoid racing another deployment, then fast-forward the validated commit.
+    Invoke-Checked "git" @("-C", $repoRoot, "fetch", $RemoteName, "main") $repoRoot
+    $remoteHead = (& git -C $repoRoot rev-parse "$RemoteName/main").Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve $RemoteName/main before publication" }
+    if ($remoteHead -ne $baseHead) {
+        throw "Remote main advanced during the cycle; refusing to publish stale research"
+    }
+    Invoke-Checked "git" @("-C", $repoRoot, "push", $RemoteName, "${cycleCommit}:refs/heads/main") $repoRoot
 
     Write-RuntimeState "published" $runId "Published validated cycle $cycleCommit" $worktree $branch
     Remove-CycleWorktree $worktree $branch
