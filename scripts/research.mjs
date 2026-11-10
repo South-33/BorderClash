@@ -450,11 +450,26 @@ async function inspectSource(value) {
     throw new Error("source requires a valid HTTP(S) URL");
   }
 
-  const response = await fetch(url, {
-    redirect: "follow",
-    signal: AbortSignal.timeout(15_000),
-    headers: { "user-agent": "Mozilla/5.0 BorderClashResearch/1.0" },
-  });
+  let response;
+  try {
+    response = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(7_000),
+      headers: { "user-agent": "Mozilla/5.0 BorderClashResearch/1.0" },
+    });
+  } catch (error) {
+    process.stdout.write(JSON.stringify({
+      url: url.href,
+      status: null,
+      ok: false,
+      usable: false,
+      title: null,
+      publishedAt: null,
+      description: null,
+      error: error instanceof Error ? error.message : String(error),
+    }, null, 2) + "\n");
+    return;
+  }
   const contentType = response.headers.get("content-type") ?? "";
   const html = contentType.includes("html") ? await response.text() : "";
   const metadata = html ? pageMetadata(html) : { title: null, publishedAt: null, description: null };
@@ -486,7 +501,7 @@ if (command === "brief") {
   await inspectSource(process.argv[3]);
 } else if (command === "finish") {
   await finish(process.argv[3], process.argv.slice(4));
-} else if (command === "help") {
+} else if (command === "help" || command === "--help" || command === "-h") {
   process.stdout.write([
     "node scripts/research.mjs                    # concise structured brief",
     "node scripts/research.mjs context            # compact human-readable cycle context",

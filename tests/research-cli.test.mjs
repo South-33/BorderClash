@@ -317,3 +317,30 @@ test("source rejects non-http URLs", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /HTTP\(S\)/u);
 });
+
+test("source reports network failures as unusable instead of crashing", async () => {
+  const server = createServer((_request, response) => response.end("unused"));
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  const address = server.address();
+  await new Promise((resolveClose) => server.close(resolveClose));
+
+  const result = spawnSync(process.execPath, [script, "source", `http://127.0.0.1:${address.port}/closed`], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.status, null);
+  assert.equal(output.ok, false);
+  assert.equal(output.usable, false);
+  assert.equal(typeof output.error, "string");
+});
+
+test("--help is a successful alias for help", () => {
+  const result = spawnSync(process.execPath, [script, "--help"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /source <url>/u);
+});
