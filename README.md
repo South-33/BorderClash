@@ -1,52 +1,57 @@
 # BorderClash
 
-Public Thailand-Cambodia border monitor. Git `main` is the system of record.
+BorderClash is an automated public monitor of the Thailand-Cambodia border situation. It compares Cambodian, Thai, and international reporting, keeps a sourced timeline, and maintains a concise current picture for ordinary readers.
 
-## Production flow
+The research is AI-assisted. It can be incomplete or wrong, so the site keeps source links and distinguishes reported claims from established facts.
 
-`SouthServer` -> Windows task `BorderClashResearch` -> `ops/run-production.ps1` -> `ops/run-cycle.ps1` -> AGY (`gemini-3.8-flash-medium`) -> validated research commit on `main` -> Vercel production deploy.
+## How it works
 
-The laptop is for development, testing, and experiments only. Production research runs on SouthServer.
+1. A scheduled research cycle checks what changed in Cambodian, Thai, and international/regional reporting.
+2. Material findings are verified and written to the tracked research data in `data/`.
+3. Deterministic validation checks data format, source links, localization, and other mechanical rules.
+4. Validated changes are committed to `main`. The static site is generated from that record and deployed automatically.
+
+A cycle can also conclude that nothing material changed. The record is meant to stay accurate and useful, not grow for its own sake.
 
 ## Repository map
 
-- `data/` - canonical research record and scheduler state. Tracked in Git on purpose.
-- `src/` - website UI.
-- `scripts/` - research/build CLIs used by both the agent and the site build.
-- `ops/` - production operations: server sync, AGY cycle runner, and task installer.
-- `tests/runner/` - fake-AGY production-runner harness; other deterministic tests stay directly under `tests/`.
-- `.work/` - ignored runtime logs, disposable clones, recovery patches, and experiments.
-- `public/data/` - generated build output; ignored.
+- `src/`: the Next.js website.
+- `data/`: the research record tracked in Git.
+  - `current/`: current impact numbers, Thailand and Cambodia perspectives, and the neutral summary.
+  - `news/`: retained source reporting, grouped by month and source group (`thailand`, `cambodia`, `international`).
+  - `timeline/`: the durable event history, grouped by month.
+  - `research-state.json`: research cadence and cycle state.
+- `research/`: the research CLI, validation, quality evaluation, shared helpers, and production automation.
+- `scripts/`: small site/build helpers.
+- `tests/`: deterministic tests, including the fake-agent production harness.
+- `public/`: static assets. `public/data/` is generated and is not a source of truth.
 
-## SouthServer
-
-SSH alias: `southserver`
-
-Checkout: `C:\Users\nyxy\Desktop\BorderClash`
-
-Production task: `BorderClashResearch`
-
-Install or repair the task from the SouthServer checkout:
+## Local development
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\install-production-task.ps1
+pnpm install
+pnpm dev
 ```
 
-SouthServer auto-logs into the `nyxy` session after boot. The task wakes on that logon and every 10 minutes afterward. `data/state.json` decides whether research is actually due, so most wake-ups exit quickly.
-
-If AGY authentication expires, sign in once from the interactive `nyxy` SouthServer session by running `agy` in PowerShell and completing the Google login, then enable the task with `Enable-ScheduledTask -TaskName BorderClashResearch`.
-
-Each real cycle gets an ignored `.work/CYCLE_CONTEXT.md` generated from canonical data before AGY starts. The disposable cycle directory is removed after success or failure; enough context, logs, feedback, and data diff are preserved under `.work/runner/logs/` for diagnosis.
-
-Vercel deploys production only from `main`. A completed research cycle therefore updates both the durable research record and the public site with one validated push.
-
-## Local checks
+Useful checks:
 
 ```powershell
-pnpm lint
 pnpm test
-pnpm test:runner
+pnpm validate
+pnpm test:automation
 pnpm build
 ```
 
-`pnpm test:runner` uses fake AGY and does not consume a model.
+`pnpm test:automation` uses a fake research agent and does not consume a model.
+
+To inspect the compact context a research cycle receives:
+
+```powershell
+pnpm research context
+```
+
+The model-based reader-copy benchmark is intentionally separate from deterministic validation:
+
+```powershell
+pnpm quality:reader
+```
