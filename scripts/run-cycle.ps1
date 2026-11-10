@@ -244,7 +244,7 @@ try {
     $effectivePrompt = if ($Prompt) {
         $Prompt
     } else {
-        @"
+        @'
 /goal Complete exactly one BorderClash research cycle. Read AGENTS.md first and treat it as the contract.
 
 Keep this cycle bounded:
@@ -254,7 +254,7 @@ Keep this cycle bounded:
 - Deep-read at most six strong candidate sources by default, and only when they could change canonical data or resolve a material contradiction.
 - If the discovery pass finds no plausible material change, finish a clean no-change cycle promptly: call `finish`, run `check`, review the data diff, and stop.
 - The outer runner owns generation, Git publication, and deployment. End with <!-- GOAL_COMPLETE --> only after the research cycle itself is complete.
-"@
+'@
     }
 
     $stdoutPath = Join-Path $logDir "$runId.json"
