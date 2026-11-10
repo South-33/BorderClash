@@ -181,6 +181,19 @@ function Remove-RunDirectory {
     if (Test-Path -LiteralPath $RunDir) { throw "Could not remove run directory $RunDir" }
 }
 
+function Save-DataPatch {
+    param([string]$RunDir, [string]$BaseHead, [string]$Destination)
+
+    if (-not $RunDir -or -not (Test-Path -LiteralPath $RunDir) -or -not $BaseHead) { return }
+    $patch = @(& git -C $RunDir diff --binary $BaseHead -- data 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "Could not capture research data diff" }
+    [IO.File]::WriteAllText(
+        $Destination,
+        [string]::Join([Environment]::NewLine, [string[]]$patch) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+}
+
 $lock = Acquire-CycleLock
 if ($null -eq $lock) {
     Write-Output "SKIP: already-running"
@@ -233,6 +246,8 @@ try {
     $runId = [DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmssfffZ")
     $runDir = Join-Path $runsRoot $runId
     Invoke-Checked "git" @("clone", "--quiet", "--no-checkout", "--no-hardlinks", $repoRoot, $runDir) $repoRoot
+    Invoke-Checked "git" @("-C", $runDir, "config", "core.autocrlf", "false") $runDir
+    Invoke-Checked "git" @("-C", $runDir, "config", "core.safecrlf", "false") $runDir
     Invoke-Checked "git" @("-C", $runDir, "checkout", "--quiet", "--detach", $baseHead) $runDir
     if ($Publish) {
         $remoteUrl = (& git -C $repoRoot remote get-url $RemoteName).Trim()
@@ -281,7 +296,7 @@ You have been woken up for one BorderClash research cycle. Read AGENTS.md and .w
     try {
         [Console]::OutputEncoding = $utf8NoBom
         $OutputEncoding = $utf8NoBom
-        $stdout = & $agy -p $effectivePrompt --dangerously-skip-permissions --output-format json --model $agyModel --print-timeout "$($TimeoutMinutes)m" --log-file $agyLogPath 2> $stderrPath
+        $stdout = @(& $agy -p $effectivePrompt --dangerously-skip-permissions --output-format json --model $agyModel --print-timeout "$($TimeoutMinutes)m" --log-file $agyLogPath 2> $stderrPath)
         $agyExit = $LASTEXITCODE
         [IO.File]::WriteAllText($stdoutPath, [string]::Join([Environment]::NewLine, [string[]]$stdout), $utf8NoBom)
     } finally {
@@ -334,19 +349,13 @@ You have been woken up for one BorderClash research cycle. Read AGENTS.md and .w
     Invoke-Checked "node" @((Join-Path $runDir "scripts\generate-public.mjs")) $runDir
     Invoke-Checked "git" @("-C", $runDir, "diff", "--check") $runDir
 
-    $dataPatch = & git -C $runDir diff --binary $baseHead -- data
-    if ($LASTEXITCODE -ne 0) { throw "Could not capture research data diff" }
-    [IO.File]::WriteAllText(
-        (Join-Path $logDir "$runId.data.patch"),
-        [string]::Join([Environment]::NewLine, [string[]]$dataPatch) + [Environment]::NewLine,
-        [Text.UTF8Encoding]::new($false)
-    )
+    Save-DataPatch $runDir $baseHead (Join-Path $logDir "$runId.data.patch")
 
     $cycleHead = (git -C $runDir rev-parse HEAD).Trim()
     $hasCommittedChanges = $cycleHead -ne $baseHead
 
     Invoke-Checked "git" @("-C", $runDir, "add", "-A") $runDir
-    & git -C $runDir diff --cached --quiet
+    & git -C $runDir diff --cached --quiet 2>$null
     $stagedDiffExit = $LASTEXITCODE
     if ($stagedDiffExit -notin @(0, 1)) {
         throw "Could not inspect staged cycle changes"
@@ -358,7 +367,7 @@ You have been woken up for one BorderClash research cycle. Read AGENTS.md and .w
         git -C $runDir log --oneline "$baseHead..$cycleHead"
     }
     if ($hasStagedChanges) {
-        git -C $runDir diff --cached --stat
+        Invoke-Checked "git" @("-C", $runDir, "diff", "--cached", "--stat") $runDir
         Invoke-Checked "git" @(
             "-C", $runDir,
             "-c", "user.name=BorderClash Research",
@@ -369,10 +378,10 @@ You have been woken up for one BorderClash research cycle. Read AGENTS.md and .w
     $cycleCommit = (git -C $runDir rev-parse HEAD).Trim()
 
     if (-not $Publish) {
-        Write-RuntimeState "validated" $runId "Shadow cycle passed; publication disabled" $runDir
+        Remove-RunDirectory $runDir
+        Write-RuntimeState "validated" $runId "Shadow cycle passed; publication disabled" ""
         Write-Output "SHADOW SUCCESS: conversation=$($result.conversation_id)"
         Write-Output "commit=$cycleCommit"
-        Remove-RunDirectory $runDir
         exit 0
     }
 
@@ -386,13 +395,20 @@ You have been woken up for one BorderClash research cycle. Read AGENTS.md and .w
     }
     Invoke-Checked "git" @("-C", $runDir, "push", "origin", "${cycleCommit}:refs/heads/main") $runDir
 
-    Write-RuntimeState "published" $runId "Published validated cycle $cycleCommit" $runDir
-    Remove-RunDirectory $runDir
+    $publishedRunDir = ""
+    try { Remove-RunDirectory $runDir } catch { Write-Warning $_.Exception.Message; $publishedRunDir = $runDir }
+    Write-RuntimeState "published" $runId "Published validated cycle $cycleCommit" $publishedRunDir
     Write-Output "PUBLISHED: $cycleCommit conversation=$($result.conversation_id)"
 }
 catch {
     $message = $_.Exception.Message
-    Write-RuntimeState "failed" $runId $message $runDir
+    $runtimeRunDir = $runDir
+    if ($runDir -and (Test-Path -LiteralPath $runDir)) {
+        try { Save-DataPatch $runDir $baseHead (Join-Path $logDir "$runId.data.patch") } catch { Write-Warning $_.Exception.Message }
+        try { Remove-RunDirectory $runDir } catch { Write-Warning $_.Exception.Message }
+        if (-not (Test-Path -LiteralPath $runDir)) { $runtimeRunDir = "" }
+    }
+    Write-RuntimeState "failed" $runId $message $runtimeRunDir
     Write-Error $message
     exit 1
 }

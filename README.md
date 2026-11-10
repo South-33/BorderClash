@@ -10,13 +10,13 @@ The laptop is for development, testing, and experiments only. Production researc
 
 ## Repository map
 
-- `data/` — canonical research record and scheduler state. Tracked in Git on purpose.
-- `src/` — website UI.
-- `scripts/` — research/build CLIs used by both the agent and the site build.
-- `ops/` — production operations: server sync, AGY cycle runner, and task installer.
-- `tests/runner/` — fake-AGY production-runner harness; other deterministic tests stay directly under `tests/`.
-- `.work/` — ignored runtime logs, disposable clones, recovery patches, and experiments.
-- `public/data/` — generated build output; ignored.
+- `data/` - canonical research record and scheduler state. Tracked in Git on purpose.
+- `src/` - website UI.
+- `scripts/` - research/build CLIs used by both the agent and the site build.
+- `ops/` - production operations: server sync, AGY cycle runner, and task installer.
+- `tests/runner/` - fake-AGY production-runner harness; other deterministic tests stay directly under `tests/`.
+- `.work/` - ignored runtime logs, disposable clones, recovery patches, and experiments.
+- `public/data/` - generated build output; ignored.
 
 ## SouthServer
 
@@ -34,7 +34,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ops\install-production-t
 
 The task wakes every 10 minutes and after startup/logon. `data/state.json` decides whether research is actually due, so most wake-ups exit quickly.
 
-Each real cycle gets an ignored `.work/CYCLE_CONTEXT.md` generated from the canonical data before AGY starts. The disposable cycle directory is removed after success, so no per-run context file is committed.
+If AGY authentication expires, sign in once from the interactive `nyxy` SouthServer session by running `agy` in PowerShell and completing the Google login, then enable the task with `Enable-ScheduledTask -TaskName BorderClashResearch`.
+
+Each real cycle gets an ignored `.work/CYCLE_CONTEXT.md` generated from canonical data before AGY starts. The disposable cycle directory is removed after success or failure; enough context, logs, feedback, and data diff are preserved under `.work/runner/logs/` for diagnosis.
 
 Vercel deploys production only from `main`. A completed research cycle therefore updates both the durable research record and the public site with one validated push.
 

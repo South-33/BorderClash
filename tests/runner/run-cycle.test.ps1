@@ -94,6 +94,8 @@ try {
     $failure = Invoke-TestRunner $fakeExe
     Assert-True ($failure.ExitCode -eq 1) "fake CLI failure must fail the cycle"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "failed cycle changed main HEAD"
+    Assert-True (@(Get-ChildItem $runsRoot -Directory -ErrorAction SilentlyContinue).Count -eq 0) "failed cycle left a disposable run directory"
+    Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.data.patch" | Select-Object -First 1)) "failed cycle did not preserve a diagnostic data patch"
 
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "stale-state"
