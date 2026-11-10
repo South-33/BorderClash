@@ -404,26 +404,66 @@ async function show(id) {
   })), null, 2) + "\n");
 }
 
-async function resolveSourceUrl(value) {
-  if (!value) throw new Error("Usage: node scripts/research.mjs resolve <url>");
+function htmlAttribute(tag, name) {
+  const match = new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(tag);
+  return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
+}
+
+function decodeHtml(value) {
+  if (!value) return null;
+  return value
+    .replace(/&#(x?[0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code.replace(/^x/i, ""), /^x/i.test(code) ? 16 : 10)))
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function pageMetadata(html) {
+  const meta = new Map();
+  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+    const key = htmlAttribute(tag, "property") ?? htmlAttribute(tag, "name") ?? htmlAttribute(tag, "itemprop");
+    const content = htmlAttribute(tag, "content");
+    if (key && content && !meta.has(key.toLowerCase())) meta.set(key.toLowerCase(), decodeHtml(content));
+  }
+  const titleMatch = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  const jsonDate = /"datePublished"\s*:\s*"([^"]+)"/i.exec(html)?.[1] ?? null;
+  return {
+    title: meta.get("og:title") ?? meta.get("twitter:title") ?? decodeHtml(titleMatch?.[1] ?? null),
+    publishedAt: meta.get("article:published_time") ?? meta.get("datepublished") ?? meta.get("pubdate") ?? jsonDate,
+    description: meta.get("og:description") ?? meta.get("description") ?? meta.get("twitter:description") ?? null,
+  };
+}
+
+async function inspectSource(value) {
+  if (!value) throw new Error("Usage: node scripts/research.mjs source <url>");
   let url;
   try {
     url = new URL(value);
   } catch {
-    throw new Error("resolve requires a valid HTTP(S) URL");
+    throw new Error("source requires a valid HTTP(S) URL");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("resolve requires a valid HTTP(S) URL");
+    throw new Error("source requires a valid HTTP(S) URL");
   }
 
   const response = await fetch(url, {
     redirect: "follow",
     signal: AbortSignal.timeout(15_000),
-    headers: { "user-agent": "BorderClash research source resolver" },
+    headers: { "user-agent": "Mozilla/5.0 BorderClashResearch/1.0" },
   });
-  const resolved = response.url || url.href;
-  await response.body?.cancel();
-  process.stdout.write(resolved + "\n");
+  const contentType = response.headers.get("content-type") ?? "";
+  const html = contentType.includes("html") ? await response.text() : "";
+  const metadata = html ? pageMetadata(html) : { title: null, publishedAt: null, description: null };
+  process.stdout.write(JSON.stringify({
+    url: response.url || url.href,
+    status: response.status,
+    ok: response.ok,
+    ...metadata,
+  }, null, 2) + "\n");
 }
 
 if (!existsSync(dataRoot)) {
@@ -440,8 +480,8 @@ if (command === "brief") {
   await find(process.argv.slice(3).join(" ").trim());
 } else if (command === "show") {
   await show(process.argv[3]);
-} else if (command === "resolve") {
-  await resolveSourceUrl(process.argv[3]);
+} else if (command === "source") {
+  await inspectSource(process.argv[3]);
 } else if (command === "finish") {
   await finish(process.argv[3], process.argv.slice(4));
 } else if (command === "help") {
@@ -450,11 +490,11 @@ if (command === "brief") {
     "node scripts/research.mjs context            # compact human-readable cycle context",
     "node scripts/research.mjs find <text>        # locate relevant archive records",
     "node scripts/research.mjs show <id>           # inspect one exact record",
-    "node scripts/research.mjs resolve <url>        # resolve a discovery redirect to its publisher URL",
+    "node scripts/research.mjs source <url>         # resolve and inspect one publisher source",
     "node scripts/research.mjs finish <hours> <reason>  # schedule next cycle (1..168h)",
     "node scripts/research.mjs check               # full deterministic exit check",
   ].join("\n") + "\n");
 } else {
-  console.error("Usage: node scripts/research.mjs [brief|context|find <text>|show <id>|resolve <url>|finish <hours> <reason>|check]");
+  console.error("Usage: node scripts/research.mjs [brief|context|find <text>|show <id>|source <url>|finish <hours> <reason>|check]");
   process.exit(2);
 }

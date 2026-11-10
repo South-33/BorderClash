@@ -276,29 +276,40 @@ test("finish allows long quiet intervals and rejects scheduling beyond one week"
   }
 });
 
-test("resolve follows a redirect and prints the final publisher URL", async () => {
+test("source follows a redirect and returns publisher metadata", async () => {
   const server = createServer((request, response) => {
     if (request.url === "/grounding") {
       response.writeHead(302, { location: "/publisher/article" });
       response.end();
       return;
     }
-    response.writeHead(200, { "content-type": "text/plain" });
-    response.end("publisher");
+    response.writeHead(200, { "content-type": "text/html" });
+    response.end(`<!doctype html><html><head>
+      <meta property="og:title" content="Border update &amp; talks">
+      <meta property="article:published_time" content="2026-11-10T09:30:00Z">
+      <meta name="description" content="A concise publisher description.">
+    </head><body>publisher</body></html>`);
   });
   await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
   try {
     const address = server.address();
-    const result = await runAsync(["resolve", `http://127.0.0.1:${address.port}/grounding`]);
+    const result = await runAsync(["source", `http://127.0.0.1:${address.port}/grounding`]);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout.trim(), `http://127.0.0.1:${address.port}/publisher/article`);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      url: `http://127.0.0.1:${address.port}/publisher/article`,
+      status: 200,
+      ok: true,
+      title: "Border update & talks",
+      publishedAt: "2026-11-10T09:30:00Z",
+      description: "A concise publisher description.",
+    });
   } finally {
     await new Promise((resolveClose) => server.close(resolveClose));
   }
 });
 
-test("resolve rejects non-http URLs", () => {
-  const result = spawnSync(process.execPath, [script, "resolve", "file:///tmp/source"], {
+test("source rejects non-http URLs", () => {
+  const result = spawnSync(process.execPath, [script, "source", "file:///tmp/source"], {
     cwd: process.cwd(),
     encoding: "utf8",
   });
