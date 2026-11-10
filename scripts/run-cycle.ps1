@@ -244,7 +244,17 @@ try {
     $effectivePrompt = if ($Prompt) {
         $Prompt
     } else {
-        "/goal Complete exactly one BorderClash research cycle. Read AGENTS.md first and treat it as the contract."
+        @"
+/goal Complete exactly one BorderClash research cycle. Read AGENTS.md first and treat it as the contract.
+
+Keep this cycle bounded:
+- Run `node scripts/research.mjs` first and treat its brief as sufficient archive context.
+- Do not list or broadly read `data/`, and do not convert timestamps manually. Use `find` or `show` only when a plausible material candidate requires exact canonical context.
+- Immediately do one discovery pass covering Thai, Cambodian, and independent/regional reporting since the previous completed cycle. Do not repeat equivalent searches for the same side merely for completeness.
+- Deep-read at most six strong candidate sources by default, and only when they could change canonical data or resolve a material contradiction.
+- If the discovery pass finds no plausible material change, finish a clean no-change cycle promptly: call `finish`, run `check`, review the data diff, and stop.
+- The outer runner owns generation, Git publication, and deployment. End with <!-- GOAL_COMPLETE --> only after the research cycle itself is complete.
+"@
     }
 
     $stdoutPath = Join-Path $logDir "$runId.json"
