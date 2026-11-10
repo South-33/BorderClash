@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$runner = Join-Path $repoRoot "ops\run-cycle.ps1"
+$runner = Join-Path $repoRoot "research\automation\run-cycle.ps1"
 $fakeExe = Join-Path $PSScriptRoot "fake-agy.cmd"
 $testRoot = Join-Path $repoRoot ".work\tests\run-cycle-$PID"
 $runsRoot = Join-Path $testRoot "runs"

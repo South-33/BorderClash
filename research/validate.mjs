@@ -1,8 +1,8 @@
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
-import { selectVisibleNews } from "../lib/content-quality.mjs";
-import { isCanonicalDataPath } from "../lib/data-layout.mjs";
-import { getLocalizedTextIssue } from "../lib/language.mjs";
-import { listFiles, readJson, readJsonl } from "../lib/files.mjs";
+import { selectVisibleNews } from "./lib/news.mjs";
+import { isCanonicalDataPath } from "./lib/data-paths.mjs";
+import { getLocalizedTextIssue } from "./lib/localization.mjs";
+import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
 
 const dataRoot = resolve("data");
 const errors = [];

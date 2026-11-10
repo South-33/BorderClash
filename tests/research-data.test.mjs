@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isCanonicalDataPath } from "../lib/data-layout.mjs";
+import { isCanonicalDataPath } from "../research/lib/data-paths.mjs";
 
 test("accepts only documented canonical data paths", () => {
   for (const path of [

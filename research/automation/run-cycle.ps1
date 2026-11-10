@@ -14,7 +14,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $runnerRoot = Join-Path $repoRoot ".work\runner"
 $runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $runnerRoot "runtime" }
 $logDir = if ($LogDir) { [IO.Path]::GetFullPath($LogDir) } else { Join-Path $runnerRoot "logs" }
@@ -272,14 +272,14 @@ try {
         # targets the already-current main commit and cannot mutate the remote.
         Invoke-NonInteractiveGit @("-C", $runDir, "push", "--dry-run", "origin", "${baseHead}:refs/heads/main") $runDir
     }
-    Invoke-Checked "node" @((Join-Path $runDir "scripts\research.mjs"), "check") $runDir
+    Invoke-Checked "node" @((Join-Path $runDir "research\cli.mjs"), "check") $runDir
 
     $cycleContextDir = Join-Path $runDir ".work"
     $cycleContextPath = Join-Path $cycleContextDir "CYCLE_CONTEXT.md"
     New-Item -ItemType Directory -Force -Path $cycleContextDir | Out-Null
     Push-Location $runDir
     try {
-        $contextOutput = & node "scripts\research.mjs" "context" 2>&1
+        $contextOutput = & node "research\cli.mjs" "context" 2>&1
         $contextExit = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -366,7 +366,7 @@ Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.
         throw "Agent rewrote branch history outside the cycle base."
     }
 
-    Invoke-Checked "node" @((Join-Path $runDir "scripts\research.mjs"), "check") $runDir
+    Invoke-Checked "node" @((Join-Path $runDir "research\cli.mjs"), "check") $runDir
     Invoke-Checked "node" @((Join-Path $runDir "scripts\generate-public.mjs")) $runDir
     Invoke-Checked "git" @("-C", $runDir, "diff", "--check") $runDir
 

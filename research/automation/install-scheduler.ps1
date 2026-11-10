@@ -6,8 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 if ($EveryMinutes -lt 5) { throw "EveryMinutes must be at least 5." }
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$runner = Join-Path $repoRoot "ops\run-production.ps1"
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$runner = Join-Path $repoRoot "research\automation\run-scheduled.ps1"
 $arguments = '-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $runner
 
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $repoRoot

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-const script = resolve("scripts", "research.mjs");
+const script = resolve("research", "cli.mjs");
 
 async function writeJsonFile(path, value) {
   await mkdir(resolve(path, ".."), { recursive: true });

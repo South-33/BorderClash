@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
 function Invoke-Checked {
     param([string]$FilePath, [string[]]$Arguments)
@@ -23,6 +23,6 @@ Invoke-Checked "git" @("-C", $repoRoot, "fetch", $RemoteName, "main")
 Invoke-Checked "git" @("-C", $repoRoot, "checkout", "--quiet", "main")
 Invoke-Checked "git" @("-C", $repoRoot, "reset", "--hard", "$RemoteName/main")
 
-$runner = Join-Path $repoRoot "ops\run-cycle.ps1"
+$runner = Join-Path $repoRoot "research\automation\run-cycle.ps1"
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Publish -RemoteName $RemoteName
 exit $LASTEXITCODE

@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { isBorderRelevantNews, selectVisibleNews } from "../lib/content-quality.mjs";
-import { listFiles, readJson, readJsonl, writeJson } from "../lib/files.mjs";
+import { isBorderRelevantNews, selectVisibleNews } from "./lib/news.mjs";
+import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
 
 const dataRoot = resolve("data");
 const command = process.argv[2] || "brief";
@@ -237,7 +237,7 @@ function renderContext(output) {
     `Scheduled next: ${output.cycle.next || "unset"}`,
     `Previous cadence: ${output.cycle.intervalHours || "unknown"}h - ${output.cycle.reason || "no reason recorded"}`,
     "Preflight passed. Start external discovery now. Do not inspect repo/CLI internals unless a command fails.",
-    "Finish with: node scripts/research.mjs finish <hours> \"<reason>\". The outer runner validates and publishes.",
+    "Finish with: pnpm research finish <hours> \"<reason>\". The outer runner validates and publishes.",
     "",
     "## Current picture",
     `Overall: ${output.current.dashboard.conflictLevel}; displaced ${output.current.dashboard.displacedCount}; casualties ${output.current.dashboard.casualtyCount}.`,
@@ -278,7 +278,7 @@ function renderContext(output) {
 
   lines.push(
     "",
-    `Archive: ${output.archive.timeline} timeline events; ${output.archive.news} news records. Use \`node scripts/research.mjs find <text>\` or \`show <id>\` only when deeper local context would improve a decision.`,
+    `Archive: ${output.archive.timeline} timeline events; ${output.archive.news} news records. Use \`pnpm research find <text>\` or \`show <id>\` only when deeper local context would improve a decision.`,
     "",
   );
   return lines.join("\n");
@@ -330,7 +330,7 @@ function run(name, args) {
 
 function check() {
   run(process.execPath, ["--test", ...RESEARCH_TESTS]);
-  run(process.execPath, [join("scripts", "validate.mjs")]);
+  run(process.execPath, [join("research", "validate.mjs")]);
   run("git", ["diff", "--check"]);
 }
 
@@ -439,7 +439,7 @@ function pageMetadata(html) {
 }
 
 async function inspectSource(value) {
-  if (!value) throw new Error("Usage: node scripts/research.mjs source <url>");
+  if (!value) throw new Error("Usage: pnpm research source <url>");
   let url;
   try {
     url = new URL(value);
@@ -503,15 +503,15 @@ if (command === "brief") {
   await finish(process.argv[3], process.argv.slice(4));
 } else if (command === "help" || command === "--help" || command === "-h") {
   process.stdout.write([
-    "node scripts/research.mjs                    # concise structured brief",
-    "node scripts/research.mjs context            # compact human-readable cycle context",
-    "node scripts/research.mjs find <text>        # locate relevant archive records",
-    "node scripts/research.mjs show <id>           # inspect one exact record",
-    "node scripts/research.mjs source <url>         # resolve and inspect one publisher source",
-    "node scripts/research.mjs finish <hours> <reason>  # schedule next cycle (1..168h)",
-    "node scripts/research.mjs check               # full deterministic exit check",
+    "pnpm research                    # concise structured brief",
+    "pnpm research context            # compact human-readable cycle context",
+    "pnpm research find <text>        # locate relevant archive records",
+    "pnpm research show <id>          # inspect one exact record",
+    "pnpm research source <url>       # resolve and inspect one publisher source",
+    "pnpm research finish <hours> <reason>  # schedule next cycle (1..168h)",
+    "pnpm research check              # full deterministic exit check",
   ].join("\n") + "\n");
 } else {
-  console.error("Usage: node scripts/research.mjs [brief|context|find <text>|show <id>|source <url>|finish <hours> <reason>|check]");
+  console.error("Usage: pnpm research [brief|context|find <text>|show <id>|source <url>|finish <hours> <reason>|check]");
   process.exit(2);
 }

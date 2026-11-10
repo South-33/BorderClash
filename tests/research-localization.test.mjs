@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getLocalizedTextIssue, normalizeLocalizedDigits } from "../lib/language.mjs";
+import { getLocalizedTextIssue, normalizeLocalizedDigits } from "../research/lib/localization.mjs";
 
 test("normalizes Thai and Khmer numerals to ASCII", () => {
   assert.equal(normalizeLocalizedDigits(String.fromCodePoint(0x17f0, 0x17f1, 0x17f2)), "012");

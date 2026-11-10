@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 const root = resolve(".");
 const work = resolve(root, ".work", "benchmarks", "reader-copy");
 const runDir = resolve(tmpdir(), "borderclash-reader-bench");
-const fixture = JSON.parse((await readFile(resolve(root, "benchmarks", "reader-copy.json"), "utf8")).replace(/^\uFEFF/u, ""));
+const fixture = JSON.parse((await readFile(resolve(root, "research", "quality", "reader-cases.json"), "utf8")).replace(/^\uFEFF/u, ""));
 const agents = await readFile(resolve(root, "AGENTS.md"), "utf8");
 const section = agents.match(/## Reader copy\s*\n([\s\S]*?)(?=\n## |$)/u);
 if (!section) throw new Error("AGENTS.md is missing the Reader copy section");

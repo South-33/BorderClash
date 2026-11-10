@@ -5,16 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/generate-public.mjs && next build --webpack",
-    "visual:preview": "node scripts/serve-out.mjs",
-    "start": "node scripts/serve-out.mjs",
+    "start": "node scripts/serve-static.mjs",
     "lint": "eslint",
-    "research": "node scripts/research.mjs",
-    "content:bench": "node scripts/content-bench.mjs",
-    "bench:copy": "node scripts/bench-reader.mjs",
-    "validate": "node scripts/validate.mjs",
-    "generate": "node scripts/generate-public.mjs",
+    "research": "node research/cli.mjs",
+    "quality:reader": "node research/quality/reader-benchmark.mjs",
+    "validate": "node research/validate.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:runner": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/runner/run-cycle.test.ps1"
+    "test:automation": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/automation/run-cycle.test.ps1"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.13.18",

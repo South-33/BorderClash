@@ -31,7 +31,7 @@ if ($mode -eq "fail") {
 }
 
 if ($mode -ne "stale-state") {
-    & node scripts/research.mjs finish 12 "Fake cycle completed for runner validation." | Out-Null
+    & node research/cli.mjs finish 12 "Fake cycle completed for runner validation." | Out-Null
     if ($LASTEXITCODE -ne 0) {
         [Console]::Error.WriteLine("fake cycle could not finalize scheduler state")
         exit 24

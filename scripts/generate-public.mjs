@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../lib/content-quality.mjs";
-import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../lib/files.mjs";
+import { selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../research/lib/news.mjs";
+import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../research/lib/files.mjs";
 
 const dataRoot = resolve("data");
 const publicRoot = resolve("public", "data");
