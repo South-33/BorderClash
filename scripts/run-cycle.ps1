@@ -249,6 +249,7 @@ try {
 
     $stdoutPath = Join-Path $logDir "$runId.json"
     $stderrPath = Join-Path $logDir "$runId.stderr.log"
+    $agyLogPath = Join-Path $logDir "$runId.agy.log"
     Write-RuntimeState "running" $runId "Antigravity cycle started" $runDir
 
     Push-Location $runDir
@@ -260,7 +261,7 @@ try {
     try {
         [Console]::OutputEncoding = $utf8NoBom
         $OutputEncoding = $utf8NoBom
-        $stdout = & $agy -p $effectivePrompt --dangerously-skip-permissions --output-format json --model $agyModel --print-timeout "$($TimeoutMinutes)m" 2> $stderrPath
+        $stdout = & $agy -p $effectivePrompt --dangerously-skip-permissions --output-format json --model $agyModel --print-timeout "$($TimeoutMinutes)m" --log-file $agyLogPath 2> $stderrPath
         $agyExit = $LASTEXITCODE
         [IO.File]::WriteAllText($stdoutPath, [string]::Join([Environment]::NewLine, [string[]]$stdout), $utf8NoBom)
     } finally {
