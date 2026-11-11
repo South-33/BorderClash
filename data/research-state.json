@@ -7,5 +7,7 @@
   "lastCycleInterval": 24,
   "schedulingReason": "Border conditions remain non-kinetic with active ASEAN monitoring and bilateral confidence-building measures continuing.",
   "researchCycleCount": 610,
-  "scheduler": "external"
+  "scheduler": "external",
+  "evidenceRubricVersion": "evidence-v1",
+  "evidenceRubricActivatedAt": 1794355478441
 }

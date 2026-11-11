@@ -4,8 +4,11 @@ import { isCanonicalDataPath } from "./lib/data-paths.mjs";
 import { getLocalizedTextIssue } from "./lib/localization.mjs";
 import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
 import { MILITARY_RUBRIC_VERSION, militaryAssessmentFor } from "./lib/military-assessment.mjs";
+import { EVIDENCE_ALLOWED_SCORES, EVIDENCE_RUBRIC_VERSION } from "./lib/evidence-score.mjs";
 
 const dataRoot = resolve("data");
+const state = await readJson(join(dataRoot, "research-state.json"));
+const evidenceRubricActivatedAt = Number(state.evidenceRubricActivatedAt || 0);
 const errors = [];
 const nativeDigits = /[\u0E50-\u0E59\u17E0-\u17E9\u17F0-\u17F9]/u;
 const thaiTimelineChatVoice = /(ครับ|ค่ะ|เพื่อนบอกต่อ|ไทยเรา|บ้านเรา|ของเรา|ฝั่งเรา|กองทัพเรา|ทหารเรา|พวกเขมร)/u;
@@ -122,6 +125,9 @@ for (const file of timelineFiles) {
       if (!Number.isFinite(source.credibility) || source.credibility < 0 || source.credibility > 100) {
         add(location + ".sources[" + index + "].credibility", "must be a 0..100 record-level evidence score");
       }
+      if (Number.isFinite(source.addedAt) && source.addedAt >= evidenceRubricActivatedAt && !EVIDENCE_ALLOWED_SCORES.has(source.credibility)) {
+        add(location + ".sources[" + index + "].credibility", "new evidence must use 30, 55, 75, or 90");
+      }
       const normalizedUrl = String(source.url || "").replace(/\/$/u, "");
       if (normalizedUrl && sourceUrls.has(normalizedUrl)) add(location, "duplicate source URL");
       if (normalizedUrl) sourceUrls.add(normalizedUrl);
@@ -156,6 +162,9 @@ for (const file of newsFiles) {
     if (!newsStatuses.has(article.status)) add(location, "invalid status");
     if (!Number.isFinite(article.credibility) || article.credibility < 0 || article.credibility > 100) {
       add(location + ".credibility", "must be a 0..100 record-level evidence score");
+    }
+    if (Number.isFinite(article.fetchedAt) && article.fetchedAt >= evidenceRubricActivatedAt && !EVIDENCE_ALLOWED_SCORES.has(article.credibility)) {
+      add(location + ".credibility", "new evidence must use 30, 55, 75, or 90");
     }
     const articleTime = article.publishedAt || article.fetchedAt;
     if (!Number.isFinite(articleTime)) {
@@ -316,8 +325,10 @@ for (const field of ["id", "key", "conflictLevel", "casualtyCount", "displacedTr
   if (impact[field] !== undefined) add("current/impact." + field, "legacy field");
 }
 
-const state = await readJson(join(dataRoot, "research-state.json"));
 notFuture("research-state.lastResearchAt", state.lastResearchAt);
+if (state.evidenceRubricVersion !== EVIDENCE_RUBRIC_VERSION) add("research-state.evidenceRubricVersion", "unsupported rubric");
+if (!Number.isFinite(state.evidenceRubricActivatedAt)) add("research-state.evidenceRubricActivatedAt", "missing");
+notFuture("research-state.evidenceRubricActivatedAt", state.evidenceRubricActivatedAt);
 if (state.nextRunAt !== undefined && !Number.isFinite(state.nextRunAt)) add("research-state.nextRunAt", "not finite");
 if (state.lastCycleInterval !== undefined && (state.lastCycleInterval < 1 || state.lastCycleInterval > 168)) {
   add("research-state.lastCycleInterval", "outside 1..168 hours");

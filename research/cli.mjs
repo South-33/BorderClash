@@ -237,6 +237,7 @@ function renderContext(output) {
     `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
     `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
     "Gauge: choose the highest evidence-backed tier defined in AGENTS.md; never choose a free numeric score.",
+    "Source score: use only 90 verified/corroborated, 75 strong attributed, 55 limited, or 30 weak/unverified.",
     `Summary: ${output.current.summary.summary || ""}`,
   ];
 
