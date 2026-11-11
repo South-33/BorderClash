@@ -16,6 +16,12 @@ test('production research runs from main through one Windows task', () => {
   assert.match(production, /git.+reset.+--hard.+main/s);
   assert.match(production, /research\\automation\\run-cycle\.ps1/);
   assert.match(production, /-Publish/);
+  assert.match(production, /data\\research-state\.json/);
+  assert.match(production, /SKIP: not-due/);
+  assert.ok(
+    production.indexOf('if (-not (Test-ResearchDue))') < production.indexOf('"fetch", $RemoteName, "main"'),
+    'scheduler must check due state before waking Git/network',
+  );
 
   assert.match(installer, /BorderClashResearch/);
   assert.match(installer, /research\\automation\\run-scheduled\.ps1/);
