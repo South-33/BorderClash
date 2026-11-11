@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../research/lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../research/lib/files.mjs";
+import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/military-assessment.mjs";
 
 const dataRoot = resolve("data");
 const publicRoot = resolve("public", "data");
@@ -76,17 +77,21 @@ function timelinePublic(event) {
 
 function perspectivePublic(value) {
   if (!value) return null;
+  const assessment = militaryAssessmentFor(value.militaryAssessment?.tier);
+  if (!assessment) throw new Error(`Invalid military assessment tier: ${value.militaryAssessment?.tier || "missing"}`);
   return {
     summary: value.summary,
     summaryTh: value.summaryTh,
     summaryKh: value.summaryKh,
     sourceNames: value.sourceNames,
-    activityLabel: value.activityLabel,
-    activityLabelTh: value.activityLabelTh,
-    activityLabelKh: value.activityLabelKh,
-    activityDetails: value.activityDetails,
-    activityDetailsTh: value.activityDetailsTh,
-    activityDetailsKh: value.activityDetailsKh,
+    tensionScore: assessment.score,
+    posture: assessment.posture,
+    postureLabel: value.activityLabel,
+    postureLabelTh: value.activityLabelTh,
+    postureLabelKh: value.activityLabelKh,
+    postureReason: value.activityDetails,
+    postureReasonTh: value.activityDetailsTh,
+    postureReasonKh: value.activityDetailsKh,
     updatedAt: value.updatedAt,
   };
 }
@@ -104,12 +109,22 @@ function summaryPublic(value) {
   };
 }
 
-function impactPublic(value) {
+function metricDisplay(metric) {
+  if (!metric || metric.value == null) return "—";
+  const number = Number(metric.value).toLocaleString("en-US");
+  if (metric.qualifier === "MORE_THAN") return `>${number}`;
+  if (metric.qualifier === "AT_LEAST") return `≥${number}`;
+  return number;
+}
+
+function impactPublic(value, thailand, cambodia) {
   if (!value) return null;
   return {
-    displaced: value.displaced,
-    deaths: value.deaths,
-    injuries: value.injuries,
+    riskLevel: riskLevelFromTiers(thailand?.militaryAssessment?.tier, cambodia?.militaryAssessment?.tier),
+    displacedCount: metricDisplay(value.displaced),
+    deathCount: metricDisplay(value.deaths),
+    civilianInjuredCount: "—",
+    militaryInjuredCount: "—",
     updatedAt: value.updatedAt,
   };
 }
@@ -141,7 +156,7 @@ const snapshot = {
   thailandPerspective: perspectivePublic(thailandPerspective),
   cambodiaPerspective: perspectivePublic(cambodiaPerspective),
   summary: summaryPublic(currentSummary),
-  impact: impactPublic(impact),
+  impact: impactPublic(impact, thailandPerspective, cambodiaPerspective),
   timelineEvents: [],
   researchState: {
     lastResearchAt: researchState.lastResearchAt,

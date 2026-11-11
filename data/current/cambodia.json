@@ -13,5 +13,14 @@
   "activityLabelKh": "លេណដ្ឋាន និងការតវ៉ាអំពីព្រំដែន",
   "activityDetails": "Cambodian forces are holding defensive positions, including trenches near Sa Kaeo, while Cambodia protests Thai border actions in Pursat. No new armed clash is reported in the latest period.",
   "activityDetailsTh": "กองกำลังกัมพูชากำลังรักษาที่ตั้งแนวรับ ซึ่งรวมถึงสนามเพลาะใกล้สระแก้ว ขณะที่กัมพูชาประท้วงการกระทำบริเวณชายแดนของไทยในโพธิสัตว์ ทั้งนี้ ไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่ในช่วงเวลาล่าสุด",
-  "activityDetailsKh": "កងកម្លាំងកម្ពុជាកំពុងកាន់កាប់ទីតាំងការពារខ្លួន រួមទាំងលេណដ្ឋានក្បែរស្រះកែវ ខណៈដែលកម្ពុជាតវ៉ាចំពោះសកម្មភាពតាមព្រំដែនរបស់ថៃនៅពោធិ៍សាត់។ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចប្រដាប់អាវុធថ្មីណាមួយនៅក្នុងរយៈពេលចុងក្រោយនេះឡើយ។"
+  "activityDetailsKh": "កងកម្លាំងកម្ពុជាកំពុងកាន់កាប់ទីតាំងការពារខ្លួន រួមទាំងលេណដ្ឋានក្បែរស្រះកែវ ខណៈដែលកម្ពុជាតវ៉ាចំពោះសកម្មភាពតាមព្រំដែនរបស់ថៃនៅពោធិ៍សាត់។ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចប្រដាប់អាវុធថ្មីណាមួយនៅក្នុងរយៈពេលចុងក្រោយនេះឡើយ។",
+  "militaryAssessment": {
+    "rubricVersion": "military-v1",
+    "tier": "FORTIFIED",
+    "assessedAt": 1794355478441,
+    "evidenceIds": [
+      "ks7esq7aw3cv0j9cm3qmbad1w9894qgc"
+    ],
+    "basis": "Confirmed defensive trench construction remains the strongest current military-action signal; the current record reports no new armed clash."
+  }
 }

@@ -23,12 +23,14 @@ export interface Perspective {
     summaryTh?: string;
     summaryKh?: string;
     sourceNames: string[];
-    activityLabel?: string;
-    activityLabelTh?: string;
-    activityLabelKh?: string;
-    activityDetails?: string;
-    activityDetailsTh?: string;
-    activityDetailsKh?: string;
+    tensionScore: number;
+    posture: "PEACEFUL" | "DEFENSIVE" | "ESCALATED" | "AGGRESSIVE";
+    postureLabel?: string;
+    postureLabelTh?: string;
+    postureLabelKh?: string;
+    postureReason?: string;
+    postureReasonTh?: string;
+    postureReasonKh?: string;
     updatedAt: number;
 }
 
@@ -43,21 +45,12 @@ export interface CurrentSummary {
 }
 
 export interface Impact {
-    displaced: ImpactMetric;
-    deaths: ImpactMetric;
-    injuries: ImpactMetric;
+    riskLevel: "LOW" | "ELEVATED" | "CRITICAL";
+    displacedCount: number | string;
+    civilianInjuredCount: number | string;
+    militaryInjuredCount: number | string;
+    deathCount: number | string;
     updatedAt: number;
-}
-
-export interface ImpactMetric {
-    value: number | null;
-    qualifier: "MORE_THAN" | "AT_LEAST" | "NO_COMBINED_TOTAL";
-    claimantName?: string;
-    claimantNameTh?: string;
-    claimantNameKh?: string;
-    sourceName?: string;
-    sourceUrl?: string;
-    sourceDate?: string;
 }
 
 export interface TimelineEvent {

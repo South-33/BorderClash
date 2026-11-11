@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
+import { militaryAssessmentFor } from "./lib/military-assessment.mjs";
 
 const dataRoot = resolve("data");
 const command = process.argv[2] || "brief";
@@ -175,11 +176,13 @@ async function brief() {
       },
       thailand: {
         updatedAt: current.thailand?.updatedAt,
+        militaryTier: current.thailand?.militaryAssessment?.tier,
         activityLabel: current.thailand?.activityLabel,
         summary: current.thailand?.summary,
       },
       cambodia: {
         updatedAt: current.cambodia?.updatedAt,
+        militaryTier: current.cambodia?.militaryAssessment?.tier,
         activityLabel: current.cambodia?.activityLabel,
         summary: current.cambodia?.summary,
       },
@@ -231,8 +234,9 @@ function renderContext(output) {
     "",
     "## Current picture",
     `Impact: ${output.current.impact.displaced?.qualifier === "MORE_THAN" ? ">" : ""}${output.current.impact.displaced?.value ?? "unknown"} displaced; ${output.current.impact.deaths?.qualifier === "AT_LEAST" ? ">=" : ""}${output.current.impact.deaths?.value ?? "unknown"} 2025 deaths; injuries: no combined total`,
-    `Thailand: ${output.current.thailand.activityLabel || "current activity not labelled"}. ${output.current.thailand.summary || ""}`,
-    `Cambodia: ${output.current.cambodia.activityLabel || "current activity not labelled"}. ${output.current.cambodia.summary || ""}`,
+    `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
+    `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
+    "Gauge: choose the highest evidence-backed tier defined in AGENTS.md; never choose a free numeric score.",
     `Summary: ${output.current.summary.summary || ""}`,
   ];
 
@@ -248,7 +252,7 @@ function renderContext(output) {
     "## Recent timeline anchors",
   );
 
-  for (const row of output.recentTimeline.slice(0, 6)) {
+  for (const row of output.recentTimeline.slice(0, 5)) {
     lines.push(`- ${row.date} ${row.timeOfDay || ""} [${row.id}] ${row.title}`.trim());
   }
   if (!output.recentTimeline.length) lines.push("- none");
@@ -256,7 +260,7 @@ function renderContext(output) {
   lines.push("", "## Recent evidence anchors");
   for (const [label, key] of [["Thailand", "thailand"], ["Cambodia", "cambodia"], ["International", "international"]]) {
     lines.push(`${label}:`);
-    const rows = output.recentNews[key].slice(0, 4);
+    const rows = output.recentNews[key].slice(0, 3);
     if (!rows.length) {
       lines.push("- none");
       continue;

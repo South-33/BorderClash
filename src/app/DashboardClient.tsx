@@ -9,6 +9,7 @@ import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translati
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
 import { getLocalizedStyleIssue, isValidLocalizedText, normalizeLocalizedDigits } from '@/lib/localized-display';
 
+const DASHBOARD_TIME_ZONE = 'Asia/Phnom_Penh';
 type ViewMode = 'ANALYSIS' | 'TIMELINE' | 'GUIDE';
 type DashboardNewsArticle = NewsArticle & {
   isVerified?: boolean;
@@ -399,7 +400,7 @@ const NewsItem = ({ article, perspective, lang = 'en', now }: {
               <span className="text-[9px] font-mono font-bold uppercase tracking-widest opacity-25">{t.credibility}</span>
               <div className="flex-1 h-[2px] bg-riso-ink/5">
                 <div
-                  className={`h-full ${(article.credibility ?? 50) >= 85 ? 'bg-green-600' : (article.credibility ?? 50) >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                  className={`h-full ${(article.credibility ?? 50) >= 70 ? 'bg-green-600' : (article.credibility ?? 50) >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`}
                   style={{ width: `${article.credibility ?? 50}%` }}
                 />
               </div>
@@ -591,47 +592,105 @@ const AutoScrollLabel = ({ text, className = "", fontSizeClass = "text-[10px]" }
   );
 };
 
-// Current military activity from the latest stored source summary.
-const MilitarySituation = ({
-  activityLabel,
-  activityLabelTh,
-  activityLabelKh,
-  activityDetails,
-  activityDetailsTh,
-  activityDetailsKh,
+// Military Intensity Gauge - Enhanced with territorial context and AI rationale
+const MilitaryIntensityGauge = ({
+  intensity,
+  posture,
+  postureLabel,
+  postureLabelTh,
+  postureLabelKh,
+  postureRationale,
+  postureRationaleTh,
+  postureRationaleKh,
   lang = 'en'
 }: {
-  activityLabel?: string;
-  activityLabelTh?: string;
-  activityLabelKh?: string;
-  activityDetails?: string;
-  activityDetailsTh?: string;
-  activityDetailsKh?: string;
+  intensity: number;
+  posture: "PEACEFUL" | "DEFENSIVE" | "ESCALATED" | "AGGRESSIVE" | undefined;
+  postureLabel?: string;
+  postureLabelTh?: string;
+  postureLabelKh?: string;
+  postureRationale?: string;
+  postureRationaleTh?: string;
+  postureRationaleKh?: string;
   lang?: 'en' | 'th' | 'kh';
 }) => {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const t = TRANSLATIONS[(lang as Lang) || 'en'];
-  const displayLabel = localizedText(lang as Lang, activityLabel, activityLabelTh, activityLabelKh);
-  const displayDetails = localizedText(lang as Lang, activityDetails, activityDetailsTh, activityDetailsKh);
+  const displayIntensity = intensity ?? 50;
+  const displayPosture = posture ?? "DEFENSIVE";
+
+  const displayLabel = localizedText(lang as Lang, postureLabel, postureLabelTh, postureLabelKh);
+  const displayRationale = localizedText(lang as Lang, postureRationale, postureRationaleTh, postureRationaleKh);
+
+  const postureBgColors: Record<string, string> = {
+    PEACEFUL: 'bg-green-600/10 border-green-600/30',
+    DEFENSIVE: 'bg-yellow-500/10 border-yellow-500/30',
+    ESCALATED: 'bg-orange-500/10 border-orange-500/30',
+    AGGRESSIVE: 'bg-red-500/10 border-red-500/30',
+  };
 
   const labelFontSize = (lang === 'th' || lang === 'kh') ? 'text-[15px]' : 'text-[12px]';
 
   return (
     <div className="dashboard-military-gauge mb-4">
-      <div className="dashboard-gauge-title mb-2">
-        <h4 className={`font-mono font-bold uppercase opacity-60 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.militarySituation}</h4>
+      {/* Title and Intensity Number Row */}
+      <div className="dashboard-gauge-title flex items-center justify-between mb-2">
+        <h4 className={`font-mono font-bold uppercase opacity-60 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.postureGaugeTitle || t.militaryIntensity}</h4>
+        <span className={`font-mono opacity-80 font-bold ${lang === 'kh' || lang === 'th' ? 'text-[12px]' : 'text-[10px]'}`}>{displayIntensity}/100</span>
+      </div>
+
+      {/* Gradient Gauge Bar */}
+      {/* Segmented LCD-style Gauge Bar */}
+      <div className="dashboard-gauge-bar relative h-8 bg-riso-ink/5 border border-riso-ink/20 flex gap-[2px] p-[2px]">
+        {/* 20 Segments (5% each for even split) */}
+        {Array.from({ length: 20 }).map((_, i) => {
+          const threshold = (i + 1) * 5;
+          const isActive = displayIntensity >= threshold;
+
+          // Use inline styles to avoid Tailwind purging issues in production
+          // Color hex values: Green #188d45, Yellow #eab308, Orange #ea580c, Red #dc2626
+          let color = '';
+          if (threshold <= 30) color = '#188d45';      // Green
+          else if (threshold <= 55) color = '#eab308'; // Yellow
+          else if (threshold < 70) color = '#ea580c';  // Orange
+          else color = '#dc2626';                       // Red
+
+          return (
+            <div
+              key={i}
+              className="flex-1 transition-all duration-300"
+              style={{
+                backgroundColor: color,
+                opacity: isActive ? 1 : 0.2
+              }}
+            />
+          );
+        })}
+
+
       </div>
 
       <div className="dashboard-gauge-controls flex items-center gap-2 mt-2">
+        {/* Low Key Tactical Label */}
+        <div className={`dashboard-gauge-chip flex-shrink-0 h-8 flex items-center justify-center px-3 border ${labelFontSize} font-mono font-bold uppercase tracking-widest transition-colors duration-300 ${displayPosture === 'PEACEFUL' ? 'text-[#188d45] border-[#188d45]/30' :
+          displayPosture === 'DEFENSIVE' ? 'text-[#ca8a04] border-[#ca8a04]/30' :
+            displayPosture === 'ESCALATED' ? 'text-[#ea580c] border-[#ea580c]/30' :
+              'text-[#b91c1c] border-[#b91c1c]/30'
+          }`}>
+          {displayPosture === 'PEACEFUL' ? t.peaceful : displayPosture === 'AGGRESSIVE' ? t.aggressive : displayPosture === 'ESCALATED' ? t.escalated : t.defensive}
+        </div>
+
+        {/* Unified Label - Dynamic Width with Auto-Scroll if Overflowing */}
         {displayLabel && (
           <AutoScrollLabel
             text={displayLabel}
-            className="dashboard-gauge-label border bg-riso-ink/5 border-riso-ink/20"
+            className={`dashboard-gauge-label border ${postureBgColors[displayPosture]}`}
             fontSizeClass={labelFontSize}
           />
         )}
 
-        {displayDetails && (
+        {/* Dedicated Analysis Toggle Button */}
+        {displayRationale && (
           <button
             onClick={() => setShowAnalysis(!showAnalysis)}
             className={`dashboard-gauge-button
@@ -643,7 +702,7 @@ const MilitarySituation = ({
                 : 'bg-riso-ink/5 text-riso-ink border-riso-ink/30 hover:border-riso-ink/100 hover:bg-riso-ink/10'}
             `}
           >
-            <span className="font-bold tracking-wider">{t.details}</span>
+            <span className="font-bold tracking-wider">{t.postureRationale}</span>
             <span
               className="transition-transform duration-300"
               style={{
@@ -657,14 +716,16 @@ const MilitarySituation = ({
         )}
       </div>
 
+      {/* AI Rationale (collapsible with smooth animation) */}
       <div
         className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${showAnalysis ? 'grid-rows-[1fr] mt-0' : 'grid-rows-[0fr] mt-0'}`}
       >
         <div className="overflow-hidden">
-          {displayDetails && (
+          {displayRationale && (
             <div className="mt-2 p-3 bg-riso-ink/5 border-l-4 border-l-riso-ink border-y border-r border-y-riso-ink/10 border-r-riso-ink/10">
               <p className={`font-mono text-justify leading-relaxed ${labelFontSize}`}>
-                {displayDetails}
+                <span className="mr-2 uppercase tracking-wider opacity-70">[{t.analysis}]:</span>
+                {displayRationale}
               </p>
             </div>
           )}
@@ -1356,24 +1417,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric', numberingSystem: 'latn' });
   };
 
-  // Source dates are date-only evidence metadata. Parse their components directly so
-  // timezone conversion cannot invent a time or move the publication to another day.
-  const formatSourceDate = (sourceDate?: string) => {
-    const match = sourceDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/u);
-    if (!match) return null;
-
-    const [, year, monthText, dayText] = match;
-    const monthIndex = Number(monthText) - 1;
-    const day = Number(dayText);
-    if (monthIndex < 0 || monthIndex > 11 || day < 1 || day > 31) return sourceDate;
-
-    if (lang === 'kh') return `${day} ${KH_MONTHS[monthIndex]} ${year}`;
-    if (lang === 'th') return `${day} ${TH_MONTHS_SHORT[monthIndex]} ${year}`;
-    const month = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' })
-      .format(new Date(Date.UTC(Number(year), monthIndex, 1)));
-    return `${day} ${month} ${year}`;
-  };
-
   // Build flat list for virtualization: [header, event, event, ..., header, event, ...]
   // Each item has { type: 'header' | 'event', date: string, event?: any, eventIndex?: number }
   const virtualItems = useMemo(() => {
@@ -1892,69 +1935,88 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               <div className="flex-none">
                 <Card className="dashboard-stats-card" title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
 
-                  <div className="stats-grid grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+                  <div className="stats-grid grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                     {/* Displaced Civilians */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.displacedCivilians}</h4>
-                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">
-                        {impact?.displaced?.value != null
-                          ? `${impact.displaced.qualifier === 'MORE_THAN' ? '>' : impact.displaced.qualifier === 'AT_LEAST' ? '≥' : ''}${impact.displaced.value.toLocaleString('en-US')}`
-                          : '—'}
-                      </span>
-                      {impact?.displaced?.claimantName && (
-                        <span className={`mt-3 font-mono opacity-60 leading-tight ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>
-                          {localizedText(
-                            lang as Lang,
-                            impact.displaced.claimantName,
-                            impact.displaced.claimantNameTh,
-                            impact.displaced.claimantNameKh,
-                          )}
-                        </span>
-                      )}
-                      {impact?.displaced?.sourceUrl && (
-                        <a
-                          className={`${impact.displaced.claimantName ? 'mt-1' : 'mt-3'} font-mono text-[10px] opacity-50 hover:opacity-80 underline underline-offset-2`}
-                          href={impact.displaced.sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {impact.displaced.claimantName ? `${t.reportedBy} ` : ''}
-                          {impact.displaced.sourceName}
-                          {formatSourceDate(impact.displaced.sourceDate) ? ` · ${formatSourceDate(impact.displaced.sourceDate)}` : ''}
-                        </a>
-                      )}
+                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{(impact?.displacedCount || 0).toLocaleString('en-US')}</span>
+                      {/* Trend Indicator - Show last updated instead */}
+                      <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} leading-tight`}>
+                        {impact?.updatedAt ? (
+                          <span className="block" title={`${t.lastUpdated}: ${new Intl.DateTimeFormat('en-GB', {
+                            timeZone: DASHBOARD_TIME_ZONE,
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }).format(new Date(impact.updatedAt))}`}>
+                            {t.lastUpdated} {(() => {
+                              const d = new Date(impact.updatedAt);
+                              const dateParts = new Intl.DateTimeFormat('en-US', {
+                                timeZone: DASHBOARD_TIME_ZONE,
+                                month: 'numeric',
+                                day: 'numeric',
+                              }).formatToParts(d);
+                              const day = Number(dateParts.find(part => part.type === 'day')?.value || '1');
+                              const monthIndex = Number(dateParts.find(part => part.type === 'month')?.value || '1') - 1;
+                              const month = lang === 'kh'
+                                ? KH_MONTHS[monthIndex]
+                                : lang === 'th'
+                                  ? TH_MONTHS_SHORT[monthIndex]
+                                  : new Intl.DateTimeFormat('en-US', { timeZone: DASHBOARD_TIME_ZONE, month: 'short' }).format(d).toUpperCase();
+                              const time = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'en-GB', {
+                                timeZone: DASHBOARD_TIME_ZONE,
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: lang === 'en',
+                              }).format(d);
+                              return <>{month} {day} <span className="hidden md:inline ml-1">{time}</span></>;
+                            })()}
+                          </span>
+                        ) : (
+                          <span>{t.estimated}</span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Fatalities (Replaces old Injuries box position) */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.fatalities}</h4>
-                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">
-                        {impact?.deaths?.value != null
-                          ? `${impact.deaths.qualifier === 'MORE_THAN' ? '>' : impact.deaths.qualifier === 'AT_LEAST' ? '≥' : ''}${impact.deaths.value.toLocaleString('en-US')}`
-                          : '—'}
-                      </span>
-                      <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.fighting2025}</div>
-                      {impact?.deaths?.sourceUrl && (
-                        <a
-                          className="mt-1 font-mono text-[10px] opacity-50 hover:opacity-80 underline underline-offset-2"
-                          href={impact.deaths.sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {impact.deaths.sourceName}
-                          {formatSourceDate(impact.deaths.sourceDate) ? ` · ${formatSourceDate(impact.deaths.sourceDate)}` : ''}
-                        </a>
-                      )}
+                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{impact?.deathCount || 0}</span>
+                      <div className={`mt-3 font-mono text-riso-accent font-bold uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.confirmedOnly}</div>
                     </div>
 
                     {/* Injuries - Split into Civilian / Military */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
-                      {/* No single cross-border injury total is reliable enough to publish. */}
+                      {/* Top: Title + Numbers */}
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.injured}</h4>
-                      <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">—</span>
-                      <span className={`mt-3 font-mono opacity-50 tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} leading-tight`}>{t.noCombinedInjuryTotal}</span>
+                      <div className="flex items-start gap-6">
+                        {/* Civilian */}
+                        <div className="text-left">
+                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{impact?.civilianInjuredCount || 0}</span>
+                          <span className={`mt-2 font-mono opacity-50 uppercase tracking-tighter md:tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.civilian}</span>
+                        </div>
+                        {/* Military */}
+                        <div className="text-left">
+                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{impact?.militaryInjuredCount || 0}</span>
+                          <span className={`mt-2 font-mono opacity-50 uppercase tracking-tighter md:tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.military}</span>
+                        </div>
+                      </div>
                     </div>
 
+                    {/* Status / risk level */}
+                    <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.threatLevel}</h4>
+                      <span className={`font-display text-3xl md:text-5xl leading-none uppercase ${(impact?.riskLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
+                        (impact?.riskLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'
+                        }`}>
+                        {(impact?.riskLevel || 'Low').toUpperCase() === 'CRITICAL' ? t.critical :
+                          (impact?.riskLevel || 'Low').toUpperCase() === 'ELEVATED' ? t.elevated :
+                            t.low}
+                      </span>
+                      <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.estimated}</div>
+                    </div>
                   </div>
                 </Card>
               </div>
@@ -2022,14 +2084,16 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           )}
                         </div>
 
-                        {/* Military situation */}
-                        <MilitarySituation
-                          activityLabel={cambodiaPerspective?.activityLabel}
-                          activityLabelTh={cambodiaPerspective?.activityLabelTh}
-                          activityLabelKh={cambodiaPerspective?.activityLabelKh}
-                          activityDetails={cambodiaPerspective?.activityDetails}
-                          activityDetailsTh={cambodiaPerspective?.activityDetailsTh}
-                          activityDetailsKh={cambodiaPerspective?.activityDetailsKh}
+                        {/* Military Intensity */}
+                        <MilitaryIntensityGauge
+                          intensity={cambodiaPerspective?.tensionScore ?? 50}
+                          posture={cambodiaPerspective?.posture}
+                          postureLabel={cambodiaPerspective?.postureLabel}
+                          postureLabelTh={cambodiaPerspective?.postureLabelTh}
+                          postureLabelKh={cambodiaPerspective?.postureLabelKh}
+                          postureRationale={cambodiaPerspective?.postureReason}
+                          postureRationaleTh={cambodiaPerspective?.postureReasonTh}
+                          postureRationaleKh={cambodiaPerspective?.postureReasonKh}
                           lang={lang}
                         />
                         {/* Intelligence Log - Scrollable & Filterable */}
@@ -2064,14 +2128,16 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           )}
                         </div>
 
-                        {/* Military situation */}
-                        <MilitarySituation
-                          activityLabel={thailandPerspective?.activityLabel}
-                          activityLabelTh={thailandPerspective?.activityLabelTh}
-                          activityLabelKh={thailandPerspective?.activityLabelKh}
-                          activityDetails={thailandPerspective?.activityDetails}
-                          activityDetailsTh={thailandPerspective?.activityDetailsTh}
-                          activityDetailsKh={thailandPerspective?.activityDetailsKh}
+                        {/* Military Intensity */}
+                        <MilitaryIntensityGauge
+                          intensity={thailandPerspective?.tensionScore ?? 50}
+                          posture={thailandPerspective?.posture}
+                          postureLabel={thailandPerspective?.postureLabel}
+                          postureLabelTh={thailandPerspective?.postureLabelTh}
+                          postureLabelKh={thailandPerspective?.postureLabelKh}
+                          postureRationale={thailandPerspective?.postureReason}
+                          postureRationaleTh={thailandPerspective?.postureReasonTh}
+                          postureRationaleKh={thailandPerspective?.postureReasonKh}
                           lang={lang}
                         />
 

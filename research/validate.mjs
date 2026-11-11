@@ -3,6 +3,7 @@ import { selectVisibleNews } from "./lib/news.mjs";
 import { isCanonicalDataPath } from "./lib/data-paths.mjs";
 import { getLocalizedTextIssue } from "./lib/localization.mjs";
 import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
+import { MILITARY_RUBRIC_VERSION, militaryAssessmentFor } from "./lib/military-assessment.mjs";
 
 const dataRoot = resolve("data");
 const errors = [];
@@ -118,6 +119,9 @@ for (const file of timelineFiles) {
     for (const [index, source] of (event.sources || []).entries()) {
       directSourceUrl(location + ".sources[" + index + "]", source.url);
       notFuture(location + ".sources[" + index + "].addedAt", source.addedAt);
+      if (!Number.isFinite(source.credibility) || source.credibility < 0 || source.credibility > 100) {
+        add(location + ".sources[" + index + "].credibility", "must be a 0..100 record-level evidence score");
+      }
       const normalizedUrl = String(source.url || "").replace(/\/$/u, "");
       if (normalizedUrl && sourceUrls.has(normalizedUrl)) add(location, "duplicate source URL");
       if (normalizedUrl) sourceUrls.add(normalizedUrl);
@@ -150,6 +154,9 @@ for (const file of newsFiles) {
     }
     if (!article.source) add(location, "missing source");
     if (!newsStatuses.has(article.status)) add(location, "invalid status");
+    if (!Number.isFinite(article.credibility) || article.credibility < 0 || article.credibility > 100) {
+      add(location + ".credibility", "must be a 0..100 record-level evidence score");
+    }
     const articleTime = article.publishedAt || article.fetchedAt;
     if (!Number.isFinite(articleTime)) {
       add(location, "missing timestamp");
@@ -198,6 +205,38 @@ for (const name of ["thailand", "cambodia"]) {
   if (value.posture !== undefined) add(location + ".posture", "legacy field");
   if (!value.activityLabel) add(location + ".activityLabel", "missing");
   if (!value.activityDetails) add(location + ".activityDetails", "missing");
+  const assessment = value.militaryAssessment;
+  if (!assessment || typeof assessment !== "object") {
+    add(location + ".militaryAssessment", "missing");
+  } else {
+    if (assessment.rubricVersion !== MILITARY_RUBRIC_VERSION) {
+      add(location + ".militaryAssessment.rubricVersion", "unsupported rubric");
+    }
+    if (!militaryAssessmentFor(assessment.tier)) {
+      add(location + ".militaryAssessment.tier", "invalid tier");
+    }
+    notFuture(location + ".militaryAssessment.assessedAt", assessment.assessedAt);
+    if (!Number.isFinite(assessment.assessedAt)) {
+      add(location + ".militaryAssessment.assessedAt", "missing");
+    }
+    if (!Array.isArray(assessment.evidenceIds) || assessment.evidenceIds.length === 0) {
+      add(location + ".militaryAssessment.evidenceIds", "must cite at least one stored evidence record");
+    } else {
+      for (const [index, id] of assessment.evidenceIds.entries()) {
+        if (!timelineIds.has(id) && !newsIds.has(id)) {
+          add(location + `.militaryAssessment.evidenceIds[${index}]`, "unknown evidence id");
+        }
+      }
+    }
+    if (typeof assessment.basis !== "string" || !assessment.basis.trim()) {
+      add(location + ".militaryAssessment.basis", "missing");
+    }
+    for (const forbidden of ["score", "posture", "riskLevel"]) {
+      if (assessment[forbidden] !== undefined) {
+        add(location + ".militaryAssessment." + forbidden, "derived field must not be stored");
+      }
+    }
+  }
   localized(location + ".summaryTh", value.summaryTh, "th", true);
   localized(location + ".summaryKh", value.summaryKh, "kh", true);
   localized(location + ".activityLabelTh", value.activityLabelTh, "th", true);

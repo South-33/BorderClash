@@ -15,5 +15,15 @@
   "activityLabelKh": "ការសង់របងព្រំដែន និងការរៀបចំអង្គភាពយោធាឡើងវិញ",
   "activityDetails": "Thai forces are mainly holding defensive positions, building permanent border fencing, and reorganizing units. No new armed clash is reported in the latest period.",
   "activityDetailsTh": "กองกำลังไทยเน้นตั้งรับ สร้างรั้วถาวรตามแนวชายแดน และปรับหน่วยทหาร ในช่วงล่าสุดยังไม่มีรายงานการปะทะด้วยอาวุธครั้งใหม่",
-  "activityDetailsKh": "កងកម្លាំងថៃផ្តោតលើការការពារ សាងសង់របងព្រំដែនអចិន្ត្រៃយ៍ និងកែសម្រួលអង្គភាពយោធា។ ក្នុងរយៈពេលថ្មីៗនេះ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចដោយអាវុធថ្មីទេ។"
+  "activityDetailsKh": "កងកម្លាំងថៃផ្តោតលើការការពារ សាងសង់របងព្រំដែនអចិន្ត្រៃយ៍ និងកែសម្រួលអង្គភាពយោធា។ ក្នុងរយៈពេលថ្មីៗនេះ មិនមានសេចក្តីរាយការណ៍អំពីការប៉ះទង្គិចដោយអាវុធថ្មីទេ។",
+  "militaryAssessment": {
+    "rubricVersion": "military-v1",
+    "tier": "FORTIFIED",
+    "assessedAt": 1794355478441,
+    "evidenceIds": [
+      "ks79e6tamfhvaqmepj2cjh0c218b4wnf",
+      "ks74h5ejkxhy6zg42frm401xd189bmn5"
+    ],
+    "basis": "Confirmed permanent border fencing and unit reorganization remain the strongest current military-action signals; the current record reports no new armed clash."
+  }
 }
