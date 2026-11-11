@@ -22,6 +22,12 @@ test('production research runs from main through one Windows task', () => {
     production.indexOf('if (-not (Test-ResearchDue))') < production.indexOf('"fetch", $RemoteName, "main"'),
     'scheduler must check due state before waking Git/network',
   );
+  const preflight = production.slice(
+    production.indexOf('function Test-ResearchDue'),
+    production.indexOf('function Invoke-Checked'),
+  );
+  assert.doesNotMatch(preflight, /Write-Output/, 'preflight must return only a boolean');
+  assert.match(production, /Write-Output \$script:preflightMessage/);
 
   assert.match(installer, /BorderClashResearch/);
   assert.match(installer, /research\\automation\\run-scheduled\.ps1/);
