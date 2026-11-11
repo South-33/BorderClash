@@ -9,5 +9,7 @@
   "researchCycleCount": 610,
   "scheduler": "external",
   "evidenceRubricVersion": "evidence-v1",
-  "evidenceRubricActivatedAt": 1794355478441
+  "evidenceRubricActivatedAt": 1794355478441,
+  "importanceRubricVersion": "timeline-importance-v1",
+  "importanceRubricActivatedAt": 1794355478441
 }

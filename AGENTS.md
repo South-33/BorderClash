@@ -54,6 +54,10 @@ The user-facing military gauge is stable UI. Research chooses a fixed evidence t
 
 Choose the highest tier supported by current stored evidence, cite the evidence IDs in `militaryAssessment.evidenceIds`, set `assessedAt` when the tier is reviewed, and explain the choice in `basis`. Reassess it every cycle; do not let temporary troop movement or combat signals persist without newer confirmation. Durable works such as fencing or trenches may carry forward only while the current record still supports them. Do not infer an offensive tier from one side's allegation alone. The overall risk card is derived from both tiers: below 56 = LOW, 56-69 = ELEVATED, 70+ = CRITICAL.
 
+## Timeline importance
+
+Timeline `importance` measures materiality, not truth or source quality. New events use only four values so the existing UI thresholds stay meaningful: `50` context/minor, `70` notable, `80` major, `95` defining. Use `50` for useful but non-story-changing context, `70` for a material update, `80` for a clear change in military/diplomatic/humanitarian state, and `95` only for defining turns such as the onset/end of major fighting, a ceasefire/settlement, or a comparable conflict-wide shift. Do not invent intermediate values.
+
 ## Reader copy
 
 Write for ordinary civilians who want to understand the situation quickly.

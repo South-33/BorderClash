@@ -5,10 +5,12 @@ import { getLocalizedTextIssue } from "./lib/localization.mjs";
 import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
 import { MILITARY_RUBRIC_VERSION, militaryAssessmentFor } from "./lib/military-assessment.mjs";
 import { EVIDENCE_ALLOWED_SCORES, EVIDENCE_RUBRIC_VERSION } from "./lib/evidence-score.mjs";
+import { TIMELINE_IMPORTANCE_ALLOWED, TIMELINE_IMPORTANCE_RUBRIC_VERSION } from "./lib/timeline-importance.mjs";
 
 const dataRoot = resolve("data");
 const state = await readJson(join(dataRoot, "research-state.json"));
 const evidenceRubricActivatedAt = Number(state.evidenceRubricActivatedAt || 0);
+const importanceRubricActivatedAt = Number(state.importanceRubricActivatedAt || 0);
 const errors = [];
 const nativeDigits = /[\u0E50-\u0E59\u17E0-\u17E9\u17F0-\u17F9]/u;
 const thaiTimelineChatVoice = /(ครับ|ค่ะ|เพื่อนบอกต่อ|ไทยเรา|บ้านเรา|ของเรา|ฝั่งเรา|กองทัพเรา|ทหารเรา|พวกเขมร)/u;
@@ -98,6 +100,12 @@ for (const file of timelineFiles) {
     if (!event.id) add(location, "missing id");
     if (timelineIds.has(event.id)) add(location, "duplicate id " + event.id);
     timelineIds.add(event.id);
+    if (!Number.isFinite(event.importance) || event.importance < 0 || event.importance > 100) {
+      add(location + ".importance", "must be a 0..100 materiality score");
+    }
+    if (Number.isFinite(event.createdAt) && event.createdAt >= importanceRubricActivatedAt && !TIMELINE_IMPORTANCE_ALLOWED.has(event.importance)) {
+      add(location + ".importance", "new timeline events must use 50, 70, 80, or 95");
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/u.test(event.date || "")) add(location, "invalid date");
     if (String(event.date || "").slice(0, 7) !== expectedMonth) add(location, "wrong timeline month");
     notFuture(location + ".createdAt", event.createdAt);
@@ -329,6 +337,9 @@ notFuture("research-state.lastResearchAt", state.lastResearchAt);
 if (state.evidenceRubricVersion !== EVIDENCE_RUBRIC_VERSION) add("research-state.evidenceRubricVersion", "unsupported rubric");
 if (!Number.isFinite(state.evidenceRubricActivatedAt)) add("research-state.evidenceRubricActivatedAt", "missing");
 notFuture("research-state.evidenceRubricActivatedAt", state.evidenceRubricActivatedAt);
+if (state.importanceRubricVersion !== TIMELINE_IMPORTANCE_RUBRIC_VERSION) add("research-state.importanceRubricVersion", "unsupported rubric");
+if (!Number.isFinite(state.importanceRubricActivatedAt)) add("research-state.importanceRubricActivatedAt", "missing");
+notFuture("research-state.importanceRubricActivatedAt", state.importanceRubricActivatedAt);
 if (state.nextRunAt !== undefined && !Number.isFinite(state.nextRunAt)) add("research-state.nextRunAt", "not finite");
 if (state.lastCycleInterval !== undefined && (state.lastCycleInterval < 1 || state.lastCycleInterval > 168)) {
   add("research-state.lastCycleInterval", "outside 1..168 hours");

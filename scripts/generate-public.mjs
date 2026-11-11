@@ -4,6 +4,7 @@ import { selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../research/lib/news.m
 import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../research/lib/files.mjs";
 import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/military-assessment.mjs";
 import { normalizeEvidenceScore } from "../research/lib/evidence-score.mjs";
+import { normalizeTimelineImportance } from "../research/lib/timeline-importance.mjs";
 
 const dataRoot = resolve("data");
 const publicRoot = resolve("public", "data");
@@ -64,7 +65,7 @@ function timelinePublic(event) {
     descriptionTh: event.descriptionTh,
     descriptionKh: event.descriptionKh,
     category: event.category,
-    importance: event.importance,
+    importance: normalizeTimelineImportance(event.importance),
     status: event.status,
     sources: Array.isArray(event.sources)
       ? event.sources.map((source) => ({
