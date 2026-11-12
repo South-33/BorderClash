@@ -3,7 +3,6 @@ import { join, resolve } from "node:path";
 import { newsEnvironmentKey, PUBLIC_NEWS_LIMIT, selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../research/lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../research/lib/files.mjs";
 import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/military-assessment.mjs";
-import { normalizeEvidenceScore } from "../research/lib/evidence-score.mjs";
 import { normalizeTimelineImportance } from "../research/lib/timeline-importance.mjs";
 
 const dataRoot = resolve("data");
@@ -34,7 +33,7 @@ function visibleNews(records, limit = PUBLIC_NEWS_LIMIT) {
       source: article.source,
       sourceUrl: article.sourceUrl,
       category: article.category,
-      credibility: normalizeEvidenceScore(article.credibility, article.status),
+      credibility: article.credibility,
       status: article.status,
     }));
 }
@@ -65,7 +64,7 @@ function timelinePublic(event) {
       ? event.sources.map((source) => ({
         url: source.url,
         name: source.name,
-        credibility: normalizeEvidenceScore(source.credibility),
+        credibility: source.credibility,
       }))
       : [],
   };

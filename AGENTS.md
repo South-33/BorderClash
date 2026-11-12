@@ -45,6 +45,8 @@ Apply the same evidence standard regardless of which side benefits. Keep allegat
 
 Store direct publisher URLs when URLs are part of the evidence. Never invent a URL, quote, number, date, translation, source, or certainty. `credibility` describes the evidence supporting that record, not a permanent reputation score for an outlet or viewpoint.
 
+Use only decile `credibility` scores: `100` verified, `90` very strong, `80` strong, `70` credible, `60` plausible/attributed, `50` uncertain, `40` weak, `30` very weak, `20` likely unreliable, `10` very likely false, `0` false/fabricated. Score the specific claim as written, not the outlet. A conflict party's material allegation about its opponent cannot exceed 60 without genuinely independent corroboration; repetition of one underlying source is not corroboration. Use 100 only when the claim is directly established or exceptionally well corroborated. Lack of evidence is uncertainty, not falsity, so 0/10 require credible contrary evidence. When two adjacent scores are defensible, use the lower one. `research/lib/evidence-score.mjs` is the authoritative rubric.
+
 Write for ordinary civilians. English, Thai, and Khmer should each read like natural local general-news writing while preserving names, dates, numbers, actors, actions, negation, attribution, uncertainty, and claim strength. Keep the claimant in the same sentence as a disputed claim.
 
 ## Completion
