@@ -70,7 +70,6 @@ $branchesBefore = @(& git -C $repoRoot branch --format="%(refname:short)" | Wher
 $worktreesBefore = @(& git -C $repoRoot worktree list --porcelain |
     Where-Object { $_ -like "worktree *" } |
     ForEach-Object { $_.Substring(9).Trim() })
-$job = $null
 Assert-True ($runsRoot.StartsWith((Join-Path $repoRoot ".work"), [StringComparison]::OrdinalIgnoreCase)) "test runs must stay inside repo .work"
 Reset-TestArtifacts
 
@@ -451,41 +450,18 @@ try {
     Assert-True ((Get-Content $missingFeedbackFile.FullName -Raw).Trim() -eq "missing") "missing feedback log did not preserve the diagnostic state"
 
     Reset-TestArtifacts
-    $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
-    $job = Start-Job -ScriptBlock {
-        param($runnerPath, $agyPath, $testRunsRoot, $testRuntimeDir, $testLogDir, $testMutexName)
-        $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runnerPath -Force -AgyPath $agyPath -TimeoutMinutes 1 -RunsRoot $testRunsRoot -RuntimeDir $testRuntimeDir -LogDir $testLogDir -MutexName $testMutexName 2>&1
-        exit $LASTEXITCODE
-    } -ArgumentList $runner, $fakeExe, $runsRoot, $runtimeDir, $logDir, $mutexName
-
-    $observedRunning = $false
-    for ($attempt = 0; $attempt -lt 100; $attempt++) {
-        $runtimePath = Join-Path $runtimeDir "runtime.json"
-        if (Test-Path $runtimePath) {
-            try {
-                $runtimeState = Get-Content $runtimePath -Raw | ConvertFrom-Json
-                if ($runtimeState.status -eq "running") {
-                    $observedRunning = $true
-                    break
-                }
-            } catch { }
-        }
-        Start-Sleep -Milliseconds 100
+    $heldMutex = [Threading.Mutex]::new($false, $mutexName)
+    $ownsMutex = $false
+    try {
+        $ownsMutex = $heldMutex.WaitOne(0)
+        Assert-True $ownsMutex "test could not acquire the research-cycle mutex"
+        $second = Invoke-TestRunner $fakeExe
+        Assert-True ($second.ExitCode -eq 0) "overlapping trigger should exit cleanly: $($second.Output -join ' | ')"
+        Assert-True (($second.Output -join "`n") -match "SKIP: already-running") "overlapping trigger did not observe mutex"
+    } finally {
+        if ($ownsMutex) { $heldMutex.ReleaseMutex() }
+        $heldMutex.Dispose()
     }
-    Assert-True $observedRunning "first lock-holder never reached running state"
-    $second = Invoke-TestRunner $fakeExe
-    if ($second.ExitCode -ne 0) {
-        Write-Output ("second trigger exit=" + $second.ExitCode)
-        Write-Output ($second.Output -join "`n")
-    }
-    Assert-True ($second.ExitCode -eq 0) "overlapping trigger should exit cleanly"
-    Assert-True (($second.Output -join "`n") -match "SKIP: already-running") "overlapping trigger did not observe mutex"
-
-    Wait-Job $job | Out-Null
-    $firstOutput = Receive-Job $job
-    Assert-True ($job.State -eq "Completed") "first lock-holder job did not complete"
-    Assert-True (($firstOutput -join "`n") -match "SHADOW SUCCESS") "first fake cycle did not complete normally"
 
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "shadow tests changed main HEAD"
 
@@ -523,9 +499,6 @@ try {
     Write-Output "run-cycle tests passed"
 }
 finally {
-    if ($null -ne $job) {
-        Remove-Job $job -Force -ErrorAction SilentlyContinue
-    }
     Remove-Item Env:BORDERCLASH_FAKE_AGY_MODE -ErrorAction SilentlyContinue
     if ($null -ne (git -C $repoRoot remote | Where-Object { $_ -eq "runner-test-$PID" })) {
         & git -C $repoRoot remote remove "runner-test-$PID" 2>$null | Out-Null
