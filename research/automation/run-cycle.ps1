@@ -340,7 +340,7 @@ Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md
     if (-not ([string]$result.response).Contains("<!-- GOAL_COMPLETE -->")) {
         throw "Antigravity did not confirm goal completion"
     }
-    $feedback = [regex]::Match([string]$result.response, '(?m)^HARNESS_(?:FEEDBACK|NOTE):\s*(.+)$')
+    $feedback = [regex]::Match([string]$result.response, '(?m)^HARNESS_FEEDBACK:\s*(.+)$')
     $feedbackText = if ($feedback.Success) { $feedback.Groups[1].Value.Trim() } else { "missing" }
     [IO.File]::WriteAllText(
         (Join-Path $logDir "$runId.feedback.txt"),

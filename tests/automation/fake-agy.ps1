@@ -64,7 +64,7 @@ if ($mode -eq "flip-pause") {
 
 $response = if ($mode -eq "unicode") {
     [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("4LiX4LiU4Liq4Lit4Lia4Lig4Liy4Lip4Liy4LmE4LiX4LiiIOGen+GetuGegOGem+GfkuGelOGehOGel+GetuGen+GetuGegeGfkuGemOGfguGemiA8IS0tIEdPQUxfQ09NUExFVEUgLS0+")) + [Environment]::NewLine + "HARNESS_FEEDBACK: none"
-} elseif ($mode -eq "note") {
+} elseif ($mode -eq "feedback") {
     "HARNESS_FEEDBACK: Fake harness feedback." + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
 } elseif ($mode -eq "missing-feedback") {
     "fake cycle complete" + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"

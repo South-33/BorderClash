@@ -160,9 +160,9 @@ try {
     Assert-True ($null -ne $defaultFeedback) "successful cycle did not preserve harness feedback"
 
     Reset-TestArtifacts
-    $env:BORDERCLASH_FAKE_AGY_MODE = "note"
-    $note = Invoke-TestRunner $fakeExe
-    Assert-True ($note.ExitCode -eq 0) "harness-note cycle should pass"
+    $env:BORDERCLASH_FAKE_AGY_MODE = "feedback"
+    $feedbackCycle = Invoke-TestRunner $fakeExe
+    Assert-True ($feedbackCycle.ExitCode -eq 0) "harness-feedback cycle should pass"
     Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.context.md" | Select-Object -First 1)) "runner did not preserve cycle context"
     Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.prompt.txt" | Select-Object -First 1)) "runner did not preserve cycle prompt"
     Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.data.patch" | Select-Object -First 1)) "runner did not preserve research data diff"
