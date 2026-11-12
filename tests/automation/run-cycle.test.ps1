@@ -65,12 +65,25 @@ function Reset-TestArtifacts {
     $ErrorActionPreference = $previousErrorAction
 }
 
+function Get-TestOwnedWorktrees {
+    $ownedRoot = [IO.Path]::GetFullPath($testRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $ownedPrefix = $ownedRoot + [IO.Path]::DirectorySeparatorChar
+    return @(& git -C $repoRoot worktree list --porcelain |
+        Where-Object { $_ -like "worktree *" } |
+        ForEach-Object { $_.Substring(9).Trim() } |
+        Where-Object {
+            try {
+                [IO.Path]::GetFullPath($_).StartsWith($ownedPrefix, [StringComparison]::OrdinalIgnoreCase)
+            } catch {
+                $false
+            }
+        })
+}
+
 $headBefore = (git -C $repoRoot rev-parse HEAD).Trim()
 $branchesBefore = @(& git -C $repoRoot branch --format="%(refname:short)" | Where-Object { $_ })
-$worktreesBefore = @(& git -C $repoRoot worktree list --porcelain |
-    Where-Object { $_ -like "worktree *" } |
-    ForEach-Object { $_.Substring(9).Trim() })
 Assert-True ($runsRoot.StartsWith((Join-Path $repoRoot ".work"), [StringComparison]::OrdinalIgnoreCase)) "test runs must stay inside repo .work"
+Assert-True (@(Get-TestOwnedWorktrees).Count -eq 0) "test root already owns a Git worktree"
 Reset-TestArtifacts
 
 try {
@@ -490,10 +503,7 @@ try {
     & git -C $repoRoot remote remove $publishRemoteName
     Assert-True ($LASTEXITCODE -eq 0) "could not remove publish test remote"
     $addedBranches = @(& git -C $repoRoot branch --format="%(refname:short)" | Where-Object { $_ -and $_ -notin $branchesBefore })
-    $addedWorktrees = @(& git -C $repoRoot worktree list --porcelain |
-        Where-Object { $_ -like "worktree *" } |
-        ForEach-Object { $_.Substring(9).Trim() } |
-        Where-Object { $_ -notin $worktreesBefore })
+    $addedWorktrees = @(Get-TestOwnedWorktrees)
     Assert-True ($addedBranches.Count -eq 0) "runner created a repository branch: $($addedBranches -join ', ')"
     Assert-True ($addedWorktrees.Count -eq 0) "runner created a Git worktree: $($addedWorktrees -join ', ')"
     Write-Output "run-cycle tests passed"
@@ -507,10 +517,7 @@ finally {
 }
 
 $addedBranches = @(& git -C $repoRoot branch --format="%(refname:short)" | Where-Object { $_ -and $_ -notin $branchesBefore })
-$addedWorktrees = @(& git -C $repoRoot worktree list --porcelain |
-    Where-Object { $_ -like "worktree *" } |
-    ForEach-Object { $_.Substring(9).Trim() } |
-    Where-Object { $_ -notin $worktreesBefore })
+$addedWorktrees = @(Get-TestOwnedWorktrees)
 Assert-True ($addedBranches.Count -eq 0) "test run left a repository branch: $($addedBranches -join ', ')"
 Assert-True ($addedWorktrees.Count -eq 0) "test run left a Git worktree: $($addedWorktrees -join ', ')"
 
