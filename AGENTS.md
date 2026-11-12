@@ -12,6 +12,7 @@ Maintain a trustworthy, useful public record of the Thailand-Cambodia border sit
 - Production research runs from one dedicated Windows checkout through `research/automation/`. Development machines are not production schedulers.
 - Production pushes use a repo-scoped SSH deploy key, not a personal interactive Git credential. The scheduler uses an interactive Windows logon because AGY authentication belongs to that user session. `install-scheduler.ps1` owns the recurring + logon task configuration.
 - Vercel production deploys from `main` only.
+- `.work/` is disposable scratch. Keep durable local evidence only under `.work/runner/` or `.work/benchmarks/`; remove one-off probes and repair artifacts after use.
 
 ## Research
 
@@ -25,7 +26,7 @@ For each cycle:
 1. Read `.work/CYCLE_CONTEXT.md` (`pnpm research context` is the manual fallback). Start discovery from there; inspect deeper archive/repo context only when it can change a decision.
 2. Check three information environments: one broad international/regional search, one Cambodia-national search, and one Thailand-national search. The national searches should represent domestic media people in that country actually read; use Khmer/Thai queries when useful and do not default to only a pair of English-facing outlets. Then verify concrete candidates. Search again only to resolve a material contradiction or missing fact.
 3. Deep-read the strongest material evidence, edit the smallest justified set under `data/`, and stop when more searching is unlikely to improve the record.
-4. Run `pnpm research finish <hours> "<reason>"`. Choose when another run is likely to add information; 1-168 hours is only a safety range. Then stop—the runner validates and publishes.
+4. Run `pnpm research finish <hours> "<reason>"`. Choose when another run is likely to add information; 1-168 hours is only a safety range. Then stop; the runner validates and publishes.
 
 Use `pnpm research find <text>` / `show <id>` only when exact archive context helps a decision.
 During a routine cycle, do not run Git, tests/validation/builds, CLI help, directory listings, or raw archive reads just to orient yourself. The cycle context and research CLI already provide that view. Read/edit a raw data file only when a specific evidence-backed change requires it.
