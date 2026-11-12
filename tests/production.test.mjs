@@ -48,6 +48,14 @@ test('production research runs from main through one Windows task', () => {
   assert.match(installer, /EveryMinutes = 5/);
 
   assert.match(runner, /\[int\]\$TimeoutMinutes = 0/);
+  const allowedModelBlock = runner.match(/\$allowedResearchModels = @\(([\s\S]*?)\)/)?.[1] ?? '';
+  const allowedModels = [...allowedModelBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(allowedModels, [
+    'gemini-3.8-flash-low',
+    'gemini-3.8-flash-medium',
+    'gemini-3.8-flash-high',
+  ]);
+  assert.match(runner, /Unsupported research model/);
   assert.match(runner, /agy-supervisor\.mjs/);
   assert.match(runner, /AGY_SESSION\.json/);
   assert.match(runner, /runner_interrupted_after_success/);

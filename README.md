@@ -53,6 +53,6 @@ To inspect the compact context a research cycle receives:
 pnpm research context
 ```
 
-Production uses the runner's default research model unless `-Model` or `BORDERCLASH_RESEARCH_MODEL` selects another available AGY model.
+Production research is limited to `gemini-3.8-flash-low`, `gemini-3.8-flash-medium`, and `gemini-3.8-flash-high`. The runner defaults to `gemini-3.8-flash-medium`; `-Model` or `BORDERCLASH_RESEARCH_MODEL` may select one of the other allowed Flash variants.
 
 Optional development benchmarks live under `benchmarks/`. They are not part of a research cycle or the production validation path.

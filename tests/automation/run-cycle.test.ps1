@@ -352,6 +352,28 @@ try {
     Remove-Item Env:BORDERCLASH_EXPECT_MODEL -ErrorAction SilentlyContinue
 
     Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "success"
+    $invalidModel = Invoke-TestRunner $fakeExe -Model "gemini-2.5-pro"
+    Assert-True ($invalidModel.ExitCode -ne 0) "unsupported research model override should fail before AGY starts"
+    Assert-True (($invalidModel.Output -join "`n") -match "Unsupported research model 'gemini-2.5-pro'") "unsupported model failure did not name the rejected model"
+
+    Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "timeout-persistent"
+    $legacyModelCheckpoint = Invoke-TestRunner $fakeExe
+    Assert-True ($legacyModelCheckpoint.ExitCode -eq 0) "legacy-model fixture did not create a resumable checkpoint"
+    $legacyRuntimePath = Join-Path $runtimeDir "runtime.json"
+    $legacyRuntime = Get-Content -LiteralPath $legacyRuntimePath -Raw | ConvertFrom-Json
+    Assert-True ($legacyRuntime.status -eq "resumable") "legacy-model fixture was not resumable"
+    $legacyRuntime.model = "gemini-2.5-pro"
+    $legacyRuntime | ConvertTo-Json | Set-Content -Encoding utf8 $legacyRuntimePath
+    $env:BORDERCLASH_EXPECT_MODEL = "gemini-3.8-flash-medium"
+    $legacyModelResume = Invoke-TestRunner $fakeExe
+    Assert-True ($legacyModelResume.ExitCode -eq 0) "legacy unsupported checkpoint model should resume with an allowed production model"
+    Assert-True (($legacyModelResume.Output -join "`n") -match "RECOVER MODEL: unsupported checkpoint model 'gemini-2.5-pro'; using gemini-3.8-flash-medium") "legacy checkpoint did not report the model substitution"
+    Assert-True (($legacyModelResume.Output -join "`n") -match "RESUME:.*fake-persistent-conversation") "legacy checkpoint model substitution lost the existing conversation"
+    Remove-Item Env:BORDERCLASH_EXPECT_MODEL -ErrorAction SilentlyContinue
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "missing-feedback"
     $missingFeedback = Invoke-TestRunner $fakeExe
     Assert-True ($missingFeedback.ExitCode -ne 0) "cycle without required harness feedback should fail"

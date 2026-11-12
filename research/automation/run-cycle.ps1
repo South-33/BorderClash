@@ -15,6 +15,19 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$allowedResearchModels = @(
+    "gemini-3.8-flash-low",
+    "gemini-3.8-flash-medium",
+    "gemini-3.8-flash-high"
+)
+
+function Assert-ResearchModel {
+    param([string]$Candidate)
+    if ($Candidate -notin $allowedResearchModels) {
+        throw "Unsupported research model '$Candidate'. Allowed models: $($allowedResearchModels -join ', ')"
+    }
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $runnerRoot = Join-Path $repoRoot ".work\runner"
 $runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $runnerRoot "runtime" }
@@ -27,6 +40,7 @@ $agyModel = if ($Model) {
 } else {
     "gemini-3.8-flash-medium"
 }
+Assert-ResearchModel $agyModel
 
 New-Item -ItemType Directory -Force -Path $runtimeDir, $logDir, $runsRoot | Out-Null
 
@@ -385,7 +399,14 @@ try {
             $recoveringCompletedTurn = [string]$checkpoint.status -eq "ready"
             $checkpointResumeCount = if ($checkpoint.PSObject.Properties["resumeCount"]) { [int]$checkpoint.resumeCount } else { 0 }
             $resumeCount = if ($recoveringCompletedTurn) { $checkpointResumeCount } else { $checkpointResumeCount + 1 }
-            if ($checkpoint.PSObject.Properties["model"] -and $checkpoint.model) { $agyModel = [string]$checkpoint.model }
+            if ($checkpoint.PSObject.Properties["model"] -and $checkpoint.model) {
+                $checkpointModel = [string]$checkpoint.model
+                if ($recoveringCompletedTurn -or $checkpointModel -in $allowedResearchModels) {
+                    $agyModel = $checkpointModel
+                } else {
+                    Write-Output "RECOVER MODEL: unsupported checkpoint model '$checkpointModel'; using $agyModel"
+                }
+            }
             & git -C $runDir merge-base --is-ancestor $baseHead HEAD
             if ($LASTEXITCODE -ne 0) { throw "Resumable cycle no longer descends from its base commit" }
             $cycleContextPath = Join-Path $runDir ".work\CYCLE_CONTEXT.md"
