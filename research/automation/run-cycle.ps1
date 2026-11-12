@@ -2,7 +2,7 @@ param(
     [switch]$Force,
     [switch]$Publish,
     [string]$RemoteName = "origin",
-    [int]$TimeoutMinutes = 45,
+    [int]$TimeoutMinutes = 0,
     [string]$Model = "",
     [string]$Prompt = "",
     [string]$AgyPath = "",
@@ -39,13 +39,14 @@ function Write-RuntimeState {
         [string]$BaseHead = "",
         [string]$ConversationId = "",
         [int]$ResumeCount = 0,
-        [string]$RecoveryReason = ""
+        [string]$RecoveryReason = "",
+        [string]$StateModel = ""
     )
     $payload = [ordered]@{
         updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         status = $Status
         runId = $RunId
-        model = $agyModel
+        model = if ($StateModel) { $StateModel } else { $agyModel }
         message = $Message
         runDir = $RunDir
     }
@@ -73,26 +74,6 @@ function Get-OwnedRunDirectory {
     $ownedPrefix = $ownedRoot + [IO.Path]::DirectorySeparatorChar
     if (-not $candidatePath.StartsWith($ownedPrefix, [StringComparison]::OrdinalIgnoreCase)) { return "" }
     return $candidatePath
-}
-
-function Read-AgyError {
-    param([string]$Path)
-
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    $text = Get-Content -LiteralPath $Path -Raw -ErrorAction SilentlyContinue
-    if (-not $text) { return $null }
-    $index = $text.IndexOf("AGY_ERROR:")
-    if ($index -lt 0) { return $null }
-    $tail = $text.Substring($index + 10)
-
-    $statusMatch = [regex]::Match($tail, '"(?:status|canonical_status)"\s*:\s*"([^"\r\n]+)"')
-    $retryableMatch = [regex]::Match($tail, '"retryable"\s*:\s*(true|false)', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-    if (-not $statusMatch.Success -and -not $retryableMatch.Success) { return $null }
-
-    return [pscustomobject]@{
-        status = if ($statusMatch.Success) { $statusMatch.Groups[1].Value } else { "" }
-        retryable = $retryableMatch.Success -and $retryableMatch.Groups[1].Value -ieq "true"
-    }
 }
 
 function Write-RecoveryRecord {
@@ -124,6 +105,19 @@ function Acquire-CycleLock {
     return $mutex
 }
 
+function Test-ProcessInstanceActive {
+    param([int]$ProcessId, [int64]$StartedAtMs)
+
+    if ($ProcessId -le 0 -or $StartedAtMs -le 0) { return $false }
+    try {
+        $process = Get-Process -Id $ProcessId -ErrorAction Stop
+        [DateTimeOffset]$started = $process.StartTime
+        return [Math]::Abs($started.ToUnixTimeMilliseconds() - $StartedAtMs) -lt 15000
+    } catch {
+        return $false
+    }
+}
+
 function Recover-StaleRuntimeState {
     $runtimePath = Join-Path $runtimeDir "runtime.json"
     if (-not (Test-Path $runtimePath)) { return }
@@ -140,6 +134,41 @@ function Recover-StaleRuntimeState {
     $previousRunDir = if ($previous.PSObject.Properties["runDir"] -and $previous.runDir) {
         [string]$previous.runDir
     } else { "" }
+    $previousBaseHead = if ($previous.PSObject.Properties["baseHead"] -and $previous.baseHead) { [string]$previous.baseHead } else { "" }
+    $previousConversation = if ($previous.PSObject.Properties["conversationId"] -and $previous.conversationId) { [string]$previous.conversationId } else { "" }
+    $previousResumeCount = if ($previous.PSObject.Properties["resumeCount"]) { [int]$previous.resumeCount } else { 0 }
+    $previousModel = if ($previous.PSObject.Properties["model"] -and $previous.model) { [string]$previous.model } else { $agyModel }
+    $candidate = Get-OwnedRunDirectory $previousRunDir
+    $session = $null
+
+    if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+        $sessionPath = Join-Path $candidate ".work\AGY_SESSION.json"
+        if (Test-Path -LiteralPath $sessionPath) {
+            try {
+                $session = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                if (-not $previousConversation -and $session.conversationId) { $previousConversation = [string]$session.conversationId }
+            } catch { }
+        }
+    }
+
+    if (
+        $session -and
+        [string]$session.status -eq "running" -and
+        $session.PSObject.Properties["agyPid"] -and
+        $session.PSObject.Properties["agyStartedAt"] -and
+        (Test-ProcessInstanceActive ([int]$session.agyPid) ([int64]$session.agyStartedAt))
+    ) {
+        Write-RuntimeState "running" $previousRunId "Previous runner ended but its AGY process is still active" $candidate $previousBaseHead $previousConversation $previousResumeCount "runner_detached" $previousModel
+        return "active"
+    }
+
+    $sessionStatus = if ($session -and $session.PSObject.Properties["status"]) { [string]$session.status } else { "" }
+    $sessionSucceeded = (
+        $sessionStatus -eq "success" -and
+        $session.PSObject.Properties["result"] -and
+        $session.result -and
+        [string]$session.result.status -eq "SUCCESS"
+    )
 
     [ordered]@{
         detectedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -147,18 +176,38 @@ function Recover-StaleRuntimeState {
         runId = $previousRunId
         message = "Previous runner ended without a final status; the cycle mutex is no longer owned."
         runDir = $previousRunDir
+        baseHead = $previousBaseHead
+        conversationId = $previousConversation
     } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $logDir "$previousRunId.interrupted.json")
 
-    if ($previousRunDir) {
-        $candidate = [IO.Path]::GetFullPath($previousRunDir).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-        $ownedRoot = [IO.Path]::GetFullPath($runsRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-        $ownedPrefix = $ownedRoot + [IO.Path]::DirectorySeparatorChar
-        if ($candidate.StartsWith($ownedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-            Remove-RunDirectory $candidate
-        }
+    if ($candidate -and (Test-Path -LiteralPath $candidate) -and $previousConversation -and $previousBaseHead -and $sessionSucceeded) {
+        Write-RuntimeState "ready" $previousRunId "Recovered a completed AGY turn that still needs validation" $candidate $previousBaseHead $previousConversation $previousResumeCount "runner_interrupted_after_success" $previousModel
+        return
     }
 
-    Write-RuntimeState "interrupted" $previousRunId "Recovered stale running state from an interrupted process" $previousRunDir
+    if ($candidate -and (Test-Path -LiteralPath $candidate) -and $sessionStatus -eq "error") {
+        try { Save-DataPatch $candidate $previousBaseHead (Join-Path $logDir "$previousRunId.data.patch") } catch { Write-Warning $_.Exception.Message }
+        Remove-RunDirectory $candidate
+        Write-RuntimeState "failed" $previousRunId "Recovered a terminal non-retryable AGY failure; discarded its workspace" "" $previousBaseHead $previousConversation $previousResumeCount "runner_interrupted_after_error" $previousModel
+        return "dropped"
+    }
+
+    if (
+        $candidate -and
+        (Test-Path -LiteralPath $candidate) -and
+        $previousConversation -and
+        $previousBaseHead -and
+        $sessionStatus -in @("", "running", "recoverable")
+    ) {
+        Write-RuntimeState "resumable" $previousRunId "Recovered interrupted runner from its streamed AGY conversation" $candidate $previousBaseHead $previousConversation $previousResumeCount "runner_interrupted" $previousModel
+        return
+    }
+
+    if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+        Remove-RunDirectory $candidate
+    }
+
+    Write-RuntimeState "interrupted" $previousRunId "Recovered stale running state without a resumable AGY conversation" "" $previousBaseHead "" $previousResumeCount "" $previousModel
 }
 
 function Invoke-Checked {
@@ -276,12 +325,19 @@ if ($null -eq $lock) {
     exit 0
 }
 
-Recover-StaleRuntimeState
+$staleRecovery = Recover-StaleRuntimeState
+if ($staleRecovery -eq "active") {
+    Write-Output "SKIP: detached AGY process still running"
+    exit 0
+} elseif ($staleRecovery -eq "dropped") {
+    Write-Output "DROP: interrupted cycle had already ended with a non-retryable AGY error"
+}
 
 $runId = ""
 $runDir = ""
 $baseHead = ""
 $resuming = $false
+$recoveringCompletedTurn = $false
 $resumeCount = 0
 $conversationId = ""
 $checkpoint = Read-RuntimeState
@@ -304,8 +360,8 @@ try {
         exit 0
     }
 
-    $hasResumableCheckpoint = $checkpoint -and [string]$checkpoint.status -eq "resumable"
-    if (-not $Force -and -not $hasResumableCheckpoint -and $state.nextRunAt -and [int64]$state.nextRunAt -gt $nowMs) {
+    $hasRecoveryCheckpoint = $checkpoint -and [string]$checkpoint.status -in @("resumable", "ready")
+    if (-not $Force -and -not $hasRecoveryCheckpoint -and $state.nextRunAt -and [int64]$state.nextRunAt -gt $nowMs) {
         $next = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$state.nextRunAt).ToLocalTime()
         Write-Output "SKIP: not-due nextRunAt=$($next.ToString('o'))"
         exit 0
@@ -315,17 +371,7 @@ try {
         Write-Output "PRODUCTION BASE: $baseHead ($baseRef)"
     }
 
-    $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
-    $agy = if ($AgyPath) {
-        (Resolve-Path $AgyPath).Path
-    } elseif ($agyCommand) {
-        $agyCommand.Source
-    } else {
-        Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe"
-    }
-    if (-not (Test-Path $agy)) { throw "Antigravity CLI not found" }
-
-    if ($hasResumableCheckpoint) {
+    if ($hasRecoveryCheckpoint) {
         $checkpointRunDir = Get-OwnedRunDirectory ([string]$checkpoint.runDir)
         $checkpointBase = if ($checkpoint.PSObject.Properties["baseHead"]) { [string]$checkpoint.baseHead } else { "" }
         $checkpointConversation = if ($checkpoint.PSObject.Properties["conversationId"]) { [string]$checkpoint.conversationId } else { "" }
@@ -336,14 +382,20 @@ try {
             $runId = $checkpointRunId
             $runDir = $checkpointRunDir
             $conversationId = $checkpointConversation
-            $resumeCount = if ($checkpoint.PSObject.Properties["resumeCount"]) { [int]$checkpoint.resumeCount + 1 } else { 1 }
+            $recoveringCompletedTurn = [string]$checkpoint.status -eq "ready"
+            $checkpointResumeCount = if ($checkpoint.PSObject.Properties["resumeCount"]) { [int]$checkpoint.resumeCount } else { 0 }
+            $resumeCount = if ($recoveringCompletedTurn) { $checkpointResumeCount } else { $checkpointResumeCount + 1 }
             if ($checkpoint.PSObject.Properties["model"] -and $checkpoint.model) { $agyModel = [string]$checkpoint.model }
             & git -C $runDir merge-base --is-ancestor $baseHead HEAD
             if ($LASTEXITCODE -ne 0) { throw "Resumable cycle no longer descends from its base commit" }
             $cycleContextPath = Join-Path $runDir ".work\CYCLE_CONTEXT.md"
             if (-not (Test-Path -LiteralPath $cycleContextPath)) { throw "Resumable cycle lost its generated context" }
-            $resuming = $true
-            Write-Output "RESUME: run=$runId conversation=$conversationId attempt=$resumeCount"
+            if ($recoveringCompletedTurn) {
+                Write-Output "RECOVER: run=$runId completed AGY turn; validating without another model call"
+            } else {
+                $resuming = $true
+                Write-Output "RESUME: run=$runId conversation=$conversationId attempt=$resumeCount"
+            }
         } else {
             $reason = if ($checkpointBase -and $checkpointBase -ne $baseHead) {
                 "base advanced from $checkpointBase to $baseHead"
@@ -362,7 +414,7 @@ try {
         }
     }
 
-    if (-not $resuming) {
+    if (-not $resuming -and -not $recoveringCompletedTurn) {
         $runId = [DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmssfffZ")
         $runDir = Join-Path $runsRoot $runId
         Invoke-Checked "git" @("clone", "--quiet", "--no-checkout", "--no-hardlinks", $repoRoot, $runDir) $repoRoot
@@ -405,86 +457,100 @@ try {
         Invoke-NonInteractiveGit @("-C", $runDir, "push", "--dry-run", "origin", "${baseHead}:refs/heads/main") $runDir
     }
 
-    $effectivePrompt = if ($resuming) {
-        "Continue the interrupted BorderClash research cycle from this existing workspace and conversation. Preserve completed work, verify what remains, and finish the original cycle per AGENTS.md."
-    } elseif ($Prompt) {
-        $Prompt
+    $result = $null
+    if ($recoveringCompletedTurn) {
+        $sessionPath = Join-Path $runDir ".work\AGY_SESSION.json"
+        if (-not (Test-Path -LiteralPath $sessionPath)) { throw "Completed AGY recovery lost its session state" }
+        $agySession = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+        if ([string]$agySession.status -ne "success" -or -not $agySession.result) {
+            throw "Completed AGY recovery no longer has a successful terminal result"
+        }
+        $result = $agySession.result
     } else {
-        # Do not prefix this with /goal. AGY 1.5.5 headless expands the command,
-        # then exits before the first planner response.
-        @'
+        $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
+        $agy = if ($AgyPath) {
+            (Resolve-Path $AgyPath).Path
+        } elseif ($agyCommand) {
+            $agyCommand.Source
+        } else {
+            Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe"
+        }
+        if (-not (Test-Path $agy)) { throw "Antigravity CLI not found" }
+
+        $continuationPrompt = "Continue the interrupted BorderClash research cycle from this existing workspace and conversation. Preserve completed work, verify what remains, and finish the original cycle per AGENTS.md."
+        $effectivePrompt = if ($resuming) {
+            $continuationPrompt
+        } elseif ($Prompt) {
+            $Prompt
+        } else {
+            # Do not prefix this with /goal. AGY 1.5.5 headless expands the command,
+            # then exits before the first planner response.
+            @'
 Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use the repository and web as useful. Treat the context as a snapshot of repository state, not ground truth. Leave the canonical record as accurate, current, well-sourced, and useful as the available evidence allows. Correct, add, merge, archive, or remove data when justified; a no-change cycle is valid. The runner has already passed preflight checks and will validate, generate, publish, and deploy afterward. Complete the cycle as described in AGENTS.md. End with <!-- GOAL_COMPLETE --> and always include an honest HARNESS_FEEDBACK review of any friction, missing context, constraint, or tool problem; use HARNESS_FEEDBACK: none only when there was genuinely no material issue.
 '@
-    }
-    $attemptStem = if ($resuming) { "$runId.resume-$resumeCount" } else { $runId }
-    [IO.File]::WriteAllText(
-        (Join-Path $logDir "$attemptStem.prompt.txt"),
-        $effectivePrompt.Trim() + [Environment]::NewLine,
-        [Text.UTF8Encoding]::new($false)
-    )
-
-    $stdoutPath = Join-Path $logDir "$attemptStem.result.json"
-    $stderrPath = Join-Path $logDir "$attemptStem.stderr.log"
-    $agyLogPath = Join-Path $logDir "$attemptStem.agy.log"
-    $runningMessage = if ($resuming) { "Antigravity cycle resumed" } else { "Antigravity cycle started" }
-    Write-RuntimeState "running" $runId $runningMessage $runDir $baseHead $conversationId $resumeCount
-
-    Push-Location $runDir
-    $previousErrorAction = $ErrorActionPreference
-    $previousConsoleEncoding = [Console]::OutputEncoding
-    $previousOutputEncoding = $OutputEncoding
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    $ErrorActionPreference = "Continue"
-    try {
-        [Console]::OutputEncoding = $utf8NoBom
-        $OutputEncoding = $utf8NoBom
-        $agyArgs = @()
-        if ($resuming) { $agyArgs += @("--conversation", $conversationId) }
-        $agyArgs += @("-p", $effectivePrompt, "--dangerously-skip-permissions", "--output-format", "json", "--model", $agyModel, "--print-timeout", "$($TimeoutMinutes)m", "--log-file", $agyLogPath)
-        $stdout = @(& $agy @agyArgs 2> $stderrPath)
-        $agyExit = $LASTEXITCODE
-        [IO.File]::WriteAllText($stdoutPath, [string]::Join([Environment]::NewLine, [string[]]$stdout), $utf8NoBom)
-    } finally {
-        $ErrorActionPreference = $previousErrorAction
-        [Console]::OutputEncoding = $previousConsoleEncoding
-        $OutputEncoding = $previousOutputEncoding
-        Pop-Location
-    }
-
-    $result = $null
-    if ((Test-Path -LiteralPath $stdoutPath) -and (Get-Item -LiteralPath $stdoutPath).Length -gt 0) {
-        try { $result = Get-Content $stdoutPath -Raw | ConvertFrom-Json } catch { }
-    }
-    $agyError = Read-AgyError $stderrPath
-    if ($result -and $result.PSObject.Properties["conversation_id"] -and $result.conversation_id) {
-        $conversationId = [string]$result.conversation_id
-    }
-    $finishedReason = if ($result -and $result.PSObject.Properties["finished_reason"]) { [string]$result.finished_reason } else { "" }
-    $retryableProviderError = $agyError -and $agyError.PSObject.Properties["retryable"] -and [bool]$agyError.retryable
-    $recoverable = ($finishedReason -eq "print_timeout") -or $retryableProviderError
-
-    if ($recoverable -and $conversationId) {
-        $recoveryReason = if ($finishedReason -eq "print_timeout") {
-            "print_timeout"
-        } elseif ($agyError.PSObject.Properties["status"] -and $agyError.status) {
-            "retryable:$([string]$agyError.status)"
-        } else {
-            "retryable:provider"
         }
-        Save-DataPatch $runDir $baseHead (Join-Path $logDir "$runId.data.patch")
-        Write-RecoveryRecord $runId "resumable" $recoveryReason $runDir $baseHead $conversationId
-        Write-RuntimeState "resumable" $runId "Cycle checkpointed after recoverable AGY interruption" $runDir $baseHead $conversationId $resumeCount $recoveryReason
-        Write-Output "DEFERRED: $recoveryReason conversation=$conversationId run=$runId"
-        exit 0
+        $attemptStem = if ($resuming) { "$runId.resume-$resumeCount" } else { $runId }
+        $promptPath = Join-Path $logDir "$attemptStem.prompt.txt"
+        $continuationPromptPath = Join-Path $logDir "$attemptStem.continuation.txt"
+        $resultPath = Join-Path $logDir "$attemptStem.result.json"
+        $eventsPath = Join-Path $logDir "$attemptStem.events.ndjson"
+        $stderrPath = Join-Path $logDir "$attemptStem.stderr.log"
+        $agyLogBase = Join-Path $logDir "$attemptStem.agy"
+        $sessionPath = Join-Path $runDir ".work\AGY_SESSION.json"
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText($promptPath, $effectivePrompt.Trim() + [Environment]::NewLine, $utf8NoBom)
+        [IO.File]::WriteAllText($continuationPromptPath, $continuationPrompt + [Environment]::NewLine, $utf8NoBom)
+
+        $runningMessage = if ($resuming) { "Antigravity cycle resumed" } else { "Antigravity cycle started" }
+        Write-RuntimeState "running" $runId $runningMessage $runDir $baseHead $conversationId $resumeCount
+
+        $supervisor = Join-Path $runDir "research\automation\agy-supervisor.mjs"
+        $supervisorArgs = @(
+            $supervisor,
+            "--agy", $agy,
+            "--cwd", $runDir,
+            "--model", $agyModel,
+            "--prompt-file", $promptPath,
+            "--continuation-prompt-file", $continuationPromptPath,
+            "--result-file", $resultPath,
+            "--events-file", $eventsPath,
+            "--stderr-file", $stderrPath,
+            "--session-file", $sessionPath,
+            "--agy-log-base", $agyLogBase,
+            "--timeout-minutes", [string]$TimeoutMinutes
+        )
+        if ($conversationId) { $supervisorArgs += @("--conversation", $conversationId) }
+        Invoke-Checked "node" $supervisorArgs $runDir
+
+        if (-not (Test-Path -LiteralPath $sessionPath)) { throw "AGY supervisor did not write session state" }
+        $agySession = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+        if ($agySession.conversationId) { $conversationId = [string]$agySession.conversationId }
+        if ($agySession.PSObject.Properties["attempts"] -and [int]$agySession.attempts -gt 1) {
+            $resumeCount += ([int]$agySession.attempts - 1)
+        }
+
+        if ((Test-Path -LiteralPath $resultPath) -and (Get-Item -LiteralPath $resultPath).Length -gt 0) {
+            $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+        }
+
+        if ([string]$agySession.status -eq "recoverable" -and $conversationId) {
+            $recoveryReason = if ($agySession.recoveryReason) { [string]$agySession.recoveryReason } else { "retryable:provider" }
+            Save-DataPatch $runDir $baseHead (Join-Path $logDir "$runId.data.patch")
+            Write-RecoveryRecord $runId "resumable" $recoveryReason $runDir $baseHead $conversationId
+            Write-RuntimeState "resumable" $runId "Cycle checkpointed after repeated recoverable AGY interruption" $runDir $baseHead $conversationId $resumeCount $recoveryReason
+            Write-Output "DEFERRED: $recoveryReason conversation=$conversationId run=$runId"
+            exit 0
+        }
+
+        if ([string]$agySession.status -ne "success") {
+            $agyExit = if ($agySession.PSObject.Properties["exitCode"]) { [int]$agySession.exitCode } else { -1 }
+            throw "Antigravity failed with status $($agySession.status) exit=$agyExit. See $resultPath and $stderrPath"
+        }
     }
 
-    if ($agyExit -ne 0) {
-        throw "Antigravity exited $agyExit. See $stdoutPath and $stderrPath"
-    }
-    if (-not $result) { throw "Antigravity did not return parseable JSON" }
-    if ($result.status -ne "SUCCESS") {
-        throw "Antigravity status was $($result.status)"
-    }
+    if (-not $result) { throw "Antigravity did not return a terminal result event" }
+    if ($result.status -ne "SUCCESS") { throw "Antigravity status was $($result.status)" }
+
     if (-not ([string]$result.response).Contains("<!-- GOAL_COMPLETE -->")) {
         throw "Antigravity did not confirm goal completion"
     }

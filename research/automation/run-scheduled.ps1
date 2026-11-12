@@ -28,7 +28,7 @@ function Test-ResearchDue {
     if (Test-Path -LiteralPath $runtimePath) {
         try {
             $runtime = Get-Content -LiteralPath $runtimePath -Raw | ConvertFrom-Json
-            if ([string]$runtime.status -eq "resumable") { return $true }
+            if ([string]$runtime.status -in @("running", "resumable", "ready")) { return $true }
         } catch { }
     }
 

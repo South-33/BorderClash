@@ -1,9 +1,24 @@
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+
 $mode = $env:BORDERCLASH_FAKE_AGY_MODE
 if (-not $mode) { $mode = "success" }
 $cliArgs = @($args)
 $conversationIndex = [Array]::IndexOf($cliArgs, "--conversation")
 $isResume = $conversationIndex -ge 0 -and $conversationIndex + 1 -lt $cliArgs.Count
 $conversationArg = if ($isResume) { [string]$cliArgs[$conversationIndex + 1] } else { "" }
+$outputFormatIndex = [Array]::IndexOf($cliArgs, "--output-format")
+if ($outputFormatIndex -lt 0 -or $outputFormatIndex + 1 -ge $cliArgs.Count -or $cliArgs[$outputFormatIndex + 1] -ne "stream-json") {
+    [Console]::Error.WriteLine("fake Antigravity requires stream-json output")
+    exit 28
+}
+
+function Write-StreamEvent {
+    param($Value)
+    [Console]::Out.WriteLine(($Value | ConvertTo-Json -Depth 30 -Compress))
+    [Console]::Out.Flush()
+}
 
 if ($env:BORDERCLASH_EXPECT_MODEL) {
     $modelIndex = [Array]::IndexOf($cliArgs, "--model")
@@ -37,6 +52,27 @@ if ($mode -eq "fail") {
     exit 23
 }
 
+$defaultConversation = if ($mode -eq "timeout-resume") {
+    "fake-timeout-conversation"
+} elseif ($mode -eq "retryable-resume") {
+    "fake-retryable-conversation"
+} elseif ($mode -eq "timeout-persistent") {
+    "fake-persistent-conversation"
+} else {
+    "fake-test-conversation"
+}
+$currentConversation = if ($isResume) { $conversationArg } else { $defaultConversation }
+Write-StreamEvent ([ordered]@{
+    event = "init"
+    conversation_id = $currentConversation
+    init = @{
+        model = "fake-model"
+        cwd = (Get-Location).Path
+        tools = @("run_command", "write_to_file")
+        permission_mode = "always-proceed"
+    }
+})
+
 if ($mode -ne "stale-state") {
     & node research/cli.mjs finish 12 "Fake cycle completed for runner validation." | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -53,21 +89,48 @@ if ($mode -in @("timeout-resume", "retryable-resume")) {
     }
     if (-not $isResume) {
         $finishedReason = if ($mode -eq "timeout-resume") { "print_timeout" } else { "error" }
-        [ordered]@{
-            conversation_id = $expectedConversation
-            status = "ERROR"
-            response = "partial fake cycle"
-            error = if ($mode -eq "timeout-resume") { "print timeout with turn in progress" } else { "temporary provider capacity failure" }
-            duration_seconds = 1
-            num_turns = 1
-            usage = @{ input_tokens = 1; output_tokens = 1; thinking_tokens = 0; cache_read_tokens = 0; total_tokens = 2 }
-            finished_reason = $finishedReason
-        } | ConvertTo-Json -Compress
+        Write-StreamEvent ([ordered]@{
+            event = "result"
+            result = [ordered]@{
+                conversation_id = $expectedConversation
+                status = "ERROR"
+                response = "partial fake cycle"
+                error = if ($mode -eq "timeout-resume") { "print timeout with turn in progress" } else { "temporary provider capacity failure" }
+                duration_seconds = 1
+                num_turns = 1
+                usage = @{ input_tokens = 1; output_tokens = 1; thinking_tokens = 0; cache_read_tokens = 0; total_tokens = 2 }
+                finished_reason = $finishedReason
+            }
+        })
         if ($mode -eq "timeout-resume") {
             [Console]::Error.WriteLine('AGY_ERROR: {"short_error":"print timeout","status":"DEADLINE_EXCEEDED","retryable":false}')
         } else {
             [Console]::Error.WriteLine('AGY_ERROR: {"short_error":"No capacity available","status":"UNAVAILABLE","error_code":503,"retryable":true}')
         }
+        exit 3
+    }
+}
+
+if ($mode -eq "timeout-persistent") {
+    $countPath = Join-Path (Get-Location) ".work\fake-recovery-count.txt"
+    $count = if (Test-Path -LiteralPath $countPath) { [int](Get-Content -LiteralPath $countPath -Raw) } else { 0 }
+    $count++
+    [IO.File]::WriteAllText($countPath, [string]$count, [Text.UTF8Encoding]::new($false))
+    if ($count -le 2) {
+        Write-StreamEvent ([ordered]@{
+            event = "result"
+            result = [ordered]@{
+                conversation_id = $currentConversation
+                status = "ERROR"
+                response = "partial fake cycle"
+                error = "print timeout with turn in progress"
+                duration_seconds = 1
+                num_turns = $count
+                usage = @{ input_tokens = 1; output_tokens = 1; thinking_tokens = 0; cache_read_tokens = 0; total_tokens = 2 }
+                finished_reason = "print_timeout"
+            }
+        })
+        [Console]::Error.WriteLine('AGY_ERROR: {"short_error":"print timeout","status":"DEADLINE_EXCEEDED","retryable":false}')
         exit 3
     }
 }
@@ -102,18 +165,21 @@ $response = if ($mode -eq "unicode") {
     "fake cycle complete" + [Environment]::NewLine + "HARNESS_FEEDBACK: none" + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
 }
 
-[ordered]@{
-    conversation_id = "fake-test-conversation"
-    status = "SUCCESS"
-    response = $response
-    duration_seconds = 0.01
-    num_turns = 1
-    usage = @{
-        input_tokens = 0
-        output_tokens = 0
-        thinking_tokens = 0
-        cache_read_tokens = 0
-        total_tokens = 0
+Write-StreamEvent ([ordered]@{
+    event = "result"
+    result = [ordered]@{
+        conversation_id = $currentConversation
+        status = "SUCCESS"
+        response = $response
+        duration_seconds = 0.01
+        num_turns = 1
+        usage = @{
+            input_tokens = 0
+            output_tokens = 0
+            thinking_tokens = 0
+            cache_read_tokens = 0
+            total_tokens = 0
+        }
     }
-} | ConvertTo-Json -Compress
+})
 

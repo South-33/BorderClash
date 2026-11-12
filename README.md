@@ -13,7 +13,7 @@ The research is AI-assisted. It can be incomplete or wrong, so the site keeps so
 
 A cycle can also conclude that nothing material changed. The record is meant to stay accurate and useful, not grow for its own sake.
 
-Recoverable AGY timeouts and temporary provider failures do not restart the research from zero. The runner keeps the exact cycle workspace and conversation, and the five-minute scheduler poll resumes it. If `main` changes before recovery, the stale checkpoint is discarded and the cycle starts fresh from the new canonical base.
+Production AGY turns have no artificial per-turn timeout. The runner reads AGY's streaming JSON output so it records the conversation ID as soon as the turn starts. If AGY itself ends with a recoverable interruption, the runner immediately continues the same conversation in the same workspace once; only repeated transient failure falls back to the five-minute scheduler. If the runner itself disappears, the streamed checkpoint distinguishes a still-running AGY process, a resumable interruption, an already-completed turn that only needs validation, and a terminal hard failure. If `main` changes before deferred recovery, the stale checkpoint is discarded and the cycle starts fresh from the new canonical base.
 
 ## Repository map
 

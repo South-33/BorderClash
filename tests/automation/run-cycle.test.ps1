@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $runner = Join-Path $repoRoot "research\automation\run-cycle.ps1"
-$fakeExe = Join-Path $PSScriptRoot "fake-agy.cmd"
+$fakeExe = Join-Path $PSScriptRoot "fake-agy.ps1"
 $testRoot = Join-Path $repoRoot ".work\tests\run-cycle-$PID"
 $runsRoot = Join-Path $testRoot "runs"
 $runtimeDir = Join-Path $testRoot "runtime"
@@ -92,6 +92,192 @@ try {
     Assert-True (Test-Path (Join-Path $logDir "$staleRunId.interrupted.json")) "stale recovery did not preserve an interruption record"
 
     Reset-TestArtifacts
+    $activeRunId = "detached-active"
+    $activeRunDir = Join-Path $runsRoot $activeRunId
+    New-Item -ItemType Directory -Force -Path (Join-Path $activeRunDir ".work"), $runtimeDir, $logDir | Out-Null
+    $testProcess = Get-Process -Id $PID
+    [DateTimeOffset]$testProcessStarted = $testProcess.StartTime
+    [IO.File]::WriteAllText(
+        (Join-Path $activeRunDir ".work\AGY_SESSION.json"),
+        ([ordered]@{
+            status = "running"
+            conversationId = "fake-live-conversation"
+            agyPid = $PID
+            agyStartedAt = $testProcessStarted.ToUnixTimeMilliseconds()
+            model = "gemini-3.8-flash-medium"
+            cwd = $activeRunDir
+        } | ConvertTo-Json) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    [ordered]@{
+        updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        status = "running"
+        runId = $activeRunId
+        model = "gemini-3.8-flash-medium"
+        message = "runner detached while AGY remained alive"
+        runDir = $activeRunDir
+        baseHead = $headBefore
+    } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
+    $env:BORDERCLASH_FAKE_AGY_MODE = "fail"
+    $activeRecovery = Invoke-TestRunner $fakeExe
+    Assert-True ($activeRecovery.ExitCode -eq 0) "live detached AGY should make the replacement runner exit cleanly"
+    Assert-True (($activeRecovery.Output -join "`n") -match "SKIP: detached AGY process still running") "replacement runner did not avoid racing the live AGY process"
+    Assert-True (Test-Path -LiteralPath $activeRunDir) "live detached AGY workspace was removed"
+    $activeRuntime = Get-Content (Join-Path $runtimeDir "runtime.json") -Raw | ConvertFrom-Json
+    Assert-True ($activeRuntime.status -eq "running") "live detached AGY lost its running checkpoint"
+
+    Reset-TestArtifacts
+    $interruptedRunId = "streamed-interruption"
+    $interruptedRunDir = Join-Path $runsRoot $interruptedRunId
+    New-Item -ItemType Directory -Force -Path $runsRoot, $runtimeDir, $logDir | Out-Null
+    & git clone --quiet --no-checkout --no-hardlinks $repoRoot $interruptedRunDir
+    Assert-True ($LASTEXITCODE -eq 0) "could not create streamed-interruption fixture"
+    & git -C $interruptedRunDir checkout --quiet --detach $headBefore
+    Assert-True ($LASTEXITCODE -eq 0) "could not position streamed-interruption fixture"
+    New-Item -ItemType Directory -Force -Path (Join-Path $interruptedRunDir ".work") | Out-Null
+    Push-Location $interruptedRunDir
+    try {
+        $interruptedContext = & node research/cli.mjs context 2>&1
+        Assert-True ($LASTEXITCODE -eq 0) "could not generate streamed-interruption context"
+    } finally {
+        Pop-Location
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $interruptedRunDir ".work\CYCLE_CONTEXT.md"),
+        [string]::Join([Environment]::NewLine, [string[]]$interruptedContext) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    [ordered]@{
+        updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        status = "running"
+        runId = $interruptedRunId
+        model = "gemini-3.8-flash-medium"
+        message = "runner disappeared after AGY stream init"
+        runDir = $interruptedRunDir
+        baseHead = $headBefore
+    } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
+    [IO.File]::WriteAllText(
+        (Join-Path $interruptedRunDir ".work\AGY_SESSION.json"),
+        ([ordered]@{
+            status = "running"
+            conversationId = "fake-interrupted-conversation"
+            model = "gemini-3.8-flash-medium"
+            cwd = $interruptedRunDir
+            attempt = 1
+            updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        } | ConvertTo-Json) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    $env:BORDERCLASH_FAKE_AGY_MODE = "success"
+    $interruptedRecovery = Invoke-TestRunner $fakeExe
+    Assert-True ($interruptedRecovery.ExitCode -eq 0) "streamed conversation should survive an interrupted runner"
+    Assert-True (($interruptedRecovery.Output -join "`n") -match "RESUME:.*fake-interrupted-conversation") "interrupted runner did not resume the streamed conversation"
+    Assert-True (($interruptedRecovery.Output -join "`n") -match "SHADOW SUCCESS") "interrupted runner recovery did not validate"
+    Assert-True (-not (Test-Path -LiteralPath $interruptedRunDir)) "interrupted runner recovery left its workspace behind"
+
+    Reset-TestArtifacts
+    $completedRunId = "completed-before-runner-exit"
+    $completedRunDir = Join-Path $runsRoot $completedRunId
+    New-Item -ItemType Directory -Force -Path $runsRoot, $runtimeDir, $logDir | Out-Null
+    & git clone --quiet --no-checkout --no-hardlinks $repoRoot $completedRunDir
+    Assert-True ($LASTEXITCODE -eq 0) "could not create completed-turn recovery fixture"
+    & git -C $completedRunDir checkout --quiet --detach $headBefore
+    Assert-True ($LASTEXITCODE -eq 0) "could not position completed-turn recovery fixture"
+    New-Item -ItemType Directory -Force -Path (Join-Path $completedRunDir ".work") | Out-Null
+    [IO.File]::WriteAllText(
+        (Join-Path $completedRunDir ".work\CYCLE_RUN.json"),
+        ([ordered]@{ runId = $completedRunId; baseHead = $headBefore; model = "gemini-3.8-flash-medium" } | ConvertTo-Json) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    Push-Location $completedRunDir
+    try {
+        $completedContext = & node research/cli.mjs context 2>&1
+        Assert-True ($LASTEXITCODE -eq 0) "could not generate completed-turn context"
+        & node research/cli.mjs finish 12 "Completed before runner interruption." | Out-Null
+        Assert-True ($LASTEXITCODE -eq 0) "could not finalize completed-turn fixture"
+    } finally {
+        Pop-Location
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $completedRunDir ".work\CYCLE_CONTEXT.md"),
+        [string]::Join([Environment]::NewLine, [string[]]$completedContext) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    [ordered]@{
+        updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        status = "running"
+        runId = $completedRunId
+        model = "gemini-3.8-flash-medium"
+        message = "runner disappeared after AGY terminal success"
+        runDir = $completedRunDir
+        baseHead = $headBefore
+    } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
+    [IO.File]::WriteAllText(
+        (Join-Path $completedRunDir ".work\AGY_SESSION.json"),
+        ([ordered]@{
+            status = "success"
+            conversationId = "fake-completed-conversation"
+            model = "gemini-3.8-flash-medium"
+            cwd = $completedRunDir
+            attempts = 1
+            result = [ordered]@{
+                conversation_id = "fake-completed-conversation"
+                status = "SUCCESS"
+                response = "fake cycle complete`nHARNESS_FEEDBACK: none`n<!-- GOAL_COMPLETE -->"
+            }
+            updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        } | ConvertTo-Json -Depth 20) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    $env:BORDERCLASH_FAKE_AGY_MODE = "fail"
+    $completedRecovery = Invoke-TestRunner $fakeExe
+    Assert-True ($completedRecovery.ExitCode -eq 0) "completed streamed turn should validate without another AGY call"
+    Assert-True (($completedRecovery.Output -join "`n") -match "RECOVER:.*validating without another model call") "completed streamed turn did not take the no-model recovery path"
+    Assert-True (($completedRecovery.Output -join "`n") -match "SHADOW SUCCESS") "completed streamed turn recovery did not validate"
+    Assert-True (($completedRecovery.Output -join "`n") -notmatch "RESUME:.*fake-completed-conversation") "completed streamed turn unnecessarily resumed AGY"
+    Assert-True (-not (Test-Path -LiteralPath $completedRunDir)) "completed streamed turn recovery left its workspace behind"
+
+    Reset-TestArtifacts
+    $hardErrorRunId = "hard-error-before-runner-exit"
+    $hardErrorRunDir = Join-Path $runsRoot $hardErrorRunId
+    New-Item -ItemType Directory -Force -Path $runsRoot, $runtimeDir, $logDir | Out-Null
+    & git clone --quiet --no-checkout --no-hardlinks $repoRoot $hardErrorRunDir
+    Assert-True ($LASTEXITCODE -eq 0) "could not create hard-error recovery fixture"
+    & git -C $hardErrorRunDir checkout --quiet --detach $headBefore
+    Assert-True ($LASTEXITCODE -eq 0) "could not position hard-error recovery fixture"
+    New-Item -ItemType Directory -Force -Path (Join-Path $hardErrorRunDir ".work") | Out-Null
+    [ordered]@{
+        updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        status = "running"
+        runId = $hardErrorRunId
+        model = "gemini-3.8-flash-medium"
+        message = "runner disappeared after terminal hard error"
+        runDir = $hardErrorRunDir
+        baseHead = $headBefore
+    } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $runtimeDir "runtime.json")
+    [IO.File]::WriteAllText(
+        (Join-Path $hardErrorRunDir ".work\AGY_SESSION.json"),
+        ([ordered]@{
+            status = "error"
+            conversationId = "fake-hard-error-conversation"
+            model = "gemini-3.8-flash-medium"
+            cwd = $hardErrorRunDir
+            exitCode = 23
+            result = [ordered]@{ conversation_id = "fake-hard-error-conversation"; status = "ERROR"; error = "terminal fake failure" }
+            agyError = [ordered]@{ status = "INVALID_ARGUMENT"; retryable = $false }
+            updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        } | ConvertTo-Json -Depth 20) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    $env:BORDERCLASH_FAKE_AGY_MODE = "success"
+    $hardErrorRecovery = Invoke-TestRunner $fakeExe
+    Assert-True ($hardErrorRecovery.ExitCode -eq 0) "hard-error recovery should discard the failed conversation and start fresh"
+    Assert-True (($hardErrorRecovery.Output -join "`n") -match "DROP:.*non-retryable AGY error") "hard-error recovery did not report dropping the terminal failure"
+    Assert-True (($hardErrorRecovery.Output -join "`n") -notmatch "RESUME:.*fake-hard-error-conversation") "hard-error recovery incorrectly resumed a terminal failure"
+    Assert-True (($hardErrorRecovery.Output -join "`n") -match "SHADOW SUCCESS") "fresh cycle after hard-error recovery did not validate"
+    Assert-True (-not (Test-Path -LiteralPath $hardErrorRunDir)) "hard-error workspace survived cleanup"
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "fail"
     $failure = Invoke-TestRunner $fakeExe
     Assert-True ($failure.ExitCode -eq 1) "fake CLI failure must fail the cycle"
@@ -102,26 +288,38 @@ try {
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "timeout-resume"
     $timedOut = Invoke-TestRunner $fakeExe
-    Assert-True ($timedOut.ExitCode -eq 0) "recoverable print timeout should checkpoint instead of hard-failing"
-    Assert-True (($timedOut.Output -join "`n") -match "DEFERRED: print_timeout") "timeout did not report a resumable checkpoint"
+    Assert-True ($timedOut.ExitCode -eq 0) "recoverable print timeout should continue inside the same runner"
+    Assert-True (($timedOut.Output -join "`n") -match "RETRY: print_timeout.*fake-timeout-conversation") "timeout did not immediately continue the streamed conversation"
+    Assert-True (($timedOut.Output -join "`n") -match "SHADOW SUCCESS") "immediate timeout continuation did not validate"
     $timeoutRuntime = Get-Content (Join-Path $runtimeDir "runtime.json") -Raw | ConvertFrom-Json
-    Assert-True ($timeoutRuntime.status -eq "resumable") "timeout runtime state was not resumable"
-    Assert-True ($timeoutRuntime.conversationId -eq "fake-timeout-conversation") "timeout lost the AGY conversation id"
-    $timeoutRunDir = [string]$timeoutRuntime.runDir
-    Assert-True (Test-Path -LiteralPath $timeoutRunDir) "timeout deleted the resumable cycle workspace"
-    $timeoutResume = Invoke-TestRunner $fakeExe
-    Assert-True ($timeoutResume.ExitCode -eq 0) "resumed timeout cycle should complete"
-    Assert-True (($timeoutResume.Output -join "`n") -match "RESUME:.*fake-timeout-conversation") "runner did not resume the saved timeout conversation"
-    Assert-True (($timeoutResume.Output -join "`n") -match "SHADOW SUCCESS") "resumed timeout cycle did not validate"
-    Assert-True (-not (Test-Path -LiteralPath $timeoutRunDir)) "successful timeout resume left the cycle workspace behind"
-    Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.resume-1.result.json" | Select-Object -First 1)) "timeout resume did not preserve an attempt-specific result log"
+    Assert-True ($timeoutRuntime.status -eq "validated") "successful timeout continuation remained checkpointed"
+    $timeoutEvents = Get-ChildItem $logDir -File -Filter "*.events.ndjson" | Select-Object -First 1
+    Assert-True ($null -ne $timeoutEvents) "runner did not preserve AGY stream events"
+    Assert-True (@(Get-Content $timeoutEvents.FullName | Where-Object { $_ -match '"event":"result"' }).Count -ge 2) "timeout continuation did not preserve both terminal attempt events"
 
     Reset-TestArtifacts
-    $env:BORDERCLASH_FAKE_AGY_MODE = "timeout-resume"
+    $env:BORDERCLASH_FAKE_AGY_MODE = "timeout-persistent"
+    $persistentTimeout = Invoke-TestRunner $fakeExe
+    Assert-True ($persistentTimeout.ExitCode -eq 0) "repeated timeout should checkpoint after one immediate continuation"
+    Assert-True (($persistentTimeout.Output -join "`n") -match "DEFERRED: print_timeout") "repeated timeout did not create scheduler fallback state"
+    $persistentRuntime = Get-Content (Join-Path $runtimeDir "runtime.json") -Raw | ConvertFrom-Json
+    Assert-True ($persistentRuntime.status -eq "resumable") "repeated timeout fallback was not resumable"
+    $persistentRunDir = [string]$persistentRuntime.runDir
+    $persistentResume = Invoke-TestRunner $fakeExe
+    Assert-True ($persistentResume.ExitCode -eq 0) "scheduler fallback did not resume the persistent timeout cycle"
+    Assert-True (($persistentResume.Output -join "`n") -match "RESUME:.*fake-persistent-conversation") "scheduler fallback did not reuse the saved conversation"
+    Assert-True (($persistentResume.Output -join "`n") -match "SHADOW SUCCESS") "scheduler fallback did not finish the cycle"
+    Assert-True (-not (Test-Path -LiteralPath $persistentRunDir)) "successful scheduler fallback left its workspace behind"
+
+    Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "timeout-persistent"
     $staleCheckpoint = Invoke-TestRunner $fakeExe
     Assert-True ($staleCheckpoint.ExitCode -eq 0) "stale-checkpoint fixture did not create a resumable cycle"
+    Assert-True (($staleCheckpoint.Output -join "`n") -match "RETRY: print_timeout") "repeated timeout did not try an immediate continuation first"
+    Assert-True (($staleCheckpoint.Output -join "`n") -match "DEFERRED: print_timeout") "repeated timeout did not fall back to a durable checkpoint"
     $staleRuntimePath = Join-Path $runtimeDir "runtime.json"
     $staleRuntime = Get-Content $staleRuntimePath -Raw | ConvertFrom-Json
+    Assert-True ($staleRuntime.status -eq "resumable") "repeated timeout did not leave a resumable checkpoint"
     $staleRunDir = [string]$staleRuntime.runDir
     $staleRuntime.baseHead = "0000000000000000000000000000000000000000"
     $staleRuntime | ConvertTo-Json | Set-Content -Encoding utf8 $staleRuntimePath
@@ -134,16 +332,11 @@ try {
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "retryable-resume"
     $capacity = Invoke-TestRunner $fakeExe
-    Assert-True ($capacity.ExitCode -eq 0) "retryable provider failure should checkpoint instead of hard-failing"
-    Assert-True (($capacity.Output -join "`n") -match "DEFERRED: retryable:UNAVAILABLE") "retryable provider failure was not classified from AGY_ERROR"
+    Assert-True ($capacity.ExitCode -eq 0) "retryable provider failure should continue inside the same runner"
+    Assert-True (($capacity.Output -join "`n") -match "RETRY: retryable:UNAVAILABLE.*fake-retryable-conversation") "retryable provider failure was not immediately continued"
+    Assert-True (($capacity.Output -join "`n") -match "SHADOW SUCCESS") "provider retry did not complete the cycle"
     $capacityRuntime = Get-Content (Join-Path $runtimeDir "runtime.json") -Raw | ConvertFrom-Json
-    Assert-True ($capacityRuntime.status -eq "resumable") "provider capacity failure was not resumable"
-    Assert-True ($capacityRuntime.conversationId -eq "fake-retryable-conversation") "provider capacity failure lost the AGY conversation id"
-    $capacityRunDir = [string]$capacityRuntime.runDir
-    $capacityResume = Invoke-TestRunner $fakeExe
-    Assert-True ($capacityResume.ExitCode -eq 0) "retryable provider cycle should resume and complete"
-    Assert-True (($capacityResume.Output -join "`n") -match "RESUME:.*fake-retryable-conversation") "runner did not resume the provider-failure conversation"
-    Assert-True (-not (Test-Path -LiteralPath $capacityRunDir)) "successful provider retry left the cycle workspace behind"
+    Assert-True ($capacityRuntime.status -eq "validated") "successful provider retry remained checkpointed"
 
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "success"
@@ -178,7 +371,7 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "non-data"
     $nonData = Invoke-TestRunner $fakeExe
     Assert-True ($nonData.ExitCode -eq 1) "routine cycle must reject non-data edits"
-    Assert-True (($nonData.Output -join "`n") -match "Routine research may only change data/") "non-data rejection did not name the boundary"
+    Assert-True (($nonData.Output -join "`n") -match "Routine\s+research\s+may\s+only\s+change\s+data/") "non-data rejection did not name the boundary"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "rejected repo change advanced main HEAD"
 
     Reset-TestArtifacts
