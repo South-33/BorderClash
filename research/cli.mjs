@@ -253,7 +253,7 @@ function renderContext(output) {
   const lines = [
     "# BorderClash cycle context",
     "",
-    "Use this as a starting snapshot, not a research boundary. Inspect the repository, history, and web wherever that can improve the data behind the existing dashboard.",
+    "This is a snapshot of what the repository currently says, not verified truth. Use it for orientation and as a signal for what may need checking; inspect the repository, history, and web wherever useful.",
     "A no-change cycle is valid when the current record remains the best supported picture.",
     "",
     "## Cycle",
@@ -262,7 +262,7 @@ function renderContext(output) {
     `Scheduled next: ${output.cycle.next || "unset"}`,
     `Previous cadence: ${output.cycle.intervalHours || "unknown"}h - ${output.cycle.reason || "no reason recorded"}`,
     "",
-    "## Current picture",
+    "## Current repository state",
     `Impact: displaced ${compactMetric(output.current.impact.displaced)}; deaths ${compactMetric(output.current.impact.deaths)}; injuries ${compactMetric(output.current.impact.injuries)}`,
     `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
     `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
@@ -286,7 +286,7 @@ function renderContext(output) {
   }
   if (!output.recentTimeline.length) lines.push("- none");
 
-  lines.push("", "## Latest evidence anchors");
+  lines.push("", "## Latest retained evidence anchors");
   for (const [label, key] of [["Thailand domestic", "thailand"], ["Cambodia domestic", "cambodia"], ["International", "international"]]) {
     lines.push(`${label}:`);
     const rows = output.recentNews[key].slice(0, 3);

@@ -8,13 +8,15 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^# BorderClash cycle context/mu);
+  assert.match(result.stdout, /not verified truth/u);
   assert.match(result.stdout, /Research reference time:/u);
-  assert.match(result.stdout, /starting snapshot, not a research boundary/u);
+  assert.match(result.stdout, /## Current repository state/u);
+  assert.match(result.stdout, /## Latest retained evidence anchors/u);
+  assert.match(result.stdout, /snapshot of what the repository currently says, not verified truth/u);
   assert.match(result.stdout, /A no-change cycle is valid/u);
   assert.match(result.stdout, /## Recent repository context/u);
   assert.doesNotMatch(result.stdout, /## Research window/u);
   assert.doesNotMatch(result.stdout, /2025 deaths/u);
-  assert.match(result.stdout, /## Latest evidence anchors/u);
   assert.match(result.stdout, /## Source mix across the latest 20 visible records per environment \(context, not a quota\)/u);
   assert.match(result.stdout, /Thailand domestic:/u);
   assert.match(result.stdout, /Cambodia domestic:/u);
