@@ -6,7 +6,7 @@ import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/milit
 
 test("user-facing dashboard files remain on the pre-audit UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "80035414494da4f447ed8f1611549e2b40b11a0fb51f52ca71a60169589cb0db"],
+    ["src/app/DashboardClient.tsx", "cb8afbc1cc7104f893b6ba8169750ace0c46131caa32b59106c6ca39036977b5"],
     ["src/app/translations.ts", "35535d9a298327da1062688c28bcbea1d92afe01ddd8b6aba8e0a842df3924b8"],
   ]);
   for (const [file, hash] of expected) {
@@ -17,6 +17,28 @@ test("user-facing dashboard files remain on the pre-audit UI contract", () => {
       `${file} changed; UI changes require an explicit UI task`,
     );
   }
+});
+
+test("open dashboards pick up a newly published research snapshot", () => {
+  const source = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
+  assert.match(source, /fetch\(`\/data\/dashboard\.json\?research=\$\{Date\.now\(\)\}`/u);
+  assert.match(source, /cache: 'no-store'/u);
+  assert.match(source, /publishedResearchAt > loadedResearchAt/u);
+  assert.match(source, /window\.location\.reload\(\)/u);
+  assert.match(source, /isPossiblyStale \? 60_000 : 300_000/u);
+});
+
+test("public dashboard freshness and feed depth follow the static-data contract", () => {
+  const generator = fs.readFileSync("scripts/generate-public.mjs", "utf8");
+  assert.match(generator, /const PUBLIC_NEWS_LIMIT = 60;/u);
+  assert.match(generator, /updatedAt: lastResearchAt \|\| value\.updatedAt/u);
+  assert.match(generator, /impactPublic\(impact, thailandPerspective, cambodiaPerspective, researchState\.lastResearchAt\)/u);
+});
+
+test("source cards render a real external-link arrow instead of an entity name", () => {
+  const source = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
+  assert.equal(source.includes("&nearr;"), false);
+  assert.equal((source.match(/↗/gu) || []).length >= 2, true);
 });
 
 test("government impact figures preserve claimant and reporting outlet separately", () => {

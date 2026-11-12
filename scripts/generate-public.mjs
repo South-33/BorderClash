@@ -8,6 +8,7 @@ import { normalizeTimelineImportance } from "../research/lib/timeline-importance
 
 const dataRoot = resolve("data");
 const publicRoot = resolve("public", "data");
+const PUBLIC_NEWS_LIMIT = 60;
 
 async function readAllNews() {
   const files = (await listFiles(join(dataRoot, "news"), ".jsonl"));
@@ -119,7 +120,7 @@ function metricDisplay(metric) {
   return number;
 }
 
-function impactPublic(value, thailand, cambodia) {
+function impactPublic(value, thailand, cambodia, lastResearchAt) {
   if (!value) return null;
   return {
     riskLevel: riskLevelFromTiers(thailand?.militaryAssessment?.tier, cambodia?.militaryAssessment?.tier),
@@ -127,7 +128,10 @@ function impactPublic(value, thailand, cambodia) {
     deathCount: metricDisplay(value.deaths),
     civilianInjuredCount: "—",
     militaryInjuredCount: "—",
-    updatedAt: value.updatedAt,
+    // The unchanged UI labels this field simply "UPDATED". Expose the most
+    // recent completed research verification here; canonical impact.json keeps
+    // the underlying evidence/source timestamps separately.
+    updatedAt: lastResearchAt || value.updatedAt,
   };
 }
 
@@ -153,12 +157,12 @@ timeline.sort((a, b) => {
 });
 
 const snapshot = {
-  thailandNews: visibleNews(news.thailand),
-  cambodiaNews: visibleNews(news.cambodia),
+  thailandNews: visibleNews(news.thailand, PUBLIC_NEWS_LIMIT),
+  cambodiaNews: visibleNews(news.cambodia, PUBLIC_NEWS_LIMIT),
   thailandPerspective: perspectivePublic(thailandPerspective),
   cambodiaPerspective: perspectivePublic(cambodiaPerspective),
   summary: summaryPublic(currentSummary),
-  impact: impactPublic(impact, thailandPerspective, cambodiaPerspective),
+  impact: impactPublic(impact, thailandPerspective, cambodiaPerspective, researchState.lastResearchAt),
   timelineEvents: [],
   researchState: {
     lastResearchAt: researchState.lastResearchAt,

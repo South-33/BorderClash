@@ -884,6 +884,48 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const activeSnapshot = initialData;
   const timelineVersion = researchState?.lastResearchAt ?? initialData.snapshotAt;
 
+  // A deployment is static, but an already-open tab can outlive several
+  // research cycles. Poll only the tiny dashboard snapshot and reload once a
+  // newer completed cycle is published so the countdown and data cannot drift.
+  useEffect(() => {
+    const loadedResearchAt = researchState?.lastResearchAt ?? 0;
+    if (!loadedResearchAt) return;
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const checkForNewSnapshot = async () => {
+      if (document.visibilityState !== 'visible') return;
+
+      try {
+        const response = await fetch(`/data/dashboard.json?research=${Date.now()}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+
+        const snapshot = await response.json() as Pick<BorderClashData, 'researchState'>;
+        const publishedResearchAt = snapshot.researchState?.lastResearchAt ?? 0;
+        if (!cancelled && publishedResearchAt > loadedResearchAt) {
+          window.location.reload();
+        }
+      } catch (error) {
+        if (!cancelled && error instanceof Error && error.name !== 'AbortError') {
+          console.error('[BorderClash] Failed to check for a newer research snapshot:', error);
+        }
+      }
+    };
+
+    void checkForNewSnapshot();
+    const interval = window.setInterval(checkForNewSnapshot, isPossiblyStale ? 60_000 : 300_000);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [researchState?.lastResearchAt, isPossiblyStale, tabFocusKey]);
+
   useEffect(() => {
     if (!shouldFetchFullTimeline || clientTimelineEvents !== undefined) return;
 
@@ -2507,7 +2549,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                     >
                                       <span className="text-gray-900">{s.name}</span>
                                       <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
-                                      <span className="opacity-30 group-hover:opacity-60 transition-opacity">&nearr;</span>
+                                      <span className="opacity-30 group-hover:opacity-60 transition-opacity">↗</span>
                                     </a>
                                   ) : (
                                     <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono">
@@ -2543,7 +2585,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                         >
                                           <span className="text-gray-800">{s.name}</span>
                                           <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
-                                          <span className="opacity-30 group-hover:opacity-60 transition-opacity">&nearr;</span>
+                                          <span className="opacity-30 group-hover:opacity-60 transition-opacity">↗</span>
                                         </a>
                                       ) : (
                                         <span key={idx + 3} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono text-gray-700">
