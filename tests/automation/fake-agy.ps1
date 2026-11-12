@@ -16,8 +16,11 @@ if ($outputFormatIndex -lt 0 -or $outputFormatIndex + 1 -ge $cliArgs.Count -or $
 
 function Write-StreamEvent {
     param($Value)
-    [Console]::Out.WriteLine(($Value | ConvertTo-Json -Depth 30 -Compress))
-    [Console]::Out.Flush()
+    $line = ($Value | ConvertTo-Json -Depth 30 -Compress) + [Environment]::NewLine
+    $bytes = [Text.Encoding]::UTF8.GetBytes($line)
+    $stdout = [Console]::OpenStandardOutput()
+    $stdout.Write($bytes, 0, $bytes.Length)
+    $stdout.Flush()
 }
 
 if ($env:BORDERCLASH_EXPECT_MODEL) {
