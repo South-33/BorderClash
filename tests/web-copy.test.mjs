@@ -6,7 +6,7 @@ import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/milit
 
 test("user-facing dashboard files remain on the pre-audit UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "cb8afbc1cc7104f893b6ba8169750ace0c46131caa32b59106c6ca39036977b5"],
+    ["src/app/DashboardClient.tsx", "7bce87e6494ede740ea99886a7fad62f06fc26f8aaaa41f7ab026bf71e5c3cd3"],
     ["src/app/translations.ts", "35535d9a298327da1062688c28bcbea1d92afe01ddd8b6aba8e0a842df3924b8"],
   ]);
   for (const [file, hash] of expected) {
@@ -26,6 +26,14 @@ test("open dashboards pick up a newly published research snapshot", () => {
   assert.match(source, /publishedResearchAt > loadedResearchAt/u);
   assert.match(source, /window\.location\.reload\(\)/u);
   assert.match(source, /isPossiblyStale \? 60_000 : 300_000/u);
+});
+
+test("news feeds return to the newest article when their data or filter changes", () => {
+  const source = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
+  assert.match(source, /const feedScrollRef = useRef<HTMLDivElement>\(null\)/u);
+  assert.match(source, /const articleVersion = `\$\{articles\?\.\[0\]\?\._id \?\? 'none'\}:\$\{articles\?\.length \?\? 0\}`/u);
+  assert.match(source, /feedScrollRef\.current\.scrollTop = 0/u);
+  assert.match(source, /\[categoryFilter, articleVersion\]/u);
 });
 
 test("public dashboard freshness and feed depth follow the static-data contract", () => {

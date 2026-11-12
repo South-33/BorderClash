@@ -470,6 +470,12 @@ const IntelligenceLog = ({
 }) => {
   const t = TRANSLATIONS[lang as Lang];
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const feedScrollRef = useRef<HTMLDivElement>(null);
+  const articleVersion = `${articles?.[0]?._id ?? 'none'}:${articles?.length ?? 0}`;
+
+  useLayoutEffect(() => {
+    if (feedScrollRef.current) feedScrollRef.current.scrollTop = 0;
+  }, [categoryFilter, articleVersion]);
 
   const filteredArticles = (articles?.filter(a =>
     categoryFilter ? a.category === categoryFilter : true
@@ -489,7 +495,7 @@ const IntelligenceLog = ({
         />
 
         {/* Scrollable Feed */}
-        <div className="flex-1 max-h-[220px] xl:max-h-[350px] overflow-y-auto scrollbar-thin">
+        <div ref={feedScrollRef} className="flex-1 max-h-[220px] xl:max-h-[350px] overflow-y-auto scrollbar-thin">
           {isLoading ? (
             <div className="h-full flex items-center justify-center">
               <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
