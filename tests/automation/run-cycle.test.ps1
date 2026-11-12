@@ -100,6 +100,52 @@ try {
     Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.data.patch" | Select-Object -First 1)) "failed cycle did not preserve a diagnostic data patch"
 
     Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "timeout-resume"
+    $timedOut = Invoke-TestRunner $fakeExe
+    Assert-True ($timedOut.ExitCode -eq 0) "recoverable print timeout should checkpoint instead of hard-failing"
+    Assert-True (($timedOut.Output -join "`n") -match "DEFERRED: print_timeout") "timeout did not report a resumable checkpoint"
+    $timeoutRuntime = Get-Content (Join-Path $runtimeDir "runtime.json") -Raw | ConvertFrom-Json
+    Assert-True ($timeoutRuntime.status -eq "resumable") "timeout runtime state was not resumable"
+    Assert-True ($timeoutRuntime.conversationId -eq "fake-timeout-conversation") "timeout lost the AGY conversation id"
+    $timeoutRunDir = [string]$timeoutRuntime.runDir
+    Assert-True (Test-Path -LiteralPath $timeoutRunDir) "timeout deleted the resumable cycle workspace"
+    $timeoutResume = Invoke-TestRunner $fakeExe
+    Assert-True ($timeoutResume.ExitCode -eq 0) "resumed timeout cycle should complete"
+    Assert-True (($timeoutResume.Output -join "`n") -match "RESUME:.*fake-timeout-conversation") "runner did not resume the saved timeout conversation"
+    Assert-True (($timeoutResume.Output -join "`n") -match "SHADOW SUCCESS") "resumed timeout cycle did not validate"
+    Assert-True (-not (Test-Path -LiteralPath $timeoutRunDir)) "successful timeout resume left the cycle workspace behind"
+    Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.resume-1.result.json" | Select-Object -First 1)) "timeout resume did not preserve an attempt-specific result log"
+
+    Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "timeout-resume"
+    $staleCheckpoint = Invoke-TestRunner $fakeExe
+    Assert-True ($staleCheckpoint.ExitCode -eq 0) "stale-checkpoint fixture did not create a resumable cycle"
+    $staleRuntimePath = Join-Path $runtimeDir "runtime.json"
+    $staleRuntime = Get-Content $staleRuntimePath -Raw | ConvertFrom-Json
+    $staleRunDir = [string]$staleRuntime.runDir
+    $staleRuntime.baseHead = "0000000000000000000000000000000000000000"
+    $staleRuntime | ConvertTo-Json | Set-Content -Encoding utf8 $staleRuntimePath
+    $env:BORDERCLASH_FAKE_AGY_MODE = "success"
+    $freshAfterAdvance = Invoke-TestRunner $fakeExe
+    Assert-True ($freshAfterAdvance.ExitCode -eq 0) "stale resumable checkpoint should fall back to a fresh cycle"
+    Assert-True (($freshAfterAdvance.Output -join "`n") -match "ABANDON RESUME: base advanced") "runner did not explain why the stale checkpoint was abandoned"
+    Assert-True (-not (Test-Path -LiteralPath $staleRunDir)) "stale checkpoint workspace survived base invalidation"
+
+    Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "retryable-resume"
+    $capacity = Invoke-TestRunner $fakeExe
+    Assert-True ($capacity.ExitCode -eq 0) "retryable provider failure should checkpoint instead of hard-failing"
+    Assert-True (($capacity.Output -join "`n") -match "DEFERRED: retryable:UNAVAILABLE") "retryable provider failure was not classified from AGY_ERROR"
+    $capacityRuntime = Get-Content (Join-Path $runtimeDir "runtime.json") -Raw | ConvertFrom-Json
+    Assert-True ($capacityRuntime.status -eq "resumable") "provider capacity failure was not resumable"
+    Assert-True ($capacityRuntime.conversationId -eq "fake-retryable-conversation") "provider capacity failure lost the AGY conversation id"
+    $capacityRunDir = [string]$capacityRuntime.runDir
+    $capacityResume = Invoke-TestRunner $fakeExe
+    Assert-True ($capacityResume.ExitCode -eq 0) "retryable provider cycle should resume and complete"
+    Assert-True (($capacityResume.Output -join "`n") -match "RESUME:.*fake-retryable-conversation") "runner did not resume the provider-failure conversation"
+    Assert-True (-not (Test-Path -LiteralPath $capacityRunDir)) "successful provider retry left the cycle workspace behind"
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "success"
     $env:BORDERCLASH_EXPECT_MODEL = "gemini-3.8-flash-high"
     $modelOverride = Invoke-TestRunner $fakeExe -Model $env:BORDERCLASH_EXPECT_MODEL

@@ -1,8 +1,11 @@
 $mode = $env:BORDERCLASH_FAKE_AGY_MODE
 if (-not $mode) { $mode = "success" }
+$cliArgs = @($args)
+$conversationIndex = [Array]::IndexOf($cliArgs, "--conversation")
+$isResume = $conversationIndex -ge 0 -and $conversationIndex + 1 -lt $cliArgs.Count
+$conversationArg = if ($isResume) { [string]$cliArgs[$conversationIndex + 1] } else { "" }
 
 if ($env:BORDERCLASH_EXPECT_MODEL) {
-    $cliArgs = @($args)
     $modelIndex = [Array]::IndexOf($cliArgs, "--model")
     if ($modelIndex -lt 0 -or $modelIndex + 1 -ge $cliArgs.Count -or $cliArgs[$modelIndex + 1] -ne $env:BORDERCLASH_EXPECT_MODEL) {
         [Console]::Error.WriteLine("unexpected model argument")
@@ -39,6 +42,33 @@ if ($mode -ne "stale-state") {
     if ($LASTEXITCODE -ne 0) {
         [Console]::Error.WriteLine("fake cycle could not finalize scheduler state")
         exit 24
+    }
+}
+
+if ($mode -in @("timeout-resume", "retryable-resume")) {
+    $expectedConversation = if ($mode -eq "timeout-resume") { "fake-timeout-conversation" } else { "fake-retryable-conversation" }
+    if ($isResume -and $conversationArg -ne $expectedConversation) {
+        [Console]::Error.WriteLine("unexpected conversation argument")
+        exit 27
+    }
+    if (-not $isResume) {
+        $finishedReason = if ($mode -eq "timeout-resume") { "print_timeout" } else { "error" }
+        [ordered]@{
+            conversation_id = $expectedConversation
+            status = "ERROR"
+            response = "partial fake cycle"
+            error = if ($mode -eq "timeout-resume") { "print timeout with turn in progress" } else { "temporary provider capacity failure" }
+            duration_seconds = 1
+            num_turns = 1
+            usage = @{ input_tokens = 1; output_tokens = 1; thinking_tokens = 0; cache_read_tokens = 0; total_tokens = 2 }
+            finished_reason = $finishedReason
+        } | ConvertTo-Json -Compress
+        if ($mode -eq "timeout-resume") {
+            [Console]::Error.WriteLine('AGY_ERROR: {"short_error":"print timeout","status":"DEADLINE_EXCEEDED","retryable":false}')
+        } else {
+            [Console]::Error.WriteLine('AGY_ERROR: {"short_error":"No capacity available","status":"UNAVAILABLE","error_code":503,"retryable":true}')
+        }
+        exit 3
     }
 }
 

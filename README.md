@@ -13,6 +13,8 @@ The research is AI-assisted. It can be incomplete or wrong, so the site keeps so
 
 A cycle can also conclude that nothing material changed. The record is meant to stay accurate and useful, not grow for its own sake.
 
+Recoverable AGY timeouts and temporary provider failures do not restart the research from zero. The runner keeps the exact cycle workspace and conversation, and the five-minute scheduler poll resumes it. If `main` changes before recovery, the stale checkpoint is discarded and the cycle starts fresh from the new canonical base.
+
 ## Repository map
 
 - `src/`: the Next.js website.
@@ -21,7 +23,8 @@ A cycle can also conclude that nothing material changed. The record is meant to 
   - `news/`: retained reporting in one JSONL file per month. Each article carries an explicit `mediaEnvironment` (`cambodia-domestic`, `thailand-domestic`, or `international`) so classification can be corrected without moving the record.
   - `timeline/`: the durable event history, grouped by month.
   - `research-state.json`: research cadence and cycle state.
-- `research/`: compact cycle context, validation, quality evaluation, shared data semantics, and production automation.
+- `research/`: compact cycle context, validation, shared data semantics, and production automation.
+- `benchmarks/`: optional model-based development benchmarks, separate from routine research.
 - `scripts/`: small site/build helpers.
 - `tests/`: deterministic tests, including the fake-agent production harness.
 - `public/`: static assets. `public/data/` is generated and is not a source of truth.

@@ -7,6 +7,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $statePath = Join-Path $repoRoot "data\research-state.json"
+$runtimePath = Join-Path $repoRoot ".work\runner\runtime\runtime.json"
 $script:preflightMessage = $null
 
 function Test-ResearchDue {
@@ -22,6 +23,13 @@ function Test-ResearchDue {
     if ($state.isPaused) {
         $script:preflightMessage = "SKIP: paused (local preflight)"
         return $false
+    }
+
+    if (Test-Path -LiteralPath $runtimePath) {
+        try {
+            $runtime = Get-Content -LiteralPath $runtimePath -Raw | ConvertFrom-Json
+            if ([string]$runtime.status -eq "resumable") { return $true }
+        } catch { }
     }
 
     $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()

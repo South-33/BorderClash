@@ -17,6 +17,7 @@ test('production research runs from main through one Windows task', () => {
   assert.match(production, /research\\automation\\run-cycle\.ps1/);
   assert.match(production, /-Publish/);
   assert.match(production, /data\\research-state\.json/);
+  assert.match(production, /\.work\\runner\\runtime\\runtime\.json/);
   assert.match(production, /SKIP: not-due/);
   assert.ok(
     production.indexOf('if (-not (Test-ResearchDue))') < production.indexOf('"fetch", $RemoteName, "main"'),
@@ -25,6 +26,11 @@ test('production research runs from main through one Windows task', () => {
   const preflight = production.slice(
     production.indexOf('function Test-ResearchDue'),
     production.indexOf('function Invoke-Checked'),
+  );
+  assert.match(preflight, /runtime\.status.+resumable/s);
+  assert.ok(
+    preflight.indexOf('runtime.status') < preflight.indexOf('state.nextRunAt'),
+    'resumable cycles must bypass the normal nextRunAt gate',
   );
   assert.doesNotMatch(preflight, /Write-Output/, 'preflight must return only a boolean');
   assert.match(production, /Write-Output \$script:preflightMessage/);

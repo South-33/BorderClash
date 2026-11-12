@@ -265,6 +265,41 @@ test("finish needs no arguments when cadence should stay the same", async () => 
   }
 });
 
+test("finish is idempotent within one runner cycle", async () => {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
+  try {
+    await mkdir(join(root, "data"), { recursive: true });
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({
+      schemaVersion: 1,
+      isPaused: false,
+      lastResearchAt: 1,
+      nextRunAt: 2,
+      lastCycleInterval: 24,
+      schedulingReason: "Quiet conditions.",
+      researchCycleCount: 7,
+      scheduler: "external",
+    }, null, 2) + "\n");
+
+    await mkdir(join(root, ".work"), { recursive: true });
+    await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-test-1" }) + "\n");
+    const first = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
+    assert.equal(first.status, 0, first.stderr);
+    const afterFirst = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
+
+    const second = spawnSync(process.execPath, [script, "finish", "12", "This second call must not advance the cycle."], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    assert.equal(second.status, 0, second.stderr);
+    assert.equal(JSON.parse(second.stdout).alreadyFinished, true);
+    const afterSecond = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
+    assert.deepEqual(afterSecond, afterFirst);
+    assert.equal(afterSecond.researchCycleCount, 8);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("finish allows long quiet intervals and rejects scheduling beyond one week", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {

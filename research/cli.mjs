@@ -317,6 +317,32 @@ function renderContext(output) {
 async function finish(hoursText, reasonParts) {
   const statePath = join(dataRoot, "research-state.json");
   const state = await readJson(statePath);
+  const cycleRuntimePath = resolve(".work", "CYCLE_RUN.json");
+  let cycleId = "";
+  if (existsSync(cycleRuntimePath)) {
+    const cycleRuntime = await readJson(cycleRuntimePath);
+    cycleId = String(cycleRuntime.runId || "").trim();
+  }
+  const finishMarkerPath = resolve(".work", "research-finish.json");
+  if (cycleId && existsSync(finishMarkerPath)) {
+    const marker = await readJson(finishMarkerPath);
+    if (marker.cycleId === cycleId) {
+      if (
+        Number(state.lastResearchAt) !== Number(marker.completedAt)
+        || Number(state.researchCycleCount) !== Number(marker.researchCycleCount)
+      ) {
+        throw new Error("finish marker does not match current research state");
+      }
+      process.stdout.write(JSON.stringify({
+        completedAt: new Date(marker.completedAt).toISOString(),
+        nextRunAt: new Date(marker.nextRunAt).toISOString(),
+        intervalHours: marker.intervalHours,
+        researchCycleCount: marker.researchCycleCount,
+        alreadyFinished: true,
+      }) + "\n");
+      return;
+    }
+  }
   const requestedHours = hoursText == null ? Number(state.lastCycleInterval || 24) : Number(hoursText);
   const hours = Number.isFinite(requestedHours) ? requestedHours : Number.NaN;
   if (!Number.isFinite(hours) || hours < 1 || hours > MAX_SCHEDULE_HOURS) {
@@ -342,6 +368,15 @@ async function finish(hoursText, reasonParts) {
     scheduler: "external",
   };
   await writeJson(statePath, next);
+  if (cycleId) {
+    await writeJson(finishMarkerPath, {
+      cycleId,
+      completedAt,
+      nextRunAt,
+      intervalHours: hours,
+      researchCycleCount: next.researchCycleCount,
+    });
+  }
   process.stdout.write(JSON.stringify({
     completedAt: new Date(completedAt).toISOString(),
     nextRunAt: new Date(nextRunAt).toISOString(),
