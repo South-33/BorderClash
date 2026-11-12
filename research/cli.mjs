@@ -1,17 +1,18 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
-import { selectVisibleNews } from "./lib/news.mjs";
+import { join, resolve } from "node:path";
+import { newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
 import { militaryAssessmentFor } from "./lib/military-assessment.mjs";
 
 const dataRoot = resolve("data");
-const command = process.argv[2] || "brief";
+const command = process.argv[2] || "context";
 const DAY_MS = 24 * 3_600_000;
 const BRIEF_MIN_DAYS = 7;
 const BRIEF_MAX_DAYS = 30;
 const BRIEF_NEWS_LIMIT = 6;
 const BRIEF_TIMELINE_LIMIT = 12;
+const SOURCE_MIX_RECORDS = 20;
 const MAX_SCHEDULE_HOURS = 168;
 
 function latestTimestamp(row) {
@@ -71,21 +72,37 @@ function selectBriefContext({ state, news, timeline, nowMs }) {
   const desiredStart = lastResearchAt > 0 ? Math.min(lastResearchAt, minimumStart) : minimumStart;
   const windowStart = Math.max(maximumStart, desiredStart);
   const eligibleNews = Object.fromEntries(
-    Object.entries(news).map(([country, rows]) => [
-      country,
+    Object.entries(news).map(([environment, rows]) => [
+      environment,
       selectVisibleNews(rows, rows.length),
     ]),
   );
   const contextNews = Object.fromEntries(
-    Object.entries(eligibleNews).map(([country, rows]) => [
-      country,
+    Object.entries(eligibleNews).map(([environment, rows]) => [
+      environment,
       rows.filter((row) => newsContextTimestamp(row) >= windowStart),
     ]),
   );
   const contextTimeline = timeline.filter((row) => timelineTimestamp(row) >= windowStart);
+  const sourceMix = Object.fromEntries(
+    Object.entries(eligibleNews).map(([environment, rows]) => {
+      const counts = new Map();
+      for (const row of rows.slice(0, SOURCE_MIX_RECORDS)) {
+        const source = String(row.source || "unknown").trim() || "unknown";
+        counts.set(source, (counts.get(source) || 0) + 1);
+      }
+      return [
+        environment,
+        [...counts.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, 6)
+          .map(([source, count]) => ({ source, count })),
+      ];
+    }),
+  );
   const sinceNews = Object.fromEntries(
-    Object.entries(eligibleNews).map(([country, rows]) => [
-      country,
+    Object.entries(eligibleNews).map(([environment, rows]) => [
+      environment,
       rows.filter((row) => newsContextTimestamp(row) >= lastResearchAt),
     ]),
   );
@@ -100,18 +117,20 @@ function selectBriefContext({ state, news, timeline, nowMs }) {
     counts: {
       timeline: contextTimeline.length,
       news: Object.fromEntries(
-        Object.entries(contextNews).map(([country, rows]) => [country, rows.length]),
+        Object.entries(contextNews).map(([environment, rows]) => [environment, rows.length]),
       ),
     },
     sinceLastCycleCounts: {
       timeline: sinceTimeline.length,
       news: Object.fromEntries(
-        Object.entries(sinceNews).map(([country, rows]) => [country, rows.length]),
+        Object.entries(sinceNews).map(([environment, rows]) => [environment, rows.length]),
       ),
     },
     news: Object.fromEntries(
-      Object.entries(contextNews).map(([country, rows]) => [country, rows.slice(0, BRIEF_NEWS_LIMIT)]),
+      Object.entries(eligibleNews).map(([environment, rows]) => [environment, rows.slice(0, BRIEF_NEWS_LIMIT)]),
     ),
+    sourceMix,
+    sourceMixRecords: SOURCE_MIX_RECORDS,
     timeline: contextTimeline.slice(0, BRIEF_TIMELINE_LIMIT),
   };
 }
@@ -140,14 +159,10 @@ async function brief() {
 
   const news = { thailand: [], cambodia: [], international: [] };
   for (const file of await listFiles(join(dataRoot, "news"), ".jsonl")) {
-    const country = file.endsWith("thailand.jsonl")
-      ? "thailand"
-      : file.endsWith("cambodia.jsonl")
-        ? "cambodia"
-        : file.endsWith("international.jsonl")
-          ? "international"
-          : null;
-    if (country) news[country].push(...await readJsonl(file));
+    for (const article of await readJsonl(file)) {
+      const environment = newsEnvironmentKey(article.mediaEnvironment);
+      if (environment) news[environment].push(article);
+    }
   }
 
   for (const values of Object.values(news)) {
@@ -202,11 +217,13 @@ async function brief() {
     },
     recentTimeline: context.timeline.map(compactTimeline),
     recentNews: Object.fromEntries(
-      Object.entries(context.news).map(([country, values]) => [
-        country,
+      Object.entries(context.news).map(([environment, values]) => [
+        environment,
         values.map(compactNews),
       ]),
     ),
+    sourceMix: context.sourceMix,
+    sourceMixRecords: context.sourceMixRecords,
     archive: {
       timeline: timeline.length,
       news: Object.values(news).reduce((sum, values) => sum + values.length, 0),
@@ -220,25 +237,35 @@ function isoDate(value) {
   return Number.isFinite(value) ? new Date(value).toISOString() : "unknown";
 }
 
+function compactMetric(metric) {
+  if (!metric || metric.value == null) {
+    return metric?.qualifier === "NO_COMBINED_TOTAL" ? "no combined total" : "unknown";
+  }
+  const prefix = metric.qualifier === "MORE_THAN"
+    ? ">"
+    : metric.qualifier === "AT_LEAST"
+      ? ">="
+      : "";
+  return `${prefix}${metric.value}`;
+}
+
 function renderContext(output) {
   const lines = [
     "# BorderClash cycle context",
     "",
-    `Now: ${output.cycle.now}`,
+    "Use this as a starting snapshot, not a research boundary. Inspect the repository, history, and web wherever that can improve the data behind the existing dashboard.",
+    "A no-change cycle is valid when the current record remains the best supported picture.",
+    "",
+    "## Cycle",
+    `Research reference time: ${output.cycle.now}`,
     `Last completed: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
     `Scheduled next: ${output.cycle.next || "unset"}`,
     `Previous cadence: ${output.cycle.intervalHours || "unknown"}h - ${output.cycle.reason || "no reason recorded"}`,
-    "No Git/checks/help, directory lists, or raw archive reads.",
-    "After 3 searches, finish no-change if results predate the last cycle or are already anchored. Source any candidate before changing data.",
-    "Finish: pnpm research finish <hours> \"<reason>\". Then stop.",
     "",
     "## Current picture",
-    `Impact: ${output.current.impact.displaced?.qualifier === "MORE_THAN" ? ">" : ""}${output.current.impact.displaced?.value ?? "unknown"} displaced; ${output.current.impact.deaths?.qualifier === "AT_LEAST" ? ">=" : ""}${output.current.impact.deaths?.value ?? "unknown"} 2025 deaths; injuries: no combined total`,
+    `Impact: displaced ${compactMetric(output.current.impact.displaced)}; deaths ${compactMetric(output.current.impact.deaths)}; injuries ${compactMetric(output.current.impact.injuries)}`,
     `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
     `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
-    "Gauge: choose the highest evidence-backed tier defined in AGENTS.md; never choose a free numeric score.",
-    "Source score: use only 90 verified/corroborated, 75 strong attributed, 55 limited, or 30 weak/unverified.",
-    "Timeline importance: use only 50 context, 70 notable, 80 major, or 95 defining.",
     `Summary: ${output.current.summary.summary || ""}`,
   ];
 
@@ -246,10 +273,10 @@ function renderContext(output) {
   const since = output.contextWindow.sinceLastCycleCounts;
   lines.push(
     "",
-    "## Research window",
+    "## Recent repository context",
     `${output.contextWindow.lookbackDays} days from ${output.contextWindow.start} to ${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (automatic context capped at 30 days)" : ""}.`,
-    `In window: timeline ${counts.timeline}; news TH ${counts.news.thailand}, KH ${counts.news.cambodia}, INTL ${counts.news.international}.`,
-    `Since last completed cycle: timeline ${since.timeline}; news TH ${since.news.thailand}, KH ${since.news.cambodia}, INTL ${since.news.international}.`,
+    `In context: timeline ${counts.timeline}; news Thailand domestic ${counts.news.thailand}, Cambodia domestic ${counts.news.cambodia}, international ${counts.news.international}.`,
+    `Since last completed cycle: timeline ${since.timeline}; news Thailand domestic ${since.news.thailand}, Cambodia domestic ${since.news.cambodia}, international ${since.news.international}.`,
     "",
     "## Recent timeline anchors",
   );
@@ -259,8 +286,8 @@ function renderContext(output) {
   }
   if (!output.recentTimeline.length) lines.push("- none");
 
-  lines.push("", "## Recent evidence anchors");
-  for (const [label, key] of [["Thailand", "thailand"], ["Cambodia", "cambodia"], ["International", "international"]]) {
+  lines.push("", "## Latest evidence anchors");
+  for (const [label, key] of [["Thailand domestic", "thailand"], ["Cambodia domestic", "cambodia"], ["International", "international"]]) {
     lines.push(`${label}:`);
     const rows = output.recentNews[key].slice(0, 3);
     if (!rows.length) {
@@ -272,26 +299,34 @@ function renderContext(output) {
     }
   }
 
+  lines.push("", `## Source mix across the latest ${output.sourceMixRecords || SOURCE_MIX_RECORDS} visible records per environment (context, not a quota)`);
+  for (const [label, key] of [["Thailand domestic", "thailand"], ["Cambodia domestic", "cambodia"], ["International", "international"]]) {
+    const mix = output.sourceMix?.[key] || [];
+    lines.push(`${label}: ${mix.length ? mix.map(({ source, count }) => `${source} (${count})`).join(", ") : "none"}`);
+  }
+
   lines.push(
     "",
-    `Archive: ${output.archive.timeline} timeline events; ${output.archive.news} news records. Use \`pnpm research find <text>\` or \`show <id>\` only when deeper local context would improve a decision.`,
+    `Archive: ${output.archive.timeline} timeline events; ${output.archive.news} news records.`,
+    "Finish when the record is in the best state the evidence supports: `pnpm research finish`. Pass a new interval and reason only when the next-run cadence should change.",
     "",
   );
   return lines.join("\n");
 }
 
 async function finish(hoursText, reasonParts) {
-  const hours = Number(hoursText);
-  const reason = reasonParts.join(" ").trim();
+  const statePath = join(dataRoot, "research-state.json");
+  const state = await readJson(statePath);
+  const requestedHours = hoursText == null ? Number(state.lastCycleInterval || 24) : Number(hoursText);
+  const hours = Number.isFinite(requestedHours) ? requestedHours : Number.NaN;
   if (!Number.isFinite(hours) || hours < 1 || hours > MAX_SCHEDULE_HOURS) {
     throw new Error(`finish hours must be between 1 and ${MAX_SCHEDULE_HOURS}`);
   }
-  if (reason.length < 8 || reason.length > 240) {
-    throw new Error("finish reason must be 8..240 characters");
+  const suppliedReason = reasonParts.join(" ").trim();
+  if (suppliedReason.length > 240) {
+    throw new Error("finish reason must be at most 240 characters");
   }
-
-  const statePath = join(dataRoot, "research-state.json");
-  const state = await readJson(statePath);
+  const reason = suppliedReason || String(state.schedulingReason || "Research cycle completed.").trim();
   const completedAt = Date.now();
   const nextRunAt = completedAt + Math.round(hours * 3_600_000);
 
@@ -334,155 +369,6 @@ function check() {
   run("git", ["diff", "--check"]);
 }
 
-async function records() {
-  const rows = [];
-  for (const file of await listFiles(join(dataRoot, "news"), ".jsonl")) {
-    const country = file.endsWith("thailand.jsonl")
-      ? "thailand"
-      : file.endsWith("cambodia.jsonl")
-        ? "cambodia"
-        : "international";
-    for (const row of await readJsonl(file)) {
-      rows.push({ kind: "news", country, file, row });
-    }
-  }
-  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
-    for (const row of await readJsonl(file)) {
-      rows.push({ kind: "timeline", file, row });
-    }
-  }
-  return rows;
-}
-
-function recordSummary(item) {
-  const { row } = item;
-  return {
-    kind: item.kind,
-    country: item.country,
-    file: relative(process.cwd(), item.file).replaceAll("\\", "/"),
-    id: row.id,
-    date: row.date,
-    publishedAt: row.publishedAt,
-    source: row.source,
-    status: row.status,
-    title: row.titleEn || row.title,
-  };
-}
-
-function recordTime(item) {
-  const { row } = item;
-  if (Number.isFinite(row.publishedAt)) return row.publishedAt;
-  if (Number.isFinite(row.fetchedAt)) return row.fetchedAt;
-  if (typeof row.date === "string") {
-    const time = Date.parse(row.date + "T00:00:00Z");
-    if (Number.isFinite(time)) return time;
-  }
-  return 0;
-}
-
-async function find(query) {
-  if (!query) throw new Error("Usage: pnpm research find <text>");
-  const needle = query.toLocaleLowerCase("en-US");
-  const matches = (await records())
-    .filter((item) => JSON.stringify(item.row).toLocaleLowerCase("en-US").includes(needle))
-    .sort((a, b) => recordTime(b) - recordTime(a))
-    .slice(0, 12)
-    .map(recordSummary);
-  process.stdout.write(JSON.stringify({ query, matches }, null, 2) + "\n");
-}
-
-async function show(id) {
-  if (!id) throw new Error("Usage: pnpm research show <id>");
-  const matches = (await records()).filter((item) => item.row.id === id);
-  if (!matches.length) {
-    console.error("No record found: " + id);
-    process.exit(1);
-  }
-  process.stdout.write(JSON.stringify(matches.map((item) => ({
-    ...recordSummary(item),
-    record: item.row,
-  })), null, 2) + "\n");
-}
-
-function htmlAttribute(tag, name) {
-  const match = new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(tag);
-  return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
-}
-
-function decodeHtml(value) {
-  if (!value) return null;
-  return value
-    .replace(/&#(x?[0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code.replace(/^x/i, ""), /^x/i.test(code) ? 16 : 10)))
-    .replaceAll("&amp;", "&")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function pageMetadata(html) {
-  const meta = new Map();
-  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
-    const key = htmlAttribute(tag, "property") ?? htmlAttribute(tag, "name") ?? htmlAttribute(tag, "itemprop");
-    const content = htmlAttribute(tag, "content");
-    if (key && content && !meta.has(key.toLowerCase())) meta.set(key.toLowerCase(), decodeHtml(content));
-  }
-  const titleMatch = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html);
-  const jsonDate = /"datePublished"\s*:\s*"([^"]+)"/i.exec(html)?.[1] ?? null;
-  return {
-    title: meta.get("og:title") ?? meta.get("twitter:title") ?? decodeHtml(titleMatch?.[1] ?? null),
-    publishedAt: meta.get("article:published_time") ?? meta.get("datepublished") ?? meta.get("pubdate") ?? jsonDate,
-    description: meta.get("og:description") ?? meta.get("description") ?? meta.get("twitter:description") ?? null,
-  };
-}
-
-async function inspectSource(value) {
-  if (!value) throw new Error("Usage: pnpm research source <url>");
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("source requires a valid HTTP(S) URL");
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("source requires a valid HTTP(S) URL");
-  }
-
-  let response;
-  try {
-    response = await fetch(url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(7_000),
-      headers: { "user-agent": "Mozilla/5.0 BorderClashResearch/1.0" },
-    });
-  } catch (error) {
-    process.stdout.write(JSON.stringify({
-      url: url.href,
-      status: null,
-      ok: false,
-      usable: false,
-      title: null,
-      publishedAt: null,
-      description: null,
-      error: error instanceof Error ? error.message : String(error),
-    }, null, 2) + "\n");
-    return;
-  }
-  const contentType = response.headers.get("content-type") ?? "";
-  const html = contentType.includes("html") ? await response.text() : "";
-  const metadata = html ? pageMetadata(html) : { title: null, publishedAt: null, description: null };
-  const usable = response.ok && Boolean(metadata.title || metadata.publishedAt || metadata.description);
-  process.stdout.write(JSON.stringify({
-    url: response.url || url.href,
-    status: response.status,
-    ok: response.ok,
-    usable,
-    ...metadata,
-  }, null, 2) + "\n");
-}
-
 if (!existsSync(dataRoot)) {
   throw new Error("Run from the BorderClash research repository root.");
 }
@@ -493,24 +379,15 @@ if (command === "brief") {
   process.stdout.write(renderContext(await brief()) + "\n");
 } else if (command === "check") {
   check();
-} else if (command === "find") {
-  await find(process.argv.slice(3).join(" ").trim());
-} else if (command === "show") {
-  await show(process.argv[3]);
-} else if (command === "source") {
-  await inspectSource(process.argv[3]);
 } else if (command === "finish") {
   await finish(process.argv[3], process.argv.slice(4));
 } else if (command === "help" || command === "--help" || command === "-h") {
   process.stdout.write([
-    "pnpm research                    # concise structured brief",
-    "pnpm research context            # compact human-readable cycle context",
-    "pnpm research find <text>        # locate relevant archive records",
-    "pnpm research show <id>          # inspect one exact record",
-    "pnpm research source <url>       # resolve and inspect one publisher source",
-    "pnpm research finish <hours> <reason>  # schedule next cycle (1..168h)",
+    "pnpm research [context]          # show the compact cycle context",
+    "pnpm research finish             # complete cycle; keep current cadence",
+    "pnpm research finish <hours> <reason>  # complete cycle and change cadence",
   ].join("\n") + "\n");
 } else {
-  console.error("Usage: pnpm research [brief|context|find <text>|show <id>|source <url>|finish <hours> <reason>]");
+  console.error("Usage: pnpm research [brief|context|finish <hours> <reason>]");
   process.exit(2);
 }

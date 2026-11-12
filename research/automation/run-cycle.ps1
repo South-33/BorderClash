@@ -3,6 +3,7 @@ param(
     [switch]$Publish,
     [string]$RemoteName = "origin",
     [int]$TimeoutMinutes = 45,
+    [string]$Model = "",
     [string]$Prompt = "",
     [string]$AgyPath = "",
     [string]$RunsRoot = "",
@@ -19,7 +20,13 @@ $runnerRoot = Join-Path $repoRoot ".work\runner"
 $runtimeDir = if ($RuntimeDir) { [IO.Path]::GetFullPath($RuntimeDir) } else { Join-Path $runnerRoot "runtime" }
 $logDir = if ($LogDir) { [IO.Path]::GetFullPath($LogDir) } else { Join-Path $runnerRoot "logs" }
 $runsRoot = if ($RunsRoot) { [IO.Path]::GetFullPath($RunsRoot) } else { Join-Path $runnerRoot "runs" }
-$agyModel = "gemini-3.8-flash-medium"
+$agyModel = if ($Model) {
+    $Model
+} elseif ($env:BORDERCLASH_RESEARCH_MODEL) {
+    $env:BORDERCLASH_RESEARCH_MODEL
+} else {
+    "gemini-3.8-flash-medium"
+}
 
 New-Item -ItemType Directory -Force -Path $runtimeDir, $logDir, $runsRoot | Out-Null
 
@@ -69,11 +76,7 @@ function Recover-StaleRuntimeState {
     $previousRunId = if ($previous.runId) { [string]$previous.runId } else { "unknown" }
     $previousRunDir = if ($previous.PSObject.Properties["runDir"] -and $previous.runDir) {
         [string]$previous.runDir
-    } elseif ($previous.PSObject.Properties["worktree"] -and $previous.worktree) {
-        # Compatibility with runtime state written by the old worktree runner.
-        [string]$previous.worktree
     } else { "" }
-    $previousBranch = if ($previous.PSObject.Properties["branch"]) { [string]$previous.branch } else { "" }
 
     [ordered]@{
         detectedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -88,11 +91,6 @@ function Recover-StaleRuntimeState {
         $ownedRoot = [IO.Path]::GetFullPath($runsRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
         $ownedPrefix = $ownedRoot + [IO.Path]::DirectorySeparatorChar
         if ($candidate.StartsWith($ownedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-            if ($previousBranch) {
-                & git -C $repoRoot worktree remove --force $candidate 2>$null | Out-Null
-                & git -C $repoRoot worktree prune --expire now 2>$null | Out-Null
-                & git -C $repoRoot branch -D $previousBranch 2>$null | Out-Null
-            }
             Remove-RunDirectory $candidate
         }
     }
@@ -296,12 +294,16 @@ try {
         $Prompt
     } else {
         # Do not prefix this with /goal. AGY 1.5.5 headless expands the command,
-        # then exits before the first planner response. Keep the normal print
-        # turn bounded instead; AGENTS.md is written to finish within that budget.
+        # then exits before the first planner response.
         @'
-Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use your judgment to leave the canonical research record as accurate, clear, and current as the evidence supports. Stay inside the research boundary: use the research CLI for archive/source lookup, do not do Git or validation work, finish once, then stop. The outer runner owns repository checks, publication, and deployment. End with <!-- GOAL_COMPLETE --> and include HARNESS_FEEDBACK only when you have one concise actionable improvement.
+Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then inspect the repository and research the web as much as useful. Leave the canonical record as accurate, current, well-sourced, and useful as the available evidence allows. Correct, add, merge, archive, or remove data when justified; a no-change cycle is valid. Spend the turn on research and canonical data; the outer runner handles tests, validation, generation, Git publication, and deployment afterward. Complete the cycle as described in AGENTS.md. End with <!-- GOAL_COMPLETE --> and always include an honest HARNESS_FEEDBACK review of any friction, missing context, constraint, or tool problem; use HARNESS_FEEDBACK: none only when there was genuinely no material issue.
 '@
     }
+    [IO.File]::WriteAllText(
+        (Join-Path $logDir "$runId.prompt.txt"),
+        $effectivePrompt.Trim() + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
 
     $stdoutPath = Join-Path $logDir "$runId.result.json"
     $stderrPath = Join-Path $logDir "$runId.stderr.log"
@@ -339,12 +341,14 @@ Complete one BorderClash research cycle. Read AGENTS.md and .work/CYCLE_CONTEXT.
         throw "Antigravity did not confirm goal completion"
     }
     $feedback = [regex]::Match([string]$result.response, '(?m)^HARNESS_(?:FEEDBACK|NOTE):\s*(.+)$')
-    if ($feedback.Success) {
-        [IO.File]::WriteAllText(
-            (Join-Path $logDir "$runId.feedback.txt"),
-            $feedback.Groups[1].Value.Trim() + [Environment]::NewLine,
-            [Text.UTF8Encoding]::new($false)
-        )
+    $feedbackText = if ($feedback.Success) { $feedback.Groups[1].Value.Trim() } else { "missing" }
+    [IO.File]::WriteAllText(
+        (Join-Path $logDir "$runId.feedback.txt"),
+        $feedbackText + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    if (-not $feedback.Success -or [string]::IsNullOrWhiteSpace($feedbackText)) {
+        throw "Antigravity did not provide required HARNESS_FEEDBACK"
     }
 
     $runStatePath = Join-Path $runDir "data\research-state.json"

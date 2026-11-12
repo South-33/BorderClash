@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -64,36 +63,26 @@ async function makeBriefFixture({ lastResearchAt, lastCycleInterval = 24, news, 
     summary: "Border situation remains calm.",
     keyUpdates: [],
   });
-  for (const country of ["thailand", "cambodia", "international"]) {
-    await writeJsonlFile(
-      join(root, "data", "news", "2026-11", `${country}.jsonl`),
-      news[country] || [],
-    );
-  }
+  await writeJsonlFile(
+    join(root, "data", "news", "2026-11.jsonl"),
+    [
+      ...(news.thailand || []).map((row) => ({ ...row, mediaEnvironment: "thailand-domestic" })),
+      ...(news.cambodia || []).map((row) => ({ ...row, mediaEnvironment: "cambodia-domestic" })),
+      ...(news.international || []).map((row) => ({ ...row, mediaEnvironment: "international" })),
+    ],
+  );
   await writeJsonlFile(join(root, "data", "timeline", "2026.jsonl"), timeline);
   return root;
 }
 
 function runBrief(root, nowMs) {
-  const result = spawnSync(process.execPath, [script], {
+  const result = spawnSync(process.execPath, [script, "brief"], {
     cwd: root,
     encoding: "utf8",
     env: { ...process.env, BORDERCLASH_NOW_MS: String(nowMs) },
   });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
-}
-
-function runAsync(args, cwd = process.cwd()) {
-  return new Promise((resolveResult, reject) => {
-    const child = spawn(process.execPath, [script, ...args], { cwd, encoding: "utf8" });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("error", reject);
-    child.on("close", (status) => resolveResult({ status, stdout, stderr }));
-  });
 }
 
 test("brief always gives at least seven days of compact local context", async () => {
@@ -249,6 +238,33 @@ test("finish owns cycle timestamps and preserves pause state", async () => {
   }
 });
 
+test("finish needs no arguments when cadence should stay the same", async () => {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
+  try {
+    await mkdir(join(root, "data"), { recursive: true });
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({
+      schemaVersion: 1,
+      isPaused: false,
+      lastResearchAt: 1,
+      nextRunAt: 2,
+      lastCycleInterval: 24,
+      schedulingReason: "Quiet conditions; daily review remains appropriate.",
+      researchCycleCount: 7,
+      scheduler: "external",
+    }, null, 2) + "\n");
+
+    const result = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
+    assert.equal(state.lastCycleInterval, 24);
+    assert.equal(state.schedulingReason, "Quiet conditions; daily review remains appropriate.");
+    assert.equal(state.nextRunAt - state.lastResearchAt, 24 * 3_600_000);
+    assert.equal(state.researchCycleCount, 8);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("finish allows long quiet intervals and rejects scheduling beyond one week", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
@@ -276,72 +292,13 @@ test("finish allows long quiet intervals and rejects scheduling beyond one week"
   }
 });
 
-test("source follows a redirect and returns publisher metadata", async () => {
-  const server = createServer((request, response) => {
-    if (request.url === "/grounding") {
-      response.writeHead(302, { location: "/publisher/article" });
-      response.end();
-      return;
-    }
-    response.writeHead(200, { "content-type": "text/html" });
-    response.end(`<!doctype html><html><head>
-      <meta property="og:title" content="Border update &amp; talks">
-      <meta property="article:published_time" content="2026-11-10T09:30:00Z">
-      <meta name="description" content="A concise publisher description.">
-    </head><body>publisher</body></html>`);
-  });
-  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
-  try {
-    const address = server.address();
-    const result = await runAsync(["source", `http://127.0.0.1:${address.port}/grounding`]);
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout), {
-      url: `http://127.0.0.1:${address.port}/publisher/article`,
-      status: 200,
-      ok: true,
-      usable: true,
-      title: "Border update & talks",
-      publishedAt: "2026-11-10T09:30:00Z",
-      description: "A concise publisher description.",
-    });
-  } finally {
-    await new Promise((resolveClose) => server.close(resolveClose));
-  }
-});
-
-test("source rejects non-http URLs", () => {
-  const result = spawnSync(process.execPath, [script, "source", "file:///tmp/source"], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /HTTP\(S\)/u);
-});
-
-test("source reports network failures as unusable instead of crashing", async () => {
-  const server = createServer((_request, response) => response.end("unused"));
-  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
-  const address = server.address();
-  await new Promise((resolveClose) => server.close(resolveClose));
-
-  const result = spawnSync(process.execPath, [script, "source", `http://127.0.0.1:${address.port}/closed`], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-  });
-  assert.equal(result.status, 0, result.stderr);
-  const output = JSON.parse(result.stdout);
-  assert.equal(output.status, null);
-  assert.equal(output.ok, false);
-  assert.equal(output.usable, false);
-  assert.equal(typeof output.error, "string");
-});
-
 test("--help is a successful alias for help", () => {
   const result = spawnSync(process.execPath, [script, "--help"], {
     cwd: process.cwd(),
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /source <url>/u);
+  assert.match(result.stdout, /research \[context\]/u);
+  assert.match(result.stdout, /research finish/u);
   assert.doesNotMatch(result.stdout, /research check/u);
 });

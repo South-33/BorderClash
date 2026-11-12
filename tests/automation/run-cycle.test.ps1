@@ -19,7 +19,8 @@ function Invoke-TestRunner {
     param(
         [string]$AgyPath,
         [switch]$Publish,
-        [string]$RemoteName = "origin"
+        [string]$RemoteName = "origin",
+        [string]$Model = ""
     )
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
@@ -31,6 +32,7 @@ function Invoke-TestRunner {
             "-MutexName", $mutexName,
             "-RemoteName", $RemoteName
         )
+        if ($Model) { $arguments += @("-Model", $Model) }
         if ($Publish) { $arguments += "-Publish" }
         $output = & powershell.exe @arguments 2>&1
         $exitCode = $LASTEXITCODE
@@ -98,10 +100,26 @@ try {
     Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.data.patch" | Select-Object -First 1)) "failed cycle did not preserve a diagnostic data patch"
 
     Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "success"
+    $env:BORDERCLASH_EXPECT_MODEL = "gemini-3.8-flash-high"
+    $modelOverride = Invoke-TestRunner $fakeExe -Model $env:BORDERCLASH_EXPECT_MODEL
+    Assert-True ($modelOverride.ExitCode -eq 0) "explicit research model override should pass through to AGY"
+    Remove-Item Env:BORDERCLASH_EXPECT_MODEL -ErrorAction SilentlyContinue
+
+    Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "missing-feedback"
+    $missingFeedback = Invoke-TestRunner $fakeExe
+    Assert-True ($missingFeedback.ExitCode -ne 0) "cycle without required harness feedback should fail"
+    Assert-True (($missingFeedback.Output -join "`n") -match "required HARNESS_FEEDBACK") "missing-feedback failure did not name the invariant: $($missingFeedback.Output -join ' | ')"
+    $missingFeedbackFile = Get-ChildItem $logDir -File -Filter "*.feedback.txt" | Select-Object -First 1
+    Assert-True ($null -ne $missingFeedbackFile) "missing feedback was not preserved for diagnosis"
+    Assert-True ((Get-Content $missingFeedbackFile.FullName -Raw).Trim() -eq "missing") "missing feedback log did not preserve the diagnostic state"
+
+    Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "stale-state"
     $staleState = Invoke-TestRunner $fakeExe
     Assert-True ($staleState.ExitCode -eq 1) "cycle without scheduler-state advancement must fail"
-    Assert-True (($staleState.Output -join "`n") -match "did not advance lastResearchAt") "stale-state failure did not name the invariant: $($staleState.Output -join ' | ')"
+    Assert-True (($staleState.Output -join "`n") -match "did not advance\s+lastResearchAt") "stale-state failure did not name the invariant: $($staleState.Output -join ' | ')"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "stale-state cycle changed main HEAD"
 
     Reset-TestArtifacts
@@ -138,15 +156,28 @@ try {
     Assert-True ($unicodeText.Contains($khmerExpected)) "runner corrupted Khmer AGY output"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "UTF-8 shadow cycle changed main HEAD"
 
+    $defaultFeedback = Get-ChildItem $logDir -File -Filter "*.feedback.txt" | Select-Object -First 1
+    Assert-True ($null -ne $defaultFeedback) "successful cycle did not preserve harness feedback"
+
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "note"
     $note = Invoke-TestRunner $fakeExe
     Assert-True ($note.ExitCode -eq 0) "harness-note cycle should pass"
     Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.context.md" | Select-Object -First 1)) "runner did not preserve cycle context"
+    Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.prompt.txt" | Select-Object -First 1)) "runner did not preserve cycle prompt"
     Assert-True ($null -ne (Get-ChildItem $logDir -File -Filter "*.data.patch" | Select-Object -First 1)) "runner did not preserve research data diff"
     $feedbackFile = Get-ChildItem $logDir -File -Filter "*.feedback.txt" | Select-Object -First 1
     Assert-True ($null -ne $feedbackFile) "runner did not extract HARNESS_FEEDBACK"
     Assert-True ((Get-Content $feedbackFile.FullName -Raw).Trim() -eq "Fake harness feedback.") "runner changed HARNESS_FEEDBACK text"
+
+    Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "missing-feedback"
+    $missingFeedback = Invoke-TestRunner $fakeExe
+    Assert-True ($missingFeedback.ExitCode -ne 0) "cycle without mandatory harness feedback should fail"
+    Assert-True (($missingFeedback.Output -join "`n") -match "required HARNESS_FEEDBACK") "missing-feedback failure did not name the invariant"
+    $missingFeedbackFile = Get-ChildItem $logDir -File -Filter "*.feedback.txt" | Select-Object -First 1
+    Assert-True ($null -ne $missingFeedbackFile) "missing feedback was not preserved for diagnosis"
+    Assert-True ((Get-Content $missingFeedbackFile.FullName -Raw).Trim() -eq "missing") "missing feedback log did not preserve the diagnostic state"
 
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "sleep"

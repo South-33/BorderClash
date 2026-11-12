@@ -9,15 +9,12 @@ test("accepts only documented canonical data paths", () => {
     "current/thailand.json",
     "current/cambodia.json",
     "current/summary.json",
-    "news/2026-11/thailand.jsonl",
-    "news/2026-11/cambodia.jsonl",
-    "news/2026-11/international.jsonl",
+    "news/2026-11.jsonl",
     "timeline/2026-11.jsonl",
   ]) {
     assert.equal(isCanonicalDataPath(path), true, path);
   }
 });
-
 test("rejects side files and malformed archive paths", () => {
   for (const path of [
     "migration.json",
@@ -27,11 +24,11 @@ test("rejects side files and malformed archive paths", () => {
     "current/dashboard.json",
     "current/state.json",
     "news/2026-11/other.jsonl",
-    "news/2026-1/thailand.jsonl",
+    "news/2026-1.jsonl",
+    "news/2026-11/cambodia-domestic.jsonl",
     "timeline/2026-11/extra.json",
     "timeline/2026-1.jsonl",
   ]) {
     assert.equal(isCanonicalDataPath(path), false, path);
   }
 });
-

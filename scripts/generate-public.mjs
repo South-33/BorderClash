@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../research/lib/news.mjs";
+import { newsEnvironmentKey, PUBLIC_NEWS_LIMIT, selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../research/lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../research/lib/files.mjs";
 import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/military-assessment.mjs";
 import { normalizeEvidenceScore } from "../research/lib/evidence-score.mjs";
@@ -8,27 +8,20 @@ import { normalizeTimelineImportance } from "../research/lib/timeline-importance
 
 const dataRoot = resolve("data");
 const publicRoot = resolve("public", "data");
-const PUBLIC_NEWS_LIMIT = 60;
-
 async function readAllNews() {
   const files = (await listFiles(join(dataRoot, "news"), ".jsonl"));
   const records = { thailand: [], cambodia: [], international: [] };
 
   for (const file of files) {
-    const country = file.endsWith("thailand.jsonl")
-      ? "thailand"
-      : file.endsWith("cambodia.jsonl")
-        ? "cambodia"
-        : file.endsWith("international.jsonl")
-          ? "international"
-          : null;
-    if (!country) continue;
-    records[country].push(...await readJsonl(file));
+    for (const article of await readJsonl(file)) {
+      const environment = newsEnvironmentKey(article.mediaEnvironment);
+      if (environment) records[environment].push(article);
+    }
   }
   return records;
 }
 
-function visibleNews(records, limit = 20) {
+function visibleNews(records, limit = PUBLIC_NEWS_LIMIT) {
   return selectVisibleNews(records, limit)
     .map((article) => ({
       _id: article.id,
@@ -47,7 +40,7 @@ function visibleNews(records, limit = 20) {
 }
 
 function articleCounts(news) {
-  const count = (country) => news[country].filter((row) => VISIBLE_NEWS_STATUSES.has(row.status)).length;
+  const count = (environment) => news[environment].filter((row) => VISIBLE_NEWS_STATUSES.has(row.status)).length;
   const thailand = count("thailand");
   const cambodia = count("cambodia");
   const international = count("international");

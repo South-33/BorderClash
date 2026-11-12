@@ -38,7 +38,8 @@ test("news feeds return to the newest article when their data or filter changes"
 
 test("public dashboard freshness and feed depth follow the static-data contract", () => {
   const generator = fs.readFileSync("scripts/generate-public.mjs", "utf8");
-  assert.match(generator, /const PUBLIC_NEWS_LIMIT = 60;/u);
+  const news = fs.readFileSync("research/lib/news.mjs", "utf8");
+  assert.match(news, /export const PUBLIC_NEWS_LIMIT = 60;/u);
   assert.match(generator, /updatedAt: lastResearchAt \|\| value\.updatedAt/u);
   assert.match(generator, /impactPublic\(impact, thailandPerspective, cambodiaPerspective, researchState\.lastResearchAt\)/u);
 });

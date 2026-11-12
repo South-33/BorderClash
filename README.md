@@ -6,8 +6,8 @@ The research is AI-assisted. It can be incomplete or wrong, so the site keeps so
 
 ## How it works
 
-1. A scheduled research cycle checks what changed in Cambodian, Thai, and international/regional reporting.
-2. Material findings are verified and written to the tracked research data in `data/`.
+1. A scheduled research agent starts from a compact snapshot, then reads the repository and researches the web wherever useful.
+2. It maintains `data/` as a knowledge base: current state, source reporting, and the historical timeline can be added, corrected, merged, archived, or removed when evidence justifies it.
 3. Deterministic validation checks data format, source links, localization, and other mechanical rules.
 4. Validated changes are committed to `main`. The static site is generated from that record and deployed automatically.
 
@@ -18,10 +18,10 @@ A cycle can also conclude that nothing material changed. The record is meant to 
 - `src/`: the Next.js website.
 - `data/`: the research record tracked in Git.
   - `current/`: current impact numbers, Thailand and Cambodia perspectives, and the neutral summary.
-  - `news/`: retained source reporting, grouped by month and source group (`thailand`, `cambodia`, `international`).
+  - `news/`: retained reporting in one JSONL file per month. Each article carries an explicit `mediaEnvironment` (`cambodia-domestic`, `thailand-domestic`, or `international`) so classification can be corrected without moving the record.
   - `timeline/`: the durable event history, grouped by month.
   - `research-state.json`: research cadence and cycle state.
-- `research/`: the research CLI, validation, quality evaluation, shared helpers, and production automation.
+- `research/`: compact cycle context, validation, quality evaluation, shared data semantics, and production automation.
 - `scripts/`: small site/build helpers.
 - `tests/`: deterministic tests, including the fake-agent production harness.
 - `public/`: static assets. `public/data/` is generated and is not a source of truth.
@@ -49,6 +49,8 @@ To inspect the compact context a research cycle receives:
 ```powershell
 pnpm research context
 ```
+
+Production uses the runner's default research model unless `-Model` or `BORDERCLASH_RESEARCH_MODEL` selects another available AGY model.
 
 The model-based reader-copy benchmark is intentionally separate from deterministic validation:
 

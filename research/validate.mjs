@@ -1,5 +1,5 @@
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
-import { selectVisibleNews } from "./lib/news.mjs";
+import { LOCALIZED_NEWS_LIMIT, NEWS_MEDIA_ENVIRONMENTS, PUBLIC_NEWS_LIMIT, newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { isCanonicalDataPath } from "./lib/data-paths.mjs";
 import { getLocalizedTextIssue } from "./lib/localization.mjs";
 import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
@@ -128,6 +128,8 @@ for (const file of timelineFiles) {
     if (!Array.isArray(event.sources) || event.sources.length === 0) add(location, "missing sources");
     const sourceUrls = new Set();
     for (const [index, source] of (event.sources || []).entries()) {
+      if (source.country !== undefined) add(location + ".sources[" + index + "].country", "legacy field");
+      if (source.mediaEnvironment !== undefined) add(location + ".sources[" + index + "].mediaEnvironment", "unexpected field");
       directSourceUrl(location + ".sources[" + index + "]", source.url);
       notFuture(location + ".sources[" + index + "].addedAt", source.addedAt);
       if (!Number.isFinite(source.credibility) || source.credibility < 0 || source.credibility > 100) {
@@ -146,18 +148,17 @@ for (const file of timelineFiles) {
 const newsFiles = await listFiles(join(dataRoot, "news"), ".jsonl");
 const newsIds = new Set();
 const newsStatuses = new Set(["active", "archived", "unverified"]);
-const newsByCountry = { thailand: [], cambodia: [], international: [] };
+const newsByEnvironment = { thailand: [], cambodia: [], international: [] };
 const newsLocations = new Map();
 for (const file of newsFiles) {
-  const expectedMonth = basename(dirname(file));
-  const country = file.endsWith("thailand.jsonl")
-    ? "thailand"
-    : file.endsWith("cambodia.jsonl")
-      ? "cambodia"
-      : "international";
+  const expectedMonth = basename(file, extname(file));
   for (const article of await readJsonl(file)) {
     const location = file + ":" + article.id;
-    newsByCountry[country].push(article);
+    if (!NEWS_MEDIA_ENVIRONMENTS.has(article.mediaEnvironment)) {
+      add(location + ".mediaEnvironment", "invalid");
+    }
+    const environment = newsEnvironmentKey(article.mediaEnvironment);
+    if (environment) newsByEnvironment[environment].push(article);
     newsLocations.set(article.id, location);
     if (!article.id) add(location, "missing id");
     if (newsIds.has(article.id)) add(location, "duplicate id");
@@ -195,12 +196,27 @@ for (const file of newsFiles) {
 }
 
 const visibleNewsIds = new Set([
-  ...selectVisibleNews(newsByCountry.cambodia).map((article) => article.id),
-  ...selectVisibleNews(newsByCountry.thailand).map((article) => article.id),
+  ...selectVisibleNews(newsByEnvironment.cambodia, LOCALIZED_NEWS_LIMIT).map((article) => article.id),
+  ...selectVisibleNews(newsByEnvironment.thailand, LOCALIZED_NEWS_LIMIT).map((article) => article.id),
 ]);
-for (const [country, articles] of Object.entries(newsByCountry)) {
+
+const publicNewsUrls = new Map();
+for (const articles of Object.values(newsByEnvironment)) {
+  for (const article of selectVisibleNews(articles, PUBLIC_NEWS_LIMIT)) {
+    const normalizedUrl = String(article.sourceUrl || "").replace(/\/$/u, "");
+    if (!normalizedUrl) continue;
+    const previousId = publicNewsUrls.get(normalizedUrl);
+    if (previousId) {
+      add(newsLocations.get(article.id) || article.id, `duplicate public source URL with ${previousId}`);
+    } else {
+      publicNewsUrls.set(normalizedUrl, article.id);
+    }
+  }
+}
+
+for (const [environment, articles] of Object.entries(newsByEnvironment)) {
   for (const article of articles) {
-    const location = newsLocations.get(article.id) || country + ":" + article.id;
+    const location = newsLocations.get(article.id) || environment + ":" + article.id;
     if (visibleNewsIds.has(article.id)) {
       localized(location + ".titleTh", article.titleTh, "th", true);
       localized(location + ".titleKh", article.titleKh, "kh", true);

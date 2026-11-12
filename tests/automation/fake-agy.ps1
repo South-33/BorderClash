@@ -1,10 +1,14 @@
-param(
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$Args
-)
-
 $mode = $env:BORDERCLASH_FAKE_AGY_MODE
 if (-not $mode) { $mode = "success" }
+
+if ($env:BORDERCLASH_EXPECT_MODEL) {
+    $cliArgs = @($args)
+    $modelIndex = [Array]::IndexOf($cliArgs, "--model")
+    if ($modelIndex -lt 0 -or $modelIndex + 1 -ge $cliArgs.Count -or $cliArgs[$modelIndex + 1] -ne $env:BORDERCLASH_EXPECT_MODEL) {
+        [Console]::Error.WriteLine("unexpected model argument")
+        exit 26
+    }
+}
 
 $cycleContext = Join-Path (Get-Location) ".work\CYCLE_CONTEXT.md"
 if (-not (Test-Path $cycleContext)) {
@@ -59,11 +63,13 @@ if ($mode -eq "flip-pause") {
 }
 
 $response = if ($mode -eq "unicode") {
-    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("4LiX4LiU4Liq4Lit4Lia4Lig4Liy4Lip4Liy4LmE4LiX4LiiIOGen+GetuGegOGem+GfkuGelOGehOGel+GetuGen+GetuGegeGfkuGemOGfguGemiA8IS0tIEdPQUxfQ09NUExFVEUgLS0+"))
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("4LiX4LiU4Liq4Lit4Lia4Lig4Liy4Lip4Liy4LmE4LiX4LiiIOGen+GetuGegOGem+GfkuGelOGehOGel+GetuGen+GetuGegeGfkuGemOGfguGemiA8IS0tIEdPQUxfQ09NUExFVEUgLS0+")) + [Environment]::NewLine + "HARNESS_FEEDBACK: none"
 } elseif ($mode -eq "note") {
     "HARNESS_FEEDBACK: Fake harness feedback." + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
+} elseif ($mode -eq "missing-feedback") {
+    "fake cycle complete" + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
 } else {
-    "fake cycle complete <!-- GOAL_COMPLETE -->"
+    "fake cycle complete" + [Environment]::NewLine + "HARNESS_FEEDBACK: none" + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
 }
 
 [ordered]@{
