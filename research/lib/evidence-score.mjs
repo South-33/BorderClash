@@ -1,6 +1,6 @@
 export const EVIDENCE_RUBRIC_VERSION = "evidence-v1";
 
-export const EVIDENCE_SCORES = Object.freeze({
+const EVIDENCE_SCORES = Object.freeze({
   VERIFIED: 90,
   ATTRIBUTED: 75,
   LIMITED: 55,

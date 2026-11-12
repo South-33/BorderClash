@@ -1,4 +1,4 @@
-import { basename, dirname, extname, join, relative, resolve } from "node:path";
+import { basename, extname, join, relative, resolve } from "node:path";
 import { LOCALIZED_NEWS_LIMIT, NEWS_MEDIA_ENVIRONMENTS, PUBLIC_NEWS_LIMIT, newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { isCanonicalDataPath } from "./lib/data-paths.mjs";
 import { getLocalizedTextIssue } from "./lib/localization.mjs";

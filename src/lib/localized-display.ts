@@ -15,10 +15,10 @@ export function normalizeLocalizedDigits(value: string): string {
     });
 }
 
-export type LocalizedTextIssue = "missing" | "wrong-script" | "no-target-script" | "bad-text";
+type LocalizedTextIssue = "missing" | "wrong-script" | "no-target-script" | "bad-text";
 export type LocalizedStyleIssue = "side-taking-tone" | "chatty-or-loaded-tone" | "non-neutral-country-label";
 
-export function getLocalizedTextIssue(
+function getLocalizedTextIssue(
     value: unknown,
     language: LocalizedLanguage,
 ): LocalizedTextIssue | null {

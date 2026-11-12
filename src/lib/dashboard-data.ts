@@ -44,7 +44,7 @@ export interface CurrentSummary {
     updatedAt: number;
 }
 
-export interface Impact {
+interface Impact {
     riskLevel: "LOW" | "ELEVATED" | "CRITICAL";
     displacedCount: number | string;
     civilianInjuredCount: number | string;
@@ -73,7 +73,7 @@ export interface TimelineEvent {
     }>;
 }
 
-export interface ResearchState {
+interface ResearchState {
     lastResearchAt: number;
     nextRunAt?: number;
     intervalHours?: number;
@@ -82,7 +82,7 @@ export interface ResearchState {
     paused?: boolean;
 }
 
-export interface ArticleCounts {
+interface ArticleCounts {
     thailand: number;
     cambodia: number;
     international: number;

@@ -239,6 +239,9 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
         });
         isTransitioning.current = false;
 
+    // updateState is a local state helper. Keeping it out preserves the original
+    // recalculation lifecycle instead of recreating this callback on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lang, checkOverflow, awaitBeforeMeasure, viewMode]);
 
     // === HANDLERS ===
@@ -258,6 +261,8 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
     }, [recalculate]);
 
     useEffect(() => {
+        // This hook intentionally starts its DOM measurement state machine on mount.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         recalculate();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

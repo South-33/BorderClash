@@ -1,6 +1,6 @@
 export const TIMELINE_IMPORTANCE_RUBRIC_VERSION = "timeline-importance-v1";
 
-export const TIMELINE_IMPORTANCE = Object.freeze({
+const TIMELINE_IMPORTANCE = Object.freeze({
   CONTEXT: 50,
   NOTABLE: 70,
   MAJOR: 80,

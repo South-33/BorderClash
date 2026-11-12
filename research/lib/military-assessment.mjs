@@ -1,6 +1,6 @@
 export const MILITARY_RUBRIC_VERSION = "military-v1";
 
-export const MILITARY_TIERS = Object.freeze({
+const MILITARY_TIERS = Object.freeze({
   CALM: { score: 10, posture: "PEACEFUL", meaning: "Routine presence or diplomacy; no material military change." },
   WATCHFUL: { score: 25, posture: "PEACEFUL", meaning: "Heightened monitoring or readiness without a material force change." },
   FORTIFIED: { score: 40, posture: "DEFENSIVE", meaning: "New or continuing fortifications, fencing, trenches, or unit reorganization without new fighting." },
@@ -21,10 +21,4 @@ export function riskLevelFromTiers(...tiers) {
   if (highest >= 70) return "CRITICAL";
   if (highest >= 56) return "ELEVATED";
   return "LOW";
-}
-
-export function militaryRubricText() {
-  return Object.entries(MILITARY_TIERS)
-    .map(([tier, value]) => `${tier}=${value.score}/${value.posture}: ${value.meaning}`)
-    .join(" | ");
 }
