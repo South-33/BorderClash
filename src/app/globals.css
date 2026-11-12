@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+.dashboard-news-score > div:first-child > div:last-child {
+    transform: translateY(-1px);
+}
+
 /* ============================================
    FORCE MOBILE - When content overflows, force mobile layout
    ============================================ */

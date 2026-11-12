@@ -20,5 +20,19 @@
   "injuries": {
     "value": null,
     "qualifier": "NO_COMBINED_TOTAL"
+  },
+  "civilianInjuries": {
+    "value": 93,
+    "qualifier": "AT_LEAST",
+    "sourceName": "Khmer Times",
+    "sourceUrl": "https://www.khmertimeskh.com/501817426/cambodia-agreed-to-ceasefire-to-protect-its-people-from-the-pain-of-conflict-says-prime-minister/",
+    "sourceDate": "2025-12-30"
+  },
+  "militaryInjuries": {
+    "value": 270,
+    "qualifier": "MORE_THAN",
+    "sourceName": "Naewna",
+    "sourceUrl": "https://www.naewna.com/politic/934475",
+    "sourceDate": "2025-12-13"
   }
 }

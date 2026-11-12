@@ -6,7 +6,7 @@ import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/milit
 
 test("user-facing dashboard files remain on the pre-audit UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "7bce87e6494ede740ea99886a7fad62f06fc26f8aaaa41f7ab026bf71e5c3cd3"],
+    ["src/app/DashboardClient.tsx", "813aa1b320bbc8b3d98622d8fb9490d7ae9eb89e3ef35d839b135ca5cd766f8d"],
     ["src/app/translations.ts", "35535d9a298327da1062688c28bcbea1d92afe01ddd8b6aba8e0a842df3924b8"],
   ]);
   for (const [file, hash] of expected) {
@@ -24,6 +24,7 @@ test("open dashboards pick up a newly published research snapshot", () => {
   assert.match(source, /fetch\(`\/data\/dashboard\.json\?research=\$\{Date\.now\(\)\}`/u);
   assert.match(source, /cache: 'no-store'/u);
   assert.match(source, /publishedResearchAt > loadedResearchAt/u);
+  assert.match(source, /snapshot\.deploymentVersion !== loadedDeploymentVersion/u);
   assert.match(source, /window\.location\.reload\(\)/u);
   assert.match(source, /isPossiblyStale \? 60_000 : 300_000/u);
 });

@@ -119,8 +119,8 @@ function impactPublic(value, thailand, cambodia, lastResearchAt) {
     riskLevel: riskLevelFromTiers(thailand?.militaryAssessment?.tier, cambodia?.militaryAssessment?.tier),
     displacedCount: metricDisplay(value.displaced),
     deathCount: metricDisplay(value.deaths),
-    civilianInjuredCount: "—",
-    militaryInjuredCount: "—",
+    civilianInjuredCount: metricDisplay(value.civilianInjuries),
+    militaryInjuredCount: metricDisplay(value.militaryInjuries),
     // The unchanged UI labels this field simply "UPDATED". Expose the most
     // recent completed research verification here; canonical impact.json keeps
     // the underlying evidence/source timestamps separately.
@@ -150,6 +150,7 @@ timeline.sort((a, b) => {
 });
 
 const snapshot = {
+  deploymentVersion: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || null,
   thailandNews: visibleNews(news.thailand, PUBLIC_NEWS_LIMIT),
   cambodiaNews: visibleNews(news.cambodia, PUBLIC_NEWS_LIMIT),
   thailandPerspective: perspectivePublic(thailandPerspective),

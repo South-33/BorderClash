@@ -90,6 +90,7 @@ interface ArticleCounts {
 }
 
 export interface BorderClashData {
+    deploymentVersion?: string | null;
     thailandNews: NewsArticle[];
     cambodiaNews: NewsArticle[];
     thailandPerspective: Perspective | null;

@@ -895,6 +895,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // newer completed cycle is published so the countdown and data cannot drift.
   useEffect(() => {
     const loadedResearchAt = researchState?.lastResearchAt ?? 0;
+    const loadedDeploymentVersion = initialData.deploymentVersion;
     if (!loadedResearchAt) return;
 
     let cancelled = false;
@@ -910,9 +911,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         });
         if (!response.ok) return;
 
-        const snapshot = await response.json() as Pick<BorderClashData, 'researchState'>;
+        const snapshot = await response.json() as Pick<BorderClashData, 'researchState' | 'deploymentVersion'>;
         const publishedResearchAt = snapshot.researchState?.lastResearchAt ?? 0;
-        if (!cancelled && publishedResearchAt > loadedResearchAt) {
+        const deploymentChanged = Boolean(
+          snapshot.deploymentVersion
+          && snapshot.deploymentVersion !== loadedDeploymentVersion,
+        );
+        if (!cancelled && (publishedResearchAt > loadedResearchAt || deploymentChanged)) {
           window.location.reload();
         }
       } catch (error) {
@@ -930,7 +935,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       controller.abort();
       window.clearInterval(interval);
     };
-  }, [researchState?.lastResearchAt, isPossiblyStale, tabFocusKey]);
+  }, [initialData.deploymentVersion, researchState?.lastResearchAt, isPossiblyStale, tabFocusKey]);
 
   useEffect(() => {
     if (!shouldFetchFullTimeline || clientTimelineEvents !== undefined) return;
@@ -1375,9 +1380,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const now = Date.now();
       setClockNow(now);
       if (researchState?.nextRunAt) {
-        const remainingToRun = Math.max(0, researchState.nextRunAt - now);
+        const remainingToRun = researchState.nextRunAt - now;
         setNextUpdateIn(Math.floor(remainingToRun / 1000));
-        setIsPossiblyStale(remainingToRun === 0 && now >= researchState.nextRunAt);
+        setIsPossiblyStale(remainingToRun <= 0);
 
         return;
       }
@@ -1391,10 +1396,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const timeSinceLastUpdate = now - (researchState.lastResearchAt || 0);
 
       // Remaining = interval - elapsed
-      const remaining = Math.max(0, intervalMs - timeSinceLastUpdate);
+      const remaining = intervalMs - timeSinceLastUpdate;
 
       setNextUpdateIn(Math.floor(remaining / 1000));
-      setIsPossiblyStale(remaining === 0 && timeSinceLastUpdate >= intervalMs);
+      setIsPossiblyStale(remaining <= 0);
 
     };
 
@@ -1404,23 +1409,25 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   }, [researchState?.lastResearchAt, researchState?.nextRunAt, researchState?.intervalHours, researchState?.paused, tabFocusKey]);
 
   const formatTime = (seconds: number): React.ReactNode => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
+    const overdue = seconds < 0;
+    const absoluteSeconds = Math.abs(seconds);
+    const h = Math.floor(absoluteSeconds / 3600);
+    const m = Math.floor((absoluteSeconds % 3600) / 60);
+    const s = absoluteSeconds % 60;
     const pad = (n: number) => n < 10 ? '0' + n : n;
 
     // Format: H:MM:ss with seconds smaller and faded
-    if (seconds >= 3600) {
+    if (absoluteSeconds >= 3600) {
       return (
         <>
-          {h}:{pad(m)}<span className="text-[0.6em] opacity-80">:{pad(s)}</span>
+          {overdue ? '+' : ''}{h}:{pad(m)}<span className="text-[0.6em] opacity-80">:{pad(s)}</span>
         </>
       );
     }
     // Under 1 hour: M:SS
     return (
       <>
-        {m}:{pad(s)}
+        {overdue ? '+' : ''}{m}:{pad(s)}
       </>
     );
   };
@@ -1787,7 +1794,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   ) : (sysStatsLoading || nextUpdateIn === null) ? (
                     <HackerScramble />
                   ) : isPossiblyStale ? (
-                    <span className="animate-pulse">--:--</span>
+                    <span className="text-riso-accent">{formatTime(nextUpdateIn)}</span>
                   ) : (
                     formatTime(nextUpdateIn)
                   )}
