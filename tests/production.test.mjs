@@ -35,4 +35,7 @@ test('production research runs from main through one Windows task', () => {
   assert.match(installer, /New-ScheduledTaskTrigger -AtLogOn/);
   assert.match(installer, /RepetitionInterval/);
   assert.match(installer, /MultipleInstances IgnoreNew/);
+  assert.match(installer, /-LogonType Interactive/);
+  assert.match(installer, /-WakeToRun/);
+  assert.match(installer, /EveryMinutes = 5/);
 });

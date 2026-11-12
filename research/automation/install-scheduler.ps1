@@ -1,6 +1,6 @@
 param(
     [string]$TaskName = "BorderClashResearch",
-    [int]$EveryMinutes = 10
+    [int]$EveryMinutes = 5
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +16,7 @@ $logon = New-ScheduledTaskTrigger -AtLogOn -User ([Security.Principal.WindowsIde
 $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
     -StartWhenAvailable `
+    -WakeToRun `
     -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 $principal = New-ScheduledTaskPrincipal `
     -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) `
@@ -31,4 +32,4 @@ Register-ScheduledTask `
     -Description "Keeps the BorderClash production checkout on main and runs one due AGY research cycle." `
     -Force | Out-Null
 
-Write-Output "installed task='$TaskName' every=${EveryMinutes}m with logon recovery"
+Write-Output "installed task='$TaskName' every=${EveryMinutes}m with logon recovery and wake-from-sleep"
