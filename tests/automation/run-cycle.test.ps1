@@ -15,6 +15,12 @@ function Assert-True {
     if (-not $Condition) { throw "ASSERTION FAILED: $Message" }
 }
 
+function Get-RuntimeMessage {
+    $path = Join-Path $runtimeDir "runtime.json"
+    if (-not (Test-Path -LiteralPath $path)) { return "" }
+    try { return [string]((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json).message) } catch { return "" }
+}
+
 function Invoke-TestRunner {
     param(
         [string]$AgyPath,
@@ -349,7 +355,8 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "missing-feedback"
     $missingFeedback = Invoke-TestRunner $fakeExe
     Assert-True ($missingFeedback.ExitCode -ne 0) "cycle without required harness feedback should fail"
-    Assert-True (($missingFeedback.Output -join "`n") -match "required HARNESS_FEEDBACK") "missing-feedback failure did not name the invariant: $($missingFeedback.Output -join ' | ')"
+    $missingFeedbackMessage = Get-RuntimeMessage
+    Assert-True ($missingFeedbackMessage -match "required HARNESS_FEEDBACK") "missing-feedback failure did not name the invariant: $missingFeedbackMessage"
     $missingFeedbackFile = Get-ChildItem $logDir -File -Filter "*.feedback.txt" | Select-Object -First 1
     Assert-True ($null -ne $missingFeedbackFile) "missing feedback was not preserved for diagnosis"
     Assert-True ((Get-Content $missingFeedbackFile.FullName -Raw).Trim() -eq "missing") "missing feedback log did not preserve the diagnostic state"
@@ -358,7 +365,8 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "stale-state"
     $staleState = Invoke-TestRunner $fakeExe
     Assert-True ($staleState.ExitCode -eq 1) "cycle without scheduler-state advancement must fail"
-    Assert-True (($staleState.Output -join "`n") -match "did not advance\s+lastResearchAt") "stale-state failure did not name the invariant: $($staleState.Output -join ' | ')"
+    $staleStateMessage = Get-RuntimeMessage
+    Assert-True ($staleStateMessage -match "did not advance lastResearchAt") "stale-state failure did not name the invariant: $staleStateMessage"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "stale-state cycle changed main HEAD"
 
     Reset-TestArtifacts
@@ -371,7 +379,8 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "non-data"
     $nonData = Invoke-TestRunner $fakeExe
     Assert-True ($nonData.ExitCode -eq 1) "routine cycle must reject non-data edits"
-    Assert-True (($nonData.Output -join "`n") -match "Routine\s+research\s+may\s+only\s+change\s+data/") "non-data rejection did not name the boundary"
+    $nonDataMessage = Get-RuntimeMessage
+    Assert-True ($nonDataMessage -match "Routine research may only change data/") "non-data rejection did not name the boundary: $nonDataMessage"
     Assert-True (((git -C $repoRoot rev-parse HEAD).Trim()) -eq $headBefore) "rejected repo change advanced main HEAD"
 
     Reset-TestArtifacts
@@ -413,7 +422,8 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "missing-feedback"
     $missingFeedback = Invoke-TestRunner $fakeExe
     Assert-True ($missingFeedback.ExitCode -ne 0) "cycle without mandatory harness feedback should fail"
-    Assert-True (($missingFeedback.Output -join "`n") -match "required HARNESS_FEEDBACK") "missing-feedback failure did not name the invariant"
+    $missingFeedbackMessage = Get-RuntimeMessage
+    Assert-True ($missingFeedbackMessage -match "required HARNESS_FEEDBACK") "missing-feedback failure did not name the invariant: $missingFeedbackMessage"
     $missingFeedbackFile = Get-ChildItem $logDir -File -Filter "*.feedback.txt" | Select-Object -First 1
     Assert-True ($null -ne $missingFeedbackFile) "missing feedback was not preserved for diagnosis"
     Assert-True ((Get-Content $missingFeedbackFile.FullName -Raw).Trim() -eq "missing") "missing feedback log did not preserve the diagnostic state"
