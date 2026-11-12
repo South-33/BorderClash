@@ -1,7 +1,7 @@
 export const EVIDENCE_RUBRIC_VERSION = "evidence-v2";
 
 export const EVIDENCE_SCORE_GUIDE = Object.freeze([
-  [100, "Verified: the specific claim is directly established or independently corroborated to a very high standard, with no material unresolved contradiction."],
+  [100, "Verified: the article's material factual content is directly established or independently corroborated to a very high standard, with no material unresolved contradiction."],
   [90, "Very strong: multiple independent strong sources agree, or direct evidence has strong independent support; only minor uncertainty remains."],
   [80, "Strong: clear direct or primary evidence, or strong professional reporting, with useful support; some material detail may remain unconfirmed."],
   [70, "Credible: clear identifiable sourcing and plausible reporting, but the material claim still relies mainly on one evidence chain."],
@@ -17,17 +17,18 @@ export const EVIDENCE_SCORE_GUIDE = Object.freeze([
 export const EVIDENCE_ALLOWED_SCORES = new Set(EVIDENCE_SCORE_GUIDE.map(([score]) => score));
 
 export const EVIDENCE_SCORING_RULES = Object.freeze([
-  "Score the specific stored claim, not the publisher's general reputation, nationality, or viewpoint.",
+  "Score the article/report as stored, not the publisher's general reputation, nationality, or viewpoint.",
+  "Judge the material factual content carried by the stored title/summary. If important claims have different support levels, use the lower score that honestly represents the unresolved material claim.",
   "A primary source can strongly prove what that source itself said, published, acknowledged, ordered, or did; it does not automatically prove its disputed claims about another actor.",
   "A conflict party's material allegation about its opponent is capped at 60 until genuinely independent evidence corroborates the underlying fact.",
   "Several outlets repeating the same statement, wire copy, image, witness, or document are one evidence chain, not independent corroboration.",
-  "Use 100 rarely. It requires the claim as written to be directly established or exceptionally well corroborated, with no material unresolved contradiction.",
+  "Use 100 rarely. It requires the report's material factual content to be directly established or exceptionally well corroborated, with no material unresolved contradiction.",
   "Lack of evidence is uncertainty, not falsity. Use 0 or 10 only when credible contrary evidence supports that judgment.",
   "When evidence materially conflicts or two adjacent scores both seem defensible, use the lower score until the uncertainty is resolved.",
 ]);
 
 export function evidenceRubricPrompt() {
-  return "Evidence score (deciles only): 100 verified; 90 very strong; 80 strong; 70 credible; 60 plausible/attributed; 50 uncertain; 40 weak; 30 very weak; 20 likely unreliable; 10 very likely false; 0 false/fabricated. Score the claim, not the outlet. Opponent allegations cap at 60 without independent corroboration; repeated provenance is one evidence chain; 0/10 require credible contrary evidence; when between grades use the lower one.";
+  return "Evidence score (deciles only): 100 verified; 90 very strong; 80 strong; 70 credible; 60 plausible/attributed; 50 uncertain; 40 weak; 30 very weak; 20 likely unreliable; 10 very likely false; 0 false/fabricated. One article URL has one score. Score its material report, not the outlet. Opponent allegations cap at 60 without independent corroboration; repeated provenance is one evidence chain; 0/10 require credible contrary evidence; when between grades use the lower one.";
 }
 
 export function isEvidenceScore(value) {

@@ -1,5 +1,6 @@
 import { basename, extname, join, relative, resolve } from "node:path";
-import { LOCALIZED_NEWS_LIMIT, NEWS_MEDIA_ENVIRONMENTS, PUBLIC_NEWS_LIMIT, newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
+import { LOCALIZED_NEWS_LIMIT, NEWS_MEDIA_ENVIRONMENTS, newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
+import { normalizeArticleUrl } from "./lib/articles.mjs";
 import { isCanonicalDataPath } from "./lib/data-paths.mjs";
 import { getLocalizedTextIssue } from "./lib/localization.mjs";
 import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
@@ -92,6 +93,7 @@ for (const file of await listFiles(dataRoot)) {
 
 const timelineFiles = await listFiles(join(dataRoot, "timeline"), ".jsonl");
 const timelineIds = new Set();
+const timelineEvidenceRefs = [];
 for (const file of timelineFiles) {
   const expectedMonth = basename(file, extname(file));
   for (const event of await readJsonl(file)) {
@@ -124,22 +126,20 @@ for (const file of timelineFiles) {
     for (const field of ["impactRescoreProcessed", "impactRescoreProcessedAt", "impactRescoreRunId"]) {
       if (event[field] !== undefined) add(location + "." + field, "legacy timeline field");
     }
-    if (!Array.isArray(event.sources) || event.sources.length === 0) add(location, "missing sources");
-    const sourceUrls = new Set();
-    for (const [index, source] of (event.sources || []).entries()) {
-      if (source.country !== undefined) add(location + ".sources[" + index + "].country", "legacy field");
-      if (source.mediaEnvironment !== undefined) add(location + ".sources[" + index + "].mediaEnvironment", "unexpected field");
-      directSourceUrl(location + ".sources[" + index + "]", source.url);
-      notFuture(location + ".sources[" + index + "].addedAt", source.addedAt);
-      if (!Number.isFinite(source.credibility) || source.credibility < 0 || source.credibility > 100) {
-        add(location + ".sources[" + index + "].credibility", "must be a 0..100 record-level evidence score");
+    if (event.sources !== undefined) add(location + ".sources", "legacy field; timeline must cite canonical article IDs via evidenceIds");
+    if (!Array.isArray(event.evidenceIds) || event.evidenceIds.length === 0) {
+      add(location + ".evidenceIds", "must cite at least one canonical article");
+    } else {
+      const seenEvidenceIds = new Set();
+      for (const [index, id] of event.evidenceIds.entries()) {
+        if (typeof id !== "string" || !id) {
+          add(location + `.evidenceIds[${index}]`, "invalid article id");
+          continue;
+        }
+        if (seenEvidenceIds.has(id)) add(location + `.evidenceIds[${index}]`, "duplicate article id");
+        seenEvidenceIds.add(id);
+        timelineEvidenceRefs.push({ location: location + `.evidenceIds[${index}]`, id });
       }
-      if (!isEvidenceScore(source.credibility)) {
-        add(location + ".sources[" + index + "].credibility", "must use a 0..100 multiple of 10 under evidence-v2");
-      }
-      const normalizedUrl = String(source.url || "").replace(/\/$/u, "");
-      if (normalizedUrl && sourceUrls.has(normalizedUrl)) add(location, "duplicate source URL");
-      if (normalizedUrl) sourceUrls.add(normalizedUrl);
     }
   }
 }
@@ -149,6 +149,7 @@ const newsIds = new Set();
 const newsStatuses = new Set(["active", "archived", "unverified"]);
 const newsByEnvironment = { thailand: [], cambodia: [], international: [] };
 const newsLocations = new Map();
+const newsUrls = new Map();
 for (const file of newsFiles) {
   const expectedMonth = basename(file, extname(file));
   for (const article of await readJsonl(file)) {
@@ -184,6 +185,12 @@ for (const file of newsFiles) {
       add(location, "wrong news month");
     }
     directSourceUrl(location + ".sourceUrl", article.sourceUrl);
+    const normalizedUrl = normalizeArticleUrl(article.sourceUrl);
+    if (normalizedUrl) {
+      const previousId = newsUrls.get(normalizedUrl);
+      if (previousId) add(location + ".sourceUrl", `duplicate canonical article URL with ${previousId}`);
+      else newsUrls.set(normalizedUrl, article.id);
+    }
     notFuture(location + ".fetchedAt", article.fetchedAt);
     notFuture(location + ".sourceVerifiedAt", article.sourceVerifiedAt);
     localized(location + ".titleTh", article.titleTh, "th");
@@ -197,24 +204,14 @@ for (const file of newsFiles) {
   }
 }
 
+for (const { location, id } of timelineEvidenceRefs) {
+  if (!newsIds.has(id)) add(location, "unknown canonical article id");
+}
+
 const visibleNewsIds = new Set([
   ...selectVisibleNews(newsByEnvironment.cambodia, LOCALIZED_NEWS_LIMIT).map((article) => article.id),
   ...selectVisibleNews(newsByEnvironment.thailand, LOCALIZED_NEWS_LIMIT).map((article) => article.id),
 ]);
-
-const publicNewsUrls = new Map();
-for (const articles of Object.values(newsByEnvironment)) {
-  for (const article of selectVisibleNews(articles, PUBLIC_NEWS_LIMIT)) {
-    const normalizedUrl = String(article.sourceUrl || "").replace(/\/$/u, "");
-    if (!normalizedUrl) continue;
-    const previousId = publicNewsUrls.get(normalizedUrl);
-    if (previousId) {
-      add(newsLocations.get(article.id) || article.id, `duplicate public source URL with ${previousId}`);
-    } else {
-      publicNewsUrls.set(normalizedUrl, article.id);
-    }
-  }
-}
 
 for (const [environment, articles] of Object.entries(newsByEnvironment)) {
   for (const article of articles) {

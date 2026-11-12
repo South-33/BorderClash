@@ -22,7 +22,8 @@ test("research prompt contains the decisive anti-bias and anti-fake-precision ru
   assert.match(prompt, /100 verified/);
   assert.match(prompt, /50 uncertain/);
   assert.match(prompt, /0 false\/fabricated/);
-  assert.match(prompt, /claim, not the outlet/);
+  assert.match(prompt, /One article URL has one score/);
+  assert.match(prompt, /report, not the outlet/);
   assert.match(prompt, /cap at 60/);
   assert.match(prompt, /one evidence chain/);
   assert.match(prompt, /0\/10 require credible contrary evidence/);

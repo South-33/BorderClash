@@ -50,7 +50,7 @@ function compactTimeline(row) {
     importance: row.importance,
     status: row.status,
     title: row.title,
-    sourceCount: Array.isArray(row.sources) ? row.sources.length : 0,
+    sourceCount: Array.isArray(row.evidenceIds) ? row.evidenceIds.length : 0,
   };
 }
 
