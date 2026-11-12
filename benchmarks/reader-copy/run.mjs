@@ -7,14 +7,14 @@ import { resolve } from "node:path";
 const root = resolve(".");
 const work = resolve(root, ".work", "benchmarks", "reader-copy");
 const runDir = resolve(tmpdir(), "borderclash-reader-bench");
-const fixture = JSON.parse((await readFile(resolve(root, "research", "quality", "reader-cases.json"), "utf8")).replace(/^\uFEFF/u, ""));
+const fixture = JSON.parse((await readFile(resolve(root, "benchmarks", "reader-copy", "cases.json"), "utf8")).replace(/^\uFEFF/u, ""));
 const agents = await readFile(resolve(root, "AGENTS.md"), "utf8");
-const section = agents.match(/## Reader copy\s*\n([\s\S]*?)(?=\n## |$)/u);
-if (!section) throw new Error("AGENTS.md is missing the Reader copy section");
+const section = agents.match(/## Evidence and copy\s*\n([\s\S]*?)(?=\n## |$)/u);
+if (!section) throw new Error("AGENTS.md is missing the Evidence and copy section");
 
 const agy = process.env.AGY_PATH || "agy";
 const model = process.env.BENCH_MODEL || "gemini-3.8-flash-medium";
-const judgeModel = process.env.BENCH_JUDGE || "gpt-oss-120b-medium";
+const judgeModel = process.env.BENCH_JUDGE || "gemini-3.8-flash-medium";
 const printTimeout = process.env.BENCH_TIMEOUT || "150s";
 const wallTimeoutMs = Math.max(30_000, Number(process.env.BENCH_WALL_TIMEOUT_MS || 180_000));
 const fresh = process.argv.includes("--fresh");

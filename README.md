@@ -52,8 +52,4 @@ pnpm research context
 
 Production uses the runner's default research model unless `-Model` or `BORDERCLASH_RESEARCH_MODEL` selects another available AGY model.
 
-The model-based reader-copy benchmark is intentionally separate from deterministic validation:
-
-```powershell
-pnpm quality:reader
-```
+Optional development benchmarks live under `benchmarks/`. They are not part of a research cycle or the production validation path.
