@@ -119,8 +119,6 @@ function impactPublic(value, thailand, cambodia, lastResearchAt) {
     riskLevel: riskLevelFromTiers(thailand?.militaryAssessment?.tier, cambodia?.militaryAssessment?.tier),
     displacedCount: metricDisplay(value.displaced),
     deathCount: metricDisplay(value.deaths),
-    civilianInjuredCount: metricDisplay(value.civilianInjuries),
-    militaryInjuredCount: metricDisplay(value.militaryInjuries),
     // The unchanged UI labels this field simply "UPDATED". Expose the most
     // recent completed research verification here; canonical impact.json keeps
     // the underlying evidence/source timestamps separately.

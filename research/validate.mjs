@@ -320,7 +320,7 @@ for (const field of ["generalSummary", "keyEvents", "conflictLevel", "displacedC
 const impact = await readJson(join(dataRoot, "current", "impact.json"));
 notFuture("current/impact.updatedAt", impact.updatedAt);
 if (impact.riskLevel !== undefined) add("current/impact.riskLevel", "legacy field");
-for (const field of ["displaced", "deaths", "injuries", "civilianInjuries", "militaryInjuries"]) {
+for (const field of ["displaced", "deaths"]) {
   const metric = impact[field];
   if (!metric || typeof metric !== "object") {
     add("current/impact." + field, "missing metric");
@@ -345,7 +345,7 @@ for (const field of ["displaced", "deaths", "injuries", "civilianInjuries", "mil
     add("current/impact." + field + ".sourceDate", "invalid date");
   }
 }
-for (const field of ["id", "key", "conflictLevel", "casualtyCount", "displacedTrend", "lastUpdatedAt", "displacedCount", "deathCount", "civilianInjuredCount", "militaryInjuredCount"]) {
+for (const field of ["id", "key", "conflictLevel", "casualtyCount", "displacedTrend", "lastUpdatedAt", "displacedCount", "deathCount", "injuries", "civilianInjuries", "militaryInjuries", "civilianInjuredCount", "militaryInjuredCount"]) {
   if (impact[field] !== undefined) add("current/impact." + field, "legacy field");
 }
 

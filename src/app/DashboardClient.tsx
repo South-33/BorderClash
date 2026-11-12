@@ -979,6 +979,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const currentSummary = activeSnapshot.summary;
   const impact = activeSnapshot.impact;
   const articleCounts = activeSnapshot.articleCounts;
+  const dashboardRiskLevel = (impact?.riskLevel || 'LOW').toUpperCase();
 
   const isAwaitingInitialFullTimeline = viewMode === 'TIMELINE'
     && shouldFetchFullTimeline
@@ -1766,7 +1767,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               BORDER CLASH
             </h1>
             <div className="dashboard-sidebar-status flex items-center gap-2 mb-4">
-              <div className={`w-3 h-3 rounded-full ${isSyncing ? 'bg-riso-accent animate-ping' : researchState?.status === 'error' ? 'bg-red-600' : 'bg-green-600'}`}></div>
+              <div className={`dashboard-status-dot ${isSyncing
+                ? 'bg-riso-accent text-riso-accent'
+                : researchState?.status === 'error' || dashboardRiskLevel === 'CRITICAL'
+                  ? 'bg-red-600 text-red-600'
+                  : dashboardRiskLevel === 'ELEVATED'
+                    ? 'bg-yellow-500 text-yellow-500'
+                    : 'bg-green-600 text-green-600'
+                }`}></div>
               <span className="font-mono text-xs font-bold tracking-widest">
                 {isSyncing ? t.syncing :
                   researchState?.status === 'error' ? t.error :
@@ -1990,7 +1998,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               <div className="flex-none">
                 <Card className="dashboard-stats-card" title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
 
-                  <div className="stats-grid grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <div className="stats-grid grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                     {/* Displaced Civilians */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.displacedCivilians}</h4>
@@ -2035,33 +2043,15 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                       </div>
                     </div>
 
-                    {/* Fatalities (Replaces old Injuries box position) */}
+                    {/* Fatalities */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.fatalities}</h4>
                       <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{impact?.deathCount || 0}</span>
                       <div className={`mt-3 font-mono text-riso-accent font-bold uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.confirmedOnly}</div>
                     </div>
 
-                    {/* Injuries - Split into Civilian / Military */}
-                    <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
-                      {/* Top: Title + Numbers */}
-                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.injured}</h4>
-                      <div className="flex items-start gap-6">
-                        {/* Civilian */}
-                        <div className="text-left">
-                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{impact?.civilianInjuredCount || 0}</span>
-                          <span className={`mt-2 font-mono opacity-50 uppercase tracking-tighter md:tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.civilian}</span>
-                        </div>
-                        {/* Military */}
-                        <div className="text-left">
-                          <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none block">{impact?.militaryInjuredCount || 0}</span>
-                          <span className={`mt-2 font-mono opacity-50 uppercase tracking-tighter md:tracking-normal block ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.military}</span>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Status / risk level */}
-                    <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
+                    <div className="dashboard-stat-box col-span-2 lg:col-span-1 bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
                       <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.threatLevel}</h4>
                       <span className={`font-display text-3xl md:text-5xl leading-none uppercase ${(impact?.riskLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
                         (impact?.riskLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'

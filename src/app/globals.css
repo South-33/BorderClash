@@ -4,6 +4,53 @@
     transform: translateY(-1px);
 }
 
+.dashboard-status-dot {
+    position: relative;
+    width: 0.75rem;
+    height: 0.75rem;
+    flex: 0 0 auto;
+    border-radius: 9999px;
+    animation: dashboard-status-breathe 2.2s ease-in-out infinite;
+}
+
+.dashboard-status-dot::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border: 1px solid currentColor;
+    border-radius: inherit;
+    animation: dashboard-status-ring 2.2s ease-out infinite;
+}
+
+@keyframes dashboard-status-breathe {
+    0%, 100% {
+        transform: scale(0.92);
+        opacity: 0.82;
+    }
+    50% {
+        transform: scale(1.08);
+        opacity: 1;
+    }
+}
+
+@keyframes dashboard-status-ring {
+    0% {
+        transform: scale(0.9);
+        opacity: 0.38;
+    }
+    70%, 100% {
+        transform: scale(1.8);
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dashboard-status-dot,
+    .dashboard-status-dot::after {
+        animation: none;
+    }
+}
+
 /* ============================================
    FORCE MOBILE - When content overflows, force mobile layout
    ============================================ */

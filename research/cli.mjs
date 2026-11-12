@@ -186,9 +186,6 @@ async function brief() {
       impact: {
         displaced: impact.displaced,
         deaths: impact.deaths,
-        injuries: impact.injuries,
-        civilianInjuries: impact.civilianInjuries,
-        militaryInjuries: impact.militaryInjuries,
         updatedAt: impact.updatedAt,
       },
       thailand: {
@@ -265,7 +262,7 @@ function renderContext(output) {
     `Previous cadence: ${output.cycle.intervalHours || "unknown"}h - ${output.cycle.reason || "no reason recorded"}`,
     "",
     "## Current repository state",
-    `Impact: displaced ${compactMetric(output.current.impact.displaced)}; deaths ${compactMetric(output.current.impact.deaths)}; injuries ${compactMetric(output.current.impact.injuries)}; civilian injuries ${compactMetric(output.current.impact.civilianInjuries)}; military injuries ${compactMetric(output.current.impact.militaryInjuries)}`,
+    `Impact: displaced ${compactMetric(output.current.impact.displaced)}; deaths ${compactMetric(output.current.impact.deaths)}`,
     `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
     `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
     `Summary: ${output.current.summary.summary || ""}`,

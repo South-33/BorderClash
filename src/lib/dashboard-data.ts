@@ -47,8 +47,6 @@ export interface CurrentSummary {
 interface Impact {
     riskLevel: "LOW" | "ELEVATED" | "CRITICAL";
     displacedCount: number | string;
-    civilianInjuredCount: number | string;
-    militaryInjuredCount: number | string;
     deathCount: number | string;
     updatedAt: number;
 }

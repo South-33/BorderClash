@@ -4,10 +4,10 @@ import fs from "node:fs";
 import test from "node:test";
 import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/military-assessment.mjs";
 
-test("user-facing dashboard files remain on the pre-audit UI contract", () => {
+test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "813aa1b320bbc8b3d98622d8fb9490d7ae9eb89e3ef35d839b135ca5cd766f8d"],
-    ["src/app/translations.ts", "35535d9a298327da1062688c28bcbea1d92afe01ddd8b6aba8e0a842df3924b8"],
+    ["src/app/DashboardClient.tsx", "7d648517dd5c8aac3312e8516b29114fc78677d1cbbef435ae17e5de845195ab"],
+    ["src/app/translations.ts", "1640708c36ef27bf7d56a56ae2536220e2561246596ec1ce0b6340c5038abb2b"],
   ]);
   for (const [file, hash] of expected) {
     const source = fs.readFileSync(file, "utf8").replace(/\r\n/gu, "\n");
@@ -43,6 +43,8 @@ test("public dashboard freshness and feed depth follow the static-data contract"
   assert.match(news, /export const PUBLIC_NEWS_LIMIT = 60;/u);
   assert.match(generator, /updatedAt: lastResearchAt \|\| value\.updatedAt/u);
   assert.match(generator, /impactPublic\(impact, thailandPerspective, cambodiaPerspective, researchState\.lastResearchAt\)/u);
+  assert.equal(generator.includes("civilianInjuredCount"), false);
+  assert.equal(generator.includes("militaryInjuredCount"), false);
 });
 
 test("source cards render a real external-link arrow instead of an entity name", () => {
