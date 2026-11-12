@@ -49,6 +49,8 @@ async function makeBriefFixture({ lastResearchAt, lastCycleInterval = 24, news, 
     displaced: { value: 0, qualifier: "MORE_THAN" },
     deaths: { value: 0, qualifier: "AT_LEAST" },
     injuries: { value: null, qualifier: "NO_COMBINED_TOTAL" },
+    civilianInjuries: { value: 93, qualifier: "AT_LEAST" },
+    militaryInjuries: { value: 270, qualifier: "MORE_THAN" },
     updatedAt: lastResearchAt,
   });
   for (const name of ["thailand", "cambodia"]) {
@@ -111,6 +113,8 @@ test("brief always gives at least seven days of compact local context", async ()
     assert.equal(brief.contextWindow.end, "2026-11-10T12:00:00.000Z");
     assert.equal(brief.contextWindow.lookbackDays, 7);
     assert.equal(brief.contextWindow.cappedAt30Days, false);
+    assert.deepEqual(brief.current.impact.civilianInjuries, { value: 93, qualifier: "AT_LEAST" });
+    assert.deepEqual(brief.current.impact.militaryInjuries, { value: 270, qualifier: "MORE_THAN" });
     assert.deepEqual(brief.contextWindow.counts, {
       timeline: 3,
       news: { thailand: 1, cambodia: 1, international: 1 },

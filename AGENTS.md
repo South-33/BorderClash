@@ -18,6 +18,8 @@ Use effort in proportion to uncertainty and likely impact. Finish when further w
 
 Treat the repository as a maintained knowledge base, not an append-only feed. Add, correct, merge, archive, or remove records when justified. Preserve stable IDs when the underlying record is still the same thing. Work from evidence toward synthesis: source reporting and timeline first, then `data/current/`.
 
+During final synthesis, review `data/current/impact.json` against the strongest current casualty evidence. Maintain separate `civilianInjuries` and `militaryInjuries` metrics, and only publish a combined `injuries` total when the evidence supports one without double-counting or mixing incompatible scopes.
+
 When the record is in the best state the evidence supports, run `pnpm research finish` once. It keeps the current cadence unless you deliberately provide a better interval and reason.
 
 ## Information environments
