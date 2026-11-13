@@ -41,7 +41,7 @@ Seek enough source breadth to understand materially different reporting and fram
 - `data/timeline/`: the durable, reconstructable history of distinct meaningful events. Importance controls public prominence, not historical inclusion. Timeline events cite article IDs through `evidenceIds`; never copy source URLs, names, or credibility scores into timeline records.
 - `data/research-state.json`: cycle timing and scheduler state.
 
-`public/data/` is generated, not canonical. Full publisher HTML/text archives, when captured, stay private on South with an off-server backup, never in Git. Use the validator and `research/lib/` as the source of truth for schema values, scoring rubrics, localization mechanics, and other structured conventions.
+`public/data/` is generated, not canonical. Full publisher HTML/text archives, when captured, stay private on South with a separate South-local backup for now, not in Git. Use the validator and `research/lib/` as the source of truth for schema values, scoring rubrics, localization mechanics, and other structured conventions.
 
 ## Evidence and copy
 

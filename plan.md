@@ -18,8 +18,8 @@
 | GitHub `main`: `data/timeline/` | Chronological, sourced, reconstructable history; one record per distinct meaningful event |
 | GitHub `main`: `data/current/` | Cambodia and Thailand positions/postures, neutral overview, key updates, humanitarian impact |
 | GitHub `main`: `data/research-state.json` | Durable publication cadence and next target deadline (not tied to a computer's clock settings) |
-| South (Windows) | Research runner, isolated cycle workspace, model sessions, source captures, local feedback/logs |
-| Vercel | Generated public data, website, and deadline countdown; not the research database |
+| South (Windows) | Research runner, isolated workspace, model sessions, private source captures with local backup, feedback/logs |
+| Vercel | Generated public data, website, and countdown; a tiny live-status JSON when configured, not the research database |
 
 **Integration baseline (2026-11-13):** Evidence-v2 and the unified article registry are on `main`. After the follow-up article-identity cleanup there are **3,044 distinct article records** and **707 timeline events**. Timeline events cite canonical article IDs through `evidenceIds`; one article has one confidence score. The older 3,182-record archive and its duplicates are pre-migration data. Laptop, GitHub, and South were synchronized on `main`; South's research scheduler remains disabled by operator request.
 
@@ -52,7 +52,7 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 **Done when:** The harness implementation has one known, verified baseline and will not overwrite parallel changes.
 
-**Notes / pivots:** _Evidence-v2 scores article confidence in deciles, deduplicates source URLs, and makes timeline `evidenceIds` cite canonical articles. Timeline importance is a separate rubric. All 31 Node tests and canonical validation passed. Do not reintroduce duplicated per-event source scores._
+**Notes / pivots:** _Evidence-v2 scores article confidence in deciles, deduplicates source URLs, and makes timeline `evidenceIds` cite canonical articles. Timeline importance is a separate rubric. The completed integration passed 31 Node tests; after article-identity cleanup, 33 Node tests, validation, and a production build passed. Do not reintroduce duplicated source scores._
 
 ### 2. Make article ingestion and preservation deterministic
 
@@ -65,13 +65,13 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 - [ ] Save **both** the original fetched HTML and clean article text as gzip-compressed UTF-8 files, plus an atomic manifest linking the existing news ID to hashes, capture time, final URL, status, and extraction provenance. Deduplicate identical blobs. Store inert HTML for evidence/re-extraction, **not** as an executable or publicly served page.
 - [ ] Put captures and manifest on **South's disk outside the repository**; make them recoverable by article ID. Failed captures leave valid news records and a retryable/blocked capture status; they must not block research publication. Retry transient failures with bounded backoff, not endless requests.
 - [ ] Skip images, video, scripts, and external assets **by default**. HTML is useful without them because it preserves embedded text, structure, bylines, and machine-readable metadata that may improve later extraction. Capture selected images separately only if they are themselves material historical evidence and can lawfully be retained.
-- [ ] Keep archived records, backups, and extracted full text **private**; avoid pushing publisher content into Git or Vercel. Back up captures and the ID-to-hash manifest **off South** and test restores. Backfill older accessible articles gradually without delaying daily cycles.
+- [ ] Keep publisher content **private on South**, outside Git/Vercel. For now maintain a **second local backup directory on South** with checksums, a simple backup routine, and restore tests. Keep article metadata/hashes in Git. Two copies on one machine do **not** protect against disk or server failure. Backfill older accessible articles gradually without delaying daily research.
 
-**Done when:** Repeated ingestion yields the same record ID and no extra archive; distinct sources remain; text and HTML can be restored from backup; 403/JS-only/bad extraction cases are honest and nonblocking.
+**Done when:** Repeated ingestion yields the same record ID and no extra archive; distinct sources remain; text and HTML can be restored from the South-local backup; 403/JS-only/bad extraction cases are honest and nonblocking.
 
-**Sizing evidence:** Three real article pages downloaded successfully on 2026-11-13. Their uncompressed HTML was **105–305 KB** and gzip HTML **25–42 KB** each; another publisher returned 403. These are *not* representative guarantees. A planning range of **~100–250 MB for 3,044 successfully captured pages plus readable text** is plausible; measure 20–30 diverse pages before sizing South. At ~40 KB/article, 20 new articles/day adds ~0.3 GB/year, or ~3 GB/decade, before backups and overhead. Local disk has no per-request storage bill; off-server backup has a provider/equipment cost still to choose.
+**Sizing evidence:** Three real article pages sampled on 2026-11-13 were **105-305 KB** raw HTML and **25-42 KB** gzip HTML; another publisher returned HTTP 403. These are *not* representative guarantees. Plan roughly **100-250 MB** for 3,044 accessible pages plus text, then measure 20-30 representative pages. At 40 KB per article and 20 new articles/day, growth is about 0.3 GB/year or 3 GB/decade, before local backups and revisions.
 
-**Notes / pivots:** _Confirmed: retain both text and compressed original HTML; South local storage with separate off-server backup. HTML does not itself preserve referenced image files. For video-only URLs, preserve metadata and an available lawful transcript rather than pretending video-page HTML is an article. Final extraction library, backup destination/cadence, publisher access limitations, and actual sizes require a pilot. Article retrieval is separate from the agent's web reading._
+**Notes / pivots:** _Confirmed: compressed original HTML and extracted text on South, with South-local backup for now. South C: had ~66.3 GB free on 2026-11-13; initial storage is not the constraint. Off-server disaster recovery is deferred at the operator's request. Avoid bulk HTML in Git even if it fits today: Git history accumulates for decades. Reassess only if measured sizes, rights, and recovery needs justify it. HTML does not preserve image binaries. For video-only URLs, preserve metadata and an available lawful transcript rather than pretending the HTML is an article. Pilot extraction across publishers._
 
 ### 3. Give the agent one goal-driven cycle brief
 
@@ -103,12 +103,12 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 - [ ] Research additional facts as needed, using the unified article ingest path. Match new developments by actors, location, time, action, and outcome. Cite existing or newly added canonical article IDs in `evidenceIds`; do not duplicate URLs or confidence scores in timeline records. Distinct developments retain their own IDs.
 - [ ] Preserve the event's actual date; keep time unknown if unsupported. Record disputed claims as attributed claims, not verified underlying facts. Preserve corrections, stable IDs, unique sources, and distinctions between separate incidents.
-- [ ] Keep **one canonical event set**. Importance decides what the **default public highlights** show; it must not decide whether a meaningful historical event is stored. Use the integrated timeline materiality rubric, and revise its UI threshold only when evidence supports a better reader experience.
+- [ ] Keep **one canonical event set**. Importance measures historical significance on a familiar 0-100 scale, not evidence confidence or permission to store an event. Keep the current four meaningful levels (**50 context / 70 notable / 80 major / 95 defining**) instead of inventing false fine-grained precision. Use the score to derive default highlights and preserve the full timeline in a secondary view. Audit older scores before changing the public cutoff.
 - [ ] Later, run a careful deduplication and history-backfill review: suggest candidate merges, preserve sources and references, audit false precision, and add major pre-December-2025 context as a separate project.
 
 **Done when:** The timeline is historically useful and traceable, while its default reader view is selective; two distinct incidents are never merged by title similarity alone.
 
-**Notes / pivots:** _Current local timeline has 707 events; exact retrospective merges await scoring integration. Event importance and evidence confidence are different concepts._
+**Notes / pivots:** _The timeline has 707 events. The current default threshold of 70 displays 387 (55%); a public threshold of 80 would display 168 (24%) because legacy scores are normalized into four tiers on export. **Proposed**: move the public Highlights cutoff to 80 **after** reviewing and rescoring misranked older events, not before. Preserve all events in Full Timeline. Retrospective event deduplication and pre-project history backfill remain separate later tasks._
 
 ### 6. Synthesize the dashboard in ordinary human language
 
@@ -123,29 +123,33 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 **Notes / pivots:** _Preserve the present dashboard structure unless integrating the UI work reveals a better shape._
 
-### 7. Make scheduling match the published countdown
+### 7. Make scheduling and live status match the published countdown
 
-**Goal:** A target publication time is consistent across GitHub, South, and Vercel even when developers push from multiple machines.
+**Goal:** The dashboard reliably distinguishes actual South research from an overdue deadline, and publication timing stays consistent across GitHub, South, and Vercel.
 
 - [ ] Store the next **target publication deadline** as an absolute UTC timestamp. A code push does not reset it; only a successfully published research cycle advances the schedule.
 - [ ] Start a cycle before that deadline based on recent completed-run durations plus a safety margin; begin with a conservative heuristic and refine using measurements. Only one cycle at a time. If the requested cadence is shorter than a practical run, report the limitation rather than overlap runs.
-- [ ] Countdown reaches zero → UI says **Running** until newer research is published; display paused/delayed/error truthfully where the deployment has enough evidence. Publishing early immediately resets the countdown. Distinguish agent-completion time, actual public publication, and age of underlying facts.
+- [ ] Add one lightweight South-to-website live-status channel. **Preferred with the existing static export:** South overwrites one small public Vercel Blob JSON containing state, heartbeat UTC time, run ID, and published-version marker. The browser reads it directly. Keep write credentials only on South; never store secrets in the public payload. No extra server or Git commits for routine heartbeats. If Blob is unavailable, degrade to truthful snapshot-only status, not fake Running.
+- [ ] Heartbeat during a running cycle **from the runner/supervisor itself** (not only from Windows task triggers, which use IgnoreNew), plus at idle scheduler checks and status transitions: idle, running, publishing, paused, failed/delayed. Show **Running** only with a fresh heartbeat (initial rule: younger than 15 minutes) tied to a real owned run; stale or absent heartbeat means **Unknown/offline**. Only the deployed data snapshot proves newly published research.
+- [ ] If no new deployment appears roughly **one hour after the target deadline**, show **Delayed**, not endless Running. A repeating **24-hour next-check countdown** may be shown for UI continuity, but must be labeled as a check, **not** a new research publication. Do not mutate the canonical deadline or block South's real retry policy. Preserve visible last-published time. Early success resets the real countdown immediately.
+- [ ] Keep the deadline, public publication timestamp, source-evidence dates, and live process state separate. At zero, show **Running** only if the heartbeat verifies active research; otherwise show **Update due**. Display delayed/paused/error truthfully, and reset the research deadline only after the new snapshot is publicly deployed.
 - [ ] Let the agent choose the following cadence based on activity, risk, uncertainty, and likely new information, with a concise rationale. Avoid fixed daily clock times and mandatory frequency categories.
 
-**Done when:** Tests for UTC/DST, early finish, overdue, pause, offline restart, and unrelated pushes show no false countdown reset or silent deadline loss.
+**Done when:** Tests for UTC/DST, early finish, stale heartbeat, overdue, pause, offline restart, failed publication, and unrelated pushes show no false Running/freshness or silent deadline loss.
 
-**Notes / pivots:** _A static Vercel snapshot cannot prove South is actively running; live telemetry remains optional. The UI's “Running” after zero currently means publication is pending, not verified process health._
+**Notes / pivots:** _The project uses Next.js `output: "export"`; server API routes would change the deployment model. A small mutable public Vercel Blob status JSON fits the current static site and may take up to ~60 seconds to refresh due to caching. Treat the status channel as optional infrastructure with an honest offline fallback; the current UI still infers state from its static snapshot._
 
 ### 8. Recover, reconcile, validate, and publish
 
 **Goal:** Preserve hard-earned research and publish safely even if AGY fails or GitHub advances during the cycle.
 
 - [ ] Fetch latest `main` at cycle start and use an isolated workspace (keep the existing clone unless a worktree proves better). Keep the workspace and conversation ID for recoverable errors; verify the installed AGY CLI's continuation flags. Bound retries and stuck processes without wiping useful work.
+- [ ] Give the operator one coherent command interface for **status, pause, stop, resume, run now, restart fresh, and cleanup**. Pause prevents new cycles; stop terminates only the owned research process tree and keeps recoverable work; resume reuses the checkpoint when possible; fresh restart/abandon requires explicit intent. Cleanup previews targets and deletes only verified finished/abandoned scratch files, not valuable conversations, logs, or archives. Apply the one-cycle lock to manual and scheduled operations. Never let a stopped task immediately auto-relaunch.
 - [ ] Require `pnpm research finish` to record justified cadence and a mandatory `HARNESS_FEEDBACK:` critique. Persist conversation logs, structured feedback, and diagnostics locally on South, never in Git.
 - [ ] Validate data/schema/scoring, references, translation fidelity, source duplicates, and research-only changes. After concurrent developer pushes, reconcile **only** research data onto current `main`, rerun checks, and publish a fast-forward commit. Pause for real semantic conflicts; never silently overwrite a user's work or discard a failed cycle.
 - [ ] Only a newly deployed public snapshot resets the countdown visible to readers. A successful Git push does not prove a successful Vercel deployment. If deployment fails, preserve and retry the **same publish**, rather than rerunning research or falsely reporting a fresh website.
 
-**Done when:** Simulated provider failures, process crashes, and concurrent multi-machine pushes preserve work and cannot publish stale or invalid data.
+**Done when:** Simulated provider failures, process crashes, operator stop/restart/cleanup, and concurrent multi-machine pushes preserve recoverable work and cannot publish stale or invalid data.
 
 **Notes / pivots:** _Existing runner has useful recovery code but may abandon a checkpoint when `main` changes; its Windows scheduled task currently has a two-hour execution limit. Preserve the protections while simplifying._
 
@@ -153,7 +157,7 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 **Goal:** Demonstrate the new system end to end without gambling the public record.
 
-- [ ] Test ingest + archive restore, historical reconstruction, all three research stages, supported locale copy, zero-change cycles, timing transitions, interrupted sessions, conflicting changes, and Vercel deployment effects.
+- [ ] Test ingest + South-local archive restore, historical reconstruction, all three research stages, supported locale copy, zero-change cycles, live heartbeat loss, delayed 24-hour **check** display, operator controls, interrupted sessions, conflicting changes, and Vercel deployment effects.
 - [ ] Run a nonpublishing supervised cycle first. Review evidence, runtime, feedback, and archive capacity; then a controlled publication.
 - [ ] Obtain explicit operator approval **before** re-enabling South's scheduler. Keep this plan current by checking verified outcomes and replacing stale notes, not accumulating a changelog.
 
@@ -161,12 +165,12 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 **Notes / pivots:** _South stays disabled until approval._
 
-## Decisions still open (do not silently invent)
+## Settled design decisions and implementation checks
 
-- **Off-server backup:** Destination, frequency, retention, and restore objective. South-local copies alone are insufficient for decades of preservation.
-- **Live status:** Whether to add real-time South-to-UI telemetry or use the deadline-driven “Running” display with a delayed/error fallback. A static build cannot prove South is running; do not equate a reached deadline with verified process health. Prefer no new service unless status accuracy warrants it.
-- **Historical synthesis retrieval:** Git preserves every committed revision; decide whether a small dated synthesis index is needed for future agents to retrieve one day's published assessment without replaying Git history.
-- **Archive pilot:** Choose the smallest extraction library that reliably produces article body text across real Khmer/Thai/international pages. Measure size and failure rate before hardcoding compression, retry, and capacity limits.
-- **Timeline highlights:** Article confidence uses evidence-v2; timeline importance remains a different, historical-significance score. Reassess the highlight cutoff only after reviewing actual event density.
+- **Decided — archive location:** Article HTML/text and the first backup remain private on South. This is a known single-machine risk accepted for now. Off-server recovery can be added later; do not delay initial capture.
+- **Implementation check — live status:** Prefer one mutable public Vercel Blob JSON with write credentials only on South. Verify access, caching, and provider limits during implementation; obtaining the store/credential requires operator setup. If unavailable, display an honest stale/unknown state instead of claiming South is running.
+- **Decided — historical synthesis:** Git commits remain the historical synthesis store. Provide a retrieval helper if needed; do not create a second database or daily duplicate snapshots without evidence of a real problem.
+- **Implementation check — archive pilot:** Choose the smallest extraction library that reliably produces article body text across real Khmer/Thai/international pages. Measure size and failure rate before setting compression, retry, and capacity limits.
+- **Decided — timeline prominence:** Keep the 0-100 representation and four importance levels for new events. Preserve the full history. Target a more selective default Highlights view (80 instead of 70) **after** auditing older importance scores. Article confidence is an independent scale.
 
 **How to proceed from a fresh session:** Read this plan, `AGENTS.md`, and current code/Git status; start with the first unchecked prerequisite; research uncertain facts before coding; test each deliverable; record short actionable notes under its stage. Do not treat provisional technical choices as fixed product requirements.
