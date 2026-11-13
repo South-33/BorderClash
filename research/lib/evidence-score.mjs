@@ -19,6 +19,7 @@ export const EVIDENCE_ALLOWED_SCORES = new Set(EVIDENCE_SCORE_GUIDE.map(([score]
 export const EVIDENCE_SCORING_RULES = Object.freeze([
   "Score the article/report as stored, not the publisher's general reputation, nationality, or viewpoint.",
   "Judge the material factual content carried by the stored title/summary. If important claims have different support levels, use the lower score that honestly represents the unresolved material claim.",
+  "When the stored report explicitly says that a named actor said, announced, alleged, protested, or acknowledged something, score the evidence that the actor made that statement; do not treat the quoted allegation as independently proven or disproven.",
   "A primary source can strongly prove what that source itself said, published, acknowledged, ordered, or did; it does not automatically prove its disputed claims about another actor.",
   "A conflict party's material allegation about its opponent is capped at 60 until genuinely independent evidence corroborates the underlying fact.",
   "Several outlets repeating the same statement, wire copy, image, witness, or document are one evidence chain, not independent corroboration.",
@@ -28,7 +29,7 @@ export const EVIDENCE_SCORING_RULES = Object.freeze([
 ]);
 
 export function evidenceRubricPrompt() {
-  return "Evidence score (deciles only): 100 verified; 90 very strong; 80 strong; 70 credible; 60 plausible/attributed; 50 uncertain; 40 weak; 30 very weak; 20 likely unreliable; 10 very likely false; 0 false/fabricated. One article URL has one score. Score its material report, not the outlet. Opponent allegations cap at 60 without independent corroboration; repeated provenance is one evidence chain; 0/10 require credible contrary evidence; when between grades use the lower one.";
+  return "Evidence score, deciles only: 100 verified; 90 very strong; 80 strong; 70 credible; 60 attributed; 50 uncertain; 40 weak; 30 very weak; 20 likely unreliable; 10 very likely false; 0 false/fabricated. One URL, one score. Score the report, not outlet reputation. If it says X alleged Y, score whether X said it, not whether Y is true. Unattributed opponent claims cap at 60 without independent corroboration; repeated provenance is one chain; 0/10 require credible contrary evidence; ties round down.";
 }
 
 export function isEvidenceScore(value) {

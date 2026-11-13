@@ -49,6 +49,8 @@ One article has one canonical `credibility` score. If a timeline investigation d
 
 Use only decile `credibility` scores: `100` verified, `90` very strong, `80` strong, `70` credible, `60` plausible/attributed, `50` uncertain, `40` weak, `30` very weak, `20` likely unreliable, `10` very likely false, `0` false/fabricated. One article URL has one score. Score the material factual report carried by its stored title/summary, not the outlet. A conflict party's material allegation about its opponent cannot exceed 60 without genuinely independent corroboration; repetition of one underlying source is not corroboration. Use 100 only when the report is directly established or exceptionally well corroborated. Lack of evidence is uncertainty, not falsity, so 0/10 require credible contrary evidence. When two adjacent scores are defensible, use the lower one. `research/lib/evidence-score.mjs` is the authoritative rubric.
 
+Attribution changes what the record claims. If the title/summary explicitly says a named actor said, alleged, announced, protested, or acknowledged something, score whether the evidence supports that attribution; do not downgrade it as though the quoted allegation itself had been asserted as verified fact. Keep the allegation attributed in the copy.
+
 Write for ordinary civilians. English, Thai, and Khmer should each read like natural local general-news writing while preserving names, dates, numbers, actors, actions, negation, attribution, uncertainty, and claim strength. Keep the claimant in the same sentence as a disputed claim.
 
 ## Completion
