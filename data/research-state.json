@@ -8,8 +8,8 @@
   "schedulingReason": "Border conditions remain calm and non-kinetic with both sides maintaining defensive postures under the ceasefire.",
   "researchCycleCount": 611,
   "scheduler": "external",
-  "evidenceRubricVersion": "evidence-v1",
-  "evidenceRubricActivatedAt": 1794355478441,
+  "evidenceRubricVersion": "evidence-v2",
+  "evidenceRubricActivatedAt": 1794528064732,
   "importanceRubricVersion": "timeline-importance-v1",
   "importanceRubricActivatedAt": 1794355478441
 }

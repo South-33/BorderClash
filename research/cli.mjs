@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
 import { militaryAssessmentFor } from "./lib/military-assessment.mjs";
+import { evidenceRubricPrompt } from "./lib/evidence-score.mjs";
 
 const dataRoot = resolve("data");
 const command = process.argv[2] || "context";
@@ -49,7 +50,7 @@ function compactTimeline(row) {
     importance: row.importance,
     status: row.status,
     title: row.title,
-    sourceCount: Array.isArray(row.sources) ? row.sources.length : 0,
+    sourceCount: Array.isArray(row.evidenceIds) ? row.evidenceIds.length : 0,
   };
 }
 
@@ -266,6 +267,9 @@ function renderContext(output) {
     `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
     `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
     `Summary: ${output.current.summary.summary || ""}`,
+    "",
+    "## Evidence scoring rubric",
+    evidenceRubricPrompt(),
   ];
 
   const counts = output.contextWindow.counts;

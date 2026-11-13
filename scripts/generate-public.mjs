@@ -1,9 +1,9 @@
 import { stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { newsEnvironmentKey, PUBLIC_NEWS_LIMIT, selectVisibleNews, VISIBLE_NEWS_STATUSES } from "../research/lib/news.mjs";
+import { newsEnvironmentKey, PUBLIC_NEWS_LIMIT, selectVisibleNews } from "../research/lib/news.mjs";
+import { articleCountByEnvironment } from "../research/lib/articles.mjs";
 import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../research/lib/files.mjs";
 import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/military-assessment.mjs";
-import { normalizeEvidenceScore } from "../research/lib/evidence-score.mjs";
 import { normalizeTimelineImportance } from "../research/lib/timeline-importance.mjs";
 
 const dataRoot = resolve("data");
@@ -11,14 +11,18 @@ const publicRoot = resolve("public", "data");
 async function readAllNews() {
   const files = (await listFiles(join(dataRoot, "news"), ".jsonl"));
   const records = { thailand: [], cambodia: [], international: [] };
+  const all = [];
+  const byId = new Map();
 
   for (const file of files) {
     for (const article of await readJsonl(file)) {
+      all.push(article);
+      byId.set(article.id, article);
       const environment = newsEnvironmentKey(article.mediaEnvironment);
       if (environment) records[environment].push(article);
     }
   }
-  return records;
+  return { records, all, byId };
 }
 
 function visibleNews(records, limit = PUBLIC_NEWS_LIMIT) {
@@ -34,20 +38,12 @@ function visibleNews(records, limit = PUBLIC_NEWS_LIMIT) {
       source: article.source,
       sourceUrl: article.sourceUrl,
       category: article.category,
-      credibility: normalizeEvidenceScore(article.credibility, article.status),
+      credibility: article.credibility,
       status: article.status,
     }));
 }
 
-function articleCounts(news) {
-  const count = (environment) => news[environment].filter((row) => VISIBLE_NEWS_STATUSES.has(row.status)).length;
-  const thailand = count("thailand");
-  const cambodia = count("cambodia");
-  const international = count("international");
-  return { thailand, cambodia, international, total: thailand + cambodia + international };
-}
-
-function timelinePublic(event) {
+function timelinePublic(event, articlesById) {
   return {
     _id: event.id,
     date: event.date,
@@ -61,12 +57,16 @@ function timelinePublic(event) {
     category: event.category,
     importance: normalizeTimelineImportance(event.importance),
     status: event.status,
-    sources: Array.isArray(event.sources)
-      ? event.sources.map((source) => ({
-        url: source.url,
-        name: source.name,
-        credibility: normalizeEvidenceScore(source.credibility),
-      }))
+    sources: Array.isArray(event.evidenceIds)
+      ? event.evidenceIds.map((id) => {
+        const article = articlesById.get(id);
+        if (!article) throw new Error(`Timeline event ${event.id} references missing article ${id}`);
+        return {
+          url: article.sourceUrl,
+          name: article.source,
+          credibility: article.credibility,
+        };
+      })
       : [],
   };
 }
@@ -126,7 +126,7 @@ function impactPublic(value, thailand, cambodia, lastResearchAt) {
   };
 }
 
-const [news, thailandPerspective, cambodiaPerspective, currentSummary, impact, researchState] = await Promise.all([
+const [newsStore, thailandPerspective, cambodiaPerspective, currentSummary, impact, researchState] = await Promise.all([
   readAllNews(),
   readJson(join(dataRoot, "current", "thailand.json")),
   readJson(join(dataRoot, "current", "cambodia.json")),
@@ -134,11 +134,12 @@ const [news, thailandPerspective, cambodiaPerspective, currentSummary, impact, r
   readJson(join(dataRoot, "current", "impact.json")),
   readJson(join(dataRoot, "research-state.json")),
 ]);
+const news = newsStore.records;
 
 const timeline = [];
 for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
   for (const event of await readJsonl(file)) {
-    timeline.push(timelinePublic(event));
+    timeline.push(timelinePublic(event, newsStore.byId));
   }
 }
 timeline.sort((a, b) => {
@@ -164,7 +165,7 @@ const snapshot = {
     intervalHours: researchState.lastCycleInterval,
     reason: researchState.schedulingReason,
   },
-  articleCounts: articleCounts(news),
+  articleCounts: articleCountByEnvironment(newsStore.all),
 };
 
 const dashboardPath = join(publicRoot, "dashboard.json");
