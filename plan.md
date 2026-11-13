@@ -6,6 +6,8 @@
 
 **Quality over volume:** More searches, articles, events, or model activity are not success measures. A well-researched no-change cycle is valid. Preserve distinct historical developments; remove repeated representations of the same development. Favor a small, reliable system over extra agents, layers, quotas, or tools.
 
+**Design freedom (explicitly authorized):** Rethink, refactor, replace, consolidate, or remove legacy code, data structures, scripts, prompts, and workflows when investigation shows a simpler, more accurate, more maintainable solution. This is a **goal and acceptance-test plan**, not a mandate to implement every suggested command or layer. Preserve evidence, stable record identity, user-facing behavior, recovery safety, and test coverage during migrations. Explain meaningful pivots under their stage; never keep complexity only because it already exists.
+
 **Work ownership:** One autonomous Antigravity agent maintains canonical `data/`. A deterministic harness owns timing, isolation, ingestion mechanics, recovery, validation, Git integration, and publication. The agent chooses research direction and editorial judgments; code enforces invariants. The agent can search the web and add new evidence **during Curation, Timeline, or Synthesis**. Those stages describe a natural order of reasoning, not permission boundaries.
 
 ### What exists now
@@ -19,7 +21,7 @@
 | South (Windows) | Research runner, isolated cycle workspace, model sessions, source captures, local feedback/logs |
 | Vercel | Generated public data, website, and deadline countdown; not the research database |
 
-**Integration baseline (2026-11-13):** GitHub `main` now contains evidence-v2 and a unified article registry: **3,055 distinct article records** and **707 timeline events**. Each timeline event cites article IDs through `evidenceIds`; each article URL has one confidence score. The old 3,182-record archive and duplicate URLs are pre-migration data, not a current backlog. South's `BorderClashResearch` task remains disabled by operator request.
+**Integration baseline (2026-11-13):** Evidence-v2 and the unified article registry are on `main`. After the follow-up article-identity cleanup there are **3,044 distinct article records** and **707 timeline events**. Timeline events cite canonical article IDs through `evidenceIds`; one article has one confidence score. The older 3,182-record archive and its duplicates are pre-migration data. Laptop, GitHub, and South were synchronized on `main`; South's research scheduler remains disabled by operator request.
 
 ## One ordinary cycle
 
@@ -41,7 +43,7 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 ## Build in this order
 
-### 1. Integrate the other agent's work first
+### 1. Establish the integrated baseline (completed)
 
 **Goal:** One tested schema and UI contract before harness changes begin.
 
@@ -57,7 +59,7 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 **Goal:** The agent can submit articles in batches; repeated articles are rejected; each unique article gets a durable, independently readable evidence snapshot when accessible.
 
 - [ ] Extend the existing `pnpm research` Node CLI with one useful batch-ingest interface, e.g. `pnpm research ingest candidates.json`. Keep normal file editing and `research check` for corrections; do not create a large tool framework.
-- [ ] **Precheck** each candidate against the unified article registry: normalized/canonical URL, publisher ID, and likely title/date matches. Reuse existing IDs and scores; flag ambiguous same-article matches for agent review. Independent reporting from distinct publishers remains separate evidence.
+- [ ] **Precheck** each candidate against the unified article registry: normalized/canonical URL, publisher ID, and likely title/date matches. Reuse existing IDs and scores; flag ambiguous same-article matches for agent review. Independent reporting from distinct publishers remains separate evidence. Different page slugs and `www` variants may still represent one article.
 - [ ] **After dedup, fetch automatically** using the CLI's HTTP client, not the model's context as an archive. Recheck final redirected/canonical URL; cap time, bytes, redirects, and concurrency. Only fetch permitted public content; never bypass paywalls, access controls, or publisher restrictions. Protect against local/private-network URLs and unsafe redirects.
 - [ ] Extract actual article-body text and metadata (title, publisher, author if available, published/modified dates when supported, canonical URL, language). Verify extraction quality; never label a login page, navigation page, or HTTP 403 as an archived article. Agent can review suspect captures.
 - [ ] Save **both** the original fetched HTML and clean article text as gzip-compressed UTF-8 files, plus an atomic manifest linking the existing news ID to hashes, capture time, final URL, status, and extraction provenance. Deduplicate identical blobs. Store inert HTML for evidence/re-extraction, **not** as an executable or publicly served page.
@@ -67,9 +69,9 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 **Done when:** Repeated ingestion yields the same record ID and no extra archive; distinct sources remain; text and HTML can be restored from backup; 403/JS-only/bad extraction cases are honest and nonblocking.
 
-**Sizing evidence:** Three real article pages downloaded successfully on 2026-11-13. Their uncompressed HTML was **105–305 KB** and gzip HTML **25–42 KB** each; another publisher returned 403. These are *not* representative guarantees. A planning range of **~100–250 MB for 3,055 successfully captured pages plus readable text** is plausible; measure 20–30 diverse pages before sizing South. At ~40 KB/article, 20 new articles/day adds ~0.3 GB/year, or ~3 GB/decade, before backups and overhead. Local disk has no per-request storage bill; off-server backup has a provider/equipment cost still to choose.
+**Sizing evidence:** Three real article pages downloaded successfully on 2026-11-13. Their uncompressed HTML was **105–305 KB** and gzip HTML **25–42 KB** each; another publisher returned 403. These are *not* representative guarantees. A planning range of **~100–250 MB for 3,044 successfully captured pages plus readable text** is plausible; measure 20–30 diverse pages before sizing South. At ~40 KB/article, 20 new articles/day adds ~0.3 GB/year, or ~3 GB/decade, before backups and overhead. Local disk has no per-request storage bill; off-server backup has a provider/equipment cost still to choose.
 
-**Notes / pivots:** _Confirmed: retain both text and compressed original HTML; South local storage with separate off-server backup. Final extraction library, backup destination/cadence, publisher access limitations, and actual sizes require a pilot. Article retrieval is separate from the agent's web reading._
+**Notes / pivots:** _Confirmed: retain both text and compressed original HTML; South local storage with separate off-server backup. HTML does not itself preserve referenced image files. For video-only URLs, preserve metadata and an available lawful transcript rather than pretending video-page HTML is an article. Final extraction library, backup destination/cadence, publisher access limitations, and actual sizes require a pilot. Article retrieval is separate from the agent's web reading._
 
 ### 3. Give the agent one goal-driven cycle brief
 
@@ -93,7 +95,7 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 **Done when:** New findings improve the source record without duplicates, artificial volume, or systematic exclusion of a reporting environment.
 
-**Notes / pivots:** _The integrated UI counts all distinct stored article records, not only visible-feed items. Preserve that contract._
+**Notes / pivots:** _The integrated UI counts all distinct stored articles, not only the visible feed. Removing 11 more URL variants reduced the total to 3,044 without losing timeline references. Derive the count from canonical records, never a manually incremented counter._
 
 ### 5. Maintain a reconstructable timeline with selective highlights
 
@@ -101,7 +103,7 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 
 - [ ] Research additional facts as needed, using the unified article ingest path. Match new developments by actors, location, time, action, and outcome. Cite existing or newly added canonical article IDs in `evidenceIds`; do not duplicate URLs or confidence scores in timeline records. Distinct developments retain their own IDs.
 - [ ] Preserve the event's actual date; keep time unknown if unsupported. Record disputed claims as attributed claims, not verified underlying facts. Preserve corrections, stable IDs, unique sources, and distinctions between separate incidents.
-- [ ] Keep **one canonical event set**. Importance decides what the **default public highlights** show; it must not decide whether a meaningful historical event is stored. Apply the other agent's final scoring rubric, not a hardcoded assumption.
+- [ ] Keep **one canonical event set**. Importance decides what the **default public highlights** show; it must not decide whether a meaningful historical event is stored. Use the integrated timeline materiality rubric, and revise its UI threshold only when evidence supports a better reader experience.
 - [ ] Later, run a careful deduplication and history-backfill review: suggest candidate merges, preserve sources and references, audit false precision, and add major pre-December-2025 context as a separate project.
 
 **Done when:** The timeline is historically useful and traceable, while its default reader view is selective; two distinct incidents are never merged by title similarity alone.
@@ -141,7 +143,7 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 - [ ] Fetch latest `main` at cycle start and use an isolated workspace (keep the existing clone unless a worktree proves better). Keep the workspace and conversation ID for recoverable errors; verify the installed AGY CLI's continuation flags. Bound retries and stuck processes without wiping useful work.
 - [ ] Require `pnpm research finish` to record justified cadence and a mandatory `HARNESS_FEEDBACK:` critique. Persist conversation logs, structured feedback, and diagnostics locally on South, never in Git.
 - [ ] Validate data/schema/scoring, references, translation fidelity, source duplicates, and research-only changes. After concurrent developer pushes, reconcile **only** research data onto current `main`, rerun checks, and publish a fast-forward commit. Pause for real semantic conflicts; never silently overwrite a user's work or discard a failed cycle.
-- [ ] Only a successfully published data snapshot advances the public countdown. Treat a failed push or deployment as unfinished; retain recoverable work and clear diagnostics.
+- [ ] Only a newly deployed public snapshot resets the countdown visible to readers. A successful Git push does not prove a successful Vercel deployment. If deployment fails, preserve and retry the **same publish**, rather than rerunning research or falsely reporting a fresh website.
 
 **Done when:** Simulated provider failures, process crashes, and concurrent multi-machine pushes preserve work and cannot publish stale or invalid data.
 
@@ -162,7 +164,8 @@ An agent may return to curation from timeline or synthesis whenever new evidence
 ## Decisions still open (do not silently invent)
 
 - **Off-server backup:** Destination, frequency, retention, and restore objective. South-local copies alone are insufficient for decades of preservation.
-- **Live status:** Whether to add real-time South-to-UI telemetry or use the confirmed deadline-driven “Running” display with a delayed/error fallback. Prefer no new service unless status accuracy warrants it.
+- **Live status:** Whether to add real-time South-to-UI telemetry or use the deadline-driven “Running” display with a delayed/error fallback. A static build cannot prove South is running; do not equate a reached deadline with verified process health. Prefer no new service unless status accuracy warrants it.
+- **Historical synthesis retrieval:** Git preserves every committed revision; decide whether a small dated synthesis index is needed for future agents to retrieve one day's published assessment without replaying Git history.
 - **Archive pilot:** Choose the smallest extraction library that reliably produces article body text across real Khmer/Thai/international pages. Measure size and failure rate before hardcoding compression, retry, and capacity limits.
 - **Timeline highlights:** Article confidence uses evidence-v2; timeline importance remains a different, historical-significance score. Reassess the highlight cutoff only after reviewing actual event density.
 

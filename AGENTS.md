@@ -16,6 +16,8 @@ Start with `.work/CYCLE_CONTEXT.md`. It is orientation, not a boundary. Read any
 
 Use effort in proportion to uncertainty and likely impact. Finish when further work is unlikely to materially improve the accuracy, freshness, or usefulness of the record.
 
+Prefer the simplest reliable way to improve the canonical record. Legacy prompts, tools, and code are not goals in themselves; refactor or replace them when evidence and tests justify it, without weakening historical integrity or publication safety.
+
 Treat the repository as a maintained knowledge base, not an append-only feed. Add, correct, merge, archive, or remove records when justified. Preserve stable IDs for the same underlying records. Work naturally through **Curation -> Timeline -> Synthesis**, but these are not isolated steps: research, verify, and add evidence at any stage; revisit earlier conclusions when useful. Avoid repeated articles and events, but preserve distinct sources and historically meaningful developments even when they are not public highlights.
 
 During synthesis, distinguish each side's stated position from observed military activity; justify posture assessments with evidence. Maintain a neutral overall comparison and concise key updates without erasing material disagreement.
