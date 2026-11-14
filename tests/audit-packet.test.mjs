@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildAuditPacket } from "../research/lib/audit-packet.mjs";
+
+const articles = [
+  { id: "article-1", sourceUrl: "https://example.com/a", title: "Article A" },
+  { id: "article-2", sourceUrl: "https://example.com/b/", title: "Article B" },
+];
+const timeline = [
+  { id: "event-1", title: "Event", evidenceIds: ["article-1"] },
+];
+
+test("audit packet resolves timeline evidence to canonical articles", () => {
+  const packet = buildAuditPacket({ id: "event-1", timeline, articles });
+  assert.equal(packet.kind, "timeline");
+  assert.equal(packet.record.title, "Event");
+  assert.deepEqual(packet.evidence.timeline, []);
+  assert.deepEqual(packet.evidence.articles.map(({ id }) => id), ["article-1"]);
+  assert.deepEqual(packet.evidence.missingEvidenceIds, []);
+});
+
+test("audit packet expands current timeline references and direct source URLs", () => {
+  const packet = buildAuditPacket({
+    id: "current/impact",
+    current: {
+      impact: {
+        displaced: { sourceUrl: "https://example.com/b" },
+        deaths: { sourceUrl: "https://example.com/missing" },
+        assessment: { evidenceIds: ["event-1"] },
+      },
+    },
+    timeline,
+    articles,
+  });
+  assert.equal(packet.kind, "current");
+  assert.deepEqual(packet.evidence.timeline.map(({ id }) => id), ["event-1"]);
+  assert.deepEqual(packet.evidence.articles.map(({ id }) => id).sort(), ["article-1", "article-2"]);
+  assert.deepEqual(packet.evidence.matchedDirectArticleIds, ["article-2"]);
+  assert.deepEqual(packet.evidence.missingDirectSourceUrls, ["https://example.com/missing"]);
+});
+
+test("audit packet returns a news record directly and rejects unknown IDs", () => {
+  const packet = buildAuditPacket({ id: "article-1", timeline, articles });
+  assert.equal(packet.kind, "news");
+  assert.equal(packet.record.title, "Article A");
+  assert.deepEqual(packet.evidence.articles, []);
+  assert.throws(() => buildAuditPacket({ id: "missing", timeline, articles }), /unknown audit record id/u);
+});
+
+test("audit packet reports unresolved evidence IDs", () => {
+  const packet = buildAuditPacket({
+    id: "event-broken",
+    timeline: [{ id: "event-broken", evidenceIds: ["missing-article"] }],
+    articles,
+  });
+  assert.deepEqual(packet.evidence.missingEvidenceIds, ["missing-article"]);
+});

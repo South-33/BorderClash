@@ -1,7 +1,8 @@
 import { basename, extname, join, relative, resolve } from "node:path";
 import { LOCALIZED_NEWS_LIMIT, NEWS_MEDIA_ENVIRONMENTS, newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
-import { normalizeArticleUrl } from "./lib/articles.mjs";
+import { isValidProvenanceId, normalizeArticleUrl } from "./lib/articles.mjs";
 import { isCanonicalDataPath } from "./lib/data-paths.mjs";
+import { keyUpdateRecords } from "./lib/current-shape.mjs";
 import { getLocalizedTextIssue } from "./lib/localization.mjs";
 import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
 import { MILITARY_RUBRIC_VERSION, militaryAssessmentFor } from "./lib/military-assessment.mjs";
@@ -41,6 +42,21 @@ function numericFidelity(location, english, localizedValue) {
 
 function add(location, issue) {
   errors.push(location + ": " + issue);
+}
+
+function evidenceRefs(location, value, { allowTimeline = true, required = true } = {}) {
+  if (!Array.isArray(value) || (required && value.length === 0)) {
+    if (required) add(location, "must cite at least one canonical evidence id");
+    return;
+  }
+  const seen = new Set();
+  for (const [index, id] of value.entries()) {
+    if (typeof id !== "string" || (!newsIds.has(id) && !(allowTimeline && timelineIds.has(id)))) {
+      add(location + "[" + index + "]", "unknown evidence id");
+    }
+    if (seen.has(id)) add(location + "[" + index + "]", "duplicate evidence id");
+    seen.add(id);
+  }
 }
 
 function localized(location, value, language, required = false) {
@@ -109,6 +125,11 @@ for (const file of timelineFiles) {
     }
     if (!/^\d{4}-\d{2}-\d{2}$/u.test(event.date || "")) add(location, "invalid date");
     if (String(event.date || "").slice(0, 7) !== expectedMonth) add(location, "wrong timeline month");
+    if (event.timeOfDay !== undefined && event.timeOfDay !== null && event.timeOfDay !== "") {
+      if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/u.test(String(event.timeOfDay))) {
+        add(location + ".timeOfDay", "must be HH:MM in border local time or omitted");
+      }
+    }
     notFuture(location + ".createdAt", event.createdAt);
     notFuture(location + ".lastUpdatedAt", event.lastUpdatedAt);
     localized(location + ".titleTh", event.titleTh, "th", true);
@@ -177,6 +198,11 @@ for (const file of newsFiles) {
     }
     if (article.status === "unverified" && Number.isFinite(article.credibility) && article.credibility > 50) {
       add(location + ".credibility", "unverified evidence cannot exceed 50");
+    }
+    if (article.provenanceId !== undefined) {
+      if (!isValidProvenanceId(article.provenanceId)) {
+        add(location + ".provenanceId", "must be a stable lowercase provenance key");
+      }
     }
     const articleTime = article.publishedAt || article.fetchedAt;
     if (!Number.isFinite(articleTime)) {
@@ -281,6 +307,10 @@ for (const name of ["thailand", "cambodia"]) {
   numericFidelity(location + ".activityLabelKh", value.activityLabel, value.activityLabelKh);
   numericFidelity(location + ".activityDetailsTh", value.activityDetails, value.activityDetailsTh);
   numericFidelity(location + ".activityDetailsKh", value.activityDetails, value.activityDetailsKh);
+  const linkedPerspective = value.summaryEvidenceIds !== undefined || value.activityEvidenceIds !== undefined;
+  for (const field of ["summaryEvidenceIds", "activityEvidenceIds"]) {
+    if (linkedPerspective) evidenceRefs(location + "." + field, value[field]);
+  }
   for (const field of [
     "officialNarrative",
     "narrativeSource",
@@ -308,10 +338,28 @@ localized("current/summary.summaryTh", summary.summaryTh, "th", true);
 localized("current/summary.summaryKh", summary.summaryKh, "kh", true);
 numericFidelity("current/summary.summaryTh", summary.summary, summary.summaryTh);
 numericFidelity("current/summary.summaryKh", summary.summary, summary.summaryKh);
-for (const [index, item] of (summary.keyUpdatesTh || []).entries()) localized("current/summary.keyUpdatesTh[" + index + "]", item, "th", true);
-for (const [index, item] of (summary.keyUpdatesKh || []).entries()) localized("current/summary.keyUpdatesKh[" + index + "]", item, "kh", true);
-for (const [index, item] of (summary.keyUpdatesTh || []).entries()) numericFidelity("current/summary.keyUpdatesTh[" + index + "]", summary.keyUpdates?.[index], item);
-for (const [index, item] of (summary.keyUpdatesKh || []).entries()) numericFidelity("current/summary.keyUpdatesKh[" + index + "]", summary.keyUpdates?.[index], item);
+let summaryUpdates = [];
+try {
+  summaryUpdates = keyUpdateRecords(summary);
+} catch (error) {
+  add("current/summary.keyUpdates", error.message);
+}
+for (const [index, item] of summaryUpdates.entries()) {
+  localized("current/summary.keyUpdates[" + index + "].textTh", item.textTh, "th", true);
+  localized("current/summary.keyUpdates[" + index + "].textKh", item.textKh, "kh", true);
+  numericFidelity("current/summary.keyUpdates[" + index + "].textTh", item.text, item.textTh);
+  numericFidelity("current/summary.keyUpdates[" + index + "].textKh", item.text, item.textKh);
+  if (!item.legacy) evidenceRefs("current/summary.keyUpdates[" + index + "].evidenceIds", item.evidenceIds);
+}
+const structuredSummary = summaryUpdates.some(({ legacy }) => !legacy);
+if (structuredSummary && (summary.keyUpdatesTh !== undefined || summary.keyUpdatesKh !== undefined)) {
+  add("current/summary", "structured keyUpdates must keep translations inside each record");
+}
+if (structuredSummary) {
+  evidenceRefs("current/summary.summaryEvidenceIds", summary.summaryEvidenceIds);
+} else if (summary.summaryEvidenceIds !== undefined) {
+  evidenceRefs("current/summary.summaryEvidenceIds", summary.summaryEvidenceIds);
+}
 for (const field of ["generalSummary", "keyEvents", "conflictLevel", "displacedCount", "casualtyCount", "lastUpdatedAt"]) {
   if (summary[field] !== undefined) add("current/summary." + field, "legacy field");
 }
@@ -340,6 +388,18 @@ for (const field of ["displaced", "deaths"]) {
     add("current/impact." + field + ".claimantName", "missing while localized claimant exists");
   }
   if (metric.sourceUrl !== undefined) directSourceUrl("current/impact." + field + ".sourceUrl", metric.sourceUrl);
+  if (metric.evidenceIds !== undefined) {
+    evidenceRefs("current/impact." + field + ".evidenceIds", metric.evidenceIds, { allowTimeline: false });
+    if (typeof metric.sourceName !== "string" || !metric.sourceName.trim()) {
+      add("current/impact." + field + ".sourceName", "required when evidenceIds are stored");
+    }
+    if (typeof metric.scope !== "string" || !metric.scope.trim()) {
+      add("current/impact." + field + ".scope", "required when evidenceIds are stored");
+    }
+    if (typeof metric.sourceDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(metric.sourceDate)) {
+      add("current/impact." + field + ".sourceDate", "required valid date when evidenceIds are stored");
+    }
+  }
   if (metric.sourceDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/u.test(metric.sourceDate)) {
     add("current/impact." + field + ".sourceDate", "invalid date");
   }

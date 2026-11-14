@@ -3,7 +3,8 @@ import { join, resolve } from "node:path";
 import { newsEnvironmentKey, PUBLIC_NEWS_LIMIT, selectVisibleNews } from "../research/lib/news.mjs";
 import { articleCountByEnvironment } from "../research/lib/articles.mjs";
 import { listFiles, readJson, readJsonl, writeJson, writeJsonArrayOnePerLine } from "../research/lib/files.mjs";
-import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/military-assessment.mjs";
+import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
+import { currentImpactPublic, currentSummaryPublic } from "../research/lib/current-shape.mjs";
 import { normalizeTimelineImportance } from "../research/lib/timeline-importance.mjs";
 
 const dataRoot = resolve("data");
@@ -92,40 +93,6 @@ function perspectivePublic(value) {
   };
 }
 
-function summaryPublic(value) {
-  if (!value) return null;
-  return {
-    summary: value.summary,
-    summaryTh: value.summaryTh,
-    summaryKh: value.summaryKh,
-    keyUpdates: value.keyUpdates,
-    keyUpdatesTh: value.keyUpdatesTh,
-    keyUpdatesKh: value.keyUpdatesKh,
-    updatedAt: value.updatedAt,
-  };
-}
-
-function metricDisplay(metric) {
-  if (!metric || metric.value == null) return "—";
-  const number = Number(metric.value).toLocaleString("en-US");
-  if (metric.qualifier === "MORE_THAN") return `>${number}`;
-  if (metric.qualifier === "AT_LEAST") return `≥${number}`;
-  return number;
-}
-
-function impactPublic(value, thailand, cambodia, lastResearchAt) {
-  if (!value) return null;
-  return {
-    riskLevel: riskLevelFromTiers(thailand?.militaryAssessment?.tier, cambodia?.militaryAssessment?.tier),
-    displacedCount: metricDisplay(value.displaced),
-    deathCount: metricDisplay(value.deaths),
-    // The unchanged UI labels this field simply "UPDATED". Expose the most
-    // recent completed research verification here; canonical impact.json keeps
-    // the underlying evidence/source timestamps separately.
-    updatedAt: lastResearchAt || value.updatedAt,
-  };
-}
-
 const [newsStore, thailandPerspective, cambodiaPerspective, currentSummary, impact, researchState] = await Promise.all([
   readAllNews(),
   readJson(join(dataRoot, "current", "thailand.json")),
@@ -154,8 +121,8 @@ const snapshot = {
   cambodiaNews: visibleNews(news.cambodia, PUBLIC_NEWS_LIMIT),
   thailandPerspective: perspectivePublic(thailandPerspective),
   cambodiaPerspective: perspectivePublic(cambodiaPerspective),
-  summary: summaryPublic(currentSummary),
-  impact: impactPublic(impact, thailandPerspective, cambodiaPerspective, researchState.lastResearchAt),
+  summary: currentSummaryPublic(currentSummary),
+  impact: currentImpactPublic(impact, thailandPerspective, cambodiaPerspective, researchState.lastResearchAt),
   timelineEvents: [],
   researchState: {
     lastResearchAt: researchState.lastResearchAt,

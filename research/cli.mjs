@@ -1,10 +1,36 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
 import { militaryAssessmentFor } from "./lib/military-assessment.mjs";
 import { evidenceRubricPrompt } from "./lib/evidence-score.mjs";
+import {
+  captureChangedArticles,
+  ingestCandidates,
+  loadArticleRegistry,
+  readCandidateFile,
+} from "./lib/article-ingest.mjs";
+import {
+  captureArticle,
+  restoreArchiveCopy,
+  verifyArchiveCopy,
+} from "./lib/evidence-archive.mjs";
+import { reconstructArticle } from "./lib/reconstruct.mjs";
+import { summarizeTimelineTimes } from "./lib/timeline-audit.mjs";
+import { auditTimelineChronology } from "./lib/chronology-audit.mjs";
+import { auditHumanitarianSummaryRisk } from "./lib/humanitarian-audit.mjs";
+import { auditReferenceCoverage } from "./lib/reference-audit.mjs";
+import { buildAuditPacket } from "./lib/audit-packet.mjs";
+import {
+  auditLedgerSummary,
+  createAuditLedger,
+  loadAuditRecords,
+  markAuditItem,
+  nextAuditItems,
+  syncAuditLedger,
+  writeAuditLedger,
+} from "./lib/audit-ledger.mjs";
 
 const dataRoot = resolve("data");
 const command = process.argv[2] || "context";
@@ -311,41 +337,217 @@ function renderContext(output) {
   lines.push(
     "",
     `Archive: ${output.archive.timeline} timeline events; ${output.archive.news} news records.`,
-    "Finish when the record is in the best state the evidence supports: `pnpm research finish`. Pass a new interval and reason only when the next-run cadence should change.",
+    "Finish when the record is in the best state the evidence supports: `pnpm research finish`. Commands: `pnpm research --help`.",
     "",
   );
   return lines.join("\n");
+}
+
+async function ingest(path) {
+  if (!path) throw new Error("ingest requires a JSON or JSONL candidate file");
+  const candidates = await readCandidateFile(resolve(path));
+  if (!Array.isArray(candidates) || candidates.length === 0) throw new Error("ingest candidate file is empty");
+  const results = await ingestCandidates(candidates, { dataRoot });
+  process.stdout.write(JSON.stringify({ ok: true, count: results.length, results }, null, 2) + "\n");
+}
+
+async function capture(id, force = false) {
+  if (!id) throw new Error("capture requires an article id");
+  const registry = await loadArticleRegistry(dataRoot);
+  const article = registry.byId.get(id);
+  if (!article) throw new Error(`unknown article id: ${id}`);
+  const result = await captureArticle(article, { force });
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
+async function captureChanged(baseRef) {
+  if (!baseRef) throw new Error("capture-changed requires a base Git ref");
+  const results = await captureChangedArticles(baseRef, { dataRoot });
+  const identityConflicts = results.filter(({ status }) => status === "identity-conflict");
+  const failures = results.filter(({ status }) => !["captured-html", "captured-document", "captured-text"].includes(status));
+  process.stdout.write(JSON.stringify({
+    ok: identityConflicts.length === 0,
+    count: results.length,
+    failures: failures.length,
+    identityConflicts: identityConflicts.length,
+    results,
+  }, null, 2) + "\n");
+  if (identityConflicts.length) process.exitCode = 3;
+}
+
+async function archiveVerify(id) {
+  if (!id) throw new Error("archive-verify requires an article id");
+  const result = await verifyArchiveCopy(id);
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  if (!result.ok) process.exitCode = 1;
+}
+
+async function archiveRestore(id, destination = resolve(".work", "restored-evidence")) {
+  if (!id) throw new Error("archive-restore requires an article id");
+  const result = await restoreArchiveCopy(id, destination);
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  if (!result.ok) process.exitCode = 1;
+}
+
+async function reconstruct(id, ref = "HEAD") {
+  if (!id) throw new Error("reconstruct requires an article id");
+  const result = await reconstructArticle(id, { ref, repoRoot: process.cwd() });
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+  if (!result.canonical) process.exitCode = 1;
+}
+
+async function auditTimes() {
+  const timeline = [];
+  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
+    timeline.push(...await readJsonl(file));
+  }
+  process.stdout.write(JSON.stringify(summarizeTimelineTimes(timeline), null, 2) + "\n");
+}
+
+async function auditChronology() {
+  const registry = await loadArticleRegistry(dataRoot);
+  const timeline = [];
+  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
+    timeline.push(...await readJsonl(file));
+  }
+  process.stdout.write(JSON.stringify(auditTimelineChronology(timeline, registry.articles), null, 2) + "\n");
+}
+
+async function auditHumanitarian() {
+  const registry = await loadArticleRegistry(dataRoot);
+  const timeline = [];
+  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
+    timeline.push(...await readJsonl(file));
+  }
+  process.stdout.write(JSON.stringify(auditHumanitarianSummaryRisk(timeline, registry.articles), null, 2) + "\n");
+}
+
+async function auditReferences() {
+  const registry = await loadArticleRegistry(dataRoot);
+  const timeline = [];
+  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
+    timeline.push(...await readJsonl(file));
+  }
+  const current = {};
+  for (const name of ["summary", "thailand", "cambodia", "impact"]) {
+    current[name] = await readJson(join(dataRoot, "current", `${name}.json`));
+  }
+  process.stdout.write(JSON.stringify(auditReferenceCoverage({
+    articles: registry.articles,
+    timeline,
+    current,
+  }), null, 2) + "\n");
+}
+
+async function auditShow(id) {
+  if (!id) throw new Error("audit-show requires a stable record id");
+  const registry = await loadArticleRegistry(dataRoot);
+  const timeline = [];
+  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
+    timeline.push(...await readJsonl(file));
+  }
+  const current = {};
+  for (const name of ["summary", "thailand", "cambodia", "impact"]) {
+    current[name] = await readJson(join(dataRoot, "current", `${name}.json`));
+  }
+  process.stdout.write(JSON.stringify(buildAuditPacket({
+    id,
+    articles: registry.articles,
+    timeline,
+    current,
+  }), null, 2) + "\n");
+}
+
+const defaultAuditLedgerPath = resolve(".work", "audit-ledger.json");
+
+function gitText(args) {
+  const result = spawnSync("git", args, {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0) throw new Error((result.stderr || result.stdout || "git failed").trim());
+  return result.stdout.trim();
+}
+
+async function auditInit(ref = "HEAD", path = defaultAuditLedgerPath) {
+  const commit = gitText(["rev-parse", ref]);
+  const diff = spawnSync("git", ["diff", "--quiet", commit, "--", "data"], { cwd: process.cwd(), windowsHide: true });
+  if (diff.status !== 0) throw new Error("audit-init requires canonical data to match the anchor Git revision");
+  const untracked = gitText(["ls-files", "--others", "--exclude-standard", "--", "data"]);
+  if (untracked) throw new Error("audit-init requires no untracked canonical data");
+  const ledger = createAuditLedger(await loadAuditRecords(dataRoot), { anchorCommit: commit });
+  await writeAuditLedger(resolve(path), ledger);
+  process.stdout.write(JSON.stringify(auditLedgerSummary(ledger), null, 2) + "\n");
+}
+
+async function readAuditLedger(path = defaultAuditLedgerPath) {
+  return readJson(resolve(path));
+}
+
+async function auditStatus(path = defaultAuditLedgerPath) {
+  process.stdout.write(JSON.stringify(auditLedgerSummary(await readAuditLedger(path)), null, 2) + "\n");
+}
+
+async function auditNext(limitText = "25", path = defaultAuditLedgerPath) {
+  const ledger = await readAuditLedger(path);
+  process.stdout.write(JSON.stringify(nextAuditItems(ledger, Number(limitText)), null, 2) + "\n");
+}
+
+async function auditMark(id, status, noteParts) {
+  if (!id || !status) throw new Error("audit-mark requires <id> <status> [note]");
+  const ledger = await readAuditLedger();
+  const item = markAuditItem(ledger, id, status, noteParts.join(" "));
+  await writeAuditLedger(defaultAuditLedgerPath, ledger);
+  process.stdout.write(JSON.stringify(item, null, 2) + "\n");
+}
+
+async function auditSync(ref = "HEAD", path = defaultAuditLedgerPath) {
+  const ledger = await readAuditLedger(path);
+  const commit = gitText(["rev-parse", ref]);
+  syncAuditLedger(ledger, await loadAuditRecords(dataRoot), { commit });
+  await writeAuditLedger(resolve(path), ledger);
+  process.stdout.write(JSON.stringify(auditLedgerSummary(ledger), null, 2) + "\n");
 }
 
 async function finish(hoursText, reasonParts) {
   const statePath = join(dataRoot, "research-state.json");
   const state = await readJson(statePath);
   const cycleRuntimePath = resolve(".work", "CYCLE_RUN.json");
-  let cycleId = "";
-  if (existsSync(cycleRuntimePath)) {
-    const cycleRuntime = await readJson(cycleRuntimePath);
-    cycleId = String(cycleRuntime.runId || "").trim();
+  if (!existsSync(cycleRuntimePath)) {
+    throw new Error("finish is only available inside a runner cycle");
   }
+  const cycleRuntime = await readJson(cycleRuntimePath);
+  const cycleId = String(cycleRuntime.runId || "").trim();
+  if (!cycleId) throw new Error("cycle metadata is missing runId");
   const finishMarkerPath = resolve(".work", "research-finish.json");
-  if (cycleId && existsSync(finishMarkerPath)) {
+  if (existsSync(finishMarkerPath)) {
     const marker = await readJson(finishMarkerPath);
-    if (marker.cycleId === cycleId) {
-      if (
-        Number(state.lastResearchAt) !== Number(marker.completedAt)
-        || Number(state.researchCycleCount) !== Number(marker.researchCycleCount)
-      ) {
-        throw new Error("finish marker does not match current research state");
-      }
-      process.stdout.write(JSON.stringify({
-        completedAt: new Date(marker.completedAt).toISOString(),
-        nextRunAt: new Date(marker.nextRunAt).toISOString(),
-        intervalHours: marker.intervalHours,
-        researchCycleCount: marker.researchCycleCount,
-        alreadyFinished: true,
-      }) + "\n");
+    if (marker.cycleId === cycleId && marker.decision !== "review") {
+      process.stdout.write(JSON.stringify({ ...marker, alreadyFinished: true }) + "\n");
+      return;
+    }
+    if (marker.cycleId === cycleId && marker.decision === "review" && hoursText === "--review") {
+      process.stdout.write(JSON.stringify({ ...marker, alreadyFinished: true }) + "\n");
       return;
     }
   }
+
+  if (hoursText === "--review") {
+    const reason = reasonParts.join(" ").trim();
+    if (!reason) throw new Error("review reason is required");
+    if (reason.length > 240) throw new Error("review reason must be at most 240 characters");
+    const marker = {
+      cycleId,
+      decision: "review",
+      reason,
+      requestedAt: Date.now(),
+    };
+    await writeJson(finishMarkerPath, marker);
+    process.stdout.write(JSON.stringify(marker) + "\n");
+    return;
+  }
+
   const requestedHours = hoursText == null ? Number(state.lastCycleInterval || 24) : Number(hoursText);
   const hours = Number.isFinite(requestedHours) ? requestedHours : Number.NaN;
   if (!Number.isFinite(hours) || hours < 1 || hours > MAX_SCHEDULE_HOURS) {
@@ -355,37 +557,19 @@ async function finish(hoursText, reasonParts) {
   if (suppliedReason.length > 240) {
     throw new Error("finish reason must be at most 240 characters");
   }
-  const reason = suppliedReason || String(state.schedulingReason || "Research cycle completed.").trim();
-  const completedAt = Date.now();
-  const nextRunAt = completedAt + Math.round(hours * 3_600_000);
-
-  const next = {
-    ...state,
-    isPaused: Boolean(state.isPaused),
-    systemStatus: "online",
-    lastResearchAt: completedAt,
-    nextRunAt,
-    lastCycleInterval: hours,
-    schedulingReason: reason,
-    researchCycleCount: Number(state.researchCycleCount || 0) + 1,
-    scheduler: "external",
-  };
-  await writeJson(statePath, next);
-  if (cycleId) {
-    await writeJson(finishMarkerPath, {
-      cycleId,
-      completedAt,
-      nextRunAt,
-      intervalHours: hours,
-      researchCycleCount: next.researchCycleCount,
-    });
+  const previousHours = Number(state.lastCycleInterval || 24);
+  if (hours !== previousHours && !suppliedReason) {
+    throw new Error("finish reason is required when changing cadence");
   }
-  process.stdout.write(JSON.stringify({
-    completedAt: new Date(completedAt).toISOString(),
-    nextRunAt: new Date(nextRunAt).toISOString(),
+  const marker = {
+    cycleId,
+    decision: "complete",
     intervalHours: hours,
-    researchCycleCount: next.researchCycleCount,
-  }) + "\n");
+    reason: suppliedReason || String(state.schedulingReason || "Research cycle completed.").trim(),
+    requestedAt: Date.now(),
+  };
+  await writeJson(finishMarkerPath, marker);
+  process.stdout.write(JSON.stringify(marker) + "\n");
 }
 
 function run(name, args) {
@@ -398,11 +582,6 @@ function run(name, args) {
 }
 
 function check() {
-  const tests = readdirSync(resolve("tests"))
-    .filter((name) => name.endsWith(".test.mjs"))
-    .sort()
-    .map((name) => join("tests", name));
-  run(process.execPath, ["--test", ...tests]);
   run(process.execPath, [join("research", "validate.mjs")]);
   run("git", ["diff", "--check"]);
 }
@@ -417,15 +596,63 @@ if (command === "brief") {
   process.stdout.write(renderContext(await brief()) + "\n");
 } else if (command === "check") {
   check();
+} else if (command === "ingest") {
+  await ingest(process.argv[3]);
+} else if (command === "capture") {
+  await capture(process.argv[3], process.argv.includes("--force"));
+} else if (command === "capture-changed") {
+  await captureChanged(process.argv[3]);
+} else if (command === "archive-verify") {
+  await archiveVerify(process.argv[3]);
+} else if (command === "archive-restore") {
+  await archiveRestore(process.argv[3], process.argv[4]);
+} else if (command === "reconstruct") {
+  await reconstruct(process.argv[3], process.argv[4] || "HEAD");
+} else if (command === "audit-times") {
+  await auditTimes();
+} else if (command === "audit-chronology") {
+  await auditChronology();
+} else if (command === "audit-humanitarian") {
+  await auditHumanitarian();
+} else if (command === "audit-references") {
+  await auditReferences();
+} else if (command === "audit-show") {
+  await auditShow(process.argv[3]);
+} else if (command === "audit-init") {
+  await auditInit(process.argv[3] || "HEAD", process.argv[4] || defaultAuditLedgerPath);
+} else if (command === "audit-status") {
+  await auditStatus(process.argv[3] || defaultAuditLedgerPath);
+} else if (command === "audit-next") {
+  await auditNext(process.argv[3] || "25", process.argv[4] || defaultAuditLedgerPath);
+} else if (command === "audit-mark") {
+  await auditMark(process.argv[3], process.argv[4], process.argv.slice(5));
+} else if (command === "audit-sync") {
+  await auditSync(process.argv[3] || "HEAD", process.argv[4] || defaultAuditLedgerPath);
 } else if (command === "finish") {
   await finish(process.argv[3], process.argv.slice(4));
 } else if (command === "help" || command === "--help" || command === "-h") {
   process.stdout.write([
     "pnpm research [context]          # show the compact cycle context",
-    "pnpm research finish             # complete cycle; keep current cadence",
+    "pnpm research ingest <file>      # add/reuse a small batch of article records and capture evidence",
+    "pnpm research capture <id> [--force] # capture or retry one stored article",
+    "pnpm research archive-verify <id>    # verify the South-local backup copy by checksum",
+    "pnpm research archive-restore <id> [destination] # restore one backup to a review directory",
+    "pnpm research reconstruct <id> [git-ref] # show one historical canonical record with its private capture metadata",
+    "pnpm research audit-times         # inventory exact/date-only timeline times for source review",
+    "pnpm research audit-chronology    # flag retrospective evidence whose publication date may have been copied to an event",
+    "pnpm research audit-humanitarian  # triage single-source humanitarian events with dense numeric summary mismatches",
+    "pnpm research audit-references    # report canonical evidence references and current source URLs outside the registry",
+    "pnpm research audit-show <id>     # show one canonical record with resolved article/timeline evidence",
+    "pnpm research audit-init [git-ref] # create the local full-record audit ledger",
+    "pnpm research audit-next [limit]    # show the next prioritized pending records",
+    "pnpm research audit-mark <id> <reviewed|corrected|merged|unresolved> [note] # record one audit result",
+    "pnpm research audit-sync [git-ref]  # reopen changed/new records after upstream movement",
+    "pnpm research audit-status          # summarize full-record audit progress",
+    "pnpm research finish             # request completion; keep current cadence",
     "pnpm research finish <hours> <reason>  # complete cycle and change cadence",
+    "pnpm research finish --review <reason> # stop for operator review without publication",
   ].join("\n") + "\n");
 } else {
-  console.error("Usage: pnpm research [brief|context|finish <hours> <reason>]");
+  console.error("Usage: pnpm research [brief|context|ingest|capture|archive-verify|archive-restore|reconstruct|audit-times|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-init|audit-next|audit-mark|audit-sync|audit-status|finish]");
   process.exit(2);
 }

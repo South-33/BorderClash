@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeArticleUrl } from "../research/lib/articles.mjs";
+import { isValidProvenanceId, normalizeArticleUrl, publisherArticleIdentity } from "../research/lib/articles.mjs";
 
 test("article identity removes harmless URL variation", () => {
   assert.equal(
@@ -42,4 +42,28 @@ test("article identity preserves distinguishing query parameters", () => {
     normalizeArticleUrl("https://asean.bernama.com/news.php?id=2503641"),
     normalizeArticleUrl("https://asean.bernama.com/news.php?id=2505352"),
   );
+});
+
+test("publisher article identity joins known mobile and desktop aliases without collapsing syndicated copies", () => {
+  assert.equal(
+    publisherArticleIdentity("https://freshnewsasia.com/localnews/412489-2025-12-18-11-52-51"),
+    "freshnewsasia:412489",
+  );
+  assert.equal(
+    publisherArticleIdentity("https://m.freshnewsasia.com/localnews/412489-2025-12-18-11-52-51"),
+    "freshnewsasia:412489",
+  );
+  assert.equal(
+    publisherArticleIdentity("https://www.thaipbs.or.th/news/content/359446"),
+    "thaipbs:359446",
+  );
+  assert.equal(publisherArticleIdentity("https://wire.example.net/copy/412489"), "");
+});
+
+test("provenance IDs are stable lowercase keys", () => {
+  assert.equal(isValidProvenanceId("wire:reuters:2026-11-13.border"), true);
+  assert.equal(isValidProvenanceId("statement:thai-mfa:2026-11-13"), true);
+  assert.equal(isValidProvenanceId("Wire:Reuters"), false);
+  assert.equal(isValidProvenanceId("ab"), false);
+  assert.equal(isValidProvenanceId(123), false);
 });

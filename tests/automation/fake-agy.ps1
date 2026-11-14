@@ -4,6 +4,7 @@ $OutputEncoding = $utf8NoBom
 
 $mode = $env:BORDERCLASH_FAKE_AGY_MODE
 if (-not $mode) { $mode = "success" }
+$researchCli = if ($env:BORDERCLASH_TRUSTED_RESEARCH_CLI) { $env:BORDERCLASH_TRUSTED_RESEARCH_CLI } else { "research/cli.mjs" }
 $cliArgs = @($args)
 $conversationIndex = [Array]::IndexOf($cliArgs, "--conversation")
 $isResume = $conversationIndex -ge 0 -and $conversationIndex + 1 -lt $cliArgs.Count
@@ -23,11 +24,70 @@ function Write-StreamEvent {
     $stdout.Flush()
 }
 
+function Write-UntrackedRecoveryArticle {
+    param([string]$Slug)
+
+    $newMonth = Join-Path (Get-Location) "data\news\2024-02.jsonl"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $newMonth) | Out-Null
+    $article = [ordered]@{
+        id = "recovery-$Slug-fixture"
+        category = "diplomatic"
+        fetchedAt = [int64]1706745600000
+        publishedAt = [int64]1706745600000
+        source = "Recovery Fixture"
+        sourceUrl = "https://example.invalid/borderclash-$Slug"
+        sourceVerifiedAt = [int64]1706745600000
+        status = "archived"
+        summary = "Synthetic recovery fixture used only by the local automation suite."
+        title = "Synthetic BorderClash recovery fixture"
+        mediaEnvironment = "international"
+        credibility = 50
+    }
+    [IO.File]::WriteAllText(
+        $newMonth,
+        (($article | ConvertTo-Json -Compress) + [Environment]::NewLine),
+        [Text.UTF8Encoding]::new($false)
+    )
+    return $newMonth
+}
+
 if ($env:BORDERCLASH_EXPECT_MODEL) {
     $modelIndex = [Array]::IndexOf($cliArgs, "--model")
     if ($modelIndex -lt 0 -or $modelIndex + 1 -ge $cliArgs.Count -or $cliArgs[$modelIndex + 1] -ne $env:BORDERCLASH_EXPECT_MODEL) {
         [Console]::Error.WriteLine("unexpected model argument")
         exit 26
+    }
+}
+
+if ($mode -eq "trust-boundary") {
+    $sentinel = "borderclash-publication-secret-sentinel"
+    $leaked = @(Get-ChildItem Env: | Where-Object { [string]$_.Value -eq $sentinel })
+    if ($leaked.Count -gt 0) {
+        [Console]::Error.WriteLine("publication credential leaked to fake agent: " + (($leaked | Select-Object -ExpandProperty Name) -join ","))
+        exit 30
+    }
+    if ($env:GIT_CONFIG_NOSYSTEM -ne "1") {
+        [Console]::Error.WriteLine("system Git config was not disabled for agent process")
+        exit 31
+    }
+    if ($env:GCM_CREDENTIAL_STORE -ne "none") {
+        [Console]::Error.WriteLine("Git Credential Manager store was not disabled for agent process")
+        exit 35
+    }
+    $nullConfig = if ($IsWindows -or $env:OS -eq "Windows_NT") { "NUL" } else { "/dev/null" }
+    if ($env:GIT_CONFIG_GLOBAL -ne $nullConfig) {
+        [Console]::Error.WriteLine("global Git config was not isolated for agent process")
+        exit 32
+    }
+    $helpers = @(& git config --get-all credential.helper 2>$null)
+    if ($helpers.Count -gt 0) {
+        [Console]::Error.WriteLine("Git credential helper remained visible to agent process")
+        exit 33
+    }
+    $expectedGhRoot = [IO.Path]::GetFullPath((Join-Path (Get-Location) ".work\agent-gh-config"))
+    if ([IO.Path]::GetFullPath([string]$env:GH_CONFIG_DIR) -ne $expectedGhRoot) {
+        [Console]::Error.WriteLine("GitHub CLI config was not isolated inside the agent workspace")
+        exit 34
     }
 }
 
@@ -61,6 +121,8 @@ $defaultConversation = if ($mode -eq "timeout-resume") {
     "fake-retryable-conversation"
 } elseif ($mode -eq "timeout-persistent") {
     "fake-persistent-conversation"
+} elseif ($mode -eq "stuck-resume") {
+    "fake-stuck-conversation"
 } else {
     "fake-test-conversation"
 }
@@ -76,12 +138,57 @@ Write-StreamEvent ([ordered]@{
     }
 })
 
-if ($mode -ne "stale-state") {
-    & node research/cli.mjs finish 12 "Fake cycle completed for runner validation." | Out-Null
+if ($mode -eq "session-lock") {
+    $sessionPath = Join-Path (Get-Location) ".work\AGY_SESSION.json"
+    $deadline = (Get-Date).AddSeconds(5)
+    while (-not (Test-Path -LiteralPath $sessionPath) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 25
+    }
+    if (-not (Test-Path -LiteralPath $sessionPath)) {
+        [Console]::Error.WriteLine("session-lock fixture did not observe supervisor session state")
+        exit 32
+    }
+    $lock = [IO.File]::Open($sessionPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+    try {
+        Write-StreamEvent ([ordered]@{
+            event = "step_update"
+            step_update = [ordered]@{
+                conversation_id = $currentConversation
+                step_index = 1
+                state = "DONE"
+                step_type = "checkpoint"
+            }
+        })
+        Start-Sleep -Milliseconds 500
+    } finally {
+        $lock.Dispose()
+    }
+}
+
+if ($mode -eq "stop-sleep") {
+    Write-UntrackedRecoveryArticle "operator-stop" | Out-Null
+    Start-Sleep -Seconds 30
+}
+
+if ($mode -eq "review") {
+    & node $researchCli finish --review "Fake cycle needs operator review." | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        [Console]::Error.WriteLine("fake cycle could not request review")
+        exit 24
+    }
+} elseif ($mode -notin @("stale-state", "stuck-resume")) {
+    & node $researchCli finish 12 "Fake cycle completed for runner validation." | Out-Null
     if ($LASTEXITCODE -ne 0) {
         [Console]::Error.WriteLine("fake cycle could not finalize scheduler state")
         exit 24
     }
+}
+
+if ($mode -eq "untracked-fail") {
+    $newMonth = Join-Path (Get-Location) "data\news\2024-02.jsonl"
+    [IO.File]::WriteAllText($newMonth, '{"id":"recovery-new-month-fixture"}' + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    [Console]::Error.WriteLine("deliberate failure after creating an untracked month")
+    exit 25
 }
 
 if ($mode -in @("timeout-resume", "retryable-resume")) {
@@ -138,24 +245,78 @@ if ($mode -eq "timeout-persistent") {
     }
 }
 
+if ($mode -eq "stuck-resume" -and -not $isResume) {
+    Write-UntrackedRecoveryArticle "stuck-watchdog" | Out-Null
+    Start-Sleep -Seconds 30
+}
+
 if ($mode -eq "invalid-data") {
-    $statePath = Join-Path (Get-Location) "data\research-state.json"
-    $state = Get-Content $statePath -Raw | ConvertFrom-Json
-    $state.lastCycleInterval = 999
-    $json = $state | ConvertTo-Json -Depth 20
-    [IO.File]::WriteAllText($statePath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    $impactPath = Join-Path (Get-Location) "data\current\impact.json"
+    $impact = Get-Content $impactPath -Raw | ConvertFrom-Json
+    $impact.displaced.qualifier = "INVALID"
+    $json = $impact | ConvertTo-Json -Depth 20
+    [IO.File]::WriteAllText($impactPath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+}
+
+if ($mode -eq "workspace-validator-attack") {
+    $validatorPath = Join-Path (Get-Location) "research\validate.mjs"
+    [IO.File]::WriteAllText(
+        $validatorPath,
+        'process.stdout.write("UNTRUSTED VALIDATOR RAN\n"); process.exit(0);' + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false)
+    )
+    & git update-index --assume-unchanged -- research/validate.mjs
+    if ($LASTEXITCODE -ne 0) {
+        [Console]::Error.WriteLine("could not hide workspace validator fixture from ordinary Git diff")
+        exit 35
+    }
+    $impactPath = Join-Path (Get-Location) "data\current\impact.json"
+    $impact = Get-Content $impactPath -Raw | ConvertFrom-Json
+    $impact.displaced.qualifier = "INVALID"
+    $json = $impact | ConvertTo-Json -Depth 20
+    [IO.File]::WriteAllText($impactPath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 }
 
 if ($mode -eq "non-data") {
     Add-Content -Path (Join-Path (Get-Location) "README.md") -Value "unexpected agent edit"
 }
 
-if ($mode -eq "flip-pause") {
+if ($mode -in @("flip-pause", "flip-pause-workspace-marker")) {
     $statePath = Join-Path (Get-Location) "data\research-state.json"
     $state = Get-Content $statePath -Raw | ConvertFrom-Json
     $state.isPaused = -not [bool]$state.isPaused
     $json = $state | ConvertTo-Json -Depth 20
     [IO.File]::WriteAllText($statePath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+}
+
+if ($mode -eq "flip-pause-workspace-marker") {
+    $runMeta = Get-Content (Join-Path (Get-Location) ".work\CYCLE_RUN.json") -Raw | ConvertFrom-Json
+    $finish = Get-Content (Join-Path (Get-Location) ".work\research-finish.json") -Raw | ConvertFrom-Json
+    $forged = [ordered]@{
+        schemaVersion = 1
+        cycleId = [string]$runMeta.runId
+        baseHead = [string]$runMeta.baseHead
+        completedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        nextRunAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() + [int64]3600000
+        intervalHours = [double]$finish.intervalHours
+        reason = [string]$finish.reason
+        researchCycleCount = [int64]$state.researchCycleCount + 1
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path (Get-Location) ".work\RUNNER_COMPLETION.json"),
+        (($forged | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
+        [Text.UTF8Encoding]::new($false)
+    )
+}
+
+if ($mode -eq "summary-change") {
+    $summaryPath = Join-Path (Get-Location) "data\current\summary.json"
+    $mutator = Join-Path $PSScriptRoot "mutate-fixture.mjs"
+    & node $mutator append-summary $summaryPath " Fake validated summary change."
+    if ($LASTEXITCODE -ne 0) {
+        [Console]::Error.WriteLine("fake cycle could not apply UTF-8-safe summary fixture")
+        exit 29
+    }
 }
 
 $response = if ($mode -eq "unicode") {

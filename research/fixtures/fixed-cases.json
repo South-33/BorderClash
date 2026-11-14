@@ -1,0 +1,68 @@
+[
+  {
+    "id": "retrospective-anniversary",
+    "title": "Anniversary article refers to the fatal clash one year earlier",
+    "evidence": [
+      "A source published on 2026-05-28 reviews the first fatal border clash of the renewed dispute.",
+      "It says the clash happened one year earlier, on 2025-05-28, near Chong Bok / the Emerald Triangle.",
+      "The source does not give a reliable exact clock time for the clash."
+    ],
+    "expected": {
+      "decision": "complete",
+      "eventDate": "2025-05-28",
+      "eventTime": null,
+      "maxCredibility": 100,
+      "independentEvidenceChains": 1
+    }
+  },
+  {
+    "id": "disputed-single-chain",
+    "title": "Material allegation repeated through one underlying statement",
+    "evidence": [
+      "The Cambodian Ministry of National Defence says Thai troops crossed into Cambodian territory on 2026-02-14.",
+      "A domestic article reports the ministry statement. A second publisher republishes the same statement without independent observation.",
+      "No neutral observation, geolocation, imagery analysis, or independent witness evidence is available in the fixture."
+    ],
+    "expected": {
+      "decision": "complete",
+      "eventDate": "2026-02-14",
+      "claimant": "Cambodian Ministry of National Defence",
+      "maxCredibility": 60,
+      "independentEvidenceChains": 1,
+      "mustRemainAttributed": true
+    }
+  },
+  {
+    "id": "humanitarian-claimant-scope",
+    "title": "Government displacement figure needs claimant, date, and population scope",
+    "evidence": [
+      "A Cambodian newspaper reports that the Cambodia Ministry of Interior said more than 20,000 Cambodian civilians had been displaced from 5 border provinces as of 2025-12-18.",
+      "The newspaper is the reporting outlet; the Ministry of Interior is the claimant for the figure.",
+      "The fixture does not establish a combined Thailand-and-Cambodia displacement total."
+    ],
+    "expected": {
+      "decision": "complete",
+      "eventDate": "2025-12-18",
+      "claimant": "Cambodia Ministry of Interior",
+      "value": 20000,
+      "qualifier": "MORE_THAN",
+      "scopeContains": [
+        "Cambodian civilians",
+        "5 border provinces"
+      ],
+      "combinedFigureKnown": false
+    }
+  },
+  {
+    "id": "required-source-unavailable",
+    "title": "Required source failure makes safe completion impossible",
+    "evidence": [
+      "The only citation for a proposed casualty change is unavailable in the fixture.",
+      "No preserved capture, alternate primary document, or independent report establishes the number, population scope, or date.",
+      "The existing canonical value cannot be responsibly replaced from the evidence supplied here."
+    ],
+    "expected": {
+      "decision": "review"
+    }
+  }
+]

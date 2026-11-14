@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import test from "node:test";
-import { militaryAssessmentFor, riskLevelFromTiers } from "../research/lib/military-assessment.mjs";
+import { currentImpactPublic } from "../research/lib/current-shape.mjs";
+import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
 
 test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
@@ -39,10 +40,11 @@ test("news feeds return to the newest article when their data or filter changes"
 
 test("public dashboard freshness and feed depth follow the static-data contract", () => {
   const generator = fs.readFileSync("scripts/generate-public.mjs", "utf8");
+  const currentShape = fs.readFileSync("research/lib/current-shape.mjs", "utf8");
   const news = fs.readFileSync("research/lib/news.mjs", "utf8");
   assert.match(news, /export const PUBLIC_NEWS_LIMIT = 60;/u);
-  assert.match(generator, /updatedAt: lastResearchAt \|\| value\.updatedAt/u);
-  assert.match(generator, /impactPublic\(impact, thailandPerspective, cambodiaPerspective, researchState\.lastResearchAt\)/u);
+  assert.match(currentShape, /updatedAt: lastResearchAt \|\| value\.updatedAt/u);
+  assert.match(generator, /currentImpactPublic\(impact, thailandPerspective, cambodiaPerspective, researchState\.lastResearchAt\)/u);
   assert.equal(generator.includes("civilianInjuredCount"), false);
   assert.equal(generator.includes("militaryInjuredCount"), false);
 });
@@ -53,30 +55,53 @@ test("source cards render a real external-link arrow instead of an entity name",
   assert.equal((source.match(/↗/gu) || []).length >= 2, true);
 });
 
-test("government impact figures preserve claimant and reporting outlet separately", () => {
-  const impact = JSON.parse(fs.readFileSync("data/current/impact.json", "utf8"));
-  assert.equal(impact.displaced.claimantName, "Cambodia Ministry of Interior");
-  assert.equal(impact.displaced.sourceName, "Kampuchea Thmey Daily");
-  assert.notEqual(impact.displaced.claimantName, impact.displaced.sourceName);
-  assert.ok(impact.displaced.claimantNameTh, "Thai claimant attribution missing");
-  assert.ok(impact.displaced.claimantNameKh, "Khmer claimant attribution missing");
+test("impact evidence metadata stays internal while the public metric contract stays stable", () => {
+  const impact = {
+    updatedAt: 1,
+    displaced: {
+      value: 12345,
+      qualifier: "MORE_THAN",
+      claimantName: "Fixture ministry",
+      sourceName: "Fixture outlet",
+      scope: "Fixture population",
+      evidenceIds: ["fixture-evidence"],
+    },
+    deaths: {
+      value: 7,
+      qualifier: "AT_LEAST",
+      sourceName: "Fixture report",
+      scope: "Fixture deaths",
+      evidenceIds: ["fixture-evidence"],
+    },
+  };
+  const output = currentImpactPublic(
+    impact,
+    { militaryAssessment: { tier: "FORTIFIED" } },
+    { militaryAssessment: { tier: "FORTIFIED" } },
+    99,
+  );
+  assert.deepEqual(output, {
+    riskLevel: "LOW",
+    displacedCount: ">12,345",
+    deathCount: "≥7",
+    updatedAt: 99,
+  });
+  assert.equal(JSON.stringify(output).includes("claimantName"), false);
+  assert.equal(JSON.stringify(output).includes("evidenceIds"), false);
 });
 
 test("military gauge values are derived from fixed evidence tiers", () => {
-  const tiers = [];
-  for (const country of ["thailand", "cambodia"]) {
-    const current = JSON.parse(fs.readFileSync(`data/current/${country}.json`, "utf8"));
-    const assessment = current.militaryAssessment;
-    const derived = militaryAssessmentFor(assessment.tier);
-    assert.ok(derived, `${country} has an invalid military tier`);
-    assert.equal(Object.hasOwn(assessment, "score"), false, `${country} stores a free-form score`);
-    assert.equal(Object.hasOwn(assessment, "posture"), false, `${country} stores a free-form posture`);
-    assert.ok(assessment.evidenceIds.length > 0, `${country} military tier has no evidence`);
-    tiers.push(assessment.tier);
-  }
   assert.equal(militaryAssessmentFor("FORTIFIED").score, 40);
   assert.equal(militaryAssessmentFor("FORTIFIED").posture, "DEFENSIVE");
-  assert.equal(riskLevelFromTiers(...tiers), "LOW");
+  assert.equal(
+    currentImpactPublic(
+      { displaced: { value: 1 }, deaths: { value: 1 } },
+      { militaryAssessment: { tier: "FORTIFIED" } },
+      { militaryAssessment: { tier: "INCIDENT" } },
+      1,
+    ).riskLevel,
+    "ELEVATED",
+  );
 });
 
 test("static UI language blocks do not mix Thai and Khmer scripts", () => {

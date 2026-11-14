@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 
 async function ensureParent(path) {
@@ -11,7 +11,9 @@ export async function readJson(path) {
 
 export async function writeJson(path, value) {
   await ensureParent(path);
-  await writeFile(path, JSON.stringify(value, null, 2) + "\n", "utf8");
+  const temp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temp, JSON.stringify(value, null, 2) + "\n", "utf8");
+  await rename(temp, path);
 }
 
 export async function readJsonl(path) {
@@ -20,6 +22,14 @@ export async function readJsonl(path) {
     .split(/\r?\n/u)
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+}
+
+export async function writeJsonl(path, values) {
+  await ensureParent(path);
+  const temp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  const body = values.map((value) => JSON.stringify(value)).join("\n");
+  await writeFile(temp, body + (body ? "\n" : ""), "utf8");
+  await rename(temp, path);
 }
 
 export async function listFiles(root, extension = "") {

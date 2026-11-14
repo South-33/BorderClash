@@ -197,11 +197,11 @@ test("brief extends to the previous cycle but caps automatic context at thirty d
   }
 });
 
-test("finish owns cycle timestamps and preserves pause state", async () => {
+test("finish records completion intent without mutating trusted scheduler state", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
     await mkdir(join(root, "data"), { recursive: true });
-    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({
+    const originalState = {
       schemaVersion: 1,
       isPaused: true,
       systemStatus: "online",
@@ -211,27 +211,27 @@ test("finish owns cycle timestamps and preserves pause state", async () => {
       schedulingReason: "old",
       researchCycleCount: 7,
       scheduler: "external",
-    }, null, 2) + "\n");
+    };
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify(originalState, null, 2) + "\n");
+    await mkdir(join(root, ".work"), { recursive: true });
+    await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-test-1" }) + "\n");
 
-    const before = Date.now();
     const result = spawnSync(process.execPath, [
       script,
       "finish",
       "18",
       "Stable conditions with no fast-moving material change.",
     ], { cwd: root, encoding: "utf8" });
-    const after = Date.now();
 
     assert.equal(result.status, 0, result.stderr);
     const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
-    assert.equal(state.isPaused, true);
-    assert.equal(state.systemStatus, "online");
-    assert.equal(state.scheduler, "external");
-    assert.equal(state.researchCycleCount, 8);
-    assert.equal(state.lastCycleInterval, 18);
-    assert.match(state.schedulingReason, /Stable conditions/u);
-    assert.ok(state.lastResearchAt >= before && state.lastResearchAt <= after);
-    assert.equal(state.nextRunAt - state.lastResearchAt, 18 * 3_600_000);
+    assert.deepEqual(state, originalState);
+    const marker = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
+    assert.equal(marker.cycleId, "cycle-test-1");
+    assert.equal(marker.decision, "complete");
+    assert.equal(marker.intervalHours, 18);
+    assert.match(marker.reason, /Stable conditions/u);
+    assert.ok(Number.isFinite(marker.requestedAt));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -251,14 +251,18 @@ test("finish needs no arguments when cadence should stay the same", async () => 
       researchCycleCount: 7,
       scheduler: "external",
     }, null, 2) + "\n");
+    await mkdir(join(root, ".work"), { recursive: true });
+    await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-test-2" }) + "\n");
 
     const result = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
     const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
+    assert.equal(state.researchCycleCount, 7);
     assert.equal(state.lastCycleInterval, 24);
     assert.equal(state.schedulingReason, "Quiet conditions; daily review remains appropriate.");
-    assert.equal(state.nextRunAt - state.lastResearchAt, 24 * 3_600_000);
-    assert.equal(state.researchCycleCount, 8);
+    const marker = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
+    assert.equal(marker.intervalHours, 24);
+    assert.equal(marker.reason, "Quiet conditions; daily review remains appropriate.");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -283,7 +287,7 @@ test("finish is idempotent within one runner cycle", async () => {
     await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-test-1" }) + "\n");
     const first = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
     assert.equal(first.status, 0, first.stderr);
-    const afterFirst = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
+    const afterFirst = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
 
     const second = spawnSync(process.execPath, [script, "finish", "12", "This second call must not advance the cycle."], {
       cwd: root,
@@ -291,26 +295,30 @@ test("finish is idempotent within one runner cycle", async () => {
     });
     assert.equal(second.status, 0, second.stderr);
     assert.equal(JSON.parse(second.stdout).alreadyFinished, true);
-    const afterSecond = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
+    const afterSecond = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
     assert.deepEqual(afterSecond, afterFirst);
-    assert.equal(afterSecond.researchCycleCount, 8);
+    const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
+    assert.equal(state.researchCycleCount, 7);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("finish allows long quiet intervals and rejects scheduling beyond one week", async () => {
+test("finish requires a reason for cadence changes and rejects scheduling beyond one week", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
     await mkdir(join(root, "data"), { recursive: true });
-    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({ researchCycleCount: 3 }) + "\n");
-    const accepted = spawnSync(process.execPath, [
-      script,
-      "finish",
-      "80",
-      "Conditions are quiet and no near-term trigger is visible.",
-    ], { cwd: root, encoding: "utf8" });
-    assert.equal(accepted.status, 0, accepted.stderr);
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({
+      researchCycleCount: 3,
+      lastCycleInterval: 24,
+      schedulingReason: "fixture",
+    }) + "\n");
+    await mkdir(join(root, ".work"), { recursive: true });
+    await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-test-3" }) + "\n");
+
+    const missingReason = spawnSync(process.execPath, [script, "finish", "80"], { cwd: root, encoding: "utf8" });
+    assert.notEqual(missingReason.status, 0);
+    assert.match(missingReason.stderr, /reason is required/u);
 
     const result = spawnSync(process.execPath, [
       script,
@@ -321,6 +329,123 @@ test("finish allows long quiet intervals and rejects scheduling beyond one week"
 
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /between 1 and 168/u);
+
+    const accepted = spawnSync(process.execPath, [
+      script,
+      "finish",
+      "80",
+      "Conditions are quiet and no near-term trigger is visible.",
+    ], { cwd: root, encoding: "utf8" });
+    assert.equal(accepted.status, 0, accepted.stderr);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("finish can request durable operator review without changing scheduler state", async () => {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
+  try {
+    await mkdir(join(root, "data"), { recursive: true });
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({
+      lastCycleInterval: 24,
+      schedulingReason: "fixture",
+      researchCycleCount: 3,
+    }) + "\n");
+    await mkdir(join(root, ".work"), { recursive: true });
+    await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-review-1" }) + "\n");
+
+    const result = spawnSync(process.execPath, [
+      script,
+      "finish",
+      "--review",
+      "The cited source is unavailable and the event date cannot be verified.",
+    ], { cwd: root, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    const marker = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
+    assert.equal(marker.decision, "review");
+    assert.match(marker.reason, /event date cannot be verified/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a resumed reviewed cycle can replace review intent with completion intent", async () => {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
+  try {
+    await mkdir(join(root, "data"), { recursive: true });
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({
+      lastCycleInterval: 24,
+      schedulingReason: "fixture cadence",
+      researchCycleCount: 3,
+    }) + "\n");
+    await mkdir(join(root, ".work"), { recursive: true });
+    await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-review-resume-1" }) + "\n");
+
+    const review = spawnSync(process.execPath, [
+      script,
+      "finish",
+      "--review",
+      "Needs operator review first.",
+    ], { cwd: root, encoding: "utf8" });
+    assert.equal(review.status, 0, review.stderr);
+
+    const complete = spawnSync(process.execPath, [
+      script,
+      "finish",
+      "12",
+      "Operator resolved the blocker; closer follow-up is appropriate.",
+    ], { cwd: root, encoding: "utf8" });
+    assert.equal(complete.status, 0, complete.stderr);
+    const marker = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
+    assert.equal(marker.decision, "complete");
+    assert.equal(marker.intervalHours, 12);
+    assert.match(marker.reason, /Operator resolved/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("capture-changed exits 3 when a manual publisher alias needs identity review", async () => {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-capture-changed-"));
+  try {
+    const newsPath = join(root, "data", "news", "2026-11.jsonl");
+    const existing = {
+      id: "existing-freshnews-001",
+      source: "Fresh News",
+      sourceUrl: "https://freshnewsasia.com/localnews/412489-2025-12-18-11-52-51",
+      title: "Existing article",
+      fetchedAt: Date.UTC(2026, 10, 13),
+    };
+    await writeJsonlFile(newsPath, [existing]);
+    for (const args of [
+      ["init", "--quiet"],
+      ["config", "user.name", "Fixture"],
+      ["config", "user.email", "fixture@example.invalid"],
+      ["add", "data/news/2026-11.jsonl"],
+      ["commit", "--quiet", "-m", "fixture base"],
+    ]) {
+      const git = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+      assert.equal(git.status, 0, git.stderr);
+    }
+    const alias = {
+      ...existing,
+      id: "manual-alias-001",
+      sourceUrl: "https://m.freshnewsasia.com/localnews/412489-2025-12-18-11-52-51",
+      title: "Manual mobile alias",
+    };
+    await writeJsonlFile(newsPath, [existing, alias]);
+
+    const result = spawnSync(process.execPath, [script, "capture-changed", "HEAD"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 3, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.ok, false);
+    assert.equal(output.identityConflicts, 1);
+    assert.equal(output.results[0].articleId, alias.id);
+    assert.equal(output.results[0].status, "identity-conflict");
+    assert.deepEqual(output.results[0].existingIds, [existing.id]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -7,14 +7,20 @@
     "claimantNameTh": "กระทรวงมหาดไทยกัมพูชา",
     "claimantNameKh": "ក្រសួងមហាផ្ទៃកម្ពុជា",
     "sourceName": "Kampuchea Thmey Daily",
-    "sourceUrl": "https://en.kampucheathmey.com/national/1151284/",
-    "sourceDate": "2026-11-10"
+    "sourceDate": "2026-11-10",
+    "scope": "Cambodian residents still displaced and unable to return home as of 2026-11-10, as reported by Cambodia Ministry of Interior",
+    "evidenceIds": [
+      "3799c455fb54e43d6d2e17ef066d8fc9"
+    ]
   },
   "deaths": {
     "value": 150,
     "qualifier": "AT_LEAST",
     "sourceName": "International Crisis Group",
-    "sourceUrl": "https://www.crisisgroup.org/sites/default/files/2026-10/359-cambodia-thailand-thaw.pdf",
-    "sourceDate": "2026-10-09"
+    "sourceDate": "2026-10-09",
+    "scope": "People killed in the 2025 border fighting between Cambodia and Thailand, as assessed by International Crisis Group",
+    "evidenceIds": [
+      "1680d2fad2725b798f4f04bd51cf29db"
+    ]
   }
 }

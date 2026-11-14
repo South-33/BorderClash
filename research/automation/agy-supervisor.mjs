@@ -1,7 +1,8 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { extname } from "node:path";
+import { buildAgentEnvironment } from "./agent-environment.mjs";
 
 function parseArgs(argv) {
   const out = {};
@@ -24,7 +25,17 @@ function requireArg(args, name) {
 function writeJson(path, value) {
   const tempPath = `${path}.${process.pid}.tmp`;
   writeFileSync(tempPath, JSON.stringify(value, null, 2) + "\n", "utf8");
-  renameSync(tempPath, path);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      renameSync(tempPath, path);
+      return;
+    } catch (error) {
+      const retryable = process.platform === "win32"
+        && ["EPERM", "EACCES", "EBUSY"].includes(String(error?.code || ""));
+      if (!retryable || attempt >= 20) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(100, 10 * (attempt + 1)));
+    }
+  }
 }
 
 function parseAgyError(text) {
@@ -51,11 +62,33 @@ function commandFor(executable, args) {
   return { file: executable, args };
 }
 
+function stopProcessTree(child) {
+  if (!child?.pid) return;
+  if (process.platform === "win32") {
+    spawnSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    return;
+  }
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    // The process may already have exited.
+  }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function runAttempt({
   agy,
   cwd,
   model,
+  settingsPath,
   prompt,
+  jsonSchemaPath,
   conversationId,
   timeoutMinutes,
   agyLogBase,
@@ -63,18 +96,22 @@ async function runAttempt({
   stderrPath,
   sessionPath,
   attempt,
+  stuckMinutes,
 }) {
   const agyArgs = [];
   if (conversationId) agyArgs.push("--conversation", conversationId);
+  if (settingsPath) agyArgs.push("--settings", settingsPath);
   agyArgs.push(
     "-p",
     prompt,
     "--dangerously-skip-permissions",
+    "--sandbox",
     "--output-format",
     "stream-json",
     "--model",
     model,
   );
+  if (jsonSchemaPath) agyArgs.push("--json-schema", jsonSchemaPath);
   if (timeoutMinutes > 0) agyArgs.push("--print-timeout", `${timeoutMinutes}m`);
   agyArgs.push("--log-file", `${agyLogBase}.attempt-${attempt}.log`);
 
@@ -84,12 +121,15 @@ async function runAttempt({
     cwd,
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
+    env: buildAgentEnvironment(cwd),
   });
 
   let currentConversationId = conversationId || "";
   let result = null;
   let stderr = "";
   let lastStep = null;
+  let lastActivityAt = Date.now();
+  let stuckTriggered = false;
 
   const saveSession = (extra = {}) => {
     writeJson(sessionPath, {
@@ -109,6 +149,7 @@ async function runAttempt({
 
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => {
+    lastActivityAt = Date.now();
     stderr += chunk;
     appendFileSync(stderrPath, chunk, "utf8");
   });
@@ -116,6 +157,7 @@ async function runAttempt({
   child.stdout.setEncoding("utf8");
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   lines.on("line", (line) => {
+    lastActivityAt = Date.now();
     appendFileSync(eventsPath, line + "\n", "utf8");
     let event;
     try {
@@ -149,15 +191,31 @@ async function runAttempt({
     }
   });
 
+  const stuckMs = Number.isFinite(stuckMinutes) && stuckMinutes > 0
+    ? stuckMinutes * 60_000
+    : 0;
+  const watchdog = stuckMs > 0
+    ? setInterval(() => {
+      if (!stuckTriggered && Date.now() - lastActivityAt >= stuckMs) {
+        stuckTriggered = true;
+        appendFileSync(stderrPath, `AGY supervisor stopped an inactive process after ${stuckMinutes} minutes.\n`, "utf8");
+        stopProcessTree(child);
+      }
+    }, Math.min(30_000, Math.max(1_000, Math.floor(stuckMs / 4))))
+    : null;
+
   const exit = await new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("close", (code, signal) => resolve({ code: code ?? 1, signal: signal || "" }));
   });
+  if (watchdog) clearInterval(watchdog);
 
   const agyError = parseAgyError(stderr);
   const finishedReason = String(result?.finished_reason || "");
-  const recoverable = finishedReason === "print_timeout" || agyError?.retryable === true;
-  const recoveryReason = finishedReason === "print_timeout"
+  const recoverable = stuckTriggered || finishedReason === "print_timeout" || agyError?.retryable === true;
+  const recoveryReason = stuckTriggered
+    ? "stuck_timeout"
+    : finishedReason === "print_timeout"
     ? "print_timeout"
     : agyError?.retryable === true
       ? `retryable:${agyError.status || agyError.canonical_status || "provider"}`
@@ -190,6 +248,7 @@ async function main() {
   const agy = requireArg(args, "agy");
   const cwd = requireArg(args, "cwd");
   const model = requireArg(args, "model");
+  const settingsPath = String(args["settings-file"] || "");
   const prompt = readFileSync(requireArg(args, "prompt-file"), "utf8").trim();
   const continuationPrompt = readFileSync(requireArg(args, "continuation-prompt-file"), "utf8").trim();
   const resultPath = requireArg(args, "result-file");
@@ -198,7 +257,10 @@ async function main() {
   const sessionPath = requireArg(args, "session-file");
   const agyLogBase = requireArg(args, "agy-log-base");
   const timeoutMinutes = Number(args["timeout-minutes"] || 0);
+  const stuckMinutes = Number(args["stuck-minutes"] || 90);
+  const retryDelayMs = Math.max(0, Number(args["retry-delay-ms"] || 30_000));
   const initialConversationId = String(args.conversation || "");
+  const jsonSchemaPath = String(args["json-schema-file"] || "");
   const maxImmediateRecoveries = 1;
 
   writeFileSync(eventsPath, "", "utf8");
@@ -214,7 +276,9 @@ async function main() {
       agy,
       cwd,
       model,
+      settingsPath,
       prompt: activePrompt,
+      jsonSchemaPath,
       conversationId,
       timeoutMinutes: activeTimeoutMinutes,
       agyLogBase,
@@ -222,6 +286,7 @@ async function main() {
       stderrPath,
       sessionPath,
       attempt,
+      stuckMinutes,
     });
     attempts.push(outcome);
     conversationId = outcome.conversationId || conversationId;
@@ -242,6 +307,7 @@ async function main() {
 
     if (outcome.recoverable && conversationId && attempt <= maxImmediateRecoveries) {
       console.log(`RETRY: ${outcome.recoveryReason} conversation=${conversationId}`);
+      if (retryDelayMs > 0) await delay(retryDelayMs);
       activePrompt = continuationPrompt;
       if (outcome.recoveryReason === "print_timeout") activeTimeoutMinutes = 0;
       continue;

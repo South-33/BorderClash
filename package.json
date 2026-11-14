@@ -8,6 +8,7 @@
     "start": "node scripts/serve-static.mjs",
     "lint": "eslint",
     "research": "node research/cli.mjs",
+    "research:verify-correction": "node research/automation/verify-correction.mjs",
     "evidence:migration:snapshot": "node scripts/evidence-migration-harness.mjs snapshot",
     "evidence:migration:verify": "node scripts/evidence-migration-harness.mjs verify",
     "validate": "node research/validate.mjs",

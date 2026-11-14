@@ -53,6 +53,24 @@ To inspect the compact context a research cycle receives:
 pnpm research context
 ```
 
-Production research is limited to `gemini-3.8-flash-low`, `gemini-3.8-flash-medium`, and `gemini-3.8-flash-high`. The runner defaults to `gemini-3.8-flash-medium`; `-Model` or `BORDERCLASH_RESEARCH_MODEL` may select one of the other allowed Flash variants.
+Real research cycles run only on South and use `gemini-3.8-flash-medium`. Development and fake-agent tests can run elsewhere. While South is unavailable, `research/automation/run-audit-review.ps1` can run prompt-only Flash Medium audit reviews on prepared evidence packets. The model workspace is empty and sandboxed; session permissions deny terminal, file, URL/download, and MCP access before execution, and any tool event also invalidates the review. The result is review evidence only rather than publication or South acceptance.
+
+New evidence can enter through a small batch ingest file, or an existing source can be captured again:
+
+```powershell
+pnpm research ingest .work/candidates.jsonl
+pnpm research capture <article-id> --force
+```
+
+Ingest reuses existing article IDs when normalized URLs, safe redirects, publisher canonical URLs, or known publisher article IDs identify the same underlying article. Ambiguous matches stop for review instead of creating a duplicate. Source capture is private and stays outside Git. By default it uses `~/.borderclash/evidence` with a second South-local copy under `~/.borderclash/evidence-backup`; the roots can be overridden with `BORDERCLASH_EVIDENCE_ARCHIVE` and `BORDERCLASH_EVIDENCE_BACKUP`.
+
+For the pre-rollout supervised South verification, use `research/automation/run-supervised.ps1`. It always runs the real cycle without publication, keeps runner state separate from production state, and places evidence plus its backup in isolated directories outside Git. Before a real model turn it runs a non-mutating privilege preflight and stops if the model context can still reach publication write access or the result is inconclusive. It records `SUPERVISED_CONTEXT.json`, `AGENT_AUTH_PROBE.json`, and `SUPERVISED_REPORT.json` in the isolated session root; `-ProbeArticleId` also exercises capture, backup verification, and restore. A real supervised run shares the production cycle lock, so it cannot overlap a production cycle, and it does not change the scheduler task.
+
+To check or restore one archived source:
+
+```powershell
+pnpm research archive-verify <article-id>
+pnpm research archive-restore <article-id> .work/restored-evidence
+```
 
 Optional development benchmarks live under `benchmarks/`. They are not part of a research cycle or the production validation path.

@@ -17,7 +17,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
     -StartWhenAvailable `
     -WakeToRun `
-    -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+    -ExecutionTimeLimit ([TimeSpan]::Zero)
 $principal = New-ScheduledTaskPrincipal `
     -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) `
     -LogonType Interactive `
@@ -32,4 +32,4 @@ Register-ScheduledTask `
     -Description "Keeps the BorderClash production checkout on main and runs one due AGY research cycle." `
     -Force | Out-Null
 
-Write-Output "installed task='$TaskName' every=${EveryMinutes}m with logon recovery and wake-from-sleep"
+Write-Output "installed task='$TaskName' every=${EveryMinutes}m with logon recovery, wake-from-sleep, and runner-owned stuck recovery"
