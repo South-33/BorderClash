@@ -8,7 +8,7 @@ function collectReferences(value, articleIds, timelineIds, missingIds, directSou
   if (!value || typeof value !== "object") return;
 
   for (const [key, child] of Object.entries(value)) {
-    if (key === "evidenceIds" && Array.isArray(child)) {
+    if ((key === "evidenceIds" || key.endsWith("EvidenceIds")) && Array.isArray(child)) {
       for (const id of child) {
         if (knownArticleIds.has(id)) articleIds.add(id);
         else if (knownTimelineIds.has(id)) timelineIds.add(id);

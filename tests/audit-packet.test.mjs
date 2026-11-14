@@ -39,6 +39,24 @@ test("audit packet expands current timeline references and direct source URLs", 
   assert.deepEqual(packet.evidence.missingDirectSourceUrls, ["https://example.com/missing"]);
 });
 
+test("audit packet resolves current summary and activity evidence fields", () => {
+  const packet = buildAuditPacket({
+    id: "current/summary",
+    current: {
+      summary: {
+        summaryEvidenceIds: ["article-2"],
+        activityEvidenceIds: ["event-1"],
+        keyUpdates: [{ text: "Update", evidenceIds: ["article-1"] }],
+      },
+    },
+    timeline,
+    articles,
+  });
+  assert.deepEqual(packet.evidence.timeline.map(({ id }) => id), ["event-1"]);
+  assert.deepEqual(packet.evidence.articles.map(({ id }) => id).sort(), ["article-1", "article-2"]);
+  assert.deepEqual(packet.evidence.missingEvidenceIds, []);
+});
+
 test("audit packet returns a news record directly and rejects unknown IDs", () => {
   const packet = buildAuditPacket({ id: "article-1", timeline, articles });
   assert.equal(packet.kind, "news");

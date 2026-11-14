@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
 import { militaryAssessmentFor } from "./lib/military-assessment.mjs";
+import { syncNewsLocalization } from "./lib/news-localization.mjs";
 import { evidenceRubricPrompt } from "./lib/evidence-score.mjs";
 import {
   captureChangedArticles,
@@ -318,7 +319,7 @@ function renderContext(output) {
   lines.push("", "## Latest retained evidence anchors");
   for (const [label, key] of [["Thailand domestic", "thailand"], ["Cambodia domestic", "cambodia"], ["International", "international"]]) {
     lines.push(`${label}:`);
-    const rows = output.recentNews[key].slice(0, 3);
+    const rows = output.recentNews[key].slice(0, 1);
     if (!rows.length) {
       lines.push("- none");
       continue;
@@ -331,7 +332,9 @@ function renderContext(output) {
   lines.push("", `## Source mix across the latest ${output.sourceMixRecords || SOURCE_MIX_RECORDS} visible records per environment (context, not a quota)`);
   for (const [label, key] of [["Thailand domestic", "thailand"], ["Cambodia domestic", "cambodia"], ["International", "international"]]) {
     const mix = output.sourceMix?.[key] || [];
-    lines.push(`${label}: ${mix.length ? mix.map(({ source, count }) => `${source} (${count})`).join(", ") : "none"}`);
+    const shown = mix.slice(0, 5);
+    const remainder = mix.length > shown.length ? `, +${mix.length - shown.length} more` : "";
+    lines.push(`${label}: ${shown.length ? shown.map(({ source, count }) => `${source} (${count})`).join(", ") + remainder : "none"}`);
   }
 
   lines.push(
@@ -348,7 +351,13 @@ async function ingest(path) {
   const candidates = await readCandidateFile(resolve(path));
   if (!Array.isArray(candidates) || candidates.length === 0) throw new Error("ingest candidate file is empty");
   const results = await ingestCandidates(candidates, { dataRoot });
-  process.stdout.write(JSON.stringify({ ok: true, count: results.length, results }, null, 2) + "\n");
+  const localization = await syncNewsLocalization(dataRoot);
+  process.stdout.write(JSON.stringify({ ok: true, count: results.length, results, localization }, null, 2) + "\n");
+}
+
+async function syncLocalization() {
+  const result = await syncNewsLocalization(dataRoot);
+  process.stdout.write(JSON.stringify({ ok: true, ...result }, null, 2) + "\n");
 }
 
 async function capture(id, force = false) {
@@ -598,6 +607,8 @@ if (command === "brief") {
   check();
 } else if (command === "ingest") {
   await ingest(process.argv[3]);
+} else if (command === "sync-news-localization") {
+  await syncLocalization();
 } else if (command === "capture") {
   await capture(process.argv[3], process.argv.includes("--force"));
 } else if (command === "capture-changed") {
@@ -634,6 +645,7 @@ if (command === "brief") {
   process.stdout.write([
     "pnpm research [context]          # show the compact cycle context",
     "pnpm research ingest <file>      # add/reuse a small batch of article records and capture evidence",
+    "pnpm research sync-news-localization # strip stale localized titles outside the newest visible domestic window",
     "pnpm research capture <id> [--force] # capture or retry one stored article",
     "pnpm research archive-verify <id>    # verify the South-local backup copy by checksum",
     "pnpm research archive-restore <id> [destination] # restore one backup to a review directory",
@@ -653,6 +665,6 @@ if (command === "brief") {
     "pnpm research finish --review <reason> # stop for operator review without publication",
   ].join("\n") + "\n");
 } else {
-  console.error("Usage: pnpm research [brief|context|ingest|capture|archive-verify|archive-restore|reconstruct|audit-times|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-init|audit-next|audit-mark|audit-sync|audit-status|finish]");
+  console.error("Usage: pnpm research [brief|context|ingest|sync-news-localization|capture|archive-verify|archive-restore|reconstruct|audit-times|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-init|audit-next|audit-mark|audit-sync|audit-status|finish]");
   process.exit(2);
 }

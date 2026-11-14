@@ -4,6 +4,7 @@ import { cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { keyUpdateRecords } from "../research/lib/current-shape.mjs";
 
 const repoRoot = resolve(".");
 const validator = join(repoRoot, "research", "validate.mjs");
@@ -34,14 +35,15 @@ test("evidence-linked current records validate while exporting the exact legacy 
 
     const summaryPath = join(root, "data", "current", "summary.json");
     const summary = JSON.parse(await readFile(summaryPath, "utf8"));
-    const expectedUpdates = [...summary.keyUpdates];
-    const expectedTh = [...summary.keyUpdatesTh];
-    const expectedKh = [...summary.keyUpdatesKh];
+    const normalizedUpdates = keyUpdateRecords(summary);
+    const expectedUpdates = normalizedUpdates.map(({ text }) => text);
+    const expectedTh = normalizedUpdates.map(({ textTh }) => textTh);
+    const expectedKh = normalizedUpdates.map(({ textKh }) => textKh);
     summary.summaryEvidenceIds = [evidenceId];
-    summary.keyUpdates = summary.keyUpdates.map((text, index) => ({
+    summary.keyUpdates = normalizedUpdates.map(({ text, textTh, textKh }) => ({
       text,
-      textTh: summary.keyUpdatesTh[index],
-      textKh: summary.keyUpdatesKh[index],
+      textTh,
+      textKh,
       evidenceIds: [evidenceId],
     }));
     delete summary.keyUpdatesTh;
