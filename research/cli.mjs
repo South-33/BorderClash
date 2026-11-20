@@ -310,8 +310,10 @@ function renderContext(output) {
   const lines = [
     "# BorderClash cycle context",
     "",
-    "This is a snapshot of what the repository currently says, not verified truth. Use it for orientation and as a signal for what may need checking; inspect the repository, history, and web wherever useful.",
-    "A no-change cycle is valid when the current record remains the best supported picture.",
+    "Repository claims, not verified truth. Verify sources and use the repository, history, or web as useful.",
+    "A no-change cycle is valid.",
+    "Canonical files: data/current/{impact,thailand,cambodia,summary}.json; data/news/YYYY-MM.jsonl; data/timeline/YYYY-MM.jsonl.",
+    "News/cycle timestamps use Unix milliseconds; timeline date uses YYYY-MM-DD and optional timeOfDay uses supported local time.",
     "",
     "## Cycle",
     `Research reference time: ${output.cycle.now}`,
@@ -1079,7 +1081,9 @@ async function auditMark(id, status, noteParts) {
     ? syncAndMarkAuditItem(ledger, primaryRecords, { commit, ...mark })
     : markAuditItem(ledger, id, status, mark.note);
   await writeAuditLedger(primaryLedgerPath, ledger);
-  releaseAuditClaim(resolve(primaryRoot, ".work", "audit-claims"), id, currentRoot, { force: true });
+  if (item.kind === "timeline") {
+    releaseAuditClaim(resolve(primaryRoot, ".work", "audit-claims"), id, currentRoot, { force: true });
+  }
   process.stdout.write(JSON.stringify(item, null, 2) + "\n");
 }
 

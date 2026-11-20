@@ -12,7 +12,6 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
   assert.match(result.stdout, /Research reference time:/u);
   assert.match(result.stdout, /## Current repository state/u);
   assert.match(result.stdout, /## Latest retained evidence anchors/u);
-  assert.match(result.stdout, /snapshot of what the repository currently says, not verified truth/u);
   assert.match(result.stdout, /A no-change cycle is valid/u);
   assert.match(result.stdout, /## Recent repository context/u);
   assert.doesNotMatch(result.stdout, /## Research window/u);

@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   assertAuditRecordMatchesPrimary,
@@ -10,6 +14,29 @@ import {
   syncAndMarkAuditItem,
   syncAuditLedger,
 } from "../research/lib/audit-ledger.mjs";
+
+test("audit-mark completes current snapshot reviews without timeline-claim cleanup", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "borderclash-current-mark-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  cpSync("research", join(root, "research"), { recursive: true });
+  for (const kind of ["current", "news", "timeline"]) mkdirSync(join(root, "data", kind), { recursive: true });
+  for (const name of ["summary", "thailand", "cambodia", "impact"]) {
+    writeFileSync(join(root, "data/current", `${name}.json`), "{}\n");
+  }
+  const run = (file, args) => {
+    const result = spawnSync(file, args, { cwd: root, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    return result.stdout;
+  };
+  run("git", ["init", "-b", "main"]);
+  run("git", ["add", "data"]);
+  run("git", ["-c", "user.name=Audit Test", "-c", "user.email=audit@example.invalid", "commit", "-m", "Fixture"]);
+  run(process.execPath, ["research/cli.mjs", "audit-init"]);
+  const item = JSON.parse(run(process.execPath, ["research/cli.mjs", "audit-mark", "current/summary", "reviewed", "Captured evidence checked."]));
+  assert.equal(item.status, "reviewed");
+  const ledger = JSON.parse(readFileSync(join(root, ".work/audit-ledger.json"), "utf8"));
+  assert.equal(ledger.items.find((row) => row.id === "current/summary").status, "reviewed");
+});
 
 function record(id, kind, value, overrides = {}) {
   return {

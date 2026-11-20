@@ -14,10 +14,10 @@ export function auditReviewRoot(env = process.env) {
   if (localAppData) return join(localAppData, "BorderClash", "audit-reviews");
 
   const xdgStateHome = String(env.XDG_STATE_HOME || "").trim();
-  if (xdgStateHome) return join(xdgStateHome, "BorderClash", "audit-reviews");
+  if (xdgStateHome) return join(xdgStateHome, "borderclash", "audit-reviews");
 
   const home = String(env.HOME || env.USERPROFILE || "").trim();
-  if (home) return join(home, ".local", "state", "BorderClash", "audit-reviews");
+  if (home) return join(home, ".local", "state", "borderclash", "audit-reviews");
 
   return resolve(".work", "audit-reviews");
 }

@@ -3,6 +3,8 @@ $script:ResearchShell = (Get-Process -Id $PID).Path
 $script:ResearchMachine = [Environment]::MachineName
 $script:ResearchLocalRoot = if ($env:LOCALAPPDATA) {
     Join-Path $env:LOCALAPPDATA "BorderClash"
+} elseif ($env:XDG_STATE_HOME) {
+    Join-Path $env:XDG_STATE_HOME "borderclash"
 } else {
     Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local/state/borderclash"
 }

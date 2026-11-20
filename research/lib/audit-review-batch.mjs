@@ -102,6 +102,7 @@ export function buildBatchReviewPrompt({ agents, entries }) {
     `Return exactly ${ids.length} review objects, one for each supplied record id, and no others.`,
     "Assess each record independently. Do not use one record as evidence for another record unless that evidence is explicitly included inside the other record's supplied packet or captured publisher text.",
     "If a stored article title or summary conflicts with captured publisher text, prefer the captured publisher text and flag the mismatch as an issue.",
+    "Judge factual support rather than verbatim wording. Editorial titles may paraphrase publisher headlines while preserving their factual meaning.",
     "For news records, supportedEventDate and supportedEventTime should normally be null because publication metadata is not an event-time claim. verdict=change means at least one canonical factual field should change; verdict=unresolved means the supplied evidence cannot safely settle the material issue.",
     "Return only the schema-required batch assessment.",
   ].join("\n");
