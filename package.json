@@ -12,7 +12,7 @@
     "research:verify-frozen": "node research/automation/verify-frozen-correction.mjs",
     "validate": "node research/validate.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:automation": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/automation/run-cycle.test.ps1"
+    "test:automation": "node tests/automation/run.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "3.14.26",

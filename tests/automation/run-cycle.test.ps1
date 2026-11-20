@@ -3,6 +3,10 @@ param(
     [string]$Section = "all"
 )
 
+$testShell = (Get-Process -Id $PID).Path
+$windowOptions = @{}
+if ($env:OS -eq "Windows_NT") { $windowOptions.WindowStyle = "Hidden" }
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -19,7 +23,7 @@ $runsRoot = Join-Path $testRoot "runs"
 $runtimeDir = Join-Path $testRoot "runtime"
 $logDir = Join-Path $testRoot "logs"
 $mutexName = "Global\BorderClashResearchCycleTest-$PID"
-$realGit = (Get-Command git.exe).Source
+$realGit = (Get-Command git).Source
 $testRemotes = [Collections.Generic.List[string]]::new()
 $serverProcesses = [Collections.Generic.List[Diagnostics.Process]]::new()
 
@@ -71,7 +75,7 @@ function Invoke-TestRunner {
     $old = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $output = & powershell.exe @arguments 2>&1
+        $output = & $testShell @arguments 2>&1
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $old
@@ -86,7 +90,7 @@ function Start-TestRunner {
         "-RunsRoot", $runsRoot, "-RuntimeDir", $runtimeDir, "-LogDir", $logDir,
         "-MutexName", $mutexName, "-RemoteName", "origin"
     )
-    return Start-Process powershell.exe -ArgumentList $arguments -PassThru -WindowStyle Hidden
+    return Start-Process $testShell -ArgumentList $arguments -PassThru @windowOptions
 }
 
 function Invoke-Control {
@@ -101,7 +105,7 @@ function Invoke-Control {
     $old = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $output = & powershell.exe @arguments 2>&1
+        $output = & $testShell @arguments 2>&1
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $old
@@ -257,7 +261,7 @@ function Start-FakePublic {
     param([string]$RemotePath)
     $portFile = Join-Path $testRoot ("port-" + [Guid]::NewGuid().ToString("N") + ".txt")
     $workDir = Join-Path $testRoot ("public-" + [Guid]::NewGuid().ToString("N"))
-    $process = Start-Process node -ArgumentList @($fakePublic, "--remote", $RemotePath, "--port-file", $portFile, "--work-dir", $workDir) -PassThru -WindowStyle Hidden
+    $process = Start-Process node -ArgumentList @($fakePublic, "--remote", $RemotePath, "--port-file", $portFile, "--work-dir", $workDir) -PassThru @windowOptions
     $serverProcesses.Add($process)
     Assert-True (Wait-Until { Test-Path -LiteralPath $portFile } 10) "fake public server did not start"
     $port = (Get-Content -LiteralPath $portFile -Raw).Trim()
@@ -279,16 +283,19 @@ try {
     if (Test-Section "controls") {
     Write-Output "automation: entry-point and shadow controls"
     # Real entry points are pinned to South; fake injection remains portable.
+    if ([Environment]::MachineName -ine "SouthServer") {
     $oldErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $realAttempt = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Force 2>&1
+        $realAttempt = & $testShell -NoProfile -ExecutionPolicy Bypass -File $runner -Force 2>&1
         $realAttemptExit = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $oldErrorAction
     }
     Assert-True ($realAttemptExit -ne 0) "real runner unexpectedly started off South"
     Assert-True (($realAttempt -join "`n") -match "only on SouthServer") "real runner did not name the South boundary"
+
+    }
 
     $env:BORDERCLASH_EXPECT_MODEL = "gemini-3.8-flash-medium"
     $env:BORDERCLASH_FAKE_AGY_MODE = "success"
