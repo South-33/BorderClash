@@ -8,6 +8,8 @@ param(
     [string]$AgyPath = ""
 )
 
+. (Join-Path $PSScriptRoot "platform.ps1")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -16,7 +18,7 @@ $runner = Join-Path $PSScriptRoot "run-cycle.ps1"
 $agentAuthProbeTool = Join-Path $PSScriptRoot "probe-agent-auth.mjs"
 $trustedResearchCli = Join-Path $repoRoot "research\cli.mjs"
 $isFakeAgent = -not [string]::IsNullOrWhiteSpace($AgyPath)
-if (-not $isFakeAgent -and -not [string]::Equals($env:COMPUTERNAME, "SouthServer", [StringComparison]::OrdinalIgnoreCase)) {
+if (-not $isFakeAgent -and -not [string]::Equals($script:ResearchMachine, "SouthServer", [StringComparison]::OrdinalIgnoreCase)) {
     throw "Real supervised BorderClash research may run only on SouthServer."
 }
 
@@ -24,7 +26,7 @@ $sessionId = [DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmssfffZ")
 $sessionRoot = if ($WorkRoot) {
     [IO.Path]::GetFullPath($WorkRoot)
 } else {
-    Join-Path $env:LOCALAPPDATA "BorderClash\supervised\$sessionId"
+    Join-Path $script:ResearchLocalRoot "supervised/$sessionId"
 }
 $runsRoot = Join-Path $sessionRoot "runs"
 $runtimeDir = Join-Path $sessionRoot "runtime"
@@ -51,7 +53,7 @@ $agentAuthProbePath = Join-Path $sessionRoot "AGENT_AUTH_PROBE.json"
 $context = [ordered]@{
     schemaVersion = 1
     sessionId = $sessionId
-    machine = [string]$env:COMPUTERNAME
+    machine = [string]$script:ResearchMachine
     model = "gemini-3.8-flash-medium"
     publicationEnabled = $false
     runsRoot = $runsRoot
@@ -150,7 +152,7 @@ try {
     Write-Output "archive=$archive"
     Write-Output "backup=$backup"
     if (-not $postCheckError) {
-        & powershell.exe @arguments
+        & $script:ResearchShell @arguments
         $cycleExit = $LASTEXITCODE
 
         $runtime = Read-JsonSafe (Join-Path $runtimeDir "runtime.json")
@@ -158,7 +160,8 @@ try {
 
         if ($cycleExit -eq 0 -and $runtime -and [string]$runtime.status -eq "validated" -and $runDir -and (Test-Path -LiteralPath $runDir)) {
             try {
-                Invoke-Checked "pnpm.cmd" @("build") $runDir
+                Invoke-Checked $script:ResearchPnpm @("install", "--frozen-lockfile") $runDir
+                Invoke-Checked $script:ResearchPnpm @("build") $runDir
                 $buildPassed = $true
 
                 if ($ProbeArticleId) {

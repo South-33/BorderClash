@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mergeJsonlRecordText } from "./audit-swarm.mjs";
+import { mergeJsonlRecordText } from "../lib/merge-jsonl.mjs";
 
 function parseArgs(argv) {
   const options = {};

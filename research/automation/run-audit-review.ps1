@@ -5,6 +5,8 @@ param(
     [string]$WorkRoot = ""
 )
 
+. (Join-Path $PSScriptRoot "platform.ps1")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -60,14 +62,14 @@ if (-not $SupplementalEvidenceFile) {
 }
 $model = "gemini-3.8-flash-medium"
 $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
-$agy = if ($agyCommand) { $agyCommand.Source } else { Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe" }
+$agy = if ($agyCommand) { $agyCommand.Source } else { Resolve-ResearchAgent }
 if (-not (Test-Path -LiteralPath $agy)) { throw "Antigravity CLI not found" }
 
 $sessionId = [DateTimeOffset]::UtcNow.ToString("yyyyMMddTHHmmssfffZ")
 $auditReviewRoot = if ($env:BORDERCLASH_AUDIT_REVIEW_ROOT) {
     [IO.Path]::GetFullPath($env:BORDERCLASH_AUDIT_REVIEW_ROOT)
 } else {
-    Join-Path $env:LOCALAPPDATA "BorderClash\audit-reviews"
+    Join-Path $script:ResearchLocalRoot "audit-reviews"
 }
 $root = if ($WorkRoot) {
     [IO.Path]::GetFullPath($WorkRoot)

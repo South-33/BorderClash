@@ -5,11 +5,13 @@ param(
     [switch]$Development
 )
 
+. (Join-Path $PSScriptRoot "platform.ps1")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$isSouth = [string]::Equals($env:COMPUTERNAME, "SouthServer", [StringComparison]::OrdinalIgnoreCase)
+$isSouth = [string]::Equals($script:ResearchMachine, "SouthServer", [StringComparison]::OrdinalIgnoreCase)
 if (-not $isSouth -and -not $Development) {
     throw "Real BorderClash fixed cases require SouthServer unless -Development is explicitly selected."
 }
@@ -19,13 +21,13 @@ if ($Development) {
 
 $model = "gemini-3.8-flash-medium"
 $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
-$agy = if ($agyCommand) { $agyCommand.Source } else { Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe" }
+$agy = if ($agyCommand) { $agyCommand.Source } else { Resolve-ResearchAgent }
 if (-not (Test-Path -LiteralPath $agy)) { throw "Antigravity CLI not found" }
 
 $fixturesPath = Join-Path $repoRoot "research\fixtures\fixed-cases.json"
 $evaluator = Join-Path $repoRoot "research\fixed-case-evaluator.mjs"
 $supervisor = Join-Path $repoRoot "research\automation\agy-supervisor.mjs"
-$defaultRoot = Join-Path $env:LOCALAPPDATA "BorderClash\fixed-cases"
+$defaultRoot = Join-Path $script:ResearchLocalRoot "fixed-cases"
 $root = if ($WorkRoot) { [IO.Path]::GetFullPath($WorkRoot) } else { $defaultRoot }
 $repoFull = [IO.Path]::GetFullPath($repoRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
 $rootFull = [IO.Path]::GetFullPath($root).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
@@ -89,7 +91,7 @@ $schemaPath = Join-Path $runnerRoot "fixed-case-result.schema.json"
     (([ordered]@{
         schemaVersion = 1
         mode = if ($Development) { "development" } else { "south-acceptance" }
-        machine = [string]$env:COMPUTERNAME
+        machine = [string]$script:ResearchMachine
         model = $model
         startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         publicationEnabled = $false

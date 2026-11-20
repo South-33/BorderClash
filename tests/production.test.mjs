@@ -8,13 +8,17 @@ test('Vercel auto-deploys only main', () => {
   assert.equal(config.git?.deploymentEnabled?.main, true);
 });
 
-test('production research runs from main through one Windows task', () => {
+test('production research runs from main through the owned scheduler', () => {
   const production = fs.readFileSync('research/automation/run-scheduled.ps1', 'utf8');
   const schedulePolicy = fs.readFileSync('research/automation/schedule-policy.ps1', 'utf8');
   const runner = fs.readFileSync('research/automation/run-cycle.ps1', 'utf8');
   const supervisor = fs.readFileSync('research/automation/agy-supervisor.mjs', 'utf8');
-  const installer = fs.readFileSync('research/automation/install-scheduler.ps1', 'utf8');
   const supervised = fs.readFileSync('research/automation/run-supervised.ps1', 'utf8');
+  const linuxInstaller = fs.readFileSync('research/automation/install-scheduler.sh', 'utf8');
+  assert.match(linuxInstaller, /OnBootSec=2min/);
+  assert.match(linuxInstaller, /OnUnitInactiveSec=5min/);
+  assert.match(linuxInstaller, /KillMode=control-group/);
+  assert.match(linuxInstaller, /DBUS_SESSION_BUS_ADDRESS/);
 
   assert.match(production, /git.+fetch.+main/s);
   assert.match(production, /FetchAttempts = 6/);
@@ -52,17 +56,6 @@ test('production research runs from main through one Windows task', () => {
   assert.match(schedulePolicy, /SampleLimit = 10/);
   assert.match(schedulePolicy, /BufferMinutes = 30/);
   assert.match(schedulePolicy, /MaximumLeadMinutes = 360/);
-
-  assert.match(installer, /BorderClashResearch/);
-  assert.match(installer, /research\\automation\\run-scheduled\.ps1/);
-  assert.doesNotMatch(installer, /New-ScheduledTaskTrigger -AtStartup/);
-  assert.match(installer, /New-ScheduledTaskTrigger -AtLogOn/);
-  assert.match(installer, /RepetitionInterval/);
-  assert.match(installer, /MultipleInstances IgnoreNew/);
-  assert.match(installer, /-LogonType Interactive/);
-  assert.match(installer, /-WakeToRun/);
-  assert.match(installer, /-ExecutionTimeLimit \(\[TimeSpan\]::Zero\)/);
-  assert.match(installer, /EveryMinutes = 5/);
 
   assert.match(runner, /\[int\]\$TimeoutMinutes = 0/);
   assert.match(runner, /\$productionModel = "gemini-3\.8-flash-medium"/);
@@ -108,7 +101,7 @@ test('production research runs from main through one Windows task', () => {
   assert.match(supervised, /SUPERVISED: publication disabled/);
   assert.doesNotMatch(supervised, /["']-Publish["']/u);
   assert.match(supervised, /Supervised work and evidence roots must stay outside the Git checkout/);
-  assert.match(supervised, /pnpm\.cmd/);
+  assert.match(supervised, /ResearchPnpm/);
   assert.match(supervised, /SUPERVISED_REPORT\.json/);
   assert.match(supervised, /probe-agent-auth\.mjs/);
   assert.match(supervised, /--push-dry-run true/);

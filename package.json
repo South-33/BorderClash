@@ -8,11 +8,8 @@
     "start": "node scripts/serve-static.mjs",
     "lint": "eslint",
     "research": "node research/cli.mjs",
-    "research:audit-swarm": "node research/automation/audit-swarm.mjs",
     "research:verify-correction": "node research/automation/verify-correction.mjs",
     "research:verify-frozen": "node research/automation/verify-frozen-correction.mjs",
-    "evidence:migration:snapshot": "node scripts/evidence-migration-harness.mjs snapshot",
-    "evidence:migration:verify": "node scripts/evidence-migration-harness.mjs verify",
     "validate": "node research/validate.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:automation": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/automation/run-cycle.test.ps1"

@@ -15,6 +15,8 @@ param(
     [int]$StartLeadMinutes = 0
 )
 
+. (Join-Path $PSScriptRoot "platform.ps1")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -32,7 +34,7 @@ $pendingPublicationPath = Join-Path $runtimeDir "pending-publication.json"
 $trustedResearchCli = Join-Path $repoRoot "research\cli.mjs"
 $agyModel = $productionModel
 $isFakeAgent = -not [string]::IsNullOrWhiteSpace($AgyPath)
-if (-not $isFakeAgent -and -not [string]::Equals($env:COMPUTERNAME, "SouthServer", [StringComparison]::OrdinalIgnoreCase)) {
+if (-not $isFakeAgent -and -not [string]::Equals($script:ResearchMachine, "SouthServer", [StringComparison]::OrdinalIgnoreCase)) {
     throw "Real BorderClash research may run only on SouthServer."
 }
 
@@ -802,7 +804,7 @@ try {
         } elseif ($agyCommand) {
             $agyCommand.Source
         } else {
-            Join-Path $env:LOCALAPPDATA "agy\bin\agy.exe"
+            Resolve-ResearchAgent
         }
         if (-not (Test-Path $agy)) { throw "Antigravity CLI not found" }
 
@@ -820,7 +822,7 @@ try {
             # Do not prefix this with /goal. AGY 1.5.5 headless expands the command,
             # then exits before the first planner response.
             @"
-Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use the repository and web as useful. Treat the context as a snapshot of repository state, not ground truth. Leave the canonical record as accurate, current, well-sourced, and useful as the available evidence allows. Correct, add, merge, archive, or remove data when justified; a no-change cycle is valid. $postCycleExpectation Complete the cycle as described in AGENTS.md. End with <!-- GOAL_COMPLETE --> and always include an honest HARNESS_FEEDBACK review of any friction, missing context, constraint, or tool problem; use HARNESS_FEEDBACK: none only when there was genuinely no material issue.
+Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use the repository and web as useful. Treat the context as a snapshot of repository state, not ground truth. Your deliverable is canonical data/ only. Report harness problems through feedback and use research finish --review when they prevent a trustworthy result. Leave the canonical record as accurate, current, well-sourced, and useful as the available evidence allows. Correct, add, merge, archive, or remove data when justified; a no-change cycle is valid. $postCycleExpectation Complete the cycle as described in AGENTS.md. End with <!-- GOAL_COMPLETE --> and always include an honest HARNESS_FEEDBACK review of any friction, missing context, constraint, or tool problem; use HARNESS_FEEDBACK: none only when there was genuinely no material issue.
 "@
         }
         $attemptStem = if ($resuming) { "$runId.resume-$resumeCount" } else { $runId }
@@ -839,11 +841,23 @@ Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md
         Write-RuntimeState "running" $runId $runningMessage $runDir $baseHead $conversationId $resumeCount
 
         $supervisor = Join-Path $repoRoot "research\automation\agy-supervisor.mjs"
+        $settingsPath = Join-Path $logDir "$attemptStem.settings.json"
+        $evidenceRoot = if ($env:BORDERCLASH_EVIDENCE_ARCHIVE) {
+            $env:BORDERCLASH_EVIDENCE_ARCHIVE
+        } else {
+            Join-Path ([Environment]::GetFolderPath("UserProfile")) ".borderclash/evidence"
+        }
+        Write-JsonAtomicFile $settingsPath @{
+            permissions = @{
+                allow = @("read_url(*)", "read_file($evidenceRoot)")
+            }
+        }
         $supervisorArgs = @(
             $supervisor,
             "--agy", $agy,
             "--cwd", $runDir,
             "--model", $agyModel,
+            "--settings-file", $settingsPath,
             "--prompt-file", $promptPath,
             "--continuation-prompt-file", $continuationPromptPath,
             "--result-file", $resultPath,

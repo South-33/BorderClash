@@ -10,6 +10,8 @@ param(
     [string]$MutexName = "Global\BorderClashResearchCycle"
 )
 
+. (Join-Path $PSScriptRoot "platform.ps1")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -103,7 +105,11 @@ function Stop-OwnedRunner {
     $pidValue = [int]$Runtime.runnerPid
     $startedAt = [int64]$Runtime.runnerStartedAt
     if (-not (Test-ProcessInstance $pidValue $startedAt)) { return $false }
-    & taskkill.exe /PID $pidValue /T /F | Out-Null
+    if ($env:OS -eq "Windows_NT") {
+        & taskkill.exe /PID $pidValue /T /F | Out-Null
+    } else {
+        [Diagnostics.Process]::GetProcessById($pidValue).Kill($true)
+    }
     return $true
 }
 
@@ -205,7 +211,7 @@ function Invoke-Runner {
     if ($Force) { $args += "-Force" }
     if ($AgyPath) { $args += @("-AgyPath", $AgyPath) }
     if (-not $AgyPath) { $args += "-Publish" }
-    & powershell.exe @args
+    & $script:ResearchShell @args
     $script:runnerExitCode = $LASTEXITCODE
 }
 

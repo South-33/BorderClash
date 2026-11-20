@@ -53,9 +53,9 @@ function parseAgyError(text) {
 }
 
 function commandFor(executable, args) {
-  if (process.platform === "win32" && extname(executable).toLowerCase() === ".ps1") {
+  if (extname(executable).toLowerCase() === ".ps1") {
     return {
-      file: "powershell.exe",
+      file: process.platform === "win32" ? "powershell.exe" : "pwsh",
       args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", executable, ...args],
     };
   }
@@ -72,7 +72,7 @@ function stopProcessTree(child) {
     return;
   }
   try {
-    child.kill("SIGTERM");
+    process.kill(-child.pid, "SIGKILL");
   } catch {
     // The process may already have exited.
   }
@@ -120,6 +120,7 @@ async function runAttempt({
   const startedAt = Date.now();
   const child = spawn(command.file, command.args, {
     cwd,
+    detached: process.platform !== "win32",
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
     env: buildAgentEnvironment(cwd),

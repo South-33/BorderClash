@@ -1236,7 +1236,7 @@ if (command === "brief") {
   await auditSync(process.argv[3] || "HEAD", process.argv[4] || defaultAuditLedgerPath);
 } else if (command === "finish") {
   await finish(process.argv[3], process.argv.slice(4));
-} else if (command === "help" || command === "--help" || command === "-h") {
+} else if (["help", "--help", "-h", "audit-help"].includes(command)) {
   process.stdout.write([
     "pnpm research [context]          # show the compact cycle context",
     "pnpm research ingest <file> [--no-localize] # add/reuse article evidence; skip unrelated localization sync for isolated audits",
@@ -1268,10 +1268,15 @@ if (command === "brief") {
     "pnpm research audit-mark <id> <reviewed|corrected|merged|unresolved> [note] # sync stale canonical state, then record one audit result",
     "pnpm research audit-sync [git-ref]  # reopen changed/new records after upstream movement",
     "pnpm research audit-status          # summarize full-record audit progress",
+    "pnpm research audit-help            # show historical audit commands",
     "pnpm research finish             # request completion; keep current cadence",
     "pnpm research finish <hours> <reason>  # complete cycle and change cadence",
     "pnpm research finish --review <reason> # stop for operator review without publication",
-  ].join("\n") + "\n");
+  ].filter((line) => {
+    const auditCommand = line.startsWith("pnpm research audit-");
+    const evidenceCommand = /audit-(?:captured|help)\b/u.test(line);
+    return command === "audit-help" || !auditCommand || evidenceCommand;
+  }).join("\n") + "\n");
 } else {
     console.error("Usage: pnpm research [brief|context|ingest|sync-news-localization|capture|probe-source|archive-verify|archive-restore|reconstruct|audit-times|audit-time-provenance|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-cluster|audit-captured|audit-prepare|audit-diagnose|audit-recover|audit-resume|audit-init|audit-next|audit-risk|audit-pick|audit-triage|audit-claim|audit-release|audit-mark|audit-sync|audit-status|finish]");
   process.exit(2);

@@ -4,6 +4,8 @@ param(
     [int]$FetchRetrySeconds = 30
 )
 
+. (Join-Path $PSScriptRoot "platform.ps1")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 if ($FetchAttempts -lt 1 -or $FetchAttempts -gt 20) { throw "FetchAttempts must be between 1 and 20." }
@@ -141,5 +143,5 @@ Invoke-Checked "git" @("-C", $repoRoot, "checkout", "--quiet", "main")
 Invoke-Checked "git" @("-C", $repoRoot, "merge", "--ff-only", "$RemoteName/main")
 
 $runner = Join-Path $repoRoot "research\automation\run-cycle.ps1"
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Publish -RemoteName $RemoteName -StartLeadMinutes $script:leadMinutes
+& $script:ResearchShell -NoProfile -ExecutionPolicy Bypass -File $runner -Publish -RemoteName $RemoteName -StartLeadMinutes $script:leadMinutes
 exit $LASTEXITCODE

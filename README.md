@@ -13,7 +13,19 @@ The research is AI-assisted. It can be incomplete or wrong, so the site keeps so
 
 A cycle can also conclude that nothing material changed. The record is meant to stay accurate and useful, not grow for its own sake.
 
-Production AGY turns have no artificial per-turn timeout. The runner reads AGY's streaming JSON output so it records the conversation ID as soon as the turn starts. If AGY itself ends with a recoverable interruption, the runner immediately continues the same conversation in the same workspace once; only repeated transient failure falls back to the five-minute scheduler. If the runner itself disappears, the streamed checkpoint distinguishes a still-running AGY process, a resumable interruption, an already-completed turn that only needs validation, and a terminal hard failure. If `main` changes before deferred recovery, the stale checkpoint is discarded and the cycle starts fresh from the new canonical base.
+Production research runs on Ubuntu South with Flash Medium. The systemd timer polls every five minutes and the runner starts before the target publication time. Interrupted work keeps its workspace and conversation, including when upstream code advances. A successful Git push remains pending until the public dashboard serves the expected research data.
+
+On South, use these commands from `~/BorderClash`.
+
+```sh
+pwsh -NoProfile -File research/automation/control.ps1 status
+pwsh -NoProfile -File research/automation/control.ps1 pause
+pwsh -NoProfile -File research/automation/control.ps1 resume
+pwsh -NoProfile -File research/automation/control.ps1 run-now
+journalctl --user -u borderclash-research -n 30
+```
+
+`stop` preserves unfinished work and blocks automatic relaunch. `restart-fresh` retires the checkpoint. `cleanup` previews eligible scratch directories, and `cleanup -Apply` removes them. Evidence archives remain outside cleanup. Install the timer with `bash research/automation/install-scheduler.sh`, then enable it with `systemctl --user enable --now borderclash-research.timer` after acceptance. User lingering keeps the timer available before desktop login.
 
 ## Repository map
 
