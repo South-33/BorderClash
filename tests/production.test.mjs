@@ -28,7 +28,9 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(production, /function Invoke-BoundedFetch/);
   assert.match(production, /function Test-SharedCredentialReady/);
   assert.match(production, /org\.freedesktop\.secrets/);
+  assert.match(production, /collection\/login/);
   assert.match(production, /aliases\/default/);
+  assert.match(production, /credentialReady/);
   assert.match(production, /SKIP: shared credential/);
   assert.match(production, /for \(\$attempt = 1; \$attempt -le \$FetchAttempts; \$attempt\+\+\)/);
   assert.match(production, /Start-Sleep -Seconds \$FetchRetrySeconds/);
