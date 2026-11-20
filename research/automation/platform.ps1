@@ -17,6 +17,10 @@ if ($env:OS -ne "Windows_NT" -and -not $env:GIT_SSH_COMMAND) {
 }
 
 function Resolve-ResearchAgent {
+    if ($env:OS -ne "Windows_NT") {
+        $unattended = Get-Command agy-unattended -ErrorAction SilentlyContinue
+        if ($unattended) { return $unattended.Source }
+    }
     $command = Get-Command agy -ErrorAction SilentlyContinue
     if ($command) { return $command.Source }
     $candidate = if ($env:LOCALAPPDATA) {

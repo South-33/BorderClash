@@ -798,11 +798,8 @@ try {
         }
         $result = $agySession.result
     } else {
-        $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
         $agy = if ($AgyPath) {
             (Resolve-Path $AgyPath).Path
-        } elseif ($agyCommand) {
-            $agyCommand.Source
         } else {
             Resolve-ResearchAgent
         }

@@ -11,6 +11,7 @@ test('Vercel auto-deploys only main', () => {
 test('production research runs from main through the owned scheduler', () => {
   const production = fs.readFileSync('research/automation/run-scheduled.ps1', 'utf8');
   const schedulePolicy = fs.readFileSync('research/automation/schedule-policy.ps1', 'utf8');
+  const platform = fs.readFileSync('research/automation/platform.ps1', 'utf8');
   const runner = fs.readFileSync('research/automation/run-cycle.ps1', 'utf8');
   const supervisor = fs.readFileSync('research/automation/agy-supervisor.mjs', 'utf8');
   const supervised = fs.readFileSync('research/automation/run-supervised.ps1', 'utf8');
@@ -56,6 +57,11 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(schedulePolicy, /SampleLimit = 10/);
   assert.match(schedulePolicy, /BufferMinutes = 30/);
   assert.match(schedulePolicy, /MaximumLeadMinutes = 360/);
+  assert.match(platform, /Get-Command agy-unattended/);
+  assert.ok(
+    platform.indexOf('Get-Command agy-unattended') < platform.indexOf('Get-Command agy '),
+    'Linux research must prefer the dedicated unattended Antigravity launcher',
+  );
 
   assert.match(runner, /\[int\]\$TimeoutMinutes = 0/);
   assert.match(runner, /\$productionModel = "gemini-3\.8-flash-medium"/);
