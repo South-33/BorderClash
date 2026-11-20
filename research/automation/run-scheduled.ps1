@@ -138,18 +138,16 @@ function Test-SharedCredentialReady {
         return $false
     }
 
-    foreach ($collection in @("login", "Default_5fKeyring")) {
-        $locked = @(
-            & $gdbus.Source call --session `
-                --dest org.freedesktop.secrets `
-                --object-path "/org/freedesktop/secrets/collection/$collection" `
-                --method org.freedesktop.DBus.Properties.Get `
-                org.freedesktop.Secret.Collection Locked 2>$null
-        )
-        if ($LASTEXITCODE -ne 0 -or ([string]::Join("", [string[]]$locked)) -notmatch "<false>") {
-            $script:preflightMessage = "SKIP: shared credential collection '$collection' is locked or unavailable"
-            return $false
-        }
+    $locked = @(
+        & $gdbus.Source call --session `
+            --dest org.freedesktop.secrets `
+            --object-path /org/freedesktop/secrets/aliases/default `
+            --method org.freedesktop.DBus.Properties.Get `
+            org.freedesktop.Secret.Collection Locked 2>$null
+    )
+    if ($LASTEXITCODE -ne 0 -or ([string]::Join("", [string[]]$locked)) -notmatch "<false>") {
+        $script:preflightMessage = "SKIP: shared default credential collection is locked or unavailable"
+        return $false
     }
 
     return $true
