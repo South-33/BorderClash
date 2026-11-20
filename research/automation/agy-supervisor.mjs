@@ -102,8 +102,9 @@ async function runAttempt({
   if (conversationId) agyArgs.push("--conversation", conversationId);
   if (settingsPath) agyArgs.push("--settings", settingsPath);
   agyArgs.push(
-    "-p",
-    prompt,
+    "--input-format",
+    "stream-json",
+    "--print=",
     "--dangerously-skip-permissions",
     "--sandbox",
     "--output-format",
@@ -119,10 +120,24 @@ async function runAttempt({
   const startedAt = Date.now();
   const child = spawn(command.file, command.args, {
     cwd,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
     env: buildAgentEnvironment(cwd),
   });
+
+  const inputMessage = {
+    event: "user",
+    message: {
+      role: "user",
+      content: [{ type: "text", text: prompt }],
+    },
+  };
+  child.stdin.on("error", (error) => {
+    if (error?.code !== "EPIPE") {
+      appendFileSync(stderrPath, `AGY supervisor stdin error: ${error?.message || error}\n`, "utf8");
+    }
+  });
+  child.stdin.end(JSON.stringify(inputMessage) + "\n", "utf8");
 
   let currentConversationId = conversationId || "";
   let result = null;

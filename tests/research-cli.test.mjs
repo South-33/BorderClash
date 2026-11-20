@@ -451,6 +451,66 @@ test("capture-changed exits 3 when a manual publisher alias needs identity revie
   }
 });
 
+test("ingest --no-localize leaves unrelated localized news unchanged", async () => {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-ingest-no-localize-"));
+  try {
+    const existing = {
+      id: "existing-evidence",
+      source: "Fixture",
+      sourceUrl: "http://127.0.0.1:1/existing",
+      category: "diplomatic",
+      mediaEnvironment: "international",
+      status: "archived",
+      title: "Existing evidence",
+      summary: "Existing evidence summary.",
+      credibility: 80,
+      publishedAt: Date.UTC(2026, 10, 15),
+      fetchedAt: Date.UTC(2026, 10, 15),
+    };
+    await writeJsonlFile(join(root, "data", "news", "2026-11.jsonl"), [existing]);
+
+    const unrelatedPath = join(root, "data", "news", "2025-01.jsonl");
+    await writeJsonlFile(unrelatedPath, [{
+      id: "old-localized",
+      source: "Fixture",
+      sourceUrl: "https://example.invalid/old-localized",
+      category: "humanitarian",
+      mediaEnvironment: "thailand-domestic",
+      status: "active",
+      title: "Old localized report",
+      titleTh: "ข่าวภาษาไทยที่ต้องคงเดิม",
+      titleKh: "ព័ត៌មានភាសាខ្មែរដែលត្រូវរក្សាទុក",
+      credibility: 70,
+      publishedAt: Date.UTC(2025, 0, 1),
+      fetchedAt: Date.UTC(2025, 0, 1),
+    }]);
+    const before = await readFile(unrelatedPath, "utf8");
+
+    const candidatePath = join(root, "candidate.jsonl");
+    const { id: _id, fetchedAt: _fetchedAt, ...candidate } = existing;
+    await writeJsonlFile(candidatePath, [candidate]);
+
+    const result = spawnSync(process.execPath, [script, "ingest", candidatePath, "--no-localize"], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        BORDERCLASH_EVIDENCE_ARCHIVE: join(root, "archive"),
+        BORDERCLASH_EVIDENCE_BACKUP: join(root, "archive-backup"),
+      },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.ok, true);
+    assert.equal(output.results[0].action, "existing");
+    assert.deepEqual(output.localization, { skipped: true });
+    assert.equal(await readFile(unrelatedPath, "utf8"), before);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("--help is a successful alias for help", () => {
   const result = spawnSync(process.execPath, [script, "--help"], {
     cwd: process.cwd(),
@@ -458,6 +518,7 @@ test("--help is a successful alias for help", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /research \[context\]/u);
+  assert.match(result.stdout, /--no-localize/u);
   assert.match(result.stdout, /research finish/u);
   assert.doesNotMatch(result.stdout, /research check/u);
 });

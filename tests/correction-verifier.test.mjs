@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { diffRecords, stableArticleId } from "../research/automation/verify-correction.mjs";
+import {
+  classifyNewsArticleMoves,
+  diffRecords,
+  stableArticleId,
+} from "../research/automation/verify-correction.mjs";
 
 test("correction verifier identifies added, modified, and deleted JSONL records", () => {
   const before = [
@@ -29,6 +33,45 @@ test("correction verifier uses canonical normalized URL identity", () => {
     stableArticleId("https://example.com/report?a=1"),
     stableArticleId("https://example.com/report?a=2"),
   );
+});
+
+test("correction verifier treats a stable article ID moved between monthly files as a move", () => {
+  const result = classifyNewsArticleMoves([
+    {
+      path: "data/news/2025-12.jsonl",
+      added: [{ id: "legacy-id", sourceUrl: "https://www.example.com/report/?utm_source=a", publishedAt: 1 }],
+      deleted: [],
+    },
+    {
+      path: "data/news/2026-01.jsonl",
+      added: [],
+      deleted: [{ id: "legacy-id", sourceUrl: "https://example.com/report", publishedAt: 2 }],
+    },
+  ]);
+
+  assert.deepEqual(result.addedArticles, []);
+  assert.deepEqual(result.movedArticles, [{
+    articleId: "legacy-id",
+    fromPath: "data/news/2026-01.jsonl",
+    toPath: "data/news/2025-12.jsonl",
+    sourceUrl: "https://www.example.com/report/?utm_source=a",
+    contentChanged: true,
+  }]);
+});
+
+test("correction verifier rejects a cross-file stable ID move that changes article identity", () => {
+  assert.throws(() => classifyNewsArticleMoves([
+    {
+      path: "data/news/2025-12.jsonl",
+      added: [{ id: "legacy-id", sourceUrl: "https://example.com/new" }],
+      deleted: [],
+    },
+    {
+      path: "data/news/2026-01.jsonl",
+      added: [],
+      deleted: [{ id: "legacy-id", sourceUrl: "https://example.com/old" }],
+    },
+  ]), /changed canonical source URL/u);
 });
 
 test("correction verifier is snapshot-stable and checks evidence references", () => {

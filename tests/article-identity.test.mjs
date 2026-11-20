@@ -20,6 +20,10 @@ test("article identity removes harmless URL variation", () => {
     normalizeArticleUrl("https://www.channelnewsasia.com/asia/thailand-cuts-laos-fuel-route-5582726"),
   );
   assert.equal(
+    normalizeArticleUrl("https://world.thaipbs.or.th/detail/61082"),
+    normalizeArticleUrl("https://world.thaipbs.or.th/detail/cambodia-pressure-tactics-hinder-ties-thai-fm-says/61082"),
+  );
+  assert.equal(
     normalizeArticleUrl("https://www.kuna.net.kw/ArticleDetails.aspx?id=3273515&Language=en"),
     normalizeArticleUrl("https://kuna.net.kw/ArticleDetails.aspx?language=en&id=3273515"),
   );
@@ -56,6 +60,14 @@ test("publisher article identity joins known mobile and desktop aliases without 
   assert.equal(
     publisherArticleIdentity("https://www.thaipbs.or.th/news/content/359446"),
     "thaipbs:359446",
+  );
+  assert.equal(
+    publisherArticleIdentity("https://world.thaipbs.or.th/detail/cambodia-pressure-tactics-hinder-ties-thai-fm-says/61082"),
+    "thaipbsworld:61082",
+  );
+  assert.equal(
+    publisherArticleIdentity("https://world.thaipbs.or.th/detail/61082"),
+    "thaipbsworld:61082",
   );
   assert.equal(publisherArticleIdentity("https://wire.example.net/copy/412489"), "");
 });

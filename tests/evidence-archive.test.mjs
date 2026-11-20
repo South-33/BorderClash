@@ -3,6 +3,11 @@ import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  brotliCompressSync,
+  deflateSync,
+  gzipSync,
+} from "node:zlib";
 import test from "node:test";
 import {
   captureArticle,
@@ -160,6 +165,133 @@ test("HTML capture preserves Unicode, canonical identity, immutable bytes, backu
     const restored = await restoreArchiveCopy(storedArticle.id, roots.restoreRoot, options);
     assert.equal(restored.ok, true);
     assert.equal(restored.files, 4);
+  } finally {
+    await rm(roots.root, { recursive: true, force: true });
+  }
+});
+
+test("HTML extraction prefers the longest article block over an earlier teaser", async () => {
+  const longBody = [
+    "This is the actual publisher article body and it is intentionally long enough to pass the evidence threshold.",
+    "It contains the material event facts, named actors, dates, and context needed for source verification.",
+    "A short article element may appear earlier on publisher pages for a teaser, widget, or navigation card.",
+    "The extractor must not stop at that teaser when a substantially longer article block contains the story.",
+  ].join(" ");
+  const fetched = await fetchEvidence("https://example.com/multiple-articles", {
+    lookupImpl: publicLookup,
+    fetchImpl: async () => htmlResponse([
+      "<html><body>",
+      "<article><p>Short teaser.</p></article>",
+      "<article><div>" + longBody + "</div></article>",
+      "</body></html>",
+    ].join("")),
+  });
+  assert.equal(fetched.status, "captured-html");
+  assert.match(fetched.text, /actual publisher article body/u);
+  assert.doesNotMatch(fetched.text, /^Short teaser\.$/u);
+});
+
+test("HTML extraction can use a publisher article-body div when article tags are teasers", async () => {
+  const longBody = [
+    "This publisher stores the real story in a dedicated article-body div rather than an article element.",
+    "The body includes the event date, named agencies, participant counts, and enough context for verification.",
+    "Earlier article tags are only navigation cards and must not prevent extraction of the real report.",
+  ].join(" ");
+  const fetched = await fetchEvidence("https://example.com/div-article-body", {
+    lookupImpl: publicLookup,
+    fetchImpl: async () => htmlResponse([
+      "<html><body>",
+      "<article><p>Navigation teaser.</p></article>",
+      '<div class="detail m-c-font-article m-d-initial"><p>',
+      longBody,
+      "</p></div>",
+      "</body></html>",
+    ].join("")),
+  });
+  assert.equal(fetched.status, "captured-html");
+  assert.match(fetched.text, /real story in a dedicated article-body div/u);
+});
+
+test("HTML capture decodes HTTP compression while preserving the exact received bytes", async (t) => {
+  const html = "<html><body><article><p>This publisher article is long enough to verify compressed response decoding. It contains a clear event date, named officials, and enough additional context for the readable-text threshold used by the evidence archive. The stored source bytes must remain exact even though the extracted text is decoded before HTML parsing.</p></article></body></html>";
+  const cases = [
+    ["gzip", gzipSync(Buffer.from(html))],
+    ["br", brotliCompressSync(Buffer.from(html))],
+    ["deflate", deflateSync(Buffer.from(html))],
+    ["sniffed-gzip", gzipSync(Buffer.from(html))],
+    ["double-gzip", gzipSync(gzipSync(Buffer.from(html)))],
+  ];
+  for (const [encoding, compressed] of cases) {
+    await t.test(encoding, async () => {
+      const roots = await tempRoots();
+      try {
+        const headers = { "content-type": "text/html; charset=utf-8" };
+        if (encoding !== "sniffed-gzip" && encoding !== "double-gzip") {
+          headers["content-encoding"] = encoding;
+        }
+        const fetched = await fetchEvidence("https://example.com/compressed", {
+          lookupImpl: publicLookup,
+          fetchImpl: async () => new Response(compressed, { status: 200, headers }),
+        });
+        assert.equal(fetched.status, "captured-html");
+        assert.match(fetched.text, /compressed response decoding/u);
+        assert.deepEqual(fetched.body, compressed);
+
+        const articleId = `archive-compressed-${encoding}`;
+        await storeEvidenceAttempt(articleId, fetched, roots);
+        const manifest = JSON.parse(await readFile(join(roots.archiveRoot, articleId, "manifest.json"), "utf8"));
+        const metadata = JSON.parse(await readFile(
+          join(roots.archiveRoot, articleId, "captures", manifest.latestCapture, "metadata.json"),
+          "utf8",
+        ));
+        const expectedEncoding = encoding === "sniffed-gzip"
+          ? "gzip"
+          : encoding === "double-gzip"
+            ? "gzip, gzip"
+            : encoding;
+        assert.equal(metadata.contentEncoding, expectedEncoding);
+        assert.deepEqual(await readCapturedOriginal(articleId, manifest.latestCapture, roots), compressed);
+      } finally {
+        await rm(roots.root, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test("recapturing identical bytes can repair derived text without changing the source revision", async () => {
+  const roots = await tempRoots();
+  try {
+    const storedArticle = article({ id: "archive-reextract-001" });
+    const html = "<html><body><article><p>This is a sufficiently long publisher article used to verify re-extraction from identical received bytes. The raw response stays identical while the derived text can be repaired after the extractor improves. Additional context keeps the article safely above the minimum extraction threshold for this test fixture.</p></article></body></html>";
+    const compressed = gzipSync(Buffer.from(html));
+    await storeEvidenceAttempt(storedArticle.id, {
+      status: "captured-html",
+      requestedUrl: storedArticle.sourceUrl,
+      finalUrl: storedArticle.sourceUrl,
+      contentType: "text/html",
+      body: compressed,
+      text: "\u001f� stale compressed text",
+      sha256: createHash("sha256").update(compressed).digest("hex"),
+      byteLength: compressed.length,
+    }, roots);
+    const before = JSON.parse(await readFile(join(roots.archiveRoot, storedArticle.id, "manifest.json"), "utf8"));
+
+    const fetched = await fetchEvidence(storedArticle.sourceUrl, {
+      lookupImpl: publicLookup,
+      fetchImpl: async () => new Response(compressed, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    });
+    await storeEvidenceAttempt(storedArticle.id, fetched, roots);
+    const after = JSON.parse(await readFile(join(roots.archiveRoot, storedArticle.id, "manifest.json"), "utf8"));
+    assert.equal(after.latestCapture, before.latestCapture);
+    const text = await readFile(
+      join(roots.archiveRoot, storedArticle.id, "captures", after.latestCapture, "text.txt"),
+      "utf8",
+    );
+    assert.match(text, /re-extraction from identical received bytes/u);
+    assert.equal((await verifyArchiveCopy(storedArticle.id, roots)).ok, true);
   } finally {
     await rm(roots.root, { recursive: true, force: true });
   }

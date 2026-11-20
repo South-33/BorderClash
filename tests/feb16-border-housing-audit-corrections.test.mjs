@@ -1,0 +1,9 @@
+﻿import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+function readJsonl(path){return readFileSync(path,"utf8").trim().split(/\r?\n/u).filter(Boolean).map(JSON.parse);}
+const eventId="ks75p159bg1sr62z69z9b2f34h81f8gv"; const evidenceId="59e9c210bb9f9d5daf2fa2f181ac0f00";
+test("housing project uses the Feb 16 inauguration date without invented time",()=>{const e=readJsonl("data/timeline/2026-02.jsonl").find(r=>r.id===eventId);assert.ok(e);assert.equal(e.date,"2026-02-16");assert.equal(e.timeOfDay,undefined);assert.deepEqual(e.evidenceIds,[evidenceId]);assert.match(e.title,/Temporary-Housing Project/u);});
+test("housing scope and province allocations match captured Cambodianess reporting",()=>{const e=readJsonl("data/timeline/2026-02.jsonl").find(r=>r.id===eventId);for(const v of ["3,000","2,000","600","200"]){assert.ok(e.description.includes(v),v);}assert.match(e.description,/high-conflict areas/u);assert.match(e.description,/unexploded ordnance/u);assert.match(e.description,/not permanent replacement housing/u);});
+test("Thai and Khmer preserve date, counts, and temporary-housing framing",()=>{const e=readJsonl("data/timeline/2026-02.jsonl").find(r=>r.id===eventId);for(const v of ["16","3,000","2,000","600","200"]){assert.ok(e.descriptionTh.includes(v),`Thai ${v}`);assert.ok(e.descriptionKh.includes(v),`Khmer ${v}`);}});
+test("captured Cambodianess evidence records the Feb 16 inauguration and 3,000-house plan",()=>{const a=readJsonl("data/news/2026-02.jsonl").find(r=>r.id===evidenceId);assert.ok(a);assert.equal(a.source,"Cambodianess");assert.match(a.summary,/February 16/u);assert.match(a.summary,/3,000 houses/u);assert.ok(!readJsonl("data/news/2026-02.jsonl").some(r=>r.id==="ccf9a327d47f4b44b15a01d5b56f4d4f"));});

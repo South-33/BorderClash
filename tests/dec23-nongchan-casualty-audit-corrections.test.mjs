@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+const targetId="ks7f4eqv93kwp4jwpy5z335rjh813sz3";
+const evidenceId="b5f3953ddd2c01679e596989cf07159a";
+const discardedNationId="9fd3e7a1049389d42843d52c4c5ef395";
+test("Dec 23 Ban Nong Chan casualty uses captured Thai PBS World report",()=>{
+ const timeline=readFileSync("data/timeline/2025-12.jsonl","utf8").trim().split(/\r?\n/u).map(JSON.parse);
+ const event=timeline.find(x=>x.id===targetId);
+ assert.equal(event.date,"2025-12-23");
+ assert.equal(event.timeOfDay,undefined);
+ assert.deepEqual(event.evidenceIds,[evidenceId]);
+ assert.match(event.description,/Thanaphat Nanthawong/u);
+ assert.match(event.description,/injuring two other soldiers/u);
+ assert.doesNotMatch(event.description,/four others|total Thai military death toll|GBC/u);
+ const news=readFileSync("data/news/2025-12.jsonl","utf8").trim().split(/\r?\n/u).map(JSON.parse);
+ const article=news.find(x=>x.id===evidenceId);
+ assert.equal(article.publishedAt,Date.parse("2025-12-23T21:20:07+07:00"));
+ assert.equal(news.some(x=>x.id===discardedNationId),false);
+});

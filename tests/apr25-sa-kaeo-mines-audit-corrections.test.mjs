@@ -1,0 +1,9 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+function readJsonl(path){return readFileSync(path,"utf8").trim().split(/\r?\n/u).filter(Boolean).map(JSON.parse);}
+const eventId="ks79k91r64vnpqz4v5vdawhy1n85sx4f"; const evidenceId="8cff52236b3122ccb4d9a20512a0e1df"; const bpId="js77dcrmxgrdy3cdg3qerqb2bh85snva"; const prov="burapha-task-force-ban-nong-chan-mines-2026-04-25";
+test("Apr 25 mine-clearance record keeps the supported date without invented 10:00",()=>{const e=readJsonl("data/timeline/2026-04.jsonl").find(r=>r.id===eventId);assert.ok(e);assert.equal(e.date,"2026-04-25");assert.equal(e.timeOfDay,undefined);assert.deepEqual(e.evidenceIds,[evidenceId]);assert.match(e.title,/32 Mines Found at Ban Nong Chan/u);assert.match(e.description,/does not give an exact April 25 event time/u);});
+test("mine counts and cumulative figures match captured reporting",()=>{const e=readJsonl("data/timeline/2026-04.jsonl").find(r=>r.id===eventId);for(const v of ["400","32","22","PMN","10","MN79","62,000","189","18"]){assert.ok(e.description.includes(v),v);}});
+test("Thai and Khmer preserve date, mine counts, area, and timing uncertainty",()=>{const e=readJsonl("data/timeline/2026-04.jsonl").find(r=>r.id===eventId);for(const v of ["25","400","32","22","PMN","10","MN79","62,000","189","18"]){assert.ok(e.descriptionTh.includes(v),`Thai ${v}`);assert.ok(e.descriptionKh.includes(v),`Khmer ${v}`);}});
+test("captured 77 Kaoded evidence and Bangkok Post share the Burapha Task Force provenance chain",()=>{const rows=readJsonl("data/news/2026-04.jsonl");const a=rows.find(r=>r.id===evidenceId);assert.ok(a);assert.equal(a.provenanceId,prov);assert.equal(rows.find(r=>r.id===bpId)?.provenanceId,prov);assert.match(a.summary,/April 25 operation/u);assert.ok(!rows.some(r=>r.id==='a6fbc327758f3279d7ecdf0502821547'));});

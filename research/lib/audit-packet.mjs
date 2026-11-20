@@ -26,7 +26,13 @@ function canonicalArticle(record) {
   return canonical;
 }
 
-export function buildAuditPacket({ id, current = {}, timeline = [], articles = [] } = {}) {
+export function buildAuditPacket({
+  id,
+  current = {},
+  timeline = [],
+  articles = [],
+  deletedRecord = null,
+} = {}) {
   if (!id) throw new Error("audit packet requires an id");
 
   const articlesById = new Map(articles.map((record) => [record.id, record]));
@@ -40,6 +46,8 @@ export function buildAuditPacket({ id, current = {}, timeline = [], articles = [
 
   let kind;
   let record;
+  let baselineRecord = null;
+  let proposedAction = "";
   if (currentName && Object.hasOwn(current, currentName)) {
     kind = "current";
     record = current[currentName];
@@ -48,7 +56,12 @@ export function buildAuditPacket({ id, current = {}, timeline = [], articles = [
     record = timelineById.get(id);
   } else if (articlesById.has(id)) {
     kind = "news";
-    record = articlesById.get(id);
+    record = canonicalArticle(articlesById.get(id));
+  } else if (deletedRecord?.id === id) {
+    kind = "timeline";
+    record = null;
+    baselineRecord = deletedRecord;
+    proposedAction = "delete";
   } else {
     throw new Error(`unknown audit record id: ${id}`);
   }
@@ -57,9 +70,10 @@ export function buildAuditPacket({ id, current = {}, timeline = [], articles = [
   const timelineIds = new Set();
   const missingIds = new Set();
   const directSourceUrls = new Set();
+  const referenceRecord = record || baselineRecord;
   if (kind !== "news") {
     collectReferences(
-      record,
+      referenceRecord,
       articleIds,
       timelineIds,
       missingIds,
@@ -92,7 +106,7 @@ export function buildAuditPacket({ id, current = {}, timeline = [], articles = [
     }
   }
 
-  return {
+  const packet = {
     id,
     kind,
     record,
@@ -105,4 +119,9 @@ export function buildAuditPacket({ id, current = {}, timeline = [], articles = [
       missingDirectSourceUrls,
     },
   };
+  if (proposedAction) {
+    packet.proposedAction = proposedAction;
+    packet.baselineRecord = baselineRecord;
+  }
+  return packet;
 }

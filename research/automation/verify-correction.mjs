@@ -161,7 +161,6 @@ function diffJsonDocument(path, beforeText, afterText) {
 
 function analyzeChanges(baseline) {
   const files = [];
-  const addedArticles = [];
   for (const path of changedDataFiles(baseline)) {
     const absolute = join(repoRoot, path);
     const beforeText = baselineFile(baseline, path);
@@ -170,9 +169,44 @@ function analyzeChanges(baseline) {
       ? diffRecords(parseJsonlText(beforeText, `${baseline}:${path}`), parseJsonlText(afterText, path))
       : diffJsonDocument(path, beforeText, afterText);
     files.push({ path, ...changes });
-    if (path.startsWith("data/news/")) addedArticles.push(...changes.added.map((row) => ({ path, row })));
   }
-  return { files, addedArticles };
+  return { files, ...classifyNewsArticleMoves(files) };
+}
+
+export function classifyNewsArticleMoves(files = []) {
+  const deletedById = new Map();
+  for (const file of files) {
+    if (!file.path.startsWith("data/news/")) continue;
+    for (const row of file.deleted || []) deletedById.set(row.id, { path: file.path, row });
+  }
+
+  const addedArticles = [];
+  const movedArticles = [];
+  for (const file of files) {
+    if (!file.path.startsWith("data/news/")) continue;
+    for (const row of file.added || []) {
+      const deleted = deletedById.get(row.id);
+      if (!deleted) {
+        addedArticles.push({ path: file.path, row });
+        continue;
+      }
+
+      const beforeUrl = normalizeArticleUrl(deleted.row.sourceUrl);
+      const afterUrl = normalizeArticleUrl(row.sourceUrl);
+      if (!beforeUrl || beforeUrl !== afterUrl) {
+        throw new Error(`Article ${row.id} moved between news files but changed canonical source URL`);
+      }
+      movedArticles.push({
+        articleId: row.id,
+        fromPath: deleted.path,
+        toPath: file.path,
+        sourceUrl: row.sourceUrl,
+        contentChanged: JSON.stringify(deleted.row) !== JSON.stringify(row),
+      });
+      deletedById.delete(row.id);
+    }
+  }
+  return { addedArticles, movedArticles };
 }
 
 async function verifyAddedArticles(addedArticles, { requireArchives }) {
@@ -335,6 +369,7 @@ async function main() {
       deletedIds: deleted.map((row) => row.id),
     })),
     addedArticles: [],
+    movedArticles: analysis.movedArticles,
     referenceCoverage: null,
     steps: [],
     ok: false,

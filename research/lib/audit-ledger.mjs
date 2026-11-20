@@ -162,6 +162,26 @@ export function markAuditItem(ledger, id, status, note = "", { now = Date.now() 
   return item;
 }
 
+export function assertAuditRecordMatchesPrimary(currentRecords, primaryRecords, id) {
+  const current = currentRecords.find((record) => record.id === id) || null;
+  const primary = primaryRecords.find((record) => record.id === id) || null;
+  if (!current && !primary) return;
+  if (!current || !primary || current.fingerprint !== primary.fingerprint) {
+    throw new Error(
+      "audit-mark from a linked worktree requires the target record to match the primary checkout; integrate the correction first",
+    );
+  }
+}
+
+export function syncAndMarkAuditItem(
+  ledger,
+  records,
+  { commit, id, status, note = "", now = Date.now() } = {},
+) {
+  syncAuditLedger(ledger, records, { commit, now });
+  return markAuditItem(ledger, id, status, note, { now });
+}
+
 export function nextAuditItems(ledger, limit = 25) {
   const count = Math.max(1, Math.min(200, Number(limit) || 25));
   return ledger.items

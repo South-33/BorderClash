@@ -18,6 +18,10 @@ export function normalizeArticleUrl(value) {
       const match = pathname.match(/-(\d{6,})$/u);
       if (match) return `${origin}/article/${match[1]}`;
     }
+    if (host === "world.thaipbs.or.th") {
+      const match = pathname.match(/^\/detail\/(?:[^/]+\/)?(\d+)$/u);
+      if (match) return `${origin}/detail/${match[1]}`;
+    }
     if (host === "bernama.com" && /^\/en\/(?:world\/)?news\.php$/u.test(pathname) && id) {
       return `${origin}/en/news.php?id=${id}`;
     }
@@ -50,6 +54,10 @@ export function publisherArticleIdentity(value) {
     if (host === "thaipbs.or.th") {
       const match = pathname.match(/^\/news\/content\/(\d+)$/u);
       if (match) return `thaipbs:${match[1]}`;
+    }
+    if (host === "world.thaipbs.or.th") {
+      const match = pathname.match(/^\/detail\/(?:[^/]+\/)?(\d+)$/u);
+      if (match) return `thaipbsworld:${match[1]}`;
     }
     if (host === "khmertimeskh.com") {
       const match = pathname.match(/^\/(\d{6,})(?:\/|$)/u);

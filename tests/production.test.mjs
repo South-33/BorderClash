@@ -82,6 +82,12 @@ test('production research runs from main through one Windows task', () => {
   assert.doesNotMatch(runner, /AGY_ERROR:/, 'PowerShell must not parse AGY stderr protocol');
 
   assert.match(supervisor, /--output-format"[\s\S]+"stream-json"/);
+  assert.match(supervisor, /--input-format"[\s\S]+"stream-json"/);
+  assert.match(supervisor, /"--print="/);
+  assert.match(supervisor, /stdio: \["pipe", "pipe", "pipe"\]/);
+  assert.match(supervisor, /event: "user"/);
+  assert.match(supervisor, /child\.stdin\.end\(JSON\.stringify\(inputMessage\)/);
+  assert.doesNotMatch(supervisor, /agyArgs\.push\([\s\S]{0,120}"-p",\s*prompt/u);
   assert.match(supervisor, /--settings/);
   assert.match(supervisor, /"--sandbox"/);
   assert.match(supervisor, /event\.event === "init"/);

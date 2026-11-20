@@ -14,6 +14,33 @@ if ($outputFormatIndex -lt 0 -or $outputFormatIndex + 1 -ge $cliArgs.Count -or $
     [Console]::Error.WriteLine("fake Antigravity requires stream-json output")
     exit 28
 }
+$inputFormatIndex = [Array]::IndexOf($cliArgs, "--input-format")
+if ($inputFormatIndex -lt 0 -or $inputFormatIndex + 1 -ge $cliArgs.Count -or $cliArgs[$inputFormatIndex + 1] -ne "stream-json") {
+    [Console]::Error.WriteLine("fake Antigravity requires stream-json input")
+    exit 36
+}
+$streamInputLine = [Console]::In.ReadLine()
+if ([string]::IsNullOrWhiteSpace($streamInputLine)) {
+    [Console]::Error.WriteLine("fake Antigravity requires one stdin prompt event")
+    exit 37
+}
+try { $streamInput = $streamInputLine | ConvertFrom-Json } catch {
+    [Console]::Error.WriteLine("fake Antigravity received invalid stream-json input")
+    exit 38
+}
+if ([string]$streamInput.event -ne "user" -or [string]$streamInput.message.role -ne "user") {
+    [Console]::Error.WriteLine("fake Antigravity received unexpected stream-json prompt shape")
+    exit 39
+}
+$streamPrompt = [string](($streamInput.message.content | ForEach-Object { [string]$_.text }) -join "")
+if (-not $streamPrompt) {
+    [Console]::Error.WriteLine("fake Antigravity received an empty stream-json prompt")
+    exit 40
+}
+if ($env:BORDERCLASH_EXPECT_PROMPT_MIN_CHARS -and $streamPrompt.Length -lt [int]$env:BORDERCLASH_EXPECT_PROMPT_MIN_CHARS) {
+    [Console]::Error.WriteLine("stream-json prompt was shorter than expected")
+    exit 41
+}
 
 function Write-StreamEvent {
     param($Value)

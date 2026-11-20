@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertAuditRecordMatchesPrimary,
   auditLedgerSummary,
   createAuditLedger,
   markAuditItem,
   nextAuditItems,
   recordFingerprint,
+  syncAndMarkAuditItem,
   syncAuditLedger,
 } from "../research/lib/audit-ledger.mjs";
 
@@ -128,4 +130,50 @@ test("merged and unresolved audit results require explicit reasons", () => {
   assert.throws(() => markAuditItem(ledger, "news-1", "merged"), /requires a reason/u);
   assert.throws(() => markAuditItem(ledger, "news-1", "unresolved"), /requires a reason/u);
   assert.throws(() => markAuditItem(ledger, "news-1", "pending"), /must be reviewed/u);
+});
+
+test("sync-and-mark certifies the current fingerprint instead of a stale pre-change record", () => {
+  const original = [record("timeline-1", "timeline", { title: "before" })];
+  const updated = [record("timeline-1", "timeline", { title: "after" })];
+  const ledger = createAuditLedger(original, { anchorCommit: "base", now: 1 });
+
+  syncAndMarkAuditItem(ledger, updated, {
+    commit: "next",
+    id: "timeline-1",
+    status: "corrected",
+    note: "Corrected against current canonical bytes.",
+    now: 10,
+  });
+
+  const item = ledger.items.find(({ id }) => id === "timeline-1");
+  assert.equal(ledger.currentCommit, "next");
+  assert.equal(item.status, "corrected");
+  assert.equal(item.fingerprint, updated[0].fingerprint);
+  assert.equal(item.reviewedFingerprint, updated[0].fingerprint);
+  assert.equal(item.history.length, 1);
+  assert.equal(item.history[0].reason, "content changed");
+
+  syncAuditLedger(ledger, updated, { commit: "next", now: 11 });
+  assert.equal(item.status, "corrected");
+  assert.equal(item.reviewedFingerprint, updated[0].fingerprint);
+});
+
+test("linked worktree audit marks require the target record to match primary", () => {
+  const primary = [
+    record("timeline-1", "timeline", { title: "current" }),
+    record("timeline-2", "timeline", { title: "other" }),
+  ];
+  const matching = [
+    record("timeline-1", "timeline", { title: "current" }),
+    record("timeline-2", "timeline", { title: "older other state" }),
+  ];
+  assert.doesNotThrow(() => assertAuditRecordMatchesPrimary(matching, primary, "timeline-1"));
+
+  const changedTarget = [record("timeline-1", "timeline", { title: "corrected only here" })];
+  assert.throws(
+    () => assertAuditRecordMatchesPrimary(changedTarget, primary, "timeline-1"),
+    /integrate the correction first/u,
+  );
+
+  assert.doesNotThrow(() => assertAuditRecordMatchesPrimary([], [], "merged-record"));
 });

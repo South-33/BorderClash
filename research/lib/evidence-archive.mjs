@@ -11,8 +11,14 @@ import {
 import { isIP } from "node:net";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
-import { basename, dirname, join, relative, resolve } from "node:path";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { dirname, join, relative, resolve } from "node:path";
+import {
+  brotliDecompressSync,
+  gunzipSync,
+  gzipSync,
+  inflateRawSync,
+  inflateSync,
+} from "node:zlib";
 import { writeJson } from "./files.mjs";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -41,6 +47,48 @@ function decodeTextBody(body, contentTypeHeader) {
   } catch {
     return { text: new TextDecoder("utf-8").decode(body), encoding: "utf-8" };
   }
+}
+
+function decodeContentBody(body, contentEncodingHeader, maxBytes) {
+  let encodings = String(contentEncodingHeader || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value && value !== "identity");
+  if (!encodings.length && body.length >= 2 && body[0] === 0x1f && body[1] === 0x8b) {
+    encodings = ["gzip"];
+  }
+  let decoded = body;
+  const appliedEncodings = [];
+  const decodeOne = (encoding) => {
+    if (encoding === "gzip" || encoding === "x-gzip") {
+      return gunzipSync(decoded, { maxOutputLength: maxBytes });
+    } else if (encoding === "br") {
+      return brotliDecompressSync(decoded, { maxOutputLength: maxBytes });
+    } else if (encoding === "deflate") {
+      try {
+        return inflateSync(decoded, { maxOutputLength: maxBytes });
+      } catch (error) {
+        if (String(error?.code || "") === "ERR_BUFFER_TOO_LARGE") throw error;
+        return inflateRawSync(decoded, { maxOutputLength: maxBytes });
+      }
+    } else {
+      throw new Error(`unsupported content encoding: ${encoding}`);
+    }
+  };
+  for (const encoding of encodings.reverse()) {
+    decoded = decodeOne(encoding);
+    appliedEncodings.push(encoding);
+    if (decoded.length > maxBytes) throw new Error(`decoded response exceeds ${maxBytes} byte capture limit`);
+  }
+  for (let layer = 0; layer < 2 && decoded.length >= 2 && decoded[0] === 0x1f && decoded[1] === 0x8b; layer += 1) {
+    decoded = decodeOne("gzip");
+    appliedEncodings.push("gzip");
+    if (decoded.length > maxBytes) throw new Error(`decoded response exceeds ${maxBytes} byte capture limit`);
+  }
+  return {
+    body: decoded,
+    contentEncoding: appliedEncodings.join(", "),
+  };
 }
 
 function normalizedHost(value) {
@@ -163,10 +211,8 @@ function jsonLdText(html) {
   return candidates.sort((a, b) => b.length - a.length)[0] || "";
 }
 
-function visibleHtmlText(html) {
-  const articleMatch = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/iu);
-  let value = articleMatch?.[1] || html;
-  value = value
+function htmlFragmentText(value) {
+  return value
     .replace(/<!--[\s\S]*?-->/gu, " ")
     .replace(/<(?:script|style|noscript|svg|nav|header|footer|form|aside)\b[^>]*>[\s\S]*?<\/(?:script|style|noscript|svg|nav|header|footer|form|aside)>/giu, " ")
     .replace(/<(?:br|p|div|li|h[1-6]|section)\b[^>]*>/giu, "\n")
@@ -176,6 +222,19 @@ function visibleHtmlText(html) {
     .replace(/ *\n */gu, "\n")
     .replace(/\n{3,}/gu, "\n\n")
     .trim();
+}
+
+function visibleHtmlText(html) {
+  const candidates = [
+    ...[...html.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/giu)].map((match) => match[1]),
+    ...[...html.matchAll(
+      /<(?:div|main|section)\b[^>]*class\s*=\s*["'][^"']*(?:article-content|article-body|article__body|story-body|entry-content|post-content|m-c-font-article)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|main|section)>/giu,
+    )].map((match) => match[1]),
+  ].filter(Boolean);
+  if (!candidates.length) return htmlFragmentText(html);
+  return candidates
+    .map(htmlFragmentText)
+    .sort((a, b) => b.length - a.length)[0] || "";
 }
 
 export function extractReadableHtml(html) {
@@ -257,6 +316,7 @@ function nativePublicRequest(url, addresses, { timeoutMs, maxBytes }) {
       headers: {
         "user-agent": "BorderClashEvidence/1.0 (+research archive)",
         accept: "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.2",
+        "accept-encoding": "identity",
       },
     });
     request.setTimeout(timeoutMs, () => {
@@ -347,6 +407,7 @@ export async function fetchEvidence(
           headers: {
             "user-agent": "BorderClashEvidence/1.0 (+research archive)",
             accept: "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.2",
+            "accept-encoding": "identity",
           },
         })
         : await nativePublicRequest(current, addresses, { timeoutMs, maxBytes });
@@ -417,18 +478,37 @@ export async function fetchEvidence(
     const contentTypeHeader = String(response.headers.get("content-type") || "application/octet-stream");
     const contentType = contentTypeHeader
       .split(";")[0].trim().toLowerCase();
+    const contentEncodingHeader = String(response.headers.get("content-encoding") || "");
     const result = {
       status: "unsupported-format",
       requestedUrl,
       finalUrl: current.href,
       redirectChain,
       contentType,
+      contentEncoding: contentEncodingHeader,
       body,
       sha256: sha256(body),
       byteLength: body.length,
     };
+    let decodedBody = body;
+    if (contentType === "text/html" || contentType === "application/xhtml+xml" || contentType.startsWith("text/")) {
+      try {
+        const decoded = decodeContentBody(body, contentEncodingHeader, maxBytes);
+        decodedBody = decoded.body;
+        result.contentEncoding = decoded.contentEncoding || contentEncodingHeader;
+      } catch (error) {
+        const message = String(error?.message || error);
+        return {
+          ...result,
+          status: message.includes("capture limit") || String(error?.code || "") === "ERR_BUFFER_TOO_LARGE"
+            ? "too-large"
+            : "unusable-extraction",
+          error: message,
+        };
+      }
+    }
     if (contentType === "text/html" || contentType === "application/xhtml+xml") {
-      const decoded = decodeTextBody(body, contentTypeHeader);
+      const decoded = decodeTextBody(decodedBody, contentTypeHeader);
       const html = decoded.text;
       const text = extractReadableHtml(html);
       return {
@@ -441,7 +521,7 @@ export async function fetchEvidence(
     }
     if (contentType === "application/pdf") return { ...result, status: "captured-document" };
     if (contentType.startsWith("text/")) {
-      const decoded = decodeTextBody(body, contentTypeHeader);
+      const decoded = decodeTextBody(decodedBody, contentTypeHeader);
       const text = decoded.text.trim();
       return { ...result, status: text ? "captured-text" : "unusable-extraction", encoding: decoded.encoding, text };
     }
@@ -487,20 +567,12 @@ function safeArticleId(articleId) {
   return id;
 }
 
-async function copyFileIfMissing(source, destination) {
-  try {
-    await stat(destination);
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-    await mkdir(dirname(destination), { recursive: true });
-    await cp(source, destination);
-  }
-}
-
 async function syncBackup(articleRoot, backupArticleRoot, captureFiles) {
   await mkdir(backupArticleRoot, { recursive: true });
   for (const relativePath of captureFiles) {
-    await copyFileIfMissing(join(articleRoot, relativePath), join(backupArticleRoot, relativePath));
+    const destination = join(backupArticleRoot, relativePath);
+    await mkdir(dirname(destination), { recursive: true });
+    await cp(join(articleRoot, relativePath), destination, { force: true });
   }
 }
 
@@ -552,6 +624,7 @@ export async function storeEvidenceAttempt(articleId, fetched, options = {}) {
       canonicalUrl: fetched.canonicalUrl || "",
       redirectChain: fetched.redirectChain || [],
       contentType: fetched.contentType || "",
+      contentEncoding: fetched.contentEncoding || "",
       encoding: fetched.encoding || "",
       byteLength: fetched.byteLength,
       sha256: fetched.sha256,
@@ -575,7 +648,7 @@ export async function storeEvidenceAttempt(articleId, fetched, options = {}) {
     }
     if (typeof fetched.text === "string" && fetched.text) {
       const textPath = join(captureRoot, "text.txt");
-      if (!(await pathExists(textPath))) await writeFile(textPath, fetched.text + "\n", "utf8");
+      await writeFile(textPath, fetched.text + "\n", "utf8");
       captureFiles.push(relative(articleRoot, textPath));
     }
     attempt.captureKey = key;
