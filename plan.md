@@ -29,7 +29,7 @@ Implementation agents can simplify the schema, code, commands, and layout where 
 - [x] Keep publication authentication in the runner environment. The agent environment strips it, and the terminal sandbox bounds filesystem access.
 - [x] Pass the full Windows and Ubuntu fake-agent recovery and publication suites in isolated verification clones.
 - [x] Verify a fresh Flash Medium CLI session after the owner's sign-in. A sandboxed terminal request returned HTTP 200; CLI research works independently of the retired remote-control daemon.
-- [ ] Verify recovery after a real reboot without a manual desktop login. The host repository includes a native encrypted keyring startup setup and its credential mechanism passed a real round-trip test. The owner must enter the Login keyring password locally once before reboot acceptance can proceed.
+- [ ] Verify recovery after a real reboot without a manual desktop login. An optional encrypted-keyring startup setup exists but is not activated. First evaluate native headless/file-backed sign-in: T3's current Antigravity adapter uses SSH mode for that purpose. Do not request the owner's keyring password until the simpler native route has been tested.
 
 ## 3. Make timing and publication reliable
 
@@ -61,24 +61,28 @@ Keep bulk publisher content private and outside Git. The accepted initial backup
 - [x] Make Node and PowerShell use the same lowercase Linux review directory and honor `XDG_STATE_HOME`. Consolidate the first batch results into that directory and verify that `audit-resume` finds the current saved review. A cross-runtime regression passes on Windows and South.
 - [x] Fix current-snapshot audit marking: it saved the ledger and then failed by trying to release a timeline-only claim for a `current/...` ID. Only timeline records now use that cleanup. The CLI regression passes on Windows and South.
 - [x] Preserve monthly JSONL evidence and timeline files and small current JSON snapshots. Current claims use canonical evidence links, metric scope is explicit, and generated output retains the existing UI fields.
-- [ ] Finish a live acceptance cycle on the revised instructions. The fresh run `20261120T185222894Z` was stopped after repeated searches for the same inaccessible leads; its conversation and workspace remain resumable. The instructions now direct the model to use retained publisher text and leave exhausted leads uncertain. Use South's retained archive for the next acceptance run.
+- [ ] Finish autonomous live acceptance. Runs `20261120T185222894Z` and `20261120T192011049Z` repeated searches for unavailable old leads and were stopped with work preserved. The second used the retained archive. An operator-guided continuation of conversation `7d2e9a92-f658-4ff5-ba55-aee3dd6ae5d7` then called `finish --review` correctly; this proves the review intent, not autonomous stopping. Its result is `logs/source-hold.result.json` under the second session; its outer checkpoint remains resumable. No test processes remain running.
 
 After retirement and feedback fixes, Ubuntu passed all 1,385 Node tests and the full fake-agent suite. The Windows suite also passed in a frozen clone, and the production build passed. After the shared-state and brief fixes, Windows passed all 1,386 Node tests; the focused cross-runtime, context, and reviewer checks passed on South.
+
+The PCA correction subsequently passed all 1,388 Node tests in a frozen South snapshot, a fresh Flash Medium review, and verification of the committed delta `85f660c`. Live feedback still reports publisher-specific sandbox DNS failures and an unnecessary dependency rebuild when invoking `pnpm research`; investigate these before rollout.
 
 ## 6. Account for the historical record
 
 - [x] Retain the audited corrections, merges, stable IDs, source archives, and local ledger from the laptop work.
 - [x] Verify current reference integrity on South. The current tree has 3,335 articles, 581 timeline events, and no missing current/timeline evidence references.
-- [ ] Finish the remaining 8 reopened records with captured evidence and Flash Medium on South. Two other reopened articles were retried and given explicit unresolved dispositions: Bangkok Post returned a transient failure; Fresh News blocked access. Stored summaries are not source verification.
-- [ ] Review the unresolved source gaps with the operator. The synchronized ledger accounts for 4,056 historical/current records, including merged records. It contains 3,144 unresolved records and 8 pending records. These counts describe audit dispositions and source limitations.
+- [x] Give all 10 reopened records a disposition using captured evidence and Flash Medium on South where evidence was available. Six were reviewed, the PCA headline was narrowed to its own announcement, and three remain unresolved: two inaccessible articles and the current summary's unsupported fourth key update. A model warning about Thai script in `summaryKh` was rejected after checking the actual Unicode codepoints; do not edit valid Khmer based on that warning.
+- [ ] Review the remaining source gaps. The synchronized ledger accounts for 4,056 historical/current records, including merged records: 169 reviewed, 611 corrected, 131 merged, 3,145 unresolved, and zero pending. An accounted-for ledger is not a fully verified historical record. The current summary hold concerns uncaptured Khaosod article `1b74fc2f24abb855829e964f656dd8b2`; no supplied capture corroborated key update 4's army calm statement.
 
 Do not infer factual support from a stored summary or from a passing schema check. Preserve attribution and uncertainty when sources remain inaccessible. Add earlier history when needed to repair chronology or explain a meaningful sequence. A comprehensive new pre-project history remains separate work.
 
 ## 7. Finish and roll out
 
-- [x] Resolve the fresh research CLI authentication failure through the owner's CLI sign-in and verify a new session. Encrypted keyring startup remains the separate prerequisite for unattended reboot recovery.
+- [ ] Complete shared CLI authentication and reboot acceptance. The same native CLI failed over SSH but succeeded when only SSH detection variables were removed. South now has a small `agy` launcher for that behavior; a later wrapped request reached a model turn but hit its one-minute timeout. Recheck it with a suitable timeout and evaluate native SSH/file-backed auth before choosing the durable approach.
 - [x] Publish the authorized history rewrite with checked force-with-lease. Verify the production snapshot and successful Vercel deployment on the consolidated `main`.
 - [ ] Verify both checkouts are clean and on the same revision. Enable the timer after unattended acceptance passes and confirm the first scheduled outcome.
 - [ ] Record the final verified result and any unresolved evidence limitations here. Remove stale or superseded notes.
 
 Continue from the first unfinished prerequisite. Keep independent work moving while authentication or another external dependency is pending. Ask for the specific missing action when it is required. Mark completion from observed results.
+
+Scheduler comparison: Antigravity `/schedule` is conversation-scoped; persistent `/automation` is an App feature. T3 can run scheduled prompts through a boot-enabled Linux user service, but manages a separate provider sign-in and does not replace BorderClash's validation/publication gates. Current evidence favors retaining the small systemd trigger and CLI runner; settle headless authentication first. Sources: [Antigravity schedule](https://antigravity.google/docs/commands/schedule/), [T3 background service](https://github.com/pingdotgg/t3code/blob/main/docs/user/background-service.md), [T3 Antigravity provider](https://github.com/pingdotgg/t3code/blob/main/docs/user/providers-antigravity.md).
