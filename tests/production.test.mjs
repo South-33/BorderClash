@@ -20,11 +20,16 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(linuxInstaller, /OnUnitInactiveSec=5min/);
   assert.match(linuxInstaller, /KillMode=control-group/);
   assert.match(linuxInstaller, /DBUS_SESSION_BUS_ADDRESS/);
+  assert.doesNotMatch(linuxInstaller, /After=network-online\.target/);
 
   assert.match(production, /git.+fetch.+main/s);
   assert.match(production, /FetchAttempts = 6/);
   assert.match(production, /FetchRetrySeconds = 30/);
   assert.match(production, /function Invoke-BoundedFetch/);
+  assert.match(production, /function Test-SharedCredentialReady/);
+  assert.match(production, /org\.freedesktop\.secrets/);
+  assert.match(production, /Default_5fKeyring/);
+  assert.match(production, /SKIP: shared credential/);
   assert.match(production, /for \(\$attempt = 1; \$attempt -le \$FetchAttempts; \$attempt\+\+\)/);
   assert.match(production, /Start-Sleep -Seconds \$FetchRetrySeconds/);
   assert.match(production, /failed after \$FetchAttempts bounded attempts/);
@@ -39,6 +44,10 @@ test('production research runs from main through the owned scheduler', () => {
   assert.ok(
     production.indexOf('if (-not (Test-ResearchDue))') < production.lastIndexOf('Invoke-BoundedFetch'),
     'scheduler must check due state before waking Git/network',
+  );
+  assert.ok(
+    production.indexOf('if (-not (Test-SharedCredentialReady))') < production.lastIndexOf('Invoke-BoundedFetch'),
+    'scheduler must wait for shared credentials before Git/network work',
   );
   const preflight = production.slice(
     production.indexOf('function Test-ResearchDue'),

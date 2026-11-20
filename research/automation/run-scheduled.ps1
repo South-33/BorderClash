@@ -117,11 +117,54 @@ function Invoke-BoundedFetch {
     }
 }
 
+function Test-SharedCredentialReady {
+    if ($env:OS -eq "Windows_NT") { return $true }
+
+    $gdbus = Get-Command gdbus -ErrorAction SilentlyContinue
+    if (-not $gdbus) {
+        $script:preflightMessage = "SKIP: shared credential service check is unavailable"
+        return $false
+    }
+
+    $owner = @(
+        & $gdbus.Source call --session `
+            --dest org.freedesktop.DBus `
+            --object-path /org/freedesktop/DBus `
+            --method org.freedesktop.DBus.NameHasOwner `
+            org.freedesktop.secrets 2>$null
+    )
+    if ($LASTEXITCODE -ne 0 -or ([string]::Join("", [string[]]$owner)) -notmatch "true") {
+        $script:preflightMessage = "SKIP: shared credential service is not ready"
+        return $false
+    }
+
+    foreach ($collection in @("login", "Default_5fKeyring")) {
+        $locked = @(
+            & $gdbus.Source call --session `
+                --dest org.freedesktop.secrets `
+                --object-path "/org/freedesktop/secrets/collection/$collection" `
+                --method org.freedesktop.DBus.Properties.Get `
+                org.freedesktop.Secret.Collection Locked 2>$null
+        )
+        if ($LASTEXITCODE -ne 0 -or ([string]::Join("", [string[]]$locked)) -notmatch "<false>") {
+            $script:preflightMessage = "SKIP: shared credential collection '$collection' is locked or unavailable"
+            return $false
+        }
+    }
+
+    return $true
+}
+
 # The Windows task polls frequently so a due cycle starts promptly. Avoid
 # waking Git/network/Node on every idle poll; the dedicated production checkout
 # owns this scheduler state, so the local state is sufficient until a cycle is
 # actually due. The normal runner still re-checks the synced state below.
 if (-not (Test-ResearchDue)) {
+    Write-Output $script:preflightMessage
+    exit 0
+}
+
+if (-not (Test-SharedCredentialReady)) {
     Write-Output $script:preflightMessage
     exit 0
 }

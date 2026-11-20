@@ -7,7 +7,6 @@ mkdir -p -- "$unit_root"
 cat > "$unit_root/borderclash-research.service" <<EOF
 [Unit]
 Description=BorderClash research and publication
-After=network-online.target
 
 [Service]
 Type=oneshot
