@@ -847,9 +847,14 @@ Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md
         } else {
             Join-Path ([Environment]::GetFolderPath("UserProfile")) ".borderclash/evidence"
         }
+        $backupRoot = if ($env:BORDERCLASH_EVIDENCE_BACKUP) {
+            $env:BORDERCLASH_EVIDENCE_BACKUP
+        } else {
+            Join-Path ([Environment]::GetFolderPath("UserProfile")) ".borderclash/evidence-backup"
+        }
         Write-JsonAtomicFile $settingsPath @{
             permissions = @{
-                allow = @("read_url(*)", "read_file($evidenceRoot)")
+                allow = @("read_url(*)", "write_file($evidenceRoot)", "write_file($backupRoot)")
             }
         }
         $supervisorArgs = @(
