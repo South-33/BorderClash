@@ -5,6 +5,15 @@ import test from "node:test";
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const readJsonl = (path) => readFileSync(path, "utf8").trim().split(/\r?\n/u).filter(Boolean).map(JSON.parse);
 
+test("PCA's own announcement does not inherit the meeting ordinal from Thailand's account", () => {
+  const news = readJsonl("data/news/2026-11.jsonl");
+  const pca = news.find((row) => row.id === "3ae337cea857a2dea84f44523ae4b645");
+  const thai = news.find((row) => row.id === "5d5428fb0bf13e8e39b160558b371fc0");
+  assert.doesNotMatch(pca.title, /third/iu);
+  assert.match(pca.summary, /will meet.*Kuala Lumpur.*November 24 to 27, 2026/u);
+  assert.match(thai.title, /third/iu);
+});
+
 test("current synthesis is refreshed and evidence-linked through November 19", () => {
   const summary = readJson("data/current/summary.json");
   const thailand = readJson("data/current/thailand.json");
