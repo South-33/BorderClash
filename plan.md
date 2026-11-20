@@ -37,7 +37,7 @@ Implementation agents can simplify the schema, code, commands, and layout where 
 - [x] Confirm delivery through the production `/data/dashboard.json`, including the expected research state and commit or a compatible descendant. A Git push alone leaves delivery pending.
 - [x] Keep publication retries separate from research retries and preserve a pending candidate through outages.
 - [x] Install `borderclash-research.service` and `borderclash-research.timer` on South. The timer checks every five minutes and the user manager has lingering enabled.
-- [ ] Verify the installed timer with a working fresh CLI login, delayed network recovery, and a reboot. Enable unattended production only when these checks pass.
+- [ ] Verify the installed timer with a working fresh CLI login and a reboot. Delayed network recovery is independently verified on South: the real scheduler script tolerated two simulated fetch failures, succeeded on the third bounded attempt, then continued through fast-forward sync and invoked the runner. Enable unattended production only when authentication and reboot checks also pass.
 
 ## 4. Preserve evidence
 
@@ -80,7 +80,7 @@ Do not infer factual support from a stored summary or from a passing schema chec
 
 - [ ] Complete trusted-workstation authentication and reboot acceptance. Normal interactive `agy` now shares the owner's GNOME credential session across GNOME Terminal, SSH, and user-systemd; a fresh SSH request returned `OK` and a transient user-systemd probe exited successfully. BorderClash commit `d5f0a0f` independently selects `agy-unattended`, whose file-backed OAuth remains unauthenticated until one owner sign-in. SouthServer commits `f2ee128` and `65fdf8c` configure auto-login/no-lock, separate the two Antigravity launchers, and provide an idempotent keyring-password removal helper that preserves stored items. Complete the passwordless-keyring conversion and `agy-unattended acp --login`, then reboot and verify both shared desktop credentials and unattended research without human input.
 - [x] Publish the authorized history rewrite with checked force-with-lease. Verify the production snapshot and successful Vercel deployment on the consolidated `main`.
-- [ ] Verify both checkouts are clean and on the same revision. Enable the timer after unattended acceptance passes and confirm the first scheduled outcome.
+- [ ] Both BorderClash checkouts and both SouthServer checkouts are clean and synchronized at their respective current revisions. Enable the timer after unattended acceptance passes and confirm the first scheduled outcome.
 - [ ] Record the final verified result and any unresolved evidence limitations here. Remove stale or superseded notes.
 
 Continue from the first unfinished prerequisite. Keep independent work moving while authentication or another external dependency is pending. Ask for the specific missing action when it is required. Mark completion from observed results.
