@@ -12,7 +12,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=$repo_root
-Environment=PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:/snap/bin
+Environment=PATH=/usr/local/bin:$HOME/.local/bin:/usr/bin:/bin:/snap/bin
 Environment=XDG_RUNTIME_DIR=/run/user/$(id -u)
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus
 ExecStart=$research_shell -NoProfile -File $repo_root/research/automation/run-scheduled.ps1

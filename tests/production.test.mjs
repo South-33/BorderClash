@@ -57,11 +57,9 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(schedulePolicy, /SampleLimit = 10/);
   assert.match(schedulePolicy, /BufferMinutes = 30/);
   assert.match(schedulePolicy, /MaximumLeadMinutes = 360/);
-  assert.match(platform, /Get-Command agy-unattended/);
-  assert.ok(
-    platform.indexOf('Get-Command agy-unattended') < platform.indexOf('Get-Command agy '),
-    'Linux research must prefer the dedicated unattended Antigravity launcher',
-  );
+  assert.doesNotMatch(platform, /agy-unattended/);
+  assert.match(platform, /Get-Command agy /);
+  assert.match(linuxInstaller, /PATH=\/usr\/local\/bin:\$HOME\/\.local\/bin/);
 
   assert.match(runner, /\[int\]\$TimeoutMinutes = 0/);
   assert.match(runner, /\$productionModel = "gemini-3\.8-flash-medium"/);
