@@ -33,7 +33,8 @@ async function runPolicy(records) {
       "} | ConvertTo-Json -Compress",
     ].join("\r\n");
     await writeFile(scriptPath, script, "utf8");
-    const result = spawnSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
+    const shell = process.platform === "win32" ? "powershell.exe" : "pwsh";
+    const result = spawnSync(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
       encoding: "utf8",
       windowsHide: true,
     });

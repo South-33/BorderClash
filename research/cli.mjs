@@ -792,6 +792,13 @@ async function readAuditLedger(path = defaultAuditLedgerPath) {
 }
 
 async function auditStatus(path = defaultAuditLedgerPath) {
+  if (!existsSync(path)) {
+    process.stdout.write(JSON.stringify({
+      initialized: false,
+      nextAction: "Use audit-init to start a historical audit. Routine research cycles can continue without an audit ledger.",
+    }, null, 2) + "\n");
+    return;
+  }
   process.stdout.write(JSON.stringify(auditLedgerSummary(await readAuditLedger(path)), null, 2) + "\n");
 }
 
@@ -1085,6 +1092,7 @@ async function auditSync(ref = "HEAD", path = defaultAuditLedgerPath) {
 }
 
 async function finish(hoursText, reasonParts) {
+  const nextAction = "Return your final response with the cycle outcome and HARNESS_FEEDBACK. Completed cycles include <!-- GOAL_COMPLETE -->.";
   const statePath = join(dataRoot, "research-state.json");
   const state = await readJson(statePath);
   const cycleRuntimePath = resolve(".work", "CYCLE_RUN.json");
@@ -1098,11 +1106,11 @@ async function finish(hoursText, reasonParts) {
   if (existsSync(finishMarkerPath)) {
     const marker = await readJson(finishMarkerPath);
     if (marker.cycleId === cycleId && marker.decision !== "review") {
-      process.stdout.write(JSON.stringify({ ...marker, alreadyFinished: true }) + "\n");
+      process.stdout.write(JSON.stringify({ ...marker, alreadyFinished: true, nextAction }) + "\n");
       return;
     }
     if (marker.cycleId === cycleId && marker.decision === "review" && hoursText === "--review") {
-      process.stdout.write(JSON.stringify({ ...marker, alreadyFinished: true }) + "\n");
+      process.stdout.write(JSON.stringify({ ...marker, alreadyFinished: true, nextAction }) + "\n");
       return;
     }
   }
@@ -1118,7 +1126,7 @@ async function finish(hoursText, reasonParts) {
       requestedAt: Date.now(),
     };
     await writeJson(finishMarkerPath, marker);
-    process.stdout.write(JSON.stringify(marker) + "\n");
+    process.stdout.write(JSON.stringify({ ...marker, nextAction }) + "\n");
     return;
   }
 
@@ -1143,7 +1151,7 @@ async function finish(hoursText, reasonParts) {
     requestedAt: Date.now(),
   };
   await writeJson(finishMarkerPath, marker);
-  process.stdout.write(JSON.stringify(marker) + "\n");
+  process.stdout.write(JSON.stringify({ ...marker, nextAction }) + "\n");
 }
 
 function run(name, args) {
