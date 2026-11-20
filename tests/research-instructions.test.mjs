@@ -15,7 +15,9 @@ test("agent instructions require a concise evidence and localization check befor
   assert.match(agents, /claim, event date and year, any exact time, attribution/isu);
   assert.match(agents, /shared provenance/iu);
   assert.match(agents, /English, Thai, and Khmer.*actors, numbers, negation, attribution, and uncertainty/isu);
-  assert.match(agents, /finish --review <reason>/u);
+  assert.match(agents, /node research\/cli\.mjs finish --review <reason>/u);
+  assert.match(agents, /terminal sandbox blocks outbound network by default/iu);
+  assert.match(agents, /terminal `probe-source` DNS failure does not prove the publisher is unavailable/iu);
 });
 
 test("fresh and resumed runner prompts stay short and point back to durable instructions", () => {

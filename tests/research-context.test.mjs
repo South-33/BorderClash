@@ -11,6 +11,8 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
   assert.match(result.stdout, /not verified truth/u);
   assert.match(result.stdout, /Research reference time:/u);
   assert.match(result.stdout, /## Current repository state/u);
+  assert.match(result.stdout, /Current key updates \(verify evidence\):/u);
+  assert.match(result.stdout, /1b74fc2f24abb855829e964f656dd8b2/u);
   assert.match(result.stdout, /## Latest retained evidence anchors/u);
   assert.match(result.stdout, /A no-change cycle is valid/u);
   assert.match(result.stdout, /## Recent repository context/u);
@@ -19,7 +21,10 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
   assert.match(result.stdout, /## Source mix across the latest 20 visible records per environment \(context, not a quota\)/u);
   assert.match(result.stdout, /Thailand domestic:/u);
   assert.match(result.stdout, /Cambodia domestic:/u);
-  assert.match(result.stdout, /Finish when the record is in the best state the evidence supports/u);
+  assert.match(result.stdout, /Finish with `node research\/cli\.mjs finish`/u);
+  assert.match(result.stdout, /Terminal HTTP is sandboxed/u);
+  assert.match(result.stdout, /node research\/cli\.mjs finish/u);
+  assert.doesNotMatch(result.stdout, /pnpm research/u);
   assert.doesNotMatch(result.stdout, /After 3 searches/u);
   const productionText = result.stdout.trimEnd().split(/\r?\n/u).join(EOL) + EOL;
   assert.ok(Buffer.byteLength(productionText, "utf8") <= 4500, `cycle context too large: ${Buffer.byteLength(productionText, "utf8")} bytes`);

@@ -931,7 +931,7 @@ Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md
 
     $finishMarkerPath = Join-Path $runDir ".work\research-finish.json"
     if (-not (Test-Path -LiteralPath $finishMarkerPath)) {
-        throw "Antigravity did not run pnpm research finish"
+        throw "Antigravity did not run node research/cli.mjs finish"
     }
     $finishMarker = Get-Content -LiteralPath $finishMarkerPath -Raw | ConvertFrom-Json
     if ([string]$finishMarker.cycleId -ne $runId) {

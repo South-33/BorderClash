@@ -306,6 +306,12 @@ function compactMetric(metric) {
   return `${prefix}${metric.value}`;
 }
 
+function firstSentence(text) {
+  const value = String(text || "").trim();
+  const match = value.match(/^.*?[.!?](?:\s|$)/u);
+  return match ? match[0].trim() : value;
+}
+
 function renderContext(output) {
   const lines = [
     "# BorderClash cycle context",
@@ -325,7 +331,12 @@ function renderContext(output) {
     `Impact: displaced ${compactMetric(output.current.impact.displaced)}; deaths ${compactMetric(output.current.impact.deaths)}`,
     `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
     `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
-    `Summary: ${output.current.summary.summary || ""}`,
+    `Overall: ${firstSentence(output.current.summary.summary)}`,
+    "Current key updates (verify evidence):",
+    ...output.current.summary.keyUpdates.slice(0, 4).map((item) => {
+      const ids = Array.isArray(item.evidenceIds) ? item.evidenceIds.join(",") : "no-evidence-id";
+      return `- [${ids}] ${item.text || ""}`;
+    }),
     "",
     "## Evidence scoring rubric",
     evidenceRubricPrompt(),
@@ -372,7 +383,8 @@ function renderContext(output) {
   lines.push(
     "",
     `Archive: ${output.archive.timeline} timeline events; ${output.archive.news} news records.`,
-    "Finish when the record is in the best state the evidence supports: `pnpm research finish`. Commands: `pnpm research --help`.",
+    "Terminal HTTP is sandboxed; use web tools. EAI_AGAIN from probe-source does not prove publisher failure.",
+    "Finish with `node research/cli.mjs finish`; help: `node research/cli.mjs --help`.",
     "",
   );
   return lines.join("\n");
@@ -1250,46 +1262,46 @@ if (command === "brief") {
   await finish(process.argv[3], process.argv.slice(4));
 } else if (["help", "--help", "-h", "audit-help"].includes(command)) {
   process.stdout.write([
-    "pnpm research [context]          # show the compact cycle context",
-    "pnpm research ingest <file> [--no-localize] # add/reuse article evidence; skip unrelated localization sync for isolated audits",
-    "pnpm research sync-news-localization # strip stale localized titles outside the newest visible domestic window",
-    "pnpm research capture <id> [--force] # capture or retry one stored article",
-    "pnpm research probe-source <url> [preview-chars] # test archive usability without changing data or archive state",
-    "pnpm research archive-verify <id>    # verify the South-local backup copy by checksum",
-    "pnpm research archive-restore <id> [destination] # restore one backup to a review directory",
-    "pnpm research reconstruct <id> [git-ref] # show one historical canonical record with its private capture metadata",
-    "pnpm research audit-times         # inventory exact/date-only times and stored-evidence time support for source review",
-    "pnpm research audit-time-provenance # flag exact times that mirror article publication time without textual support",
-    "pnpm research audit-chronology    # flag retrospective evidence whose publication date may have been copied to an event",
-    "pnpm research audit-humanitarian  # triage single-source humanitarian events with dense numeric summary mismatches",
-    "pnpm research audit-references    # report canonical evidence references and current source URLs outside the registry",
-    "pnpm research audit-show <id>     # show one canonical record with resolved article/timeline evidence",
-    "pnpm research audit-cluster <id> [window-days] [limit] # rank nearby timeline rows that may duplicate or conflate the event",
-    "pnpm research audit-captured <id> # show archived publisher text for cited evidence with prompt-safe caps",
-    "pnpm research audit-prepare <id> [window-days] [limit] [--retry-missing] [--force-capture] # one compact cluster/capture packet; retry only uncaptured transient/missing sources unless forced",
-    "pnpm research audit-diagnose <id> [window-days] [limit] # concise evidence health, exact-time support, and already-known replacement leads",
-    "pnpm research audit-recover <id> [window-days] [limit] [max-attempts] [--force-capture] # retry uncaptured cited evidence first, then ranked replacement leads, stopping after the first usable archive capture",
-    "pnpm research audit-resume <id>   # recover the latest reviewer/verifier state and detect stale evidence after an interrupted audit",
-    "pnpm research audit-init [git-ref] # create the local full-record audit ledger",
-    "pnpm research audit-next [limit]    # show the next prioritized pending records",
-    "pnpm research audit-risk [limit]    # rank pending timeline records by deterministic review-risk signals",
-    "pnpm research audit-pick [limit] [scan-limit] [--claim] # rank high-risk rows; --claim atomically reserves one row from a linked worktree",
-    "pnpm research audit-triage [limit] [scan-limit] [attempts] [concurrency] # safely pick unclaimed risk rows, batch evidence recovery, and return compact next actions",
-    "pnpm research audit-claim <id> [id...] # atomically reserve related timeline rows for the current linked worktree",
-    "pnpm research audit-release <id> # release a reservation when abandoning audit work",
-    "pnpm research audit-mark <id> <reviewed|corrected|merged|unresolved> [note] # sync stale canonical state, then record one audit result",
-    "pnpm research audit-sync [git-ref]  # reopen changed/new records after upstream movement",
-    "pnpm research audit-status          # summarize full-record audit progress",
-    "pnpm research audit-help            # show historical audit commands",
-    "pnpm research finish             # request completion; keep current cadence",
-    "pnpm research finish <hours> <reason>  # complete cycle and change cadence",
-    "pnpm research finish --review <reason> # stop for operator review without publication",
+    "node research/cli.mjs [context]          # show the compact cycle context",
+    "node research/cli.mjs ingest <file> [--no-localize] # add/reuse article evidence; skip unrelated localization sync for isolated audits",
+    "node research/cli.mjs sync-news-localization # strip stale localized titles outside the newest visible domestic window",
+    "node research/cli.mjs capture <id> [--force] # capture or retry one stored article",
+    "node research/cli.mjs probe-source <url> [preview-chars] # host/operator network diagnostic; AGY terminal sandbox can block it",
+    "node research/cli.mjs archive-verify <id>    # verify the South-local backup copy by checksum",
+    "node research/cli.mjs archive-restore <id> [destination] # restore one backup to a review directory",
+    "node research/cli.mjs reconstruct <id> [git-ref] # show one historical canonical record with its private capture metadata",
+    "node research/cli.mjs audit-times         # inventory exact/date-only times and stored-evidence time support for source review",
+    "node research/cli.mjs audit-time-provenance # flag exact times that mirror article publication time without textual support",
+    "node research/cli.mjs audit-chronology    # flag retrospective evidence whose publication date may have been copied to an event",
+    "node research/cli.mjs audit-humanitarian  # triage single-source humanitarian events with dense numeric summary mismatches",
+    "node research/cli.mjs audit-references    # report canonical evidence references and current source URLs outside the registry",
+    "node research/cli.mjs audit-show <id>     # show one canonical record with resolved article/timeline evidence",
+    "node research/cli.mjs audit-cluster <id> [window-days] [limit] # rank nearby timeline rows that may duplicate or conflate the event",
+    "node research/cli.mjs audit-captured <id> # show archived publisher text for cited evidence with prompt-safe caps",
+    "node research/cli.mjs audit-prepare <id> [window-days] [limit] [--retry-missing] [--force-capture] # one compact cluster/capture packet; retry only uncaptured transient/missing sources unless forced",
+    "node research/cli.mjs audit-diagnose <id> [window-days] [limit] # concise evidence health, exact-time support, and already-known replacement leads",
+    "node research/cli.mjs audit-recover <id> [window-days] [limit] [max-attempts] [--force-capture] # retry uncaptured cited evidence first, then ranked replacement leads, stopping after the first usable archive capture",
+    "node research/cli.mjs audit-resume <id>   # recover the latest reviewer/verifier state and detect stale evidence after an interrupted audit",
+    "node research/cli.mjs audit-init [git-ref] # create the local full-record audit ledger",
+    "node research/cli.mjs audit-next [limit]    # show the next prioritized pending records",
+    "node research/cli.mjs audit-risk [limit]    # rank pending timeline records by deterministic review-risk signals",
+    "node research/cli.mjs audit-pick [limit] [scan-limit] [--claim] # rank high-risk rows; --claim atomically reserves one row from a linked worktree",
+    "node research/cli.mjs audit-triage [limit] [scan-limit] [attempts] [concurrency] # safely pick unclaimed risk rows, batch evidence recovery, and return compact next actions",
+    "node research/cli.mjs audit-claim <id> [id...] # atomically reserve related timeline rows for the current linked worktree",
+    "node research/cli.mjs audit-release <id> # release a reservation when abandoning audit work",
+    "node research/cli.mjs audit-mark <id> <reviewed|corrected|merged|unresolved> [note] # sync stale canonical state, then record one audit result",
+    "node research/cli.mjs audit-sync [git-ref]  # reopen changed/new records after upstream movement",
+    "node research/cli.mjs audit-status          # summarize full-record audit progress",
+    "node research/cli.mjs audit-help            # show historical audit commands",
+    "node research/cli.mjs finish             # request completion; keep current cadence",
+    "node research/cli.mjs finish <hours> <reason>  # complete cycle and change cadence",
+    "node research/cli.mjs finish --review <reason> # stop for operator review without publication",
   ].filter((line) => {
-    const auditCommand = line.startsWith("pnpm research audit-");
+    const auditCommand = line.startsWith("node research/cli.mjs audit-");
     const evidenceCommand = /audit-(?:captured|help)\b/u.test(line);
     return command === "audit-help" || !auditCommand || evidenceCommand;
   }).join("\n") + "\n");
 } else {
-    console.error("Usage: pnpm research [brief|context|ingest|sync-news-localization|capture|probe-source|archive-verify|archive-restore|reconstruct|audit-times|audit-time-provenance|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-cluster|audit-captured|audit-prepare|audit-diagnose|audit-recover|audit-resume|audit-init|audit-next|audit-risk|audit-pick|audit-triage|audit-claim|audit-release|audit-mark|audit-sync|audit-status|finish]");
+    console.error("Usage: node research/cli.mjs [brief|context|ingest|sync-news-localization|capture|probe-source|archive-verify|archive-restore|reconstruct|audit-times|audit-time-provenance|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-cluster|audit-captured|audit-prepare|audit-diagnose|audit-recover|audit-resume|audit-init|audit-next|audit-risk|audit-pick|audit-triage|audit-claim|audit-release|audit-mark|audit-sync|audit-status|finish]");
   process.exit(2);
 }

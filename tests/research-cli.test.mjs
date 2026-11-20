@@ -517,8 +517,8 @@ test("--help is a successful alias for help", () => {
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /research \[context\]/u);
+  assert.match(result.stdout, /node research\/cli\.mjs \[context\]/u);
   assert.match(result.stdout, /--no-localize/u);
-  assert.match(result.stdout, /research finish/u);
+  assert.match(result.stdout, /node research\/cli\.mjs finish/u);
   assert.doesNotMatch(result.stdout, /research check/u);
 });
