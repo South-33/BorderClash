@@ -17,7 +17,7 @@ Implementation agents can simplify the schema, code, commands, and layout where 
 - [x] Remove the parallel audit coordinator, its four prompts, and completed evidence-migration tooling. Retain the small JSONL merge routine still used by serial audit packet refresh. This removes about 2,900 lines.
 - [x] Keep routine CLI help concise and expose historical audit commands through `audit-help`. Keep the launch prompt focused on canonical data and the review path.
 - [x] Consolidate the recent development history while retaining the earlier history through `48b1475` and exact trees for the later impact, November 14, and November 19 synthesis snapshots. Original commits and all workspace heads are retained in verified recovery bundles outside Git.
-- [ ] Finish retiring backed-up audit worktrees and their branch refs. Verify one local branch and one registered checkout, then sync laptop, GitHub, and South to the same `main`.
+- [x] Retire all 281 backed-up audit worktrees and their branch refs. Laptop and South each have one registered checkout on `main`. Both match GitHub and the verified public deployment. The earlier research history and distinct synthesis snapshots remain directly readable in Git. Retired runtime files are outside the active checkout.
 
 ## 2. Preserve and recover each cycle
 
@@ -26,7 +26,7 @@ Implementation agents can simplify the schema, code, commands, and layout where 
 - [x] Provide status, pause, stop, resume, run-now, restart-fresh, and cleanup through `research/automation/control.ps1`. Stop preserves work. Cleanup previews owned completed or explicitly retired scratch directories and preserves evidence.
 - [x] Keep a durable review hold when the agent requests help or safe continuation needs an operator. Retry ordinary transient outages with bounded backoff.
 - [x] Keep publication authentication in the runner environment. The agent environment strips it, and the terminal sandbox bounds filesystem access.
-- [x] Pass the full Windows fake-agent recovery and publication suite in an isolated verification clone.
+- [x] Pass the full Windows and Ubuntu fake-agent recovery and publication suites in isolated verification clones.
 - [ ] Verify a fresh CLI session after the current authentication issue is resolved, then verify recovery after a real reboot without a manual desktop login.
 
 ## 3. Make timing and publication reliable
@@ -57,7 +57,7 @@ Keep bulk publisher content private and outside Git. The accepted initial backup
 - [x] Preserve monthly JSONL evidence and timeline files and small current JSON snapshots. Current claims use canonical evidence links, metric scope is explicit, and generated output retains the existing UI fields.
 - [ ] Rerun the necessary live checks on the final simplified code after fresh CLI authentication works. Verify source access and the completion/review outcome.
 
-Local proof after retiring the parallel coordinator includes 1,385 passing Node tests and a passing production build. The frozen Windows automation suite passed. Ubuntu passed all 1,408 tests before retirement and the focused CLI, scheduling, and production checks after the feedback fixes. Broaden verification when a new change warrants it.
+After retirement and feedback fixes, Ubuntu passed all 1,385 Node tests and the full fake-agent suite. The Windows suite also passed in a frozen clone, and the production build passed. The final core CLI/scheduling changes passed focused checks on both platforms.
 
 ## 6. Account for the historical record
 
@@ -71,7 +71,7 @@ Do not infer factual support from a stored summary or from a passing schema chec
 ## 7. Finish and roll out
 
 - [ ] Resolve the fresh CLI authentication failure. Earlier sessions and the completed supervised run worked, but subsequent fresh invocations returned `authentication required`. Interactive CLI sign-in on South is pending.
-- [ ] Finish the remaining acceptance checks above, publish the consolidated `main` with a checked force-with-lease for the authorized history rewrite, and verify the production snapshot.
+- [x] Publish the authorized history rewrite with checked force-with-lease. Verify the production snapshot and successful Vercel deployment on the consolidated `main`.
 - [ ] Verify both checkouts are clean and on the same revision. Enable the timer after unattended acceptance passes and confirm the first scheduled outcome.
 - [ ] Record the final verified result and any unresolved evidence limitations here. Remove stale or superseded notes.
 
