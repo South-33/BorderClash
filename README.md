@@ -25,6 +25,8 @@ A cycle can also conclude that nothing material changed. The record is meant to 
 
 Production research runs on **South Server** (Ubuntu) with Flash Medium. The systemd timer polls every five minutes and the runner starts before the target publication time. After a reboot or power outage, the boot-time check reads the absolute `nextRunAt`; if that time has already passed, the cycle is due immediately instead of being skipped until another interval. Interrupted work keeps its workspace and conversation, including when upstream code advances. A successful Git push remains pending until the public dashboard serves the expected research data.
 
+Production research is a singleton. The timer, `run-now`, resume, and direct publish-enabled starts all share one canonical process mutex; if another trigger arrives while a cycle owns it, the second invocation exits with `SKIP: already-running`. Real publish-enabled runs cannot override that mutex. Custom mutexes are only for isolated fake/shadow experiments.
+
 On South Server, use these commands from `~/Projects/BorderClash`.
 
 ```sh
@@ -39,15 +41,9 @@ journalctl --user -u borderclash-research -n 30
 
 ### Review past research cycles
 
-The runner retains raw tool/event traces in `.work/runner/logs/` and automatically writes a readable report to `.work/runner/history/<run-id>/` when cycle state changes. Reports include the actual research tool steps, completion reason, changed files, cadence, and publication receipt. They remain available when operator cleanup removes a cycle workspace.
+The runner automatically keeps a private review history on South Server at `.work/runner/history/`. Future agents should start with `.work/runner/history/INDEX.md`, then open `<run-id>/report.md` or `report.json` for one cycle. A report links the cycle to its model conversation/resume attempts, agent harness feedback, failed tool actions, final report, changed canonical files, cadence, and publication receipt. The original raw tool/event traces remain under `.work/runner/logs/` for deeper diagnosis.
 
-```sh
-node research/automation/cycle-history.mjs list
-node research/automation/cycle-history.mjs show <run-id>
-node research/automation/cycle-history.mjs save --all  # backfill past runs
-```
-
-Each saved run has `report.md` and `report.json`; the full raw logs remain under `logs/`. Reports and logs are **local/private on South Server**, excluded from Git and the website. This is local retention, not an off-machine backup.
+No operator command is required for normal use: reports refresh automatically as cycle state changes and before stop/restart/cleanup removes a workspace. The history is **local/private on South Server**, excluded from Git and the website. It is retained diagnostic history, not an off-machine backup.
 
 ## Repository map
 

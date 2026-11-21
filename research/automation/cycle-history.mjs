@@ -81,11 +81,17 @@ function stepsFromEvents(logDir, runId) {
   for (const file of eventFiles(logDir, runId)) {
     let malformedLines = 0;
     let eventCount = 0;
+    let conversationId = null;
     for (const line of (readText(join(logDir, file.name)) || "").split(/\r?\n/u)) {
       if (!line.trim()) continue;
       let event;
       try { event = JSON.parse(line); } catch { malformedLines++; continue; }
       eventCount++;
+      conversationId = conversationId
+        || event.conversation_id
+        || event.result?.conversation_id
+        || event.step_update?.conversation_id
+        || null;
       const step = event.step_update;
       if (step?.step_type !== "tool" || step.state !== "DONE") continue;
       const parameters = step.tool_info?.parameters || {};
@@ -100,7 +106,7 @@ function stepsFromEvents(logDir, runId) {
         outcome: exit ? `exit ${exit[1]}` : "completed",
       });
     }
-    attempts.push({ attempt: file.attempt, eventsFile: file.name, eventCount, malformedLines });
+    attempts.push({ attempt: file.attempt, conversationId, eventsFile: file.name, eventCount, malformedLines });
   }
   return { attempts, steps };
 }
@@ -128,11 +134,26 @@ export function buildCycleReport(runId, options = {}) {
   const historyPath = join(resolve(options.historyDir || join(dirname(logDir), "history")), runId);
   const previous = readJson(join(historyPath, "report.json"));
   const eventTrace = stepsFromEvents(logDir, runId);
-  const attempts = eventTrace.attempts.length ? eventTrace.attempts : (previous?.attempts || []);
+  const attempts = eventTrace.attempts.length ? eventTrace.attempts.map((attempt) => {
+    const result = results.find((item) => item.attempt === attempt.attempt);
+    return {
+      ...attempt,
+      conversationId: attempt.conversationId || result?.result?.conversation_id || null,
+      resultFile: result?.name || null,
+      resultStatus: result?.result?.status || null,
+    };
+  }) : (previous?.attempts || []);
   const steps = eventTrace.attempts.length ? eventTrace.steps : (previous?.steps || []);
   const patchPath = join(logDir, `${runId}.data.patch`);
   const patch = readText(patchPath);
   const feedback = readText(join(logDir, `${runId}.feedback.txt`))?.trim() || null;
+  const lastResultEntry = [...results].reverse().find(({ result }) => result) || null;
+  const conversationIds = [...new Set([
+    ...attempts.map((attempt) => attempt.conversationId),
+    ...results.map(({ result }) => result?.conversation_id),
+    current?.conversationId,
+  ].filter(Boolean))];
+  const failedActions = steps.filter((step) => step.outcome !== "completed" && step.outcome !== "exit 0");
 
   const status = delivery?.status === "verified" ? "published"
     : current?.status || (delivery?.status === "awaiting-public" ? "awaiting-publication"
@@ -157,11 +178,20 @@ export function buildCycleReport(runId, options = {}) {
     publicationStatus: delivery?.status || null,
     agentStatus: lastResult?.status || null,
     agentReport: lastResult?.response || previous?.agentReport || null,
+    conversationIds,
     attempts,
     toolCounts: Object.fromEntries([...new Set(steps.map((s) => s.tool))].sort().map((tool) => [tool, steps.filter((s) => s.tool === tool).length])),
     steps,
+    failedActions,
     changedPaths: patch !== null ? changedPaths(patch) : previous?.changedPaths || [],
     feedback,
+    feedbackContext: feedback ? {
+      kind: "agent-harness-feedback",
+      attempt: lastResultEntry?.attempt ?? null,
+      conversationId: lastResultEntry?.result?.conversation_id || conversationIds.at(-1) || null,
+      resultFile: lastResultEntry?.name || null,
+      feedbackFile: `${runId}.feedback.txt`,
+    } : null,
     artifacts: {
       logs: logDir,
       events: attempts.map((a) => join(logDir, a.eventsFile)),
@@ -182,6 +212,7 @@ export function buildCycleReport(runId, options = {}) {
 }
 
 function markdown(report) {
+  const logLink = (name) => `../../logs/${name}`;
   const lines = [
     `# BorderClash research cycle ${report.runId}`,
     "",
@@ -193,6 +224,13 @@ function markdown(report) {
     `- Next cadence: ${report.nextCadenceHours == null ? "not recorded" : `${report.nextCadenceHours} hours`}`,
     `- Published commit: ${report.publishedCommit || "none"}`,
     `- Served commit: ${report.servedCommit || "not verified"}`,
+    `- Conversation: ${report.conversationIds?.join(", ") || "not recorded"}`,
+    "",
+    "## Diagnostic context",
+    "",
+    ...(report.attempts.length ? report.attempts.map((attempt) => `- Attempt ${attempt.attempt + 1}: conversation \`${attempt.conversationId || "unknown"}\`; result ${attempt.resultStatus || "not recorded"}; [trace](${logLink(attempt.eventsFile)})${attempt.resultFile ? `; [result](${logLink(attempt.resultFile)})` : ""}`) : ["No attempt trace was retained."]),
+    `- Agent harness feedback: ${report.feedback ? `${report.feedback} ([feedback file](${logLink(report.feedbackContext?.feedbackFile || `${report.runId}.feedback.txt`)}))` : "none recorded"}`,
+    ...(report.failedActions?.length ? ["- Non-zero/failed tool actions:", ...report.failedActions.map((step) => `  - Attempt ${step.attempt + 1}, step ${step.step}: ${step.action} — ${step.outcome}`)] : ["- Non-zero/failed tool actions: none recorded"]),
     "",
     "## What the agent actually did",
     "",
@@ -210,11 +248,11 @@ function markdown(report) {
     "",
     "## Retained evidence for review",
     "",
-    `- Event traces: ${report.attempts.map((a) => a.eventsFile).join(", ") || "none yet"}`,
-    `- Final result: ${report.artifacts.results.map((f) => basename(f)).join(", ") || "not available yet"}`,
-    `- Data patch: ${report.artifacts.patch ? basename(report.artifacts.patch) : "not available"}`,
-    `- Publication receipt: ${report.artifacts.delivery ? basename(report.artifacts.delivery) : "not available"}`,
-    `- Operator feedback: ${report.feedback || "none recorded"}`,
+    `- Event traces: ${report.attempts.map((a) => `[${a.eventsFile}](${logLink(a.eventsFile)})`).join(", ") || "none yet"}`,
+    `- Final result: ${report.artifacts.results.map((f) => `[${basename(f)}](${logLink(basename(f))})`).join(", ") || "not available yet"}`,
+    `- Data patch: ${report.artifacts.patch ? `[${basename(report.artifacts.patch)}](${logLink(basename(report.artifacts.patch))})` : "not available"}`,
+    `- Publication receipt: ${report.artifacts.delivery ? `[${basename(report.artifacts.delivery)}](${logLink(basename(report.artifacts.delivery))})` : "not available"}`,
+    `- Agent harness feedback: ${report.feedback || "none recorded"}`,
     `- Full technical log files: ${report.artifacts.rawFiles.length}`,
     "",
     "The full raw log files are local to the research server and are not published to the website.",
@@ -232,6 +270,25 @@ function saveReport(report, historyDir) {
     writeFileSync(temporary, content, { mode: 0o600 });
     renameSync(temporary, destination);
   }
+  const summaries = (existsSync(historyDir) ? readdirSync(historyDir) : [])
+    .filter((name) => runIdPattern.test(name))
+    .map((name) => readJson(join(historyDir, name, "report.json")))
+    .filter(Boolean)
+    .sort((a, b) => String(b.runId).localeCompare(String(a.runId)));
+  const index = [
+    "# BorderClash research cycle history",
+    "",
+    "Private South Server review history. Start with the per-cycle `report.md`; use the linked raw trace files only when deeper diagnosis is needed.",
+    "",
+    "| Run | Status | Conversation | Outcome |",
+    "| --- | --- | --- | --- |",
+    ...summaries.map((item) => `| [${item.runId}](${item.runId}/report.md) | ${item.status} | ${item.conversationIds?.at(-1) || "not recorded"} | ${String(item.outcome || "not recorded").replaceAll("|", "\\|")} |`),
+    "",
+  ].join("\n");
+  const indexPath = join(historyDir, "INDEX.md");
+  const indexTemp = `${indexPath}.${process.pid}.tmp`;
+  writeFileSync(indexTemp, index, { mode: 0o600 });
+  renameSync(indexTemp, indexPath);
   return dir;
 }
 

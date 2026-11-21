@@ -17,3 +17,5 @@ Prefer the simplest reliable implementation. Tests and validators should protect
 Do not encode model search depth, tool sequence, rewrite count, source count, prompt wording, translation naturalness, or editorial judgment as deterministic pass/fail tests. Evaluate those with real-cycle traces and advisory benchmarks; deterministic checks are for objective invariants only.
 
 Use `pnpm test` and `pnpm validate` for repository verification. For research CLI behavior, use `node research/cli.mjs --help`.
+
+When diagnosing past research behavior, inspect `.work/runner/history/INDEX.md` and the selected cycle's `report.md`/`report.json` before raw logs; those reports link conversation attempts, harness feedback, changed data, and publication state.

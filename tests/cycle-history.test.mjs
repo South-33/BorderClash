@@ -37,9 +37,10 @@ test("saved cycle review combines resumed trace, evidence patch, finish, and ver
     ];
     writeFileSync(join(logs, `${runId}.events.ndjson`), first.map((x) => JSON.stringify(x)).join("\n") + "\n");
     writeFileSync(join(logs, `${runId}.resume-1.events.ndjson`), JSON.stringify({
-      event: "step_update", step_update: { step_index: 4, state: "DONE", step_type: "tool", tool_name: "run_command", tool_info: { parameters: { CommandLine: "node research/cli.mjs finish 12 researched" }, output: "Command exited with code 0.\n" } },
+      event: "step_update", step_update: { conversation_id: "fixture-resume", step_index: 4, state: "DONE", step_type: "tool", tool_name: "run_command", tool_info: { parameters: { CommandLine: "node research/cli.mjs finish 12 researched" }, output: "Command exited with code 0.\n" } },
     }) + "\n");
-    writeJson(join(logs, `${runId}.resume-1.result.json`), { status: "SUCCESS", response: "Review complete" });
+    writeJson(join(logs, `${runId}.resume-1.result.json`), { conversation_id: "fixture-resume", status: "SUCCESS", response: "Review complete" });
+    writeFileSync(join(logs, `${runId}.feedback.txt`), "Source probing needed a retry.\n");
     writeJson(join(logs, `${runId}.completion.json`), { cycleId: runId, baseHead: "base123", intervalHours: 12, reason: "Evidence checked" });
     writeJson(join(logs, `${runId}.delivery.json`), { runId, status: "verified", candidateCommit: "candidate123", servedCommit: "candidate123" });
     writeFileSync(join(logs, `${runId}.data.patch`), "diff --git a/data/current/summary.json b/data/current/summary.json\n+++ b/data/current/summary.json\n");
@@ -54,11 +55,20 @@ test("saved cycle review combines resumed trace, evidence patch, finish, and ver
     assert.equal(report.decision, "complete");
     assert.equal(report.nextCadenceHours, 12);
     assert.equal(report.servedCommit, "candidate123");
+    assert.deepEqual(report.conversationIds, ["fixture", "fixture-resume"]);
+    assert.equal(report.attempts[1].conversationId, "fixture-resume");
+    assert.equal(report.attempts[1].resultFile, `${runId}.resume-1.result.json`);
+    assert.equal(report.feedbackContext.conversationId, "fixture-resume");
+    assert.equal(report.feedbackContext.kind, "agent-harness-feedback");
     assert.deepEqual(report.changedPaths, ["data/current/summary.json"]);
     assert.deepEqual(report.steps.map((x) => x.attempt), [0, 0, 1]);
     assert.equal(report.steps[1].outcome, "exit 1");
     assert.doesNotMatch(JSON.stringify(report), /token=private/u);
-    assert.match(readFileSync(join(root, "history", runId, "report.md"), "utf8"), /What the agent actually did/u);
+    const markdown = readFileSync(join(root, "history", runId, "report.md"), "utf8");
+    assert.match(markdown, /Diagnostic context/u);
+    assert.match(markdown, /fixture-resume/u);
+    assert.match(markdown, /Agent harness feedback: Source probing needed a retry/u);
+    assert.match(readFileSync(join(root, "history", "INDEX.md"), "utf8"), new RegExp(`${runId}.*fixture-resume`, "u"));
 
     rmSync(runDir, { recursive: true, force: true });
     assert.equal(cli(root, "list").status, 0);
