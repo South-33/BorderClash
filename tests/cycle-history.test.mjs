@@ -89,3 +89,15 @@ test("review records are usable during an interrupted cycle and can be refreshed
     assert.notEqual(cli(root, "show", "../../oops").status, 0);
   });
 });
+
+test("automatic save can create history before the first trace file exists", () => {
+  withFixture(({ root, runtime }) => {
+    writeJson(join(runtime, "runtime.json"), { runId, status: "running", model: "model-fixture" });
+    const saved = cli(root, "save", runId);
+    assert.equal(saved.status, 0, saved.stderr);
+    const report = JSON.parse(readFileSync(join(root, "history", runId, "report.json"), "utf8"));
+    assert.equal(report.status, "running");
+    assert.deepEqual(report.attempts, []);
+    assert.ok(existsSync(join(root, "history", "INDEX.md")));
+  });
+});

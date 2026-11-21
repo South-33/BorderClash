@@ -335,7 +335,7 @@ function main(argv) {
   }
   const selected = maybeId === "--all" && command === "save" ? ids : [safeRunId(maybeId)];
   for (const id of selected) {
-    if (!ids.includes(id)) throw new Error(`Unknown research cycle ${id}`);
+    if (command !== "save" && !ids.includes(id)) throw new Error(`Unknown research cycle ${id}`);
     const report = buildCycleReport(id, options);
     if (command === "save") process.stdout.write(`Saved ${report.runId}: ${saveReport(report, historyDir)}\n`);
     else process.stdout.write(markdown(report));

@@ -34,8 +34,8 @@ $pendingPublicationPath = Join-Path $runtimeDir "pending-publication.json"
 $trustedResearchCli = Join-Path $repoRoot "research\cli.mjs"
 $agyModel = $productionModel
 $isFakeAgent = -not [string]::IsNullOrWhiteSpace($AgyPath)
-if ($Publish -and -not $isFakeAgent -and -not [string]::Equals($MutexName, $productionMutexName, [StringComparison]::Ordinal)) {
-    throw "Real publish-enabled research must use the canonical production mutex '$productionMutexName'."
+if (-not $isFakeAgent -and -not [string]::Equals($MutexName, $productionMutexName, [StringComparison]::Ordinal)) {
+    throw "Real research must use the canonical production mutex '$productionMutexName'."
 }
 if (-not $isFakeAgent -and -not [string]::Equals($script:ResearchMachine, "SouthServer", [StringComparison]::OrdinalIgnoreCase)) {
     throw "Real BorderClash research may run only on SouthServer."

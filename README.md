@@ -25,7 +25,7 @@ A cycle can also conclude that nothing material changed. The record is meant to 
 
 Production research runs on **South Server** (Ubuntu) with Flash Medium. The systemd timer polls every five minutes and the runner starts before the target publication time. After a reboot or power outage, the boot-time check reads the absolute `nextRunAt`; if that time has already passed, the cycle is due immediately instead of being skipped until another interval. Interrupted work keeps its workspace and conversation, including when upstream code advances. A successful Git push remains pending until the public dashboard serves the expected research data.
 
-Production research is a singleton. The timer, `run-now`, resume, and direct publish-enabled starts all share one canonical process mutex; if another trigger arrives while a cycle owns it, the second invocation exits with `SKIP: already-running`. Real publish-enabled runs cannot override that mutex. Custom mutexes are only for isolated fake/shadow experiments.
+Production research is a singleton. The timer, `run-now`, resume, supervised research, and direct real starts all share one canonical process mutex; if another trigger arrives while a cycle owns it, the second invocation exits with `SKIP: already-running`. Real runs cannot override that mutex. Custom mutexes are only for fake-agent tests.
 
 On South Server, use these commands from `~/Projects/BorderClash`.
 
@@ -83,7 +83,7 @@ To inspect the compact context a research cycle receives:
 pnpm research context
 ```
 
-Real research cycles run only on South and use `gemini-3.8-flash-medium`. Development and fake-agent tests can run elsewhere. While South is unavailable, `research/automation/run-audit-review.ps1` can run prompt-only Flash Medium audit reviews on prepared evidence packets. The model workspace is empty and sandboxed; session permissions deny terminal, file, URL/download, and MCP access before execution, and any tool event also invalidates the review. The result is review evidence only rather than publication or South acceptance.
+Real research cycles run only on South and use `gemini-3.8-flash-medium`. Development and fake-agent tests can run elsewhere. Advisory model checks are kept separate from the publication path: fixed cases use prompt-supplied evidence only, and optional benchmarks live under `benchmarks/`.
 
 New evidence can enter through a small batch ingest file, or an existing source can be captured again:
 

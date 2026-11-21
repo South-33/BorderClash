@@ -400,18 +400,18 @@ try {
         $held.Dispose()
     }
 
-    # A real publish-enabled invocation must not be able to opt out of the
-    # production singleton by choosing another mutex name. Fake/shadow runs may
-    # still use isolated mutexes for tests and experiments.
+    # A real research invocation must not be able to opt out of the production
+    # singleton by choosing another mutex name. Fake-agent tests may still use
+    # isolated mutexes.
     $oldErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $customProductionMutex = & $testShell -NoProfile -ExecutionPolicy Bypass -File $runner -Force -Publish -MutexName "Global\BorderClashOtherCycle" 2>&1
+        $customProductionMutex = & $testShell -NoProfile -ExecutionPolicy Bypass -File $runner -Force -MutexName "Global\BorderClashOtherCycle" 2>&1
         $customProductionMutexExit = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $oldErrorAction
     }
-    Assert-True ($customProductionMutexExit -ne 0) "real publication unexpectedly accepted a custom cycle mutex"
+    Assert-True ($customProductionMutexExit -ne 0) "real research unexpectedly accepted a custom cycle mutex"
     Assert-True (($customProductionMutex -join "`n") -match "canonical production mutex") "custom production mutex rejection did not explain the singleton boundary"
     }
 
