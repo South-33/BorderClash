@@ -31,15 +31,10 @@ function articleId(url) {
   return createHash("sha256").update(url).digest("hex").slice(0, 32);
 }
 
-test("audit preflight checks staged new files for whitespace before expensive verification", () => {
+test("audit preflight checks staged data for whitespace before expensive verification", () => {
   const root = makeRepo();
-  const path = join(root, "tests", "sample-audit-corrections.test.mjs");
-  writeFileSync(
-    path,
-    'import test from "node:test";\ntest("ok", () => {});\n\n',
-    "utf8",
-  );
-  git(root, ["add", "tests/sample-audit-corrections.test.mjs"]);
+  writeFileSync(join(root, "data", "sample.jsonl"), '{"id":"changed"}\n\n', "utf8");
+  git(root, ["add", "data/sample.jsonl"]);
 
   const result = auditPreflight({ cwd: root });
   assert.equal(result.ok, false);
@@ -47,22 +42,14 @@ test("audit preflight checks staged new files for whitespace before expensive ve
   assert.match(result.output, /new blank line at EOF/u);
 });
 
-test("audit preflight validates data and runs staged audit regression tests", () => {
+test("audit preflight validates staged audit data", () => {
   const root = makeRepo();
-  const path = join(root, "tests", "sample-audit-corrections.test.mjs");
-  writeFileSync(
-    path,
-    'import test from "node:test";\ntest("ok", () => {});\n',
-    "utf8",
-  );
   writeFileSync(join(root, "data", "sample.jsonl"), '{"id":"changed"}\n', "utf8");
-  git(root, ["add", "data/sample.jsonl", "tests/sample-audit-corrections.test.mjs"]);
+  git(root, ["add", "data/sample.jsonl"]);
 
   const result = auditPreflight({ cwd: root });
   assert.equal(result.ok, true);
-  assert.deepEqual(result.tests, ["tests/sample-audit-corrections.test.mjs"]);
   assert.ok(result.validateMs >= 0);
-  assert.ok(result.testMs >= 0);
 });
 
 test("audit preflight refuses to verify when relevant audit work is not staged", () => {

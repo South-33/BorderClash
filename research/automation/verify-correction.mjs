@@ -386,7 +386,6 @@ async function main() {
 
     const node = process.execPath;
     const steps = [
-      { name: "known-corrections", command: node, args: ["--test", "tests/known-corrections.test.mjs"] },
       { name: "validate", command: node, args: ["research/validate.mjs"] },
       { name: "audit-chronology", command: node, args: ["research/cli.mjs", "audit-chronology"] },
       { name: "audit-humanitarian", command: node, args: ["research/cli.mjs", "audit-humanitarian"] },

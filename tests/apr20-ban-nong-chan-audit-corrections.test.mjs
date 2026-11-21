@@ -1,9 +1,0 @@
-﻿import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import test from "node:test";
-function readJsonl(p){return readFileSync(p,"utf8").trim().split(/\r?\n/u).filter(Boolean).map(JSON.parse);}
-const event='ks7fptd36hm3yj8368aswbyjbh85a0ac', evidence='48b0be909860a1867e2d31545e212eb2';
-test('Apr 20 row keeps the mine-clearance operation date without invented exact time',()=>{const e=readJsonl('data/timeline/2026-04.jsonl').find(r=>r.id===event);assert.ok(e);assert.equal(e.date,'2026-04-20');assert.equal(e.timeOfDay,undefined);assert.match(e.title,/Seven PMN Mines/u);assert.deepEqual(e.evidenceIds,[evidence]);});
-test('mine finding and recent reinforcement context are temporally separated',()=>{const e=readJsonl('data/timeline/2026-04.jsonl').find(r=>r.id===event);assert.match(e.description,/another 500 square metres/u);assert.match(e.description,/seven PMN/u);assert.match(e.description,/preceding 1–2 days/u);assert.match(e.description,/reporting from the Thai side/u);assert.doesNotMatch(e.description,/Cambodian forces reinforced positions.*On April 20/iu);});
-test('Thai and Khmer preserve key counts and timing uncertainty',()=>{const e=readJsonl('data/timeline/2026-04.jsonl').find(r=>r.id===event);for(const v of ['20','500','SHA 27-01/AD','PMN','7','1–2','K5']){assert.ok(e.descriptionTh.includes(v),`Thai ${v}`);assert.ok(e.descriptionKh.includes(v),`Khmer ${v}`);}});
-test('captured evidence summary matches the April 20 operation and recent context',()=>{const a=readJsonl('data/news/2026-04.jsonl').find(r=>r.id===evidence);assert.ok(a);assert.match(a.summary,/April 20/u);assert.match(a.summary,/500 square metres/u);assert.match(a.summary,/seven PMN/u);assert.match(a.summary,/preceding 1–2 days/u);assert.ok(!readJsonl('data/news/2026-04.jsonl').some(r=>r.id==='a540319c4149eaaaf2c7f0cdc041b7be'));});

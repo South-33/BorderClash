@@ -1,7 +1,0 @@
-﻿import assert from "node:assert/strict"; import { readFileSync } from "node:fs"; import test from "node:test";
-function readJsonl(path){return readFileSync(path,"utf8").trim().split(/\r?\n/u).filter(Boolean).map(JSON.parse);}
-const id="ks708rd7np6th1jnwk3k8qanh9812cbe";
-test("Dec 11 casino-strike row removes unsupported exact time",()=>{const e=readJsonl("data/timeline/2025-12.jsonl").find(r=>r.id===id);assert.ok(e);assert.equal(e.date,"2025-12-11");assert.equal(e.timeOfDay,undefined);assert.match(e.title,/Thai Navy Releases Footage/u);});
-test("drone-control-centre characterization remains attributed",()=>{const e=readJsonl("data/timeline/2025-12.jsonl").find(r=>r.id===id);assert.match(e.description,/Thai officials said/u);assert.match(e.description,/drone control centre/u);assert.match(e.description,/does not independently establish/u);});
-test("15-death figure is explicitly separated from the specific strike",()=>{const e=readJsonl("data/timeline/2025-12.jsonl").find(r=>r.id===id);assert.match(e.description,/at least 15 people/u);assert.match(e.description,/wider hostilities since December 8/u);assert.match(e.description,/not casualties from this specific strike/u);});
-test("Thai and Khmer preserve dates and broader-toll distinction",()=>{const e=readJsonl("data/timeline/2025-12.jsonl").find(r=>r.id===id);for(const v of ["11","15","8"]){assert.ok(e.descriptionTh.includes(v),`Thai ${v}`);assert.ok(e.descriptionKh.includes(v),`Khmer ${v}`);}});

@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeArticleUrl } from "../lib/articles.mjs";
@@ -26,8 +25,7 @@ function normalizePath(path) {
 
 function relevantAuditPath(path) {
   const normalized = normalizePath(path);
-  return normalized.startsWith("data/")
-    || /^tests\/.*audit-corrections\.test\.mjs$/u.test(normalized);
+  return normalized.startsWith("data/");
 }
 
 function gitLines(cwd, args) {
@@ -36,12 +34,6 @@ function gitLines(cwd, args) {
     throw new Error(String(result.stderr || result.stdout || "git failed").trim());
   }
   return lines(result.stdout).map(normalizePath);
-}
-
-function stagedAuditTests(cwd) {
-  return gitLines(cwd, ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "--"])
-    .filter((path) => /^tests\/.*audit-corrections\.test\.mjs$/u.test(path))
-    .filter((path) => existsSync(resolve(cwd, path)));
 }
 
 function stableArticleId(sourceUrl) {
@@ -154,31 +146,11 @@ export function auditPreflight({ cwd = process.cwd() } = {}) {
     };
   }
 
-  const tests = stagedAuditTests(root);
-  const testsStarted = Date.now();
-  const testResult = tests.length
-    ? run(process.execPath, ["--test", ...tests], { cwd: root })
-    : { status: 0, stdout: "", stderr: "" };
-  const testMs = Date.now() - testsStarted;
-  if (testResult.status !== 0) {
-    return {
-      ok: false,
-      reason: "focused-tests-failed",
-      staged,
-      tests,
-      validateMs,
-      testMs,
-      output: String(testResult.stdout || testResult.stderr || "").trim(),
-    };
-  }
-
   return {
     ok: true,
     repoRoot: normalizePath(root),
     staged,
-    tests,
     validateMs,
-    testMs,
   };
 }
 

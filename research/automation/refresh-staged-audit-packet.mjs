@@ -51,8 +51,7 @@ function stagedEntries(sourceRoot) {
 }
 
 function allowedPath(path) {
-  return /^data\/(news|timeline)\/\d{4}-\d{2}\.jsonl$/u.test(path)
-    || /^tests\/.+\.test\.mjs$/u.test(path);
+  return /^data\/(news|timeline)\/\d{4}-\d{2}\.jsonl$/u.test(path);
 }
 
 function gitBlob(cwd, spec, { allowMissing = false } = {}) {
@@ -207,7 +206,7 @@ function help() {
     "",
     "node research/automation/refresh-staged-audit-packet.mjs --source <worktree> --target <worktree> --record <id> [--apply]",
     "",
-    "Preview is the default. --apply writes and stages only approved data JSONL and focused test files.",
+    "Preview is the default. --apply writes and stages only approved data JSONL files.",
   ].join("\n") + "\n");
 }
 

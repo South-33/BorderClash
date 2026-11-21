@@ -332,11 +332,6 @@ function renderContext(output) {
     `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
     `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
     `Overall: ${firstSentence(output.current.summary.summary)}`,
-    "Current key updates (verify evidence):",
-    ...output.current.summary.keyUpdates.slice(0, 4).map((item) => {
-      const ids = Array.isArray(item.evidenceIds) ? item.evidenceIds.join(",") : "no-evidence-id";
-      return `- [${ids}] ${item.text || ""}`;
-    }),
     "",
     "## Evidence scoring rubric",
     evidenceRubricPrompt(),

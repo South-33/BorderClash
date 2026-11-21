@@ -43,7 +43,6 @@ function setup() {
     join(source, "data", "timeline", "2026-02.jsonl"),
     '{"id":"other-timeline","value":1}\n',
   );
-  writeFileSync(join(source, "tests", "claim-audit-corrections.test.mjs"), "export default true;\n");
   git(source, "add", ".");
 
   writeFileSync(
@@ -88,7 +87,9 @@ test("refresh staged packet preserves unrelated current JSONL records", () => {
     readFileSync(join(target, "data", "timeline", "2026-02.jsonl"), "utf8").trim().split(/\r?\n/u).map(JSON.parse),
     [{ id: "other-timeline", value: 9 }],
   );
-  assert.match(git(target, "status", "--short"), /claim-audit-corrections/u);
+  const status = git(target, "status", "--short");
+  assert.match(status, /data\/news\/2026-02\.jsonl/u);
+  assert.match(status, /data\/timeline\/2026-02\.jsonl/u);
 });
 
 test("refresh staged packet refuses overlap on the claimed timeline record", () => {
