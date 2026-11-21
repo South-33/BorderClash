@@ -6,7 +6,6 @@ import { newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
 import { militaryAssessmentFor } from "./lib/military-assessment.mjs";
 import { syncNewsLocalization } from "./lib/news-localization.mjs";
-import { evidenceRubricPrompt } from "./lib/evidence-score.mjs";
 import {
   captureChangedArticles,
   ingestCandidates,
@@ -68,7 +67,6 @@ const BRIEF_MIN_DAYS = 7;
 const BRIEF_MAX_DAYS = 30;
 const BRIEF_NEWS_LIMIT = 6;
 const BRIEF_TIMELINE_LIMIT = 12;
-const SOURCE_MIX_RECORDS = 20;
 const MAX_SCHEDULE_HOURS = 168;
 const AUDIT_DIFF_CONCURRENCY = 12;
 const execFileAsync = promisify(execFile);
@@ -142,22 +140,6 @@ function selectBriefContext({ state, news, timeline, nowMs }) {
     ]),
   );
   const contextTimeline = timeline.filter((row) => timelineTimestamp(row) >= windowStart);
-  const sourceMix = Object.fromEntries(
-    Object.entries(eligibleNews).map(([environment, rows]) => {
-      const counts = new Map();
-      for (const row of rows.slice(0, SOURCE_MIX_RECORDS)) {
-        const source = String(row.source || "unknown").trim() || "unknown";
-        counts.set(source, (counts.get(source) || 0) + 1);
-      }
-      return [
-        environment,
-        [...counts.entries()]
-          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-          .slice(0, 6)
-          .map(([source, count]) => ({ source, count })),
-      ];
-    }),
-  );
   const sinceNews = Object.fromEntries(
     Object.entries(eligibleNews).map(([environment, rows]) => [
       environment,
@@ -187,8 +169,6 @@ function selectBriefContext({ state, news, timeline, nowMs }) {
     news: Object.fromEntries(
       Object.entries(eligibleNews).map(([environment, rows]) => [environment, rows.slice(0, BRIEF_NEWS_LIMIT)]),
     ),
-    sourceMix,
-    sourceMixRecords: SOURCE_MIX_RECORDS,
     timeline: contextTimeline.slice(0, BRIEF_TIMELINE_LIMIT),
   };
 }
@@ -198,7 +178,7 @@ async function brief() {
   const impact = await readJson(join(dataRoot, "current", "impact.json"));
   const current = Object.fromEntries(
     await Promise.all(
-      ["thailand", "cambodia", "summary"].map(async (name) => [
+      ["thailand", "cambodia"].map(async (name) => [
         name,
         await readJson(join(dataRoot, "current", name + ".json")),
       ]),
@@ -249,19 +229,10 @@ async function brief() {
       thailand: {
         updatedAt: current.thailand?.updatedAt,
         militaryTier: current.thailand?.militaryAssessment?.tier,
-        activityLabel: current.thailand?.activityLabel,
-        summary: current.thailand?.summary,
       },
       cambodia: {
         updatedAt: current.cambodia?.updatedAt,
         militaryTier: current.cambodia?.militaryAssessment?.tier,
-        activityLabel: current.cambodia?.activityLabel,
-        summary: current.cambodia?.summary,
-      },
-      summary: {
-        updatedAt: current.summary?.updatedAt,
-        summary: current.summary?.summary,
-        keyUpdates: current.summary?.keyUpdates,
       },
     },
     contextWindow: {
@@ -279,8 +250,6 @@ async function brief() {
         values.map(compactNews),
       ]),
     ),
-    sourceMix: context.sourceMix,
-    sourceMixRecords: context.sourceMixRecords,
     archive: {
       timeline: timeline.length,
       news: Object.values(news).reduce((sum, values) => sum + values.length, 0),
@@ -306,12 +275,6 @@ function compactMetric(metric) {
   return `${prefix}${metric.value}`;
 }
 
-function firstSentence(text) {
-  const value = String(text || "").trim();
-  const match = value.match(/^.*?[.!?](?:\s|$)/u);
-  return match ? match[0].trim() : value;
-}
-
 function renderContext(output) {
   const lines = [
     "# BorderClash cycle context",
@@ -327,14 +290,10 @@ function renderContext(output) {
     `Scheduled next: ${output.cycle.next || "unset"}`,
     `Previous cadence: ${output.cycle.intervalHours || "unknown"}h - ${output.cycle.reason || "no reason recorded"}`,
     "",
-    "## Current repository state",
+    "## Current structured state",
     `Impact: displaced ${compactMetric(output.current.impact.displaced)}; deaths ${compactMetric(output.current.impact.deaths)}`,
-    `Thailand ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}: ${output.current.thailand.activityLabel || "unlabelled"}.`,
-    `Cambodia ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}: ${output.current.cambodia.activityLabel || "unlabelled"}.`,
-    `Overall: ${firstSentence(output.current.summary.summary)}`,
-    "",
-    "## Evidence scoring rubric",
-    evidenceRubricPrompt(),
+    `Thailand military posture: ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}.`,
+    `Cambodia military posture: ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}.`,
   ];
 
   const counts = output.contextWindow.counts;
@@ -365,14 +324,6 @@ function renderContext(output) {
     for (const row of rows) {
       lines.push(`- ${isoDate(row.publishedAt || row.fetchedAt).slice(0, 10)} [${row.id}] ${row.source}: ${row.title}`);
     }
-  }
-
-  lines.push("", `## Source mix across the latest ${output.sourceMixRecords || SOURCE_MIX_RECORDS} visible records per environment (context, not a quota)`);
-  for (const [label, key] of [["Thailand domestic", "thailand"], ["Cambodia domestic", "cambodia"], ["International", "international"]]) {
-    const mix = output.sourceMix?.[key] || [];
-    const shown = mix.slice(0, 5);
-    const remainder = mix.length > shown.length ? `, +${mix.length - shown.length} more` : "";
-    lines.push(`${label}: ${shown.length ? shown.map(({ source, count }) => `${source} (${count})`).join(", ") + remainder : "none"}`);
   }
 
   lines.push(
