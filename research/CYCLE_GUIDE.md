@@ -67,6 +67,7 @@ Common CLI commands:
 Terminal HTTP is sandboxed and may fail even when a publisher is reachable. Do not treat terminal DNS failure as evidence that a source is unavailable.
 
 The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually.
+Do not routinely run full repo test/build/automation suites in a research cycle. `finish` validates data and the runner does final verification; use targeted checks for specific changes or diagnoses.
 
 ## Finish
 
@@ -74,4 +75,4 @@ Before finishing, re-open evidence for consequential new or changed claims. Chec
 
 Choose the next cadence from current activity, risk, uncertainty, and likely information value: faster during significant developments, slower during sustained calm.
 
-Return a concise cycle outcome. If the harness materially helped or got in the way, include a `HARNESS_FEEDBACK:` line so operators can improve it; feedback is useful observability, not proof of completion.
+Return a concise cycle outcome. Report actionable harness friction, including recovered problems, in one `HARNESS_FEEDBACK:` line; omit it when none. Feedback is observability, not proof of completion.

@@ -221,19 +221,18 @@ function renderContext(output) {
     "",
     guide,
     "",
-    "## Live context",
-    `Research reference time: ${output.cycle.now}`,
-    `Last completed: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
+    "## Live",
+    `Now: ${output.cycle.now}`,
+    `Last: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
     "Data: data/current/{summary,thailand,cambodia,impact}.json; data/{timeline,news}/YYYY-MM.jsonl",
   ];
 
   lines.push(
     "",
-    "## Recent repository anchors",
-    `${output.contextWindow.lookbackDays} days from ${output.contextWindow.start} to ${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (automatic context capped at 30 days)" : ""}.`,
-    "Recent items; not a ranking, quota, or complete change list.",
+    "## Recent anchors",
+    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; orientation, not rank/quota.`,
     "",
-    "## Newest timeline anchors",
+    "Timeline:",
   );
 
   for (const row of output.recentTimeline.slice(0, 5)) {
@@ -241,24 +240,18 @@ function renderContext(output) {
   }
   if (!output.recentTimeline.length) lines.push("- none");
 
-  lines.push("", "## Newest retained evidence anchors");
-  for (const [label, key] of [["Thailand domestic", "thailand"], ["Cambodia domestic", "cambodia"], ["International", "international"]]) {
-    lines.push(`${label}:`);
+  lines.push("", "Evidence:");
+  for (const [label, key] of [["TH", "thailand"], ["KH", "cambodia"], ["INTL", "international"]]) {
     const rows = output.recentNews[key].slice(0, 1);
     if (!rows.length) {
-      lines.push("- none");
+      lines.push(`- ${label}: none`);
       continue;
     }
     for (const row of rows) {
-      lines.push(`- ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
+      lines.push(`- ${label} ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
     }
   }
-
-  lines.push(
-    "",
-    "Anchors are orientation only; build from records, evidence, and the web.",
-    "",
-  );
+  lines.push("");
   return lines.join("\n");
 }
 
