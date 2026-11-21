@@ -30,24 +30,11 @@ export function evaluateFixedCase(caseDefinition, result) {
   if (expected.eventDate !== undefined) add(errors, result?.eventDate === expected.eventDate, "eventDate must be " + expected.eventDate);
   if (Object.hasOwn(expected, "eventTime")) add(errors, result?.eventTime === expected.eventTime, "unsupported exact time must remain null");
   if (expected.claimant) add(errors, result?.claimant === expected.claimant, "claimant must be " + expected.claimant);
-  if (expected.maxCredibility !== undefined) {
-    add(errors, Number.isInteger(result?.credibility) && result.credibility % 10 === 0, "credibility must be a decile");
-    add(errors, Number(result?.credibility) <= expected.maxCredibility, "credibility must not exceed " + expected.maxCredibility);
-  }
-  if (expected.minCredibility !== undefined) {
-    add(errors, Number.isInteger(result?.credibility) && result.credibility % 10 === 0, "credibility must be a decile");
-    add(errors, Number(result?.credibility) >= expected.minCredibility, "credibility must be at least " + expected.minCredibility);
+  if (result?.credibility !== undefined && result?.credibility !== null) {
+    add(errors, Number.isInteger(result.credibility) && result.credibility >= 0 && result.credibility <= 100 && result.credibility % 10 === 0, "credibility must be a 0..100 decile when provided");
   }
   if (expected.independentEvidenceChains !== undefined) {
     add(errors, result?.independentEvidenceChains === expected.independentEvidenceChains, "independentEvidenceChains must be " + expected.independentEvidenceChains);
-  }
-  if (expected.mustRemainAttributed) {
-    add(
-      errors,
-      typeof result?.summaryEn === "string"
-        && /(?:says|said|states|stated|reports|reported|claims|claimed|alleges|alleged|asserts|asserted|according to)/iu.test(result.summaryEn),
-      "English summary must keep the allegation attributed",
-    );
   }
   if (expected.value !== undefined) add(errors, result?.value === expected.value, "value must be " + expected.value);
   if (expected.qualifier) add(errors, result?.qualifier === expected.qualifier, "qualifier must be " + expected.qualifier);

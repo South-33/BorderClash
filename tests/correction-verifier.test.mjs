@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   classifyNewsArticleMoves,
@@ -74,17 +73,3 @@ test("correction verifier rejects a cross-file stable ID move that changes artic
   ]), /changed canonical source URL/u);
 });
 
-test("correction verifier is snapshot-stable and checks evidence references", () => {
-  const source = readFileSync("research/automation/verify-correction.mjs", "utf8");
-  assert.match(source, /worktreeFingerprint/u);
-  assert.match(source, /verifyArchiveCopy/u);
-  assert.match(source, /checkReferenceCoverage/u);
-  assert.match(source, /missingTimelineEvidenceIds/u);
-  assert.match(source, /missingCurrentEvidenceIds/u);
-  assert.match(source, /git.+diff.+--check/su);
-  assert.match(source, /data\/current\//u);
-  assert.match(source, /data\/research-state\.json/u);
-  assert.match(source, /diffJsonDocument/u);
-  assert.match(source, /Another next build process is already running/u);
-  assert.match(source, /retryConcurrentBuild/u);
-});

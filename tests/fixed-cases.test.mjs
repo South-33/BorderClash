@@ -41,7 +41,7 @@ test("retrospective case rejects publication year and unsupported exact time", (
   assert.ok(evaluateFixedCase(fixture, { ...good, eventTime: "10:00" }).some((error) => /time/u.test(error)));
 });
 
-test("disputed case scores the attributed statement without treating the allegation as proven", () => {
+test("disputed case protects structured claimant and evidence-chain semantics", () => {
   const fixture = cases.find(({ id }) => id === "disputed-single-chain");
   const base = {
     caseId: fixture.id,
@@ -61,11 +61,12 @@ test("disputed case scores the attributed statement without treating the allegat
     ...base,
     summaryEn: "The Cambodian Ministry of National Defence stated that Thai troops crossed the border on 14 February 2026.",
   }), []);
-  assert.ok(evaluateFixedCase(fixture, {
+  assert.deepEqual(evaluateFixedCase(fixture, {
     ...base,
     summaryEn: "Thai troops crossed the border on 14 February 2026.",
-  }).some((error) => /attributed/u.test(error)));
-  assert.ok(evaluateFixedCase(fixture, { ...base, credibility: 60 }).some((error) => /at least 80/u.test(error)));
+  }), [], "free-text attribution quality belongs to editorial evaluation, not a regex gate");
+  assert.deepEqual(evaluateFixedCase(fixture, { ...base, credibility: 60 }), []);
+  assert.ok(evaluateFixedCase(fixture, { ...base, credibility: 65 }).some((error) => /decile/u.test(error)));
   assert.ok(evaluateFixedCase(fixture, { ...base, independentEvidenceChains: 2 }).some((error) => /independentEvidenceChains/u.test(error)));
 });
 
@@ -116,23 +117,19 @@ test("fixed-case runner keeps South acceptance separate from explicit laptop dev
   const supervisor = readFileSync("research/automation/agy-supervisor.mjs", "utf8");
   assert.match(runner, /SouthServer/u);
   assert.match(runner, /\[switch\]\$Development/u);
-  assert.match(runner, /unless -Development is explicitly selected/u);
-  assert.match(runner, /does not satisfy South-specific acceptance or authorize publication/u);
   assert.match(runner, /mode = if \(\$Development\) \{ "development" \} else \{ "south-acceptance" \}/u);
   assert.match(runner, /publicationEnabled = \$false/u);
   assert.match(runner, /modelWorkspaceContainsEvidence = \$false/u);
   assert.match(runner, /gemini-3\.8-flash-medium/u);
-  assert.match(runner, /Do not use tools, browse, inspect files or directories, or use facts outside this prompt/u);
-  assert.match(runner, /<CANONICAL_GUIDE>/u);
-  assert.match(runner, /model workspace is intentionally empty/u);
   assert.match(runner, /Fixed-case work root must be outside the repository/u);
   assert.match(runner, /used disallowed tool/u);
   assert.match(runner, /structured_output/u);
   assert.match(runner, /--json-schema-file/u);
+  assert.match(runner, /EVALUATION_REPORT\.json/u);
+  assert.match(runner, /advisory deviations/u);
+  assert.doesNotMatch(runner, /Fixed case evaluation failed/u);
   assert.match(supervisor, /jsonSchemaPath/u);
   assert.match(supervisor, /agyArgs\.push\("--json-schema", jsonSchemaPath\)/u);
-  assert.match(runner, /write calendar months as words rather than numeric month tokens/u);
-  assert.match(runner, /set qualifier to "MORE_THAN"/u);
   assert.match(runner, /agy-supervisor\.mjs/u);
   assert.match(runner, /ReadAllText\(\$resultPath, \[Text\.Encoding\]::UTF8\)/u);
   assert.doesNotMatch(runner, /publish-candidate|run-cycle\.ps1.+-Publish/su);

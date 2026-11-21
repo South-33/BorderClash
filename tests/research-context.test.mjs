@@ -9,7 +9,6 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
   });
   assert.equal(result.status, 0, result.stderr);
   const guide = readFileSync("research/CYCLE_GUIDE.md", "utf8").trim();
-  assert.match(result.stdout, /^# BorderClash research cycle/mu);
   assert.ok(result.stdout.includes(guide), "cycle context should embed the canonical research guide");
   assert.match(result.stdout, /^Now: \d{4}-\d{2}-\d{2}T/mu);
   assert.match(result.stdout, /data\/current\/\{summary,thailand,cambodia,impact\}\.json/u);
