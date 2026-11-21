@@ -133,6 +133,7 @@ export function buildCycleReport(runId, options = {}) {
   const finish = readJson(join(runDir, ".work", "research-finish.json"));
   const historyPath = join(resolve(options.historyDir || join(dirname(logDir), "history")), runId);
   const previous = readJson(join(historyPath, "report.json"));
+  const correction = readJson(join(historyPath, "correction.json")) || previous?.correction || null;
   const eventTrace = stepsFromEvents(logDir, runId);
   const attempts = eventTrace.attempts.length ? eventTrace.attempts.map((attempt) => {
     const result = results.find((item) => item.attempt === attempt.attempt);
@@ -192,6 +193,7 @@ export function buildCycleReport(runId, options = {}) {
       resultFile: lastResultEntry?.name || null,
       feedbackFile: `${runId}.feedback.txt`,
     } : null,
+    correction,
     artifacts: {
       logs: logDir,
       events: attempts.map((a) => join(logDir, a.eventsFile)),
@@ -226,6 +228,14 @@ function markdown(report) {
     `- Served commit: ${report.servedCommit || "not verified"}`,
     `- Conversation: ${report.conversationIds?.join(", ") || "not recorded"}`,
     "",
+    ...(report.correction ? [
+      "## Post-publication correction",
+      "",
+      `- Corrected commit: ${report.correction.correctedCommit || "not recorded"}`,
+      `- Prevention commit: ${report.correction.preventionCommit || "not recorded"}`,
+      `- Reason: ${report.correction.reason || "not recorded"}`,
+      "",
+    ] : []),
     "## Diagnostic context",
     "",
     ...(report.attempts.length ? report.attempts.map((attempt) => `- Attempt ${attempt.attempt + 1}: conversation \`${attempt.conversationId || "unknown"}\`; result ${attempt.resultStatus || "not recorded"}; [trace](${logLink(attempt.eventsFile)})${attempt.resultFile ? `; [result](${logLink(attempt.resultFile)})` : ""}`) : ["No attempt trace was retained."]),
@@ -282,7 +292,7 @@ function saveReport(report, historyDir) {
     "",
     "| Run | Status | Conversation | Outcome |",
     "| --- | --- | --- | --- |",
-    ...summaries.map((item) => `| [${item.runId}](${item.runId}/report.md) | ${item.status} | ${item.conversationIds?.at(-1) || "not recorded"} | ${String(item.outcome || "not recorded").replaceAll("|", "\\|")} |`),
+    ...summaries.map((item) => `| [${item.runId}](${item.runId}/report.md) | ${item.correction ? `${item.status} (corrected)` : item.status} | ${item.conversationIds?.at(-1) || "not recorded"} | ${String(item.outcome || "not recorded").replaceAll("|", "\\|")} |`),
     "",
   ].join("\n");
   const indexPath = join(historyDir, "INDEX.md");

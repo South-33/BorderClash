@@ -70,6 +70,17 @@ test("saved cycle review combines resumed trace, evidence patch, finish, and ver
     assert.match(markdown, /Agent harness feedback: Source probing needed a retry/u);
     assert.match(readFileSync(join(root, "history", "INDEX.md"), "utf8"), new RegExp(`${runId}.*fixture-resume`, "u"));
 
+    writeJson(join(root, "history", runId, "correction.json"), {
+      correctedCommit: "corrected123",
+      preventionCommit: "guard123",
+      reason: "Publisher chronology was corrected after publication.",
+    });
+    assert.equal(cli(root, "save", runId).status, 0);
+    const corrected = JSON.parse(readFileSync(reportPath, "utf8"));
+    assert.equal(corrected.correction.correctedCommit, "corrected123");
+    assert.match(readFileSync(join(root, "history", runId, "report.md"), "utf8"), /Post-publication correction/u);
+    assert.match(readFileSync(join(root, "history", "INDEX.md"), "utf8"), /published \(corrected\)/u);
+
     rmSync(runDir, { recursive: true, force: true });
     assert.equal(cli(root, "list").status, 0);
     assert.match(cli(root, "list").stdout, /published/u);
