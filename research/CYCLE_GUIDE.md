@@ -65,7 +65,7 @@ Common CLI commands:
 - `node research/cli.mjs finish --review <reason>` - stop for operator review when a trustworthy result is blocked.
 
 The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually.
-Research deeply; do not optimize for fewer calls or edits. Search discovers leads; sources verify them. Resolve grounding URLs with `node research/cli.mjs probe-source <url>` before repeating searches. If capture is blocked, retain `finalUrl` and corroborate elsewhere. No fixed search/rewrite count. Use diagnostics only for concrete questions; `finish` validates data.
+Research deeply; do not optimize for fewer calls or edits. Search discovers leads; sources verify them. Resolve grounding URLs with `node research/cli.mjs probe-source <url>` before repeating searches. If capture is blocked or a grounding redirect is unreachable in the sandbox, do not bypass the sandbox; seek the direct publisher URL or corroborate elsewhere. No fixed search/rewrite count. Use diagnostics only for concrete questions; `finish` validates data.
 
 ## Finish
 
