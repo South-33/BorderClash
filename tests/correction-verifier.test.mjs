@@ -72,4 +72,3 @@ test("correction verifier rejects a cross-file stable ID move that changes artic
     },
   ]), /changed canonical source URL/u);
 });
-
