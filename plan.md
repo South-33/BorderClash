@@ -6,6 +6,8 @@ Make routine BorderClash research produce a clear, fair, useful public picture f
 
 The system should be simple: one operating brief, one research agent, one structured finish decision, objective validation, and safe publication. Editorial judgment stays with the agent where it cannot be faithfully reduced to deterministic checks.
 
+The hill climb covers the entire research loop, not only synthesis or current-page prose: source discovery and coverage, source diversity, ingestion and canonical identity, capture/retention, evidence scoring and attribution, event selection and deduplication, dates/times, timeline construction, current impact/country/activity/synthesis fields, multilingual fidelity, cadence, diagnostics, runner behavior, validation, and publication. Improve whichever layer the observed evidence says is limiting quality.
+
 Do not optimize for churn, fixed length, fixed update counts, or passing prose snapshots. A researched no-change cycle is valid. Git preserves history; current public copy should represent the best current judgment.
 
 ## Working method
@@ -15,6 +17,7 @@ Do not optimize for churn, fixed length, fixed update counts, or passing prose s
 - Use current BorderClash records and evidence for evaluation, not invented toy prose when real material is available.
 - Use small isolated model evaluations instead of full production cycles when the question is wording, selection, translation, or prompt behavior.
 - Compare alternatives against the same inputs. Keep changes only when they improve reader value without weakening attribution, uncertainty, or factual fidelity.
+- After real cycles, inspect the full trace for concrete friction or missed value across discovery, sources, evidence, records, timeline, current fields, localization, finish/cadence, validation, and delivery. Fix the narrowest responsible layer rather than assuming every problem belongs in synthesis prose.
 - Treat model/judge scores as evidence, never as publication gates.
 - Keep hard failures for objective state, data, and publication invariants. Keep heuristics as warnings or review aids.
 - Do not restart a full historical audit. Reopen old records only for a concrete reason.
