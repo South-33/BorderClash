@@ -393,7 +393,16 @@ async function captured(id) {
 }
 
 async function finish(hoursText, reasonParts) {
-  const nextAction = "Return the cycle outcome. If any failed/retried command, repeated search, unclear path/CLI, or other recovered friction occurred, include one concrete HARNESS_FEEDBACK line.";
+  const nextAction = "Stop tool use and return the cycle outcome now. If any command failed, search looped, or other harness friction required recovery, include one concrete HARNESS_FEEDBACK: line; otherwise omit it. The runner handles final verification.";
+  const failInput = (error, usage = "node research/cli.mjs finish <hours> <reason>") => {
+    process.stderr.write(JSON.stringify({
+      ok: false,
+      error,
+      usage,
+      nextAction: "Choose the required cadence/reason and rerun finish directly. finish validates working data automatically; do not inspect CLI source or run validation separately.",
+    }, null, 2) + "\n");
+    process.exitCode = 2;
+  };
   const cycleRuntimePath = resolve(".work", "CYCLE_RUN.json");
   if (!existsSync(cycleRuntimePath)) {
     throw new Error("finish is only available inside a runner cycle");
@@ -416,8 +425,14 @@ async function finish(hoursText, reasonParts) {
 
   if (hoursText === "--review") {
     const reason = reasonParts.join(" ").trim();
-    if (!reason) throw new Error("review reason is required");
-    if (reason.length > 240) throw new Error("review reason must be at most 240 characters");
+    if (!reason) {
+      failInput("review reason is required", "node research/cli.mjs finish --review <reason>");
+      return;
+    }
+    if (reason.length > 240) {
+      failInput("review reason must be at most 240 characters", "node research/cli.mjs finish --review <reason>");
+      return;
+    }
     const marker = {
       cycleId,
       decision: "review",
@@ -430,19 +445,23 @@ async function finish(hoursText, reasonParts) {
   }
 
   if (hoursText == null) {
-    throw new Error(`finish needs cadence and reason. Retry directly: node research/cli.mjs finish <1-${MAX_SCHEDULE_HOURS}> "<reason>". finish runs data validation; do not inspect implementation or run validation first.`);
+    failInput(`finish needs cadence and reason; hours must be 1-${MAX_SCHEDULE_HOURS}`);
+    return;
   }
   const requestedHours = Number(hoursText);
   const hours = Number.isFinite(requestedHours) ? requestedHours : Number.NaN;
   if (!Number.isFinite(hours) || hours < 1 || hours > MAX_SCHEDULE_HOURS) {
-    throw new Error(`finish hours must be between 1 and ${MAX_SCHEDULE_HOURS}`);
+    failInput(`finish hours must be between 1 and ${MAX_SCHEDULE_HOURS}`);
+    return;
   }
   const suppliedReason = reasonParts.join(" ").trim();
   if (!suppliedReason) {
-    throw new Error("finish reason is required for every completed cycle");
+    failInput("finish reason is required for every completed cycle");
+    return;
   }
   if (suppliedReason.length > 240) {
-    throw new Error("finish reason must be at most 240 characters");
+    failInput("finish reason must be at most 240 characters");
+    return;
   }
   validateWorkingDataBeforeFinish();
   const marker = {

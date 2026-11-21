@@ -660,6 +660,39 @@ try {
     $codePublished = (& $realGit --git-dir=$remotePath rev-parse refs/heads/main).Trim()
     & $realGit --git-dir=$remotePath merge-base --is-ancestor $codeAdvance $codePublished
     Assert-True ($LASTEXITCODE -eq 0) "published candidate lost the upstream code-only commit"
+
+    # Verified delivery is authoritative even if mutable runtime state drifts
+    # back to a resumable status. Never reopen the published conversation.
+    $resumeEventsBefore = @(Get-ChildItem -LiteralPath $logDir -Filter "$($publishedRuntime.runId).resume-*.events.ndjson" -File -ErrorAction SilentlyContinue).Count
+    $publishedRuntime.status = "resumable"
+    $publishedRuntime.phase = "resumable"
+    $publishedRuntime.message = "stale fixture state"
+    [IO.File]::WriteAllText(
+        (Join-Path $runtimeDir "runtime.json"),
+        (($publishedRuntime | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
+        [Text.UTF8Encoding]::new($false)
+    )
+    $stalePending = [ordered]@{
+        status = "review"
+        reason = "stale fixture publication review"
+        runId = [string]$publishedRuntime.runId
+        sourceRunDir = [string]$publishedRuntime.runDir
+        baseHead = [string]$publishedRuntime.baseHead
+        candidateDir = [string]$publishedRuntime.publishCandidate
+        cycleStartedAt = [int64]$delivery.cycleStartedAt
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $runtimeDir "pending-publication.json"),
+        (($stalePending | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
+        [Text.UTF8Encoding]::new($false)
+    )
+    $env:BORDERCLASH_FAKE_AGY_MODE = "fail"
+    $terminalReplay = Invoke-TestRunner -Publish -RemoteName $remoteName -PublicBaseUrl $publicUrl
+    Assert-True ($terminalReplay.ExitCode -eq 0 -and ($terminalReplay.Output -join "`n") -match "PUBLIC VERIFIED") "verified delivery did not restore terminal published state"
+    Assert-True ((Get-Runtime).status -eq "published") "verified delivery did not restore published runtime state"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $runtimeDir "pending-publication.json"))) "verified delivery did not clear stale pending publication state"
+    $resumeEventsAfter = @(Get-ChildItem -LiteralPath $logDir -Filter "$($publishedRuntime.runId).resume-*.events.ndjson" -File -ErrorAction SilentlyContinue).Count
+    Assert-True ($resumeEventsAfter -eq $resumeEventsBefore) "verified published run invoked the agent again"
     }
 
     if (Test-Section "publication-overlap") {

@@ -225,7 +225,7 @@ test("finish records completion intent without mutating trusted scheduler state"
 
     assert.equal(result.status, 0, result.stderr);
     const response = JSON.parse(result.stdout);
-    assert.match(response.nextAction, /failed\/retried command/u);
+    assert.match(response.nextAction, /Stop tool use/u);
     assert.match(response.nextAction, /HARNESS_FEEDBACK/u);
     const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
     assert.deepEqual(state, originalState);
@@ -294,8 +294,10 @@ test("finish requires an explicit cadence and reason even when cadence stays the
 
     const missing = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
     assert.notEqual(missing.status, 0);
-    assert.match(missing.stderr, /Retry directly: node research\/cli\.mjs finish/u);
-    assert.match(missing.stderr, /finish runs data validation/u);
+    const guidance = JSON.parse(missing.stderr);
+    assert.equal(guidance.usage, "node research/cli.mjs finish <hours> <reason>");
+    assert.match(guidance.nextAction, /finish validates working data automatically/u);
+    assert.doesNotMatch(missing.stderr, /at finish \(/u);
     const result = spawnSync(process.execPath, [
       script,
       "finish",
@@ -303,6 +305,9 @@ test("finish requires an explicit cadence and reason even when cadence stays the
       "Quiet conditions still justify a daily review.",
     ], { cwd: root, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
+    const completed = JSON.parse(result.stdout);
+    assert.match(completed.nextAction, /Stop tool use/u);
+    assert.match(completed.nextAction, /HARNESS_FEEDBACK/u);
     const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
     assert.equal(state.researchCycleCount, 7);
     assert.equal(state.lastCycleInterval, 24);

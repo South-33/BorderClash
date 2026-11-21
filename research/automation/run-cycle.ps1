@@ -594,6 +594,33 @@ if ($null -eq $lock) {
     exit 0
 }
 
+# A verified delivery receipt is terminal for that run. Runtime and pending
+# publication files are mutable recovery surfaces and can be stale after a
+# crash or race; restore the verified state before consulting either one.
+if ($Publish) {
+    $terminalRuntime = Read-RuntimeState
+    if (
+        $terminalRuntime -and
+        $terminalRuntime.runId -and
+        [string]$terminalRuntime.status -in @("running", "resumable", "ready", "review", "pending-publication")
+    ) {
+        $terminalDeliveryPath = Join-Path $logDir "$([string]$terminalRuntime.runId).delivery.json"
+        if (Test-Path -LiteralPath $terminalDeliveryPath) {
+            $terminalDelivery = Read-State $terminalDeliveryPath
+            if (
+                $terminalDelivery -and
+                [string]$terminalDelivery.status -eq "verified" -and
+                [string]$terminalDelivery.runId -eq [string]$terminalRuntime.runId
+            ) {
+                $terminalConversation = if ($terminalRuntime.PSObject.Properties["conversationId"]) { [string]$terminalRuntime.conversationId } else { "" }
+                $terminalResumeCount = if ($terminalRuntime.PSObject.Properties["resumeCount"]) { [int]$terminalRuntime.resumeCount } else { 0 }
+                Write-Output (Set-PublicationRuntime $terminalDelivery $terminalConversation $terminalResumeCount)
+                exit 0
+            }
+        }
+    }
+}
+
 if ($Publish -and (Test-Path -LiteralPath $pendingPublicationPath)) {
     try {
         $savedPublication = Read-State $pendingPublicationPath
