@@ -477,6 +477,30 @@ try {
     Assert-True ((Get-Content -LiteralPath $watchdogStderr -Raw) -match "stopped an inactive process") "watchdog did not record the stuck-process kill"
     Assert-True (Test-Path -LiteralPath (Join-Path $watchdogDir "data\news\2024-02.jsonl")) "watchdog recovery discarded untracked data"
 
+    # If the trusted runner disappears while its AGY child survives, the child
+    # can no longer update trusted session/result files. Kill that exact process
+    # instance and resume the saved conversation instead of blocking forever.
+    Reset-TestArtifacts
+    Write-Output "automation: detached AGY recovery"
+    $detachedDir = New-RecoveryFixture "runner-detached-agy"
+    $detachedAgy = Start-Process $testShell -ArgumentList @("-NoProfile", "-Command", "Start-Sleep -Seconds 60") -PassThru @windowOptions
+    $serverProcesses.Add($detachedAgy)
+    [DateTimeOffset]$detachedStarted = $detachedAgy.StartTime
+    $detachedSessionPath = Join-Path $detachedDir ".work\AGY_SESSION.json"
+    $detachedSession = Read-JsonSafe $detachedSessionPath
+    $detachedSession | Add-Member -NotePropertyName "agyPid" -NotePropertyValue ([int]$detachedAgy.Id) -Force
+    $detachedSession | Add-Member -NotePropertyName "agyStartedAt" -NotePropertyValue ([int64]$detachedStarted.ToUnixTimeMilliseconds()) -Force
+    [IO.File]::WriteAllText(
+        $detachedSessionPath,
+        (($detachedSession | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
+        [Text.UTF8Encoding]::new($false)
+    )
+    $env:BORDERCLASH_FAKE_AGY_MODE = "success"
+    $detached = Invoke-TestRunner
+    Assert-True ($detached.ExitCode -eq 0 -and ($detached.Output -join "`n") -match "RESUME:.*fixture-conversation") "detached AGY recovery did not resume the saved conversation"
+    Assert-True (Wait-Until { $detachedAgy.HasExited } 5) "detached AGY process survived stale recovery"
+    Assert-True ((Get-Runtime).status -eq "validated") "detached AGY recovery did not validate the resumed cycle"
+
     # Runner death after init resumes; death after terminal success validates without another model call.
     Reset-TestArtifacts
     Write-Output "automation: runner death before terminal"

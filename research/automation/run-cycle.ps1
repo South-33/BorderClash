@@ -147,6 +147,21 @@ function Test-ProcessInstanceActive {
     }
 }
 
+function Stop-ProcessInstanceTree {
+    param([int]$ProcessId, [int64]$StartedAtMs)
+
+    if (-not (Test-ProcessInstanceActive $ProcessId $StartedAtMs)) { return $true }
+    try {
+        $process = Get-Process -Id $ProcessId -ErrorAction Stop
+        $process.Kill($true)
+        try { $process.WaitForExit(5000) | Out-Null } catch { }
+    } catch {
+        if (-not (Test-ProcessInstanceActive $ProcessId $StartedAtMs)) { return $true }
+        return $false
+    }
+    return -not (Test-ProcessInstanceActive $ProcessId $StartedAtMs)
+}
+
 function Recover-StaleRuntimeState {
     $runtimePath = Join-Path $runtimeDir "runtime.json"
     if (-not (Test-Path $runtimePath)) { return }
@@ -187,8 +202,13 @@ function Recover-StaleRuntimeState {
         $session.PSObject.Properties["agyStartedAt"] -and
         (Test-ProcessInstanceActive ([int]$session.agyPid) ([int64]$session.agyStartedAt))
     ) {
-        Write-RuntimeState "running" $previousRunId "Previous runner ended but its AGY process is still active" $candidate $previousBaseHead $previousConversation $previousResumeCount "runner_detached" $previousModel
-        return "active"
+        $agyPid = [int]$session.agyPid
+        $agyStartedAt = [int64]$session.agyStartedAt
+        if (-not (Stop-ProcessInstanceTree $agyPid $agyStartedAt)) {
+            Write-RuntimeState "running" $previousRunId "Previous runner ended and its AGY process could not be stopped safely" $candidate $previousBaseHead $previousConversation $previousResumeCount "runner_detached" $previousModel
+            return "active"
+        }
+        Write-Warning "Recovered detached AGY process $agyPid; resuming from the saved conversation checkpoint."
     }
 
     $sessionStatus = if ($session -and $session.PSObject.Properties["status"]) { [string]$session.status } else { "" }
