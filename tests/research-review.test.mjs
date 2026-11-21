@@ -45,6 +45,8 @@ test("review scopes advisory diagnostics to timeline records changed since the c
     assert.ok(output.scope.changedPaths.includes("data/timeline/2026-11.jsonl"));
     assert.deepEqual(output.scope.changedTimelineIds, [first.id]);
     assert.deepEqual(output.scope.removedTimelineIds, []);
+    assert.ok(output.objectiveChecks.some((value) => value.includes("script contamination")));
+    assert.ok(output.objectiveChecks.some((value) => value.includes("numeric fidelity")));
     assert.ok(Array.isArray(output.advisories));
   } finally {
     await rm(root, { recursive: true, force: true });

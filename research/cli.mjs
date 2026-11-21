@@ -504,6 +504,12 @@ async function review(args) {
   const output = {
     ok: validation.ok,
     readOnly: true,
+    objectiveChecks: [
+      "canonical schema, IDs, file placement, and score constraints",
+      "canonical evidence/reference and direct-source URL integrity",
+      "Thai/Khmer localization presence, script contamination, and ASCII-digit rules",
+      "numeric fidelity between English and localized public copy",
+    ],
     scope: requestedId ? { recordId: requestedId, kind: target.kind } : {
       changedPaths,
       changedTimelineIds: timelineIds,
@@ -516,7 +522,7 @@ async function review(args) {
       ? "Fix the objective blockers, then rerun review or finish."
       : advisories.length
         ? "Review advisory findings against source evidence; they do not require a change if your judgment says the record is already correct."
-        : "No objective blockers or targeted advisory findings were found. Continue research if it can still materially improve the record; otherwise finish.",
+        : "No objective blockers or targeted advisory findings were found. The objective checks above already ran; do not reimplement them unless diagnosing a validator problem. Continue research if it can still materially improve the record; otherwise finish.",
   };
   process.stdout.write(JSON.stringify(output, null, 2) + "\n");
   if (!validation.ok) process.exitCode = 1;
@@ -767,7 +773,9 @@ function renderHelp(topic = "") {
       "",
       "Runs objective validation and relevant advisory diagnostics. With no ID, timeline",
       "diagnostics are limited to events changed in this cycle. Advisory findings never",
-      "require a change by themselves. This command is read-only.",
+      "require a change by themselves. Objective validation already covers canonical",
+      "references, localization script/digit rules, numeric fidelity, IDs, file placement,",
+      "and score constraints. This command is read-only.",
     ].join("\n");
   }
   if (topic === "finish") {
