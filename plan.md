@@ -107,11 +107,12 @@ Acceptance: routine research CLI/runtime no longer carries bulk-audit workflow c
 
 ## Verification ledger (2026-11-21)
 
-- `pnpm test`: 126 passed. `pnpm validate`: 582 timeline events, 3,337 articles, zero warnings. `pnpm build`: succeeded.
+- `pnpm test`: 127 passed. `pnpm validate`: 582 timeline events, 3,337 articles, zero warnings. `pnpm build`: succeeded.
 - `pnpm test:automation`: passed all run-cycle sections, including structured completion, restart/recovery, operator review, and publication reconciliation.
 - Current-copy A/B reports in `.work/benchmarks/current-copy/` support the field-role guidance in both candidate orderings. The live guide keeps that role split without fixed word or update counts.
 - Reader-copy qualification is advisory. A one-pass production-model sample reached 8.5/10 fidelity but exposed one cross-script error and a few translation-category mistakes. A same-model repair pass removed hard issues and raised fidelity to 9.5/10, but took about 186 seconds / 47.8k candidate tokens and reduced Thai/Khmer naturalness to 6.5/10. That tradeoff does not justify a second production model stage.
 - Current summaries and five recent timeline entries were shortened after evidence review. At 1440x900 the full page and center card have 0 px overflow in English, Thai, and Khmer; the Khmer whole-page check also shows no country-card overflow. The 390x844 mobile view has 0 horizontal overflow and no hidden center-card content.
 - Bulk historical-audit queue/orchestration removed from working tree; `show`, `captured`, archive/restore/reconstruct, targeted diagnostics, and correction verification remain. New record/capture helpers are test-covered.
-- No full production research cycle or historical bulk rescore was run for these editorial tests.
+- A real production research cycle was subsequently run from the improved system and monitored end to end. It researched Thai, Cambodian, ASEAN-observer, and international angles; made a justified no-canonical-copy-change decision; updated only research cadence/state; published commit `2bfcd33`; and the public dashboard verified that exact served commit. No historical bulk rescore was run.
+- That live run exposed two harmless but wasteful filename guesses (`synthesis.json` and monthly `.json` instead of the canonical `summary.json` / `.jsonl` paths). Generated cycle context now names the canonical current and monthly data paths; the context remains below its 10 KB budget and the full test suite passes.
 - The optional reader-copy benchmark remains advisory; use its failures to find general fidelity problems, not as a publication gate or a reason to encode fixture-specific prose rules.
