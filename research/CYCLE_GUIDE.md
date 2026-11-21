@@ -67,7 +67,7 @@ Common CLI commands:
 Terminal HTTP is sandboxed and may fail even when a publisher is reachable. Do not treat terminal DNS failure as evidence that a source is unavailable.
 
 The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually.
-Search discovers leads; source reading verifies them. Once a lead appears, open that source or independent corroboration instead of repeating query variants. If evidence remains unavailable, omit the claim; consequential claims need stronger evidence, not more snippets. Diagnostics are for concrete questions, not routine sweeps. `finish` validates data; do not run `pnpm validate`.
+Search discovers leads; source reading verifies them. For a lead, use one broad search and at most one targeted follow-up. Then open a source or corroboration, or drop the claim if evidence is unavailable. Consequential claims need stronger evidence, not more snippets. Diagnostics are for concrete questions, not routine sweeps. `finish` validates data; do not run `pnpm validate`.
 
 ## Finish
 
