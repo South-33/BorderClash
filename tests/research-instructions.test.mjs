@@ -16,6 +16,8 @@ test("agent instructions require a concise evidence and localization check befor
   assert.match(agents, /shared provenance/iu);
   assert.match(agents, /English, Thai, and Khmer.*actors, numbers, negation, attribution, and uncertainty/isu);
   assert.match(agents, /node research\/cli\.mjs finish --review <reason>/u);
+  assert.match(agents, /node research\/cli\.mjs finish <hours> <reason>/u);
+  assert.match(agents, /non-empty `HARNESS_FEEDBACK:`/u);
   assert.match(agents, /terminal sandbox blocks outbound network by default/iu);
   assert.match(agents, /terminal `probe-source` DNS failure does not prove the publisher is unavailable/iu);
 });

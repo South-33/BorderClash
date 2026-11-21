@@ -4,6 +4,16 @@ BorderClash is an automated public monitor of the Thailand-Cambodia border situa
 
 The research is AI-assisted. It can be incomplete or wrong, so the site keeps source links and distinguishes reported claims from established facts.
 
+## Architecture
+
+BorderClash has three practical parts:
+
+- **Frontend:** `src/` renders the public monitor from generated `public/data/`.
+- **Research record:** tracked `data/` is the canonical structured record the agent can read and edit as files. South Server also keeps the private publisher-evidence archive and audit ledger outside Git so historical source material remains available without bloating the repository.
+- **Research harness:** `research/` provides the agent instructions, CLI, validation, evidence tooling, scheduling, recovery, and publication path used by production research on South Server.
+
+The tracked research record moves through Git. The private evidence archive and audit ledger are intentionally South Server state.
+
 ## How it works
 
 1. A scheduled research agent starts from a compact snapshot, then reads the repository and researches the web wherever useful.
@@ -13,9 +23,9 @@ The research is AI-assisted. It can be incomplete or wrong, so the site keeps so
 
 A cycle can also conclude that nothing material changed. The record is meant to stay accurate and useful, not grow for its own sake.
 
-Production research runs on Ubuntu South with Flash Medium. The systemd timer polls every five minutes and the runner starts before the target publication time. Interrupted work keeps its workspace and conversation, including when upstream code advances. A successful Git push remains pending until the public dashboard serves the expected research data.
+Production research runs on **South Server** (Ubuntu) with Flash Medium. The systemd timer polls every five minutes and the runner starts before the target publication time. After a reboot or power outage, the boot-time check reads the absolute `nextRunAt`; if that time has already passed, the cycle is due immediately instead of being skipped until another interval. Interrupted work keeps its workspace and conversation, including when upstream code advances. A successful Git push remains pending until the public dashboard serves the expected research data.
 
-On South, use these commands from `~/BorderClash`.
+On South Server, use these commands from `~/Projects/BorderClash`.
 
 ```sh
 pwsh -NoProfile -File research/automation/control.ps1 status

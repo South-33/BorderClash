@@ -1146,24 +1146,26 @@ async function finish(hoursText, reasonParts) {
     return;
   }
 
-  const requestedHours = hoursText == null ? Number(state.lastCycleInterval || 24) : Number(hoursText);
+  if (hoursText == null) {
+    throw new Error("finish requires an explicit cadence and reason: finish <hours> <reason>");
+  }
+  const requestedHours = Number(hoursText);
   const hours = Number.isFinite(requestedHours) ? requestedHours : Number.NaN;
   if (!Number.isFinite(hours) || hours < 1 || hours > MAX_SCHEDULE_HOURS) {
     throw new Error(`finish hours must be between 1 and ${MAX_SCHEDULE_HOURS}`);
   }
   const suppliedReason = reasonParts.join(" ").trim();
+  if (!suppliedReason) {
+    throw new Error("finish reason is required for every completed cycle");
+  }
   if (suppliedReason.length > 240) {
     throw new Error("finish reason must be at most 240 characters");
-  }
-  const previousHours = Number(state.lastCycleInterval || 24);
-  if (hours !== previousHours && !suppliedReason) {
-    throw new Error("finish reason is required when changing cadence");
   }
   const marker = {
     cycleId,
     decision: "complete",
     intervalHours: hours,
-    reason: suppliedReason || String(state.schedulingReason || "Research cycle completed.").trim(),
+    reason: suppliedReason,
     requestedAt: Date.now(),
   };
   await writeJson(finishMarkerPath, marker);
@@ -1294,7 +1296,7 @@ if (command === "brief") {
     "node research/cli.mjs audit-status          # summarize full-record audit progress",
     "node research/cli.mjs audit-help            # show historical audit commands",
     "node research/cli.mjs finish             # request completion; keep current cadence",
-    "node research/cli.mjs finish <hours> <reason>  # complete cycle and change cadence",
+    "node research/cli.mjs finish <hours> <reason>  # complete cycle and choose next cadence",
     "node research/cli.mjs finish --review <reason> # stop for operator review without publication",
   ].filter((line) => {
     const auditCommand = line.startsWith("node research/cli.mjs audit-");

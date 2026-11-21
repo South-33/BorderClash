@@ -237,7 +237,7 @@ test("finish records completion intent without mutating trusted scheduler state"
   }
 });
 
-test("finish needs no arguments when cadence should stay the same", async () => {
+test("finish requires an explicit cadence and reason even when cadence stays the same", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
     await mkdir(join(root, "data"), { recursive: true });
@@ -254,7 +254,15 @@ test("finish needs no arguments when cadence should stay the same", async () => 
     await mkdir(join(root, ".work"), { recursive: true });
     await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-test-2" }) + "\n");
 
-    const result = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
+    const missing = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
+    assert.notEqual(missing.status, 0);
+    assert.match(missing.stderr, /explicit cadence and reason/u);
+    const result = spawnSync(process.execPath, [
+      script,
+      "finish",
+      "24",
+      "Quiet conditions still justify a daily review.",
+    ], { cwd: root, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
     const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
     assert.equal(state.researchCycleCount, 7);
@@ -262,7 +270,7 @@ test("finish needs no arguments when cadence should stay the same", async () => 
     assert.equal(state.schedulingReason, "Quiet conditions; daily review remains appropriate.");
     const marker = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
     assert.equal(marker.intervalHours, 24);
-    assert.equal(marker.reason, "Quiet conditions; daily review remains appropriate.");
+    assert.equal(marker.reason, "Quiet conditions still justify a daily review.");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -285,7 +293,10 @@ test("finish is idempotent within one runner cycle", async () => {
 
     await mkdir(join(root, ".work"), { recursive: true });
     await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-test-1" }) + "\n");
-    const first = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
+    const first = spawnSync(process.execPath, [script, "finish", "24", "Quiet conditions still justify a daily review."], {
+      cwd: root,
+      encoding: "utf8",
+    });
     assert.equal(first.status, 0, first.stderr);
     const afterFirst = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
 
@@ -304,7 +315,7 @@ test("finish is idempotent within one runner cycle", async () => {
   }
 });
 
-test("finish requires a reason for cadence changes and rejects scheduling beyond one week", async () => {
+test("finish requires a reason for every cadence and rejects scheduling beyond one week", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
     await mkdir(join(root, "data"), { recursive: true });
@@ -319,6 +330,10 @@ test("finish requires a reason for cadence changes and rejects scheduling beyond
     const missingReason = spawnSync(process.execPath, [script, "finish", "80"], { cwd: root, encoding: "utf8" });
     assert.notEqual(missingReason.status, 0);
     assert.match(missingReason.stderr, /reason is required/u);
+
+    const unchangedMissingReason = spawnSync(process.execPath, [script, "finish", "24"], { cwd: root, encoding: "utf8" });
+    assert.notEqual(unchangedMissingReason.status, 0);
+    assert.match(unchangedMissingReason.stderr, /reason is required/u);
 
     const result = spawnSync(process.execPath, [
       script,
