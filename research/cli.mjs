@@ -224,13 +224,14 @@ function renderContext(output) {
     "## Live context",
     `Research reference time: ${output.cycle.now}`,
     `Last completed: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
+    "Canonical data: current=data/current/{summary,thailand,cambodia,impact}.json; monthly=data/{timeline,news}/YYYY-MM.jsonl",
   ];
 
   lines.push(
     "",
     "## Recent repository anchors",
     `${output.contextWindow.lookbackDays} days from ${output.contextWindow.start} to ${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (automatic context capped at 30 days)" : ""}.`,
-    "The anchors below are the newest retained repository items, not an importance ranking, research quota, or complete account of changes since the last cycle.",
+    "These are recent retained items, not a ranking, quota, or complete change list.",
     "",
     "## Newest timeline anchors",
   );
@@ -255,7 +256,7 @@ function renderContext(output) {
 
   lines.push(
     "",
-    "These automated anchors are only a starting point, not the research scope or ground truth. Build the context you need from the canonical records, evidence, and web.",
+    "Anchors are orientation only. Build needed context from canonical records, evidence, and the web.",
     "",
   );
   return lines.join("\n");
