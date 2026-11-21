@@ -7,7 +7,7 @@ import { normalizeArticleUrl } from "../lib/articles.mjs";
 import { loadArticleRegistry } from "../lib/article-ingest.mjs";
 import { verifyArchiveCopy } from "../lib/evidence-archive.mjs";
 import { listFiles, readJson, readJsonl } from "../lib/files.mjs";
-import { auditReferenceCoverage } from "../lib/reference-audit.mjs";
+import { checkReferenceCoverage } from "../lib/reference-check.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
@@ -252,7 +252,7 @@ async function verifyReferenceIntegrity() {
   for (const name of ["summary", "thailand", "cambodia", "impact"]) {
     current[name] = await readJson(join(dataRoot, "current", `${name}.json`));
   }
-  const coverage = auditReferenceCoverage({ articles: registry.articles, timeline, current });
+  const coverage = checkReferenceCoverage({ articles: registry.articles, timeline, current });
   if (coverage.missingTimelineEvidenceIds.length || coverage.missingCurrentEvidenceIds.length) {
     throw new Error(
       `Canonical evidence references are incomplete: timeline=${coverage.missingTimelineEvidenceIds.length} current=${coverage.missingCurrentEvidenceIds.length}`,
@@ -387,9 +387,9 @@ async function main() {
     const node = process.execPath;
     const steps = [
       { name: "validate", command: node, args: ["research/validate.mjs"] },
-      { name: "audit-chronology", command: node, args: ["research/cli.mjs", "audit-chronology"] },
-      { name: "audit-humanitarian", command: node, args: ["research/cli.mjs", "audit-humanitarian"] },
-      { name: "audit-references", command: node, args: ["research/cli.mjs", "audit-references"] },
+      { name: "check-chronology", command: node, args: ["research/cli.mjs", "check-chronology"] },
+      { name: "check-humanitarian", command: node, args: ["research/cli.mjs", "check-humanitarian"] },
+      { name: "check-references", command: node, args: ["research/cli.mjs", "check-references"] },
       { name: "diff-check", command: "git", args: ["diff", "--check", args.baseline, "--"] },
     ];
     if (args.build) {

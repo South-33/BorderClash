@@ -31,7 +31,7 @@ function articleText(article) {
   return [article?.titleEn, article?.title, article?.summary].filter(Boolean).join(" ");
 }
 
-export function auditHumanitarianSummaryRisk(events = [], articles = []) {
+export function checkHumanitarianSummaryRisk(events = [], articles = []) {
   const articlesById = new Map(articles.map((article) => [article.id, article]));
   const candidates = [];
   const missingEvidence = [];

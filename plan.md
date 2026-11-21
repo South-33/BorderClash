@@ -1,88 +1,114 @@
-# BorderClash research system
+# BorderClash research-quality hill climb
 
-## Goal and operating rules
+## Goal
 
-Maintain the best supported public record of the Thailand–Cambodia border situation. Readers need a clear current picture, attributed positions, justified military assessments, humanitarian context, and a reconstructable history. Accuracy and useful evidence take priority over volume. A researched no-change cycle is valid.
+Make routine BorderClash research produce a clear, fair, useful public picture for ordinary civilians without sacrificing evidence discipline or publication safety.
 
-One Antigravity CLI agent runs real cycles on Ubuntu South with `gemini-3.8-flash-medium`. Development and fake-agent tests can run elsewhere. Keep one permanent checkout on `main` per machine. Recoverable temporary clones isolate running cycles. Keep the existing UI and public data contract compatible. UI changes require the operator's approval.
+The system should be simple: one operating brief, one research agent, one structured finish decision, objective validation, and safe publication. Editorial judgment stays with the agent where it cannot be faithfully reduced to deterministic checks.
 
-The agent maintains canonical `data/`. The runner owns timing, recovery, source-capture mechanics, validation, Git integration, and public-delivery checks. Curation, timeline work, and synthesis remain open to further research at any point. Use `AGENTS.md` for editorial rules.
+Do not optimize for churn, fixed length, fixed update counts, or passing prose snapshots. A researched no-change cycle is valid. Git preserves history; current public copy should represent the best current judgment.
 
-Implementation agents can simplify the schema, code, commands, and layout where this improves correctness or maintenance. Keep stable IDs and evidence references. Preserve useful work before retiring it. A failed acceptance check stays open with a concrete next action.
+## Working method
 
-## 1. Keep a small, coherent system
+- Change one coherent behavior at a time where practical.
+- Do not make UI changes without explicit user approval. Treat layout, CSS, typography, component structure, animation, interactions, and static UI copy as fixed; canonical research data and public editorial content may still change when evidence or reader value warrants it.
+- Use current BorderClash records and evidence for evaluation, not invented toy prose when real material is available.
+- Use small isolated model evaluations instead of full production cycles when the question is wording, selection, translation, or prompt behavior.
+- Compare alternatives against the same inputs. Keep changes only when they improve reader value without weakening attribution, uncertainty, or factual fidelity.
+- Treat model/judge scores as evidence, never as publication gates.
+- Keep hard failures for objective state, data, and publication invariants. Keep heuristics as warnings or review aids.
+- Do not restart a full historical audit. Reopen old records only for a concrete reason.
 
-- [x] Port the existing runner to Ubuntu using the installed PowerShell host and native machine and state paths.
-- [x] Use one shared platform helper and one systemd service/timer installer. Retire Windows task installation.
-- [x] Remove the parallel audit coordinator, its four prompts, and completed evidence-migration tooling. Retain the small JSONL merge routine still used by serial audit packet refresh. This removes about 2,900 lines.
-- [x] Keep routine CLI help concise and expose historical audit commands through `audit-help`. Keep the launch prompt focused on canonical data and the review path.
-- [x] Consolidate the recent development history while retaining the earlier history through `48b1475` and exact trees for the later impact, November 14, and November 19 synthesis snapshots. Original commits and all workspace heads are retained in verified recovery bundles outside Git.
-- [x] Retire all 281 backed-up audit worktrees and their branch refs. Laptop and South each have one registered checkout on `main`. Both match GitHub and the verified public deployment. The earlier research history and distinct synthesis snapshots remain directly readable in Git. Retired runtime files are outside the active checkout.
-- [x] Share the South owner's tool paths and credential bus across SSH, terminals, and user services. Keep host setup in `../SouthServer`, including shared tmux, a compact health check, and on-demand desktop screenshots/input. Retire the unused Antigravity remote-control daemon. Archive migration scratch and the stale laptop audit ledger outside this checkout; South holds the working audit ledger.
+## 1. Restore trustworthy harness behavior
 
-## 2. Preserve and recover each cycle
+- [x] Repair the reader-copy benchmark so it uses `research/CYCLE_GUIDE.md` instead of the removed `AGENTS.md` editorial section.
+- [x] Remove the obsolete bare `finish` help entry.
+- [x] Disable Next.js automatic `AGENTS.md` mutation in development.
+- [x] Make `.work/research-finish.json` the authoritative completion/review decision. Final-response markers may be logged but must not veto otherwise valid structured completion.
+- [x] Remove the routine production custom-prompt bypass if no real caller depends on it; keep experiments in explicit development/evaluation paths.
+- [x] Remove dead prompt-prose helpers/tests that freeze wording instead of behavior.
+- [x] Keep the existing automation watchdog unchanged unless a reproducible failure proves a production defect.
 
-- [x] Keep an atomic run checkpoint, workspace, conversation, completion intent, logs, and pending-publication state. Resume completed turns at validation and interrupted turns in the same conversation where supported.
-- [x] Reconcile data against current `main`, rerun trusted validation, hold overlapping changes for review, use fast-forward publication, and verify ambiguous push results before retrying.
-- [x] Provide status, pause, stop, resume, run-now, restart-fresh, and cleanup through `research/automation/control.ps1`. Stop preserves work. Cleanup previews owned completed or explicitly retired scratch directories and preserves evidence.
-- [x] Keep a durable review hold when the agent requests help or safe continuation needs an operator. Retry ordinary transient outages with bounded backoff.
-- [x] Keep publication authentication in the runner environment. The agent environment strips it, and the terminal sandbox bounds filesystem access.
-- [x] Pass the full Windows and Ubuntu fake-agent recovery and publication suites in isolated verification clones.
-- [x] Verify a fresh Flash Medium CLI session after the owner's sign-in. A sandboxed terminal request returned HTTP 200; CLI research works independently of the retired remote-control daemon.
-- [x] Verify recovery after a real reboot without manual intervention. South auto-logged in after reboot; Wi-Fi, Tailscale, SSH, Chrony, Desktop Sharing, and the user manager recovered with no failed units. Across observed reboots either Login or Default may be the unlocked persistent collection, while normal `agy` and `gh` continue to succeed through the shared Secret Service. The scheduler therefore gates on Secret Service plus at least one unlocked persistent collection instead of assuming a specific keyring alias, and retries naturally on the five-minute timer if credentials are not ready.
+Acceptance: `pnpm test`, `pnpm validate`, and `pnpm test:automation` pass; benchmark starts successfully with the canonical guide.
 
-## 3. Make timing and publication reliable
+## 2. Put validation on the right side of the judgment boundary
 
-- [x] Keep `nextRunAt` as a UTC target calculated from validated completion and chosen cadence. Start early from measured duration plus a buffer. Keep the existing overdue counter.
-- [x] Confirm delivery through the production `/data/dashboard.json`, including the expected research state and commit or a compatible descendant. A Git push alone leaves delivery pending.
-- [x] Keep publication retries separate from research retries and preserve a pending candidate through outages.
-- [x] Install `borderclash-research.service` and `borderclash-research.timer` on South. The timer checks every five minutes and the user manager has lingering enabled.
-- [x] Verify the installed timer with a working fresh CLI login and a reboot. Delayed network recovery is independently verified on South: the real scheduler script tolerated two simulated fetch failures, succeeded on the third bounded attempt, then continued through fast-forward sync and invoked the runner. After reboot acceptance passed, the production timer was enabled; its first timer-triggered service invocation exited successfully without waking a due research cycle, and the timer re-armed for the next five-minute poll. A direct scheduler check reported `SKIP: not-due` for the 09:51 local target with the configured 90-minute lead.
+- [x] Keep structural hard failures: schema/shape, IDs, canonical URL identity, evidence references, valid dates/times/enums/ranges, required language fields, script/mojibake integrity, runner-owned state, allowed paths, publication reconciliation, and delivery verification.
+- [x] Demote free-text numeric-token parity from publication blocker to diagnostic warning/review signal.
+- [x] Demote Thai/Khmer tone/partisan-word regexes from publication blocker to diagnostic warning/review signal.
+- [x] Remove the hard failure for `titleEn === title`.
+- [x] Review other source-code/prompt regex tests while touching their code; prefer behavioral tests over exact implementation text.
 
-## 4. Preserve evidence
+Acceptance: known false positives no longer block; objective corruption and referential errors still fail.
 
-- [x] Keep one article registry across media environments and archived records. Ingest reuses article identity, flags ambiguous matches, and distinguishes shared provenance from independent corroboration.
-- [x] Capture accessible public HTML/text and documents with bounded requests, safe destinations, checksums, explicit failure states, and a separate local backup. Capture failures stay visible and do not invalidate an otherwise supported article.
-- [x] Move the laptop evidence archive and backup to South. At transfer there were 1,235 article directories, including 711 captured HTML sources and 7 captured documents. The remaining directories record extraction, access, or request failures.
-- [x] Verify and restore a captured source on South by ID with matching checksums.
-- [x] Consolidate old evidence pilots under South's local state directory, move the user desktop application out of Downloads, and remove its downloaded installer and the obsolete CLI binary.
-- [x] Verify terminal HTTP access with a fresh CLI session and explicit public URL permission after sign-in.
-- [x] Verify archive writes from the model's terminal using the final per-cycle sandbox settings. Flash Medium captured public HTML into the private archive and backup, then verified all four files with no checksum mismatch. Acceptance conversation: `4aab8a4e-cd0e-4706-b955-4244676e0ec7`.
+## 3. Resolve evidence-score semantics without a bulk rescore
 
-Keep bulk publisher content private and outside Git. The accepted initial backup remains on South and shares its failure domain. Broader off-server recovery and bulk historical capture remain later work.
+- [x] Define one meaning for article `credibility`: how strongly the retained evidence supports the stored report as actually worded, including its attribution boundary.
+- [x] Align `CYCLE_GUIDE.md`, `research/lib/evidence-score.mjs`, fixed cases, and validators with that meaning. Static UI wording is outside this research task and remains unchanged without explicit approval.
+- [x] Make clear that a primary source can strongly establish that an actor made a statement without proving the actor's disputed allegation true.
+- [x] Remove contradictory blanket handling of attributed opponent claims.
+- [x] Keep evidence-score semantics authoritative in the research contract and evaluator rather than changing static UI copy as part of this task.
+- [x] Do not rescore the archive wholesale. Revisit existing records only when a concrete current use or obvious inconsistency warrants it.
 
-## 5. Prove the research behavior
+Acceptance: the same attributed report receives the same conceptual treatment in the guide, library, fixture evaluator, and validator without requiring a UI change.
 
-- [x] Run all four fixed editorial cases with Flash Medium on South. Correctly date a retrospective, attribute a disputed claim with one evidence chain, preserve a humanitarian claimant and scope across languages, and request review when required evidence is unavailable.
-- [x] Run one full CLI research cycle under systemd on South with publication disabled. Session `20261120T114617573Z` passed validation and a production build. It made no canonical content change and retained the 24-hour cadence.
-- [x] Apply its feedback. Scheduling tests now select the platform shell, absent audit state returns an actionable status, and completion output explicitly directs the model to return its final response and feedback.
-- [x] Preserve a concise generated brief and short task prompt. Keep the current three media environments, decile article evidence scores, four timeline importance levels, and English/Thai/Khmer copy with matching facts.
-- [x] Add canonical file paths and timestamp units to the compact brief after observing guessed filenames and string/numeric date comparisons in a real cycle. Keep the existing size limit.
-- [x] Make Node and PowerShell use the same lowercase Linux review directory and honor `XDG_STATE_HOME`. Consolidate the first batch results into that directory and verify that `audit-resume` finds the current saved review. A cross-runtime regression passes on Windows and South.
-- [x] Fix current-snapshot audit marking: it saved the ledger and then failed by trying to release a timeline-only claim for a `current/...` ID. Only timeline records now use that cleanup. The CLI regression passes on Windows and South.
-- [x] Preserve monthly JSONL evidence and timeline files and small current JSON snapshots. Current claims use canonical evidence links, metric scope is explicit, and generated output retains the existing UI fields.
-- [x] Finish autonomous live acceptance. Runs `20261120T185222894Z` and `20261120T192011049Z` had repeated unavailable-source searches and were stopped with work preserved; their interrupted checkpoints remain evidence and should not be blindly resumed. After the context/direct-CLI fixes, supervised session `20261120T205528471Z` completed autonomously with publication disabled. Flash Medium made 15 actual web searches, ran zero `probe-source` commands and zero `pnpm research` commands, called `node research/cli.mjs finish` exactly once, changed only research timing state, passed trusted validation, and passed the production build. Conversation: `3d9b9651-121a-4dd0-aa18-65b4555bf03e`. The harness's later 359-package install was the intentional post-validation build step in the isolated clone, not model-driven research friction.
+## 4. Clarify editorial roles and simplify the operating brief
 
-After retirement and feedback fixes, Ubuntu passed all 1,385 Node tests and the full fake-agent suite. The Windows suite also passed in a frozen clone, and the production build passed. After the shared-state and brief fixes, Windows passed all 1,386 Node tests; the focused cross-runtime, context, and reviewer checks passed on South.
+- [x] Keep `research/CYCLE_GUIDE.md` as the single durable research contract and keep it compact.
+- [x] Define field roles: overall synthesis = shared current picture; key updates = material recent/imminent changes; country summaries = each side's current position/material claims; activity fields = supported physical military posture; timeline = reconstructable history.
+- [x] Tell the agent to verify rigorously but not narrate its audit process in public prose.
+- [x] Prefer ordinary language; keep loaded labels explicitly attributed; draft English/Thai/Khmer from the same facts rather than translating clauses literally.
+- [x] Preserve permission to leave good copy unchanged, while permitting quiet-day edits for error, stale emphasis, jargon, repetition, or poor language.
+- [x] Keep dynamic context free of previous synthesis/reasoning. Label recent anchors as orientation, not importance or scope.
+- [x] Normalize displayed context dates to border-local time where appropriate and remove/rename counts that imply more than they measure.
 
-The PCA correction subsequently passed all 1,388 Node tests in a frozen South snapshot, a fresh Flash Medium review, and verification of the committed delta `85f660c`. Live feedback still reports publisher-specific sandbox DNS failures and an unnecessary dependency rebuild when invoking `pnpm research`; investigate these before rollout.
+Acceptance: one brief remains the production contract, stays compact, and contains no previous synthesis or hidden editorial quota.
 
-## 6. Account for the historical record
+## 5. Build a small real-data editorial evaluation loop
 
-- [x] Retain the audited corrections, merges, stable IDs, source archives, and local ledger from the laptop work.
-- [x] Verify current reference integrity on South. The current tree has 3,335 articles, 581 timeline events, and no missing current/timeline evidence references.
-- [x] Give all 10 reopened records a disposition using captured evidence and Flash Medium on South where evidence was available. Six were reviewed, the PCA headline was narrowed to its own announcement, and two inaccessible articles remain unresolved. The fourth current-summary key update was previously held because its Khaosod source was uncaptured; on 21 November the live publisher page was independently retrieved and explicitly supported the army's calm/no-major-incidents/continued-monitoring statement, so the stored copy is factually supported. South still receives HTTP 403 from both the normal and AMP publisher URLs, so the private archive gap remains. A model warning about Thai script in `summaryKh` was rejected after checking the actual Unicode codepoints; do not edit valid Khmer based on that warning.
-- [x] Review the remaining source gaps as a known non-blocking evidence limitation. The synchronized ledger accounts for 4,056 historical/current records, including merged records: 169 reviewed, 611 corrected, 131 merged, 3,145 unresolved, and zero pending. An accounted-for ledger is not a fully verified historical record. Keep the Khaosod article `1b74fc2f24abb855829e964f656dd8b2` marked as an archive-access limitation rather than treating South's HTTP 403 as evidence against its now-verified publisher text.
+- [x] Repair and extend the optional reader-copy benchmark with representative real BorderClash material covering synthesis selection, timeline prose, attribution, and EN/TH/KH parity.
+- [x] Add an explicit A/B evaluation mode for candidate guide/prompt variants without changing production data.
+- [x] Use the production-qualified model for candidate generation when available; keep judge output advisory and inspect the actual prose.
+- [x] Compare at least the current guide against the proposed guide on the same real inputs.
+- [x] Record concise evaluation results under `.work/`, not canonical data.
 
-Do not infer factual support from a stored summary or from a passing schema check. Preserve attribution and uncertainty when sources remain inaccessible. Add earlier history when needed to repair chronology or explain a meaningful sequence. A comprehensive new pre-project history remains separate work.
+Acceptance: chosen guidance wins on real examples for clarity/selection/naturalness while preserving material facts, attribution, and uncertainty.
 
-## 7. Finish and roll out
+## 6. Repair the current public picture once the system is improved
 
-- [x] Complete trusted-workstation authentication and reboot acceptance. Both persistent keyring passwords were removed without deleting stored items. After reboot, the default credential collection auto-unlocked, Desktop Sharing returned on port 3389, a real post-reboot screenshot succeeded with the dock fixed/visible policy intact, and the same Antigravity login worked from both SSH and user-systemd. No second OAuth store or second desktop login path remains.
-- [x] Publish the authorized history rewrite with checked force-with-lease. Verify the production snapshot and successful Vercel deployment on the consolidated `main`.
-- [x] Both BorderClash checkouts and both SouthServer checkouts are clean and synchronized at their respective current revisions. Production was enabled only after unattended acceptance passed, and the first scheduled service outcome was confirmed.
-- [x] Final verified result: South now uses one trusted `southserver` identity, one GNOME credential session, one Antigravity login, GDM auto-login, persistent Desktop Sharing on RDP port 3389, Chrony time synchronization, NetworkManager/Tailscale recovery, and the owned BorderClash systemd timer. The same Antigravity login works after reboot from SSH and user-systemd; the scheduler waits for the unlocked default Secret Service collection, retries transient Git/network failures, and polls every five minutes. Autonomous nonpublishing Flash Medium acceptance passed before rollout. Known evidence limitations remain documented above and do not block unattended operation.
+- [x] Re-open supporting evidence for the current synthesis, country summaries, and recent visible timeline records before editing them.
+- [x] Remove duplicated roles, low-value precision, institutional alphabet soup, verification-memo tails, and unattributed loaded framing.
+- [x] Correct material Thai/Khmer semantic drift in the current public copy.
+- [x] Let key-update count be dynamic, including zero.
+- [x] Keep lower-value supported facts in timeline/evidence rather than forcing them into the current overview.
+- [x] Inspect the real dashboard at 1440x900 in English, Thai, and Khmer, plus a mobile viewport. No UI change is part of this work. The military activity label is a looping banner, so transient edge clipping during motion is expected and should not trigger UI or content changes by itself.
 
-Continue from the first unfinished prerequisite. Keep independent work moving while authentication or another external dependency is pending. Ask for the specific missing action when it is required. Mark completion from observed results.
+Acceptance: all three languages fit/read materially better, with no loss of important attribution or uncertainty; validation and tests remain green.
 
-Scheduler decision: retain **systemd -> existing BorderClash runner -> Antigravity CLI**. Antigravity `/schedule` is conversation-scoped; persistent App automations are a separate sidecar feature with fresh conversations. T3 can run scheduled prompts through a boot-enabled Linux user service, but it manages a separate Antigravity provider profile/sign-in and would not replace BorderClash's recovery, validation, review-hold, adaptive-cadence, publication, or delivery checks. For this single production job it adds a credential/runtime layer without removing a required layer. Reconsider only if those responsibilities materially change. Sources: [Antigravity schedule](https://antigravity.google/docs/commands/schedule/), [T3 background service](https://github.com/pingdotgg/t3code/blob/main/docs/user/background-service.md), [T3 Antigravity provider](https://github.com/pingdotgg/t3code/blob/main/docs/user/providers-antigravity.md).
+## 7. Retire completed historical-audit orchestration separately
+
+- [x] Preserve useful capabilities first: `show`, `captured`, capture/archive/reconstruct, reference checks, targeted chronology/time/humanitarian diagnostics, and generic correction verification.
+- [x] Remove or archive full-audit queue progression, worktree claims, risk queues, batch triage/review orchestration, stale packet refresh, and other machinery that exists only to continue the completed sweep.
+- [x] Preserve final audit artifacts as operator history outside routine production inputs.
+- [x] Keep old records editable and targeted diagnostics available without recreating a perpetual audit backlog.
+
+Acceptance: routine research CLI/runtime no longer carries bulk-audit workflow complexity, while targeted correction/evidence work remains straightforward.
+
+## Finish
+
+- [x] Run all normal and automation verification (`pnpm test`, `pnpm validate`, `pnpm test:automation`, and `pnpm build` passed).
+- [x] Run the repaired editorial benchmark/evaluation suite and inspect its outputs manually.
+- [x] Confirm production runner still has one canonical brief and safe publication/recovery behavior.
+- [x] Confirm no full-cycle production publication was required merely to test editorial behavior.
+- [x] Update this plan so completed items reflect observed results, then leave only concrete follow-up work that genuinely remains.
+
+## Verification ledger (2026-11-21)
+
+- `pnpm test`: 126 passed. `pnpm validate`: 582 timeline events, 3,337 articles, zero warnings. `pnpm build`: succeeded.
+- `pnpm test:automation`: passed all run-cycle sections, including structured completion, restart/recovery, operator review, and publication reconciliation.
+- Current-copy A/B reports in `.work/benchmarks/current-copy/` support the field-role guidance in both candidate orderings. The live guide keeps that role split without fixed word or update counts.
+- Reader-copy qualification is advisory. A one-pass production-model sample reached 8.5/10 fidelity but exposed one cross-script error and a few translation-category mistakes. A same-model repair pass removed hard issues and raised fidelity to 9.5/10, but took about 186 seconds / 47.8k candidate tokens and reduced Thai/Khmer naturalness to 6.5/10. That tradeoff does not justify a second production model stage.
+- Current summaries and five recent timeline entries were shortened after evidence review. At 1440x900 the full page and center card have 0 px overflow in English, Thai, and Khmer; the Khmer whole-page check also shows no country-card overflow. The 390x844 mobile view has 0 horizontal overflow and no hidden center-card content.
+- Bulk historical-audit queue/orchestration removed from working tree; `show`, `captured`, archive/restore/reconstruct, targeted diagnostics, and correction verification remain. New record/capture helpers are test-covered.
+- No full production research cycle or historical bulk rescore was run for these editorial tests.
+- The optional reader-copy benchmark remains advisory; use its failures to find general fidelity problems, not as a publication gate or a reason to encode fixture-specific prose rules.

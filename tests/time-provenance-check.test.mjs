@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  auditTimelineTimeProvenance,
-  auditTimelineTimeSupport,
+  checkTimelineTimeProvenance,
+  checkTimelineTimeSupport,
   evidenceStatesExactTime,
-} from "../research/lib/time-provenance-audit.mjs";
+} from "../research/lib/time-provenance-check.mjs";
 
-test("time provenance audit flags a same-day article publication time with no textual time support", () => {
-  const result = auditTimelineTimeProvenance([
+test("time provenance check flags a same-day article publication time with no textual time support", () => {
+  const result = checkTimelineTimeProvenance([
     { id: "event-1", date: "2026-06-19", timeOfDay: "10:00", importance: 95, evidenceIds: ["article-1"] },
   ], [
     {
@@ -26,8 +26,8 @@ test("time provenance audit flags a same-day article publication time with no te
   assert.equal(result.candidates[0].matches[0].evidenceSourceUrl, "https://example.com/article-1");
 });
 
-test("time support audit triages exact times absent from stored cited evidence without auto-correcting", () => {
-  const result = auditTimelineTimeSupport([
+test("time support check triages exact times absent from stored cited evidence without auto-correcting", () => {
+  const result = checkTimelineTimeSupport([
     { id: "supported", date: "2026-01-01", timeOfDay: "10:00", importance: 50, evidenceIds: ["a"] },
     { id: "high-risk", date: "2026-01-02", timeOfDay: "14:00", importance: 90, evidenceIds: ["b"] },
     { id: "missing", date: "2026-01-03", timeOfDay: "14:00", importance: 70, evidenceIds: ["missing-article"] },
@@ -51,8 +51,8 @@ test("time support audit triages exact times absent from stored cited evidence w
   assert.deepEqual(result.missingEvidence, [{ eventId: "missing", evidenceIds: ["missing-article"] }]);
 });
 
-test("time provenance audit suppresses publication matches when evidence states the exact time", () => {
-  const result = auditTimelineTimeProvenance([
+test("time provenance check suppresses publication matches when evidence states the exact time", () => {
+  const result = checkTimelineTimeProvenance([
     { id: "event-live", date: "2025-12-17", timeOfDay: "15:40", evidenceIds: ["article-live"] },
   ], [
     {
@@ -67,8 +67,8 @@ test("time provenance audit suppresses publication matches when evidence states 
   assert.equal(evidenceStatesExactTime({ title: "Update at 10.00am" }, "10:00"), true);
 });
 
-test("time provenance audit suppresses a publication collision when another cited source states the exact time", () => {
-  const result = auditTimelineTimeProvenance([
+test("time provenance check suppresses a publication collision when another cited source states the exact time", () => {
+  const result = checkTimelineTimeProvenance([
     { id: "event-briefing", date: "2026-02-18", timeOfDay: "11:00", evidenceIds: ["official", "secondary"] },
   ], [
     {
@@ -87,8 +87,8 @@ test("time provenance audit suppresses a publication collision when another cite
   assert.equal(result.candidateCount, 0);
 });
 
-test("time provenance audit ignores time-only coincidences on another publication date", () => {
-  const result = auditTimelineTimeProvenance([
+test("time provenance check ignores time-only coincidences on another publication date", () => {
+  const result = checkTimelineTimeProvenance([
     { id: "event-older", date: "2026-05-04", timeOfDay: "14:00", evidenceIds: ["article-next-day"] },
   ], [
     {
@@ -102,8 +102,8 @@ test("time provenance audit ignores time-only coincidences on another publicatio
   assert.equal(result.candidateCount, 0);
 });
 
-test("time provenance audit reports missing evidence and ignores date-only events", () => {
-  const result = auditTimelineTimeProvenance([
+test("time provenance check reports missing evidence and ignores date-only events", () => {
+  const result = checkTimelineTimeProvenance([
     { id: "event-missing", date: "2026-01-01", timeOfDay: "10:00", evidenceIds: ["missing"] },
     { id: "event-date-only", date: "2026-01-02", evidenceIds: ["missing-date-only"] },
   ], []);

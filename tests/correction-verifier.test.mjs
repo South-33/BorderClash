@@ -78,7 +78,7 @@ test("correction verifier is snapshot-stable and checks evidence references", ()
   const source = readFileSync("research/automation/verify-correction.mjs", "utf8");
   assert.match(source, /worktreeFingerprint/u);
   assert.match(source, /verifyArchiveCopy/u);
-  assert.match(source, /auditReferenceCoverage/u);
+  assert.match(source, /checkReferenceCoverage/u);
   assert.match(source, /missingTimelineEvidenceIds/u);
   assert.match(source, /missingCurrentEvidenceIds/u);
   assert.match(source, /git.+diff.+--check/su);

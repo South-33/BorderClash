@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditReferenceCoverage } from "../research/lib/reference-audit.mjs";
+import { checkReferenceCoverage } from "../research/lib/reference-check.mjs";
 
-test("reference audit reports missing current URLs without weakening ID checks", () => {
-  const report = auditReferenceCoverage({
+test("reference check reports missing current URLs without weakening ID checks", () => {
+  const report = checkReferenceCoverage({
     articles: [
       { id: "article-1", sourceUrl: "https://example.com/a/" },
       { id: "article-2", sourceUrl: "https://example.com/b" },
@@ -36,8 +36,8 @@ test("reference audit reports missing current URLs without weakening ID checks",
   assert.equal(report.ok, false);
 });
 
-test("reference audit accepts normalized current URLs and complete evidence IDs", () => {
-  const report = auditReferenceCoverage({
+test("reference check accepts normalized current URLs and complete evidence IDs", () => {
+  const report = checkReferenceCoverage({
     articles: [{ id: "article-1", sourceUrl: "https://example.com/a/" }],
     timeline: [{ id: "event-1", evidenceIds: ["article-1"] }],
     current: {

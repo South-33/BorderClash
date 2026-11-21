@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  auditHumanitarianSummaryRisk,
+  checkHumanitarianSummaryRisk,
   extractMeaningfulNumericClaims,
-} from "../research/lib/humanitarian-audit.mjs";
+} from "../research/lib/humanitarian-check.mjs";
 
-test("humanitarian audit flags dense single-source numeric claims absent from the stored evidence summary", () => {
-  const result = auditHumanitarianSummaryRisk([
+test("humanitarian check flags dense single-source numeric claims absent from the stored evidence summary", () => {
+  const result = checkHumanitarianSummaryRisk([
     {
       id: "event-risk",
       category: "humanitarian",
@@ -28,8 +28,8 @@ test("humanitarian audit flags dense single-source numeric claims absent from th
   assert.match(result.candidates[0].reviewNote, /open the source or preserved capture/u);
 });
 
-test("humanitarian audit does not flag claims represented in the stored evidence summary", () => {
-  const result = auditHumanitarianSummaryRisk([
+test("humanitarian check does not flag claims represented in the stored evidence summary", () => {
+  const result = checkHumanitarianSummaryRisk([
     {
       id: "event-covered",
       category: "humanitarian",
@@ -47,8 +47,8 @@ test("humanitarian audit does not flag claims represented in the stored evidence
   assert.equal(result.candidateCount, 0);
 });
 
-test("humanitarian audit stays conservative for multi-source events", () => {
-  const result = auditHumanitarianSummaryRisk([
+test("humanitarian check stays conservative for multi-source events", () => {
+  const result = checkHumanitarianSummaryRisk([
     {
       id: "event-multi",
       category: "humanitarian",
@@ -71,8 +71,8 @@ test("numeric extraction normalizes k suffixes but ignores years and small incid
   );
 });
 
-test("humanitarian audit reports missing evidence without creating a candidate", () => {
-  const result = auditHumanitarianSummaryRisk([
+test("humanitarian check reports missing evidence without creating a candidate", () => {
+  const result = checkHumanitarianSummaryRisk([
     {
       id: "event-missing",
       category: "humanitarian",

@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { buildAuditCapturedEvidence } from "../research/lib/audit-captured-evidence.mjs";
+import { buildCapturedEvidence } from "../research/lib/captured-evidence.mjs";
 
 async function writeCapture(root, id, text, status = "captured-html") {
   const key = `capture-${id}`;
@@ -23,8 +23,8 @@ async function writeDocumentCapture(root, id) {
   await writeFile(join(captureRoot, "original.pdf"), "fake pdf bytes", "utf8");
 }
 
-test("captured audit evidence reads multilingual publisher text with bounded excerpts", async () => {
-  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-audit-captured-"));
+test("captured evidence reads multilingual publisher text with bounded excerpts", async () => {
+  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-captured-"));
   await writeCapture(archiveRoot, "khmer", "  ភ្នំពេញ៖  អត្ថបទសាកល្បង\r\n\r\nជួរទីពីរ  ", "captured-text");
   await writeCapture(archiveRoot, "long", "x".repeat(5_000));
   const packet = {
@@ -38,7 +38,7 @@ test("captured audit evidence reads multilingual publisher text with bounded exc
     },
   };
 
-  const result = await buildAuditCapturedEvidence(packet, { archiveRoot, perArticleChars: 1_000, totalChars: 1_500 });
+  const result = await buildCapturedEvidence(packet, { archiveRoot, perArticleChars: 1_000, totalChars: 1_500 });
   assert.equal(result.recordId, "event-1");
   assert.equal(result.articleCount, 3);
   assert.equal(result.capturedCount, 2);
@@ -49,10 +49,10 @@ test("captured audit evidence reads multilingual publisher text with bounded exc
   assert.equal(result.captures[2].captureFound, false);
 });
 
-test("captured audit evidence accepts a news record when supplied as its own evidence", async () => {
-  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-audit-news-captured-"));
+test("captured evidence accepts a news record when supplied as its own evidence", async () => {
+  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-news-captured-"));
   await writeCapture(archiveRoot, "article-1", "publisher body", "captured-text");
-  const result = await buildAuditCapturedEvidence({
+  const result = await buildCapturedEvidence({
     id: "article-1",
     kind: "news",
     record: { id: "article-1" },
@@ -63,10 +63,10 @@ test("captured audit evidence accepts a news record when supplied as its own evi
   assert.equal(result.captures[0].text, "publisher body");
 });
 
-test("captured audit evidence rejects legacy HTML captures below the current archive quality floor", async () => {
-  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-audit-short-html-"));
+test("captured evidence rejects legacy HTML captures below the current archive quality floor", async () => {
+  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-short-html-"));
   await writeCapture(archiveRoot, "article-1", "Generic publisher landing page with navigation only.", "captured-html");
-  const result = await buildAuditCapturedEvidence({
+  const result = await buildCapturedEvidence({
     id: "event-1",
     evidence: { articles: [{ id: "article-1", source: "Publisher" }] },
   }, { archiveRoot });
@@ -77,15 +77,15 @@ test("captured audit evidence rejects legacy HTML captures below the current arc
   assert.equal(result.captures[0].qualityStatus, "short-html-title-mismatch");
 });
 
-test("captured audit evidence keeps a short legacy HTML capture when it matches the publisher title", async () => {
-  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-audit-short-html-title-match-"));
+test("captured evidence keeps a short legacy HTML capture when it matches the publisher title", async () => {
+  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-short-html-title-match-"));
   await writeCapture(
     archiveRoot,
     "article-1",
     "Ministry of Education says 101 schools in Oddar Meanchey have reopened after the ceasefire.",
     "captured-html",
   );
-  const result = await buildAuditCapturedEvidence({
+  const result = await buildCapturedEvidence({
     id: "event-1",
     evidence: {
       articles: [{
@@ -101,15 +101,15 @@ test("captured audit evidence keeps a short legacy HTML capture when it matches 
   assert.equal(result.captures[0].qualityStatus, "usable-short-html-title-match");
 });
 
-test("captured audit evidence accepts short Khmer HTML when title words are joined to body particles", async () => {
-  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-audit-short-khmer-html-"));
+test("captured evidence accepts short Khmer HTML when title words are joined to body particles", async () => {
+  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-short-khmer-html-"));
   await writeCapture(
     archiveRoot,
     "article-1",
     "ក្រសួងការពារជាតិបានប្រកាសថា យោធាថៃបានបាញ់ផ្លោងសរុប២៨គ្រាប់ ចូលភូមិសាស្ត្រស្រុកសំពៅលូន ខេត្តបាត់ដំបង។",
     "captured-html",
   );
-  const result = await buildAuditCapturedEvidence({
+  const result = await buildCapturedEvidence({
     id: "event-1",
     evidence: {
       articles: [{
@@ -125,10 +125,10 @@ test("captured audit evidence accepts short Khmer HTML when title words are join
   assert.equal(result.captures[0].qualityStatus, "usable-short-html-title-match");
 });
 
-test("captured audit evidence does not treat stale text from an unusable latest attempt as verified", async () => {
-  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-audit-stale-capture-"));
+test("captured evidence does not treat stale text from an unusable latest attempt as verified", async () => {
+  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-stale-capture-"));
   await writeCapture(archiveRoot, "article-1", "stale extracted text", "unusable-extraction");
-  const result = await buildAuditCapturedEvidence({
+  const result = await buildCapturedEvidence({
     id: "event-1",
     evidence: { articles: [{ id: "article-1", source: "Publisher" }] },
   }, { archiveRoot });
@@ -136,11 +136,11 @@ test("captured audit evidence does not treat stale text from an unusable latest 
   assert.equal(result.captures[0].captureFound, false);
 });
 
-test("captured audit evidence extracts text from archived PDFs when no text sidecar exists", async () => {
-  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-audit-pdf-capture-"));
+test("captured evidence extracts text from archived PDFs when no text sidecar exists", async () => {
+  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-pdf-capture-"));
   await writeDocumentCapture(archiveRoot, "pdf-article");
   let extractedPath = "";
-  const result = await buildAuditCapturedEvidence({
+  const result = await buildCapturedEvidence({
     id: "event-pdf",
     evidence: { articles: [{ id: "pdf-article", source: "Official PDF" }] },
   }, {
@@ -158,10 +158,10 @@ test("captured audit evidence extracts text from archived PDFs when no text side
   assert.equal(result.captures[0].text, "Official treaty text\n\nEffective 8 March 2026");
 });
 
-test("captured audit evidence keeps document capture non-fatal when PDF extraction is unavailable", async () => {
-  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-audit-pdf-missing-tool-"));
+test("captured evidence keeps document capture non-fatal when PDF extraction is unavailable", async () => {
+  const archiveRoot = await mkdtemp(join(tmpdir(), "borderclash-pdf-missing-tool-"));
   await writeDocumentCapture(archiveRoot, "pdf-article");
-  const result = await buildAuditCapturedEvidence({
+  const result = await buildCapturedEvidence({
     id: "event-pdf",
     evidence: { articles: [{ id: "pdf-article", source: "Official PDF" }] },
   }, {

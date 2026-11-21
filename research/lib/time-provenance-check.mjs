@@ -40,7 +40,7 @@ function evidenceDescriptor(article) {
   };
 }
 
-export function auditTimelineTimeSupport(events = [], articles = [], { limit = 25 } = {}) {
+export function checkTimelineTimeSupport(events = [], articles = [], { limit = 25 } = {}) {
   const articlesById = new Map(articles.map((article) => [article.id, article]));
   const candidates = [];
   const missingEvidence = [];
@@ -106,7 +106,7 @@ export function auditTimelineTimeSupport(events = [], articles = [], { limit = 2
   };
 }
 
-export function auditTimelineTimeProvenance(events = [], articles = []) {
+export function checkTimelineTimeProvenance(events = [], articles = []) {
   const articlesById = new Map(articles.map((article) => [article.id, article]));
   const candidates = [];
   const missingEvidence = [];

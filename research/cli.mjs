@@ -1,7 +1,6 @@
-import { execFile, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { promisify } from "node:util";
 import { newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
 import { syncNewsLocalization } from "./lib/news-localization.mjs";
@@ -18,46 +17,13 @@ import {
 } from "./lib/evidence-archive.mjs";
 import { probeEvidenceUrl } from "./lib/evidence-probe.mjs";
 import { reconstructArticle } from "./lib/reconstruct.mjs";
-import { summarizeTimelineTimes } from "./lib/timeline-audit.mjs";
-import { auditTimelineTimeProvenance, auditTimelineTimeSupport } from "./lib/time-provenance-audit.mjs";
-import { auditTimelineChronology } from "./lib/chronology-audit.mjs";
-import { auditHumanitarianSummaryRisk } from "./lib/humanitarian-audit.mjs";
-import { auditReferenceCoverage } from "./lib/reference-audit.mjs";
-import { loadAuditPacketFromWorktree } from "./lib/audit-packet-loader.mjs";
-import { buildAuditCluster } from "./lib/audit-cluster.mjs";
-import { buildAuditCapturedEvidence } from "./lib/audit-captured-evidence.mjs";
-import { buildAuditRiskQueue } from "./lib/audit-risk.mjs";
-import { buildAuditPreparation } from "./lib/audit-prepare.mjs";
-import { buildAuditEvidenceDiagnosis } from "./lib/audit-evidence-diagnosis.mjs";
-import { recoverAuditEvidence } from "./lib/audit-evidence-recovery.mjs";
-import {
-  auditWorktreeNeedsConflictScan,
-  auditWorktreeTimelineStatus,
-  claimsFromTimelineDiff,
-  createAuditClaim,
-  createAuditClaims,
-  loadAuditClaims,
-  parseWorktreePorcelain,
-  pickUnclaimedCandidates,
-  releaseAuditClaim,
-  shouldScanAuditWorktree,
-} from "./lib/audit-worktree-claims.mjs";
-import {
-  loadAuditReviewIndex,
-  reviewPacketIsCurrent,
-  sha256Text,
-} from "./lib/audit-result-index.mjs";
-import {
-  assertAuditRecordMatchesPrimary,
-  auditLedgerSummary,
-  createAuditLedger,
-  loadAuditRecords,
-  markAuditItem,
-  nextAuditItems,
-  syncAndMarkAuditItem,
-  syncAuditLedger,
-  writeAuditLedger,
-} from "./lib/audit-ledger.mjs";
+import { summarizeTimelineTimes } from "./lib/timeline-time-check.mjs";
+import { checkTimelineTimeProvenance, checkTimelineTimeSupport } from "./lib/time-provenance-check.mjs";
+import { checkTimelineChronology } from "./lib/chronology-check.mjs";
+import { checkHumanitarianSummaryRisk } from "./lib/humanitarian-check.mjs";
+import { checkReferenceCoverage } from "./lib/reference-check.mjs";
+import { loadRecordInspection } from "./lib/record-inspection.mjs";
+import { buildCapturedEvidence } from "./lib/captured-evidence.mjs";
 
 const dataRoot = resolve("data");
 const command = process.argv[2] || "context";
@@ -67,8 +33,20 @@ const BRIEF_MAX_DAYS = 30;
 const BRIEF_NEWS_LIMIT = 6;
 const BRIEF_TIMELINE_LIMIT = 12;
 const MAX_SCHEDULE_HOURS = 168;
-const AUDIT_DIFF_CONCURRENCY = 12;
-const execFileAsync = promisify(execFile);
+
+function validateWorkingDataBeforeFinish() {
+  const validator = resolve("research", "validate.mjs");
+  if (!existsSync(validator)) return;
+  const result = spawnSync(process.execPath, [validator], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.status === 0) return;
+  const detail = String(result.stderr || result.stdout || "validation failed").trim();
+  throw new Error(`finish blocked by local validation; fix the data and retry finish.\n${detail.slice(0, 8000)}`);
+}
 
 function latestTimestamp(row) {
   return row.publishedAt || row.fetchedAt || row.lastUpdatedAt || 0;
@@ -113,7 +91,7 @@ function timelineTimestamp(row) {
   const time = typeof row.timeOfDay === "string" && /^\d{2}:\d{2}$/u.test(row.timeOfDay)
     ? row.timeOfDay
     : "00:00";
-  const parsed = Date.parse(`${row.date}T${time}:00Z`);
+  const parsed = Date.parse(`${row.date}T${time}:00+07:00`);
   return Math.max(
     Number.isFinite(parsed) ? parsed : 0,
     Number(row?.createdAt || 0),
@@ -226,8 +204,14 @@ async function brief() {
   return output;
 }
 
-function isoDate(value) {
-  return Number.isFinite(value) ? new Date(value).toISOString() : "unknown";
+function borderLocalDate(value) {
+  if (!Number.isFinite(value)) return "unknown";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Phnom_Penh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
 }
 
 function renderContext(output) {
@@ -242,16 +226,13 @@ function renderContext(output) {
     `Last completed: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
   ];
 
-  const counts = output.contextWindow.counts;
-  const since = output.contextWindow.sinceLastCycleCounts;
   lines.push(
     "",
     "## Recent repository anchors",
     `${output.contextWindow.lookbackDays} days from ${output.contextWindow.start} to ${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (automatic context capped at 30 days)" : ""}.`,
-    `In context: timeline ${counts.timeline}; news Thailand domestic ${counts.news.thailand}, Cambodia domestic ${counts.news.cambodia}, international ${counts.news.international}.`,
-    `Since last completed cycle: timeline ${since.timeline}; news Thailand domestic ${since.news.thailand}, Cambodia domestic ${since.news.cambodia}, international ${since.news.international}.`,
+    "The anchors below are the newest retained repository items, not an importance ranking, research quota, or complete account of changes since the last cycle.",
     "",
-    "## Recent timeline anchors",
+    "## Newest timeline anchors",
   );
 
   for (const row of output.recentTimeline.slice(0, 5)) {
@@ -259,7 +240,7 @@ function renderContext(output) {
   }
   if (!output.recentTimeline.length) lines.push("- none");
 
-  lines.push("", "## Latest retained evidence anchors");
+  lines.push("", "## Newest retained evidence anchors");
   for (const [label, key] of [["Thailand domestic", "thailand"], ["Cambodia domestic", "cambodia"], ["International", "international"]]) {
     lines.push(`${label}:`);
     const rows = output.recentNews[key].slice(0, 1);
@@ -268,7 +249,7 @@ function renderContext(output) {
       continue;
     }
     for (const row of rows) {
-      lines.push(`- ${isoDate(row.publishedAt || row.fetchedAt).slice(0, 10)} [${row.id}] ${row.source}: ${row.title}`);
+      lines.push(`- ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
     }
   }
 
@@ -346,7 +327,7 @@ async function reconstruct(id, ref = "HEAD") {
   if (!result.canonical) process.exitCode = 1;
 }
 
-async function auditTimes() {
+async function checkTimes() {
   const registry = await loadArticleRegistry(dataRoot);
   const timeline = [];
   for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
@@ -354,38 +335,38 @@ async function auditTimes() {
   }
   process.stdout.write(JSON.stringify({
     ...summarizeTimelineTimes(timeline),
-    storedEvidenceTimeSupport: auditTimelineTimeSupport(timeline, registry.articles),
+    storedEvidenceTimeSupport: checkTimelineTimeSupport(timeline, registry.articles),
   }, null, 2) + "\n");
 }
 
-async function auditTimeProvenance() {
+async function checkTimeProvenance() {
   const registry = await loadArticleRegistry(dataRoot);
   const timeline = [];
   for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
     timeline.push(...await readJsonl(file));
   }
-  process.stdout.write(JSON.stringify(auditTimelineTimeProvenance(timeline, registry.articles), null, 2) + "\n");
+  process.stdout.write(JSON.stringify(checkTimelineTimeProvenance(timeline, registry.articles), null, 2) + "\n");
 }
 
-async function auditChronology() {
+async function checkChronology() {
   const registry = await loadArticleRegistry(dataRoot);
   const timeline = [];
   for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
     timeline.push(...await readJsonl(file));
   }
-  process.stdout.write(JSON.stringify(auditTimelineChronology(timeline, registry.articles), null, 2) + "\n");
+  process.stdout.write(JSON.stringify(checkTimelineChronology(timeline, registry.articles), null, 2) + "\n");
 }
 
-async function auditHumanitarian() {
+async function checkHumanitarian() {
   const registry = await loadArticleRegistry(dataRoot);
   const timeline = [];
   for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
     timeline.push(...await readJsonl(file));
   }
-  process.stdout.write(JSON.stringify(auditHumanitarianSummaryRisk(timeline, registry.articles), null, 2) + "\n");
+  process.stdout.write(JSON.stringify(checkHumanitarianSummaryRisk(timeline, registry.articles), null, 2) + "\n");
 }
 
-async function auditReferences() {
+async function checkReferences() {
   const registry = await loadArticleRegistry(dataRoot);
   const timeline = [];
   for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
@@ -395,612 +376,30 @@ async function auditReferences() {
   for (const name of ["summary", "thailand", "cambodia", "impact"]) {
     current[name] = await readJson(join(dataRoot, "current", `${name}.json`));
   }
-  process.stdout.write(JSON.stringify(auditReferenceCoverage({
+  process.stdout.write(JSON.stringify(checkReferenceCoverage({
     articles: registry.articles,
     timeline,
     current,
   }), null, 2) + "\n");
 }
 
-async function auditShow(id) {
-  if (!id) throw new Error("audit-show requires a stable record id");
-  const packet = await loadAuditPacket(id);
+async function show(id) {
+  if (!id) throw new Error("show requires a stable record id");
+  const packet = await loadRecordInspection(id, { cwd: process.cwd(), dataRoot });
   process.stdout.write(JSON.stringify(packet, null, 2) + "\n");
 }
 
-async function loadAuditPacket(id) {
-  return loadAuditPacketFromWorktree(id, {
-    cwd: process.cwd(),
-    dataRoot,
-  });
-}
-
-async function auditCaptured(id) {
-  if (!id) throw new Error("audit-captured requires a stable record id");
-  const packet = await loadAuditPacket(id);
+async function captured(id) {
+  if (!id) throw new Error("captured requires a stable record id");
+  const packet = await loadRecordInspection(id, { cwd: process.cwd(), dataRoot });
   const capturedPacket = packet.kind === "news"
     ? { ...packet, evidence: { ...packet.evidence, articles: [packet.record] } }
     : packet;
-  process.stdout.write(JSON.stringify(await buildAuditCapturedEvidence(capturedPacket), null, 2) + "\n");
-}
-
-function compactAuditRecord(packet) {
-  if (packet.proposedAction === "delete") {
-    const record = packet.baselineRecord || {};
-    return {
-      id: packet.id,
-      deleted: true,
-      baseline: {
-        date: record.date,
-        timeOfDay: record.timeOfDay,
-        title: record.title,
-        evidenceIds: record.evidenceIds || [],
-      },
-    };
-  }
-  const record = packet.record || {};
-  if (packet.kind === "timeline") {
-    return {
-      id: record.id,
-      date: record.date,
-      timeOfDay: record.timeOfDay,
-      title: record.title,
-      evidenceIds: record.evidenceIds || [],
-    };
-  }
-  if (packet.kind === "news") {
-    return {
-      id: record.id,
-      publishedAt: record.publishedAt,
-      source: record.source,
-      title: record.titleEn || record.title,
-      sourceUrl: record.sourceUrl,
-    };
-  }
-  return {
-    updatedAt: record.updatedAt,
-    summary: record.summary,
-  };
-}
-
-async function auditResume(id) {
-  if (!id) throw new Error("audit-resume requires a stable record id");
-  const packet = await loadAuditPacket(id);
-  const packetText = JSON.stringify(packet, null, 2) + "\n";
-  const capturedPacket = packet.kind === "news"
-    ? { ...packet, evidence: { ...packet.evidence, articles: [packet.record] } }
-    : packet;
-  const captured = await buildAuditCapturedEvidence(capturedPacket);
-  const capturedText = JSON.stringify(captured, null, 2) + "\n";
-  const latestReview = loadAuditReviewIndex(id);
-  const reviewIndex = latestReview.index;
-  const packetCurrent = latestReview.found && reviewPacketIsCurrent(reviewIndex, packetText);
-  const capturedCurrent = latestReview.found
-    && String(reviewIndex?.capturedEvidenceSha256 || "").toLowerCase() === sha256Text(capturedText);
-  const head = gitText(["rev-parse", "HEAD"]);
-  const worktreePath = gitText(["rev-parse", "--show-toplevel"]);
-  const primary = primaryWorktreeInfo();
-  const dataStatus = gitText(["status", "--porcelain", "--untracked-files=all", "--", "data"]);
-
-  let ledgerItem = null;
-  const sharedLedgerPath = primary.path
-    ? resolve(primary.path, ".work", "audit-ledger.json")
-    : defaultAuditLedgerPath;
-  if (existsSync(sharedLedgerPath)) {
-    const ledger = await readAuditLedger(sharedLedgerPath);
-    ledgerItem = ledger.items.find((item) => item.id === id) || null;
-  }
-
-  const verificationPath = resolve(
-    ".work",
-    "correction-verifications",
-    "by-target",
-    `${head}.json`,
-  );
-  const verification = existsSync(verificationPath) ? await readJson(verificationPath) : null;
-
-  process.stdout.write(JSON.stringify({
-    recordId: id,
-    head,
-    dataDirty: Boolean(dataStatus),
-    worktree: {
-      path: worktreePath,
-      primaryPath: primary.path,
-      primaryHead: primary.head,
-      isPrimary: resolve(worktreePath).toLowerCase() === resolve(primary.path || worktreePath).toLowerCase(),
-      primaryMoved: Boolean(primary.head) && primary.head !== head,
-    },
-    canonical: {
-      kind: packet.kind,
-      proposedAction: packet.proposedAction || null,
-      record: compactAuditRecord(packet),
-    },
-    ledger: ledgerItem && {
-      status: ledgerItem.status,
-      note: ledgerItem.note || "",
-      present: ledgerItem.present,
-    },
-    review: latestReview.found ? {
-      found: true,
-      current: packetCurrent && capturedCurrent,
-      packetCurrent,
-      capturedEvidenceCurrent: capturedCurrent,
-      path: latestReview.path,
-      completedAt: reviewIndex.completedAt,
-      repoHead: reviewIndex.repoHead,
-      verdict: reviewIndex.review?.verdict,
-      claimsSupported: reviewIndex.review?.claimsSupported,
-      supportedEventDate: reviewIndex.review?.supportedEventDate,
-      supportedEventTime: reviewIndex.review?.supportedEventTime,
-      issues: reviewIndex.review?.issues || [],
-    } : {
-      found: false,
-      current: false,
-      path: latestReview.path,
-    },
-    verification: verification ? {
-      found: true,
-      headVerified: !dataStatus && verification.targetCommit === head && verification.ok === true,
-      path: verificationPath,
-      ok: verification.ok,
-      finishedAt: verification.finishedAt,
-      targetCommit: verification.targetCommit,
-      changedFiles: verification.changedFiles,
-    } : {
-      found: false,
-      headVerified: false,
-      path: verificationPath,
-    },
-  }, null, 2) + "\n");
-}
-
-async function auditCluster(id, windowText = "3", limitText = "8") {
-  if (!id) throw new Error("audit-cluster requires a stable timeline id");
-  const registry = await loadArticleRegistry(dataRoot);
-  const timeline = [];
-  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
-    timeline.push(...await readJsonl(file));
-  }
-  process.stdout.write(JSON.stringify(buildAuditCluster({
-    id,
-    timeline,
-    articles: registry.articles,
-    windowDays: Number(windowText),
-    limit: Number(limitText),
-  }), null, 2) + "\n");
-}
-
-async function auditPrepare(id, windowText = "3", limitText = "8") {
-  if (!id) throw new Error("audit-prepare requires a stable timeline id");
-  const registry = await loadArticleRegistry(dataRoot);
-  const timeline = [];
-  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
-    timeline.push(...await readJsonl(file));
-  }
-  const retryMissing = process.argv.includes("--retry-missing");
-  const forceCapture = process.argv.includes("--force-capture");
-  process.stdout.write(JSON.stringify(await buildAuditPreparation({
-    id,
-    timeline,
-    articles: registry.articles,
-    windowDays: Number(windowText),
-    limit: Number(limitText),
-    retryMissing,
-    forceCapture,
-    captureArticleFn: captureArticle,
-  }), null, 2) + "\n");
-}
-
-async function auditDiagnose(id, windowText = "7", limitText = "8") {
-  if (!id) throw new Error("audit-diagnose requires a stable timeline id");
-  const registry = await loadArticleRegistry(dataRoot);
-  const timeline = [];
-  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
-    timeline.push(...await readJsonl(file));
-  }
-  process.stdout.write(JSON.stringify(await buildAuditEvidenceDiagnosis({
-    id,
-    timeline,
-    articles: registry.articles,
-    windowDays: Number(windowText),
-    limit: Number(limitText),
-  }), null, 2) + "\n");
-}
-
-async function auditRecover(id, windowText = "7", limitText = "8", attemptsText = "3") {
-  if (!id) throw new Error("audit-recover requires a stable timeline id");
-  const registry = await loadArticleRegistry(dataRoot);
-  const timeline = [];
-  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
-    timeline.push(...await readJsonl(file));
-  }
-  process.stdout.write(JSON.stringify(await recoverAuditEvidence({
-    id,
-    timeline,
-    articles: registry.articles,
-    windowDays: Number(windowText),
-    limit: Number(limitText),
-    maxAttempts: Number(attemptsText),
-    forceCapture: process.argv.includes("--force-capture"),
-    captureArticleFn: captureArticle,
-  }), null, 2) + "\n");
-}
-
-const defaultAuditLedgerPath = resolve(".work", "audit-ledger.json");
-
-function gitText(args) {
-  const result = spawnSync("git", args, {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    windowsHide: true,
-  });
-  if (result.status !== 0) throw new Error((result.stderr || result.stdout || "git failed").trim());
-  return result.stdout.trim();
-}
-
-function gitTextAt(cwd, args) {
-  const result = spawnSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    windowsHide: true,
-    maxBuffer: 20 * 1024 * 1024,
-  });
-  if (result.status !== 0) throw new Error((result.stderr || result.stdout || "git failed").trim());
-  return result.stdout;
-}
-
-async function gitTextAtAsync(cwd, args) {
-  const { stdout } = await execFileAsync("git", args, {
-    cwd,
-    windowsHide: true,
-    maxBuffer: 16 * 1024 * 1024,
-    encoding: "utf8",
-  });
-  return String(stdout || "");
-}
-
-async function mapBatches(items, concurrency, worker) {
-  const results = [];
-  const width = Math.max(1, Number(concurrency) || 1);
-  for (let index = 0; index < items.length; index += width) {
-    results.push(...await Promise.all(items.slice(index, index + width).map(worker)));
-  }
-  return results;
-}
-
-function primaryWorktreeInfo() {
-  const firstBlock = gitText(["worktree", "list", "--porcelain"])
-    .split(/\r?\n\r?\n/u)[0]
-    .split(/\r?\n/u);
-  const pathLine = firstBlock.find((line) => line.startsWith("worktree ")) || "";
-  const headLine = firstBlock.find((line) => line.startsWith("HEAD ")) || "";
-  return {
-    path: pathLine.slice("worktree ".length),
-    head: headLine.slice("HEAD ".length),
-  };
-}
-
-async function auditInit(ref = "HEAD", path = defaultAuditLedgerPath) {
-  const commit = gitText(["rev-parse", ref]);
-  const diff = spawnSync("git", ["diff", "--quiet", commit, "--", "data"], { cwd: process.cwd(), windowsHide: true });
-  if (diff.status !== 0) throw new Error("audit-init requires canonical data to match the anchor Git revision");
-  const untracked = gitText(["ls-files", "--others", "--exclude-standard", "--", "data"]);
-  if (untracked) throw new Error("audit-init requires no untracked canonical data");
-  const ledger = createAuditLedger(await loadAuditRecords(dataRoot), { anchorCommit: commit });
-  await writeAuditLedger(resolve(path), ledger);
-  process.stdout.write(JSON.stringify(auditLedgerSummary(ledger), null, 2) + "\n");
-}
-
-async function readAuditLedger(path = defaultAuditLedgerPath) {
-  return readJson(resolve(path));
-}
-
-async function auditStatus(path = defaultAuditLedgerPath) {
-  if (!existsSync(path)) {
-    process.stdout.write(JSON.stringify({
-      initialized: false,
-      nextAction: "Use audit-init to start a historical audit. Routine research cycles can continue without an audit ledger.",
-    }, null, 2) + "\n");
-    return;
-  }
-  process.stdout.write(JSON.stringify(auditLedgerSummary(await readAuditLedger(path)), null, 2) + "\n");
-}
-
-async function auditNext(limitText = "25", path = defaultAuditLedgerPath) {
-  const ledger = await readAuditLedger(path);
-  process.stdout.write(JSON.stringify(nextAuditItems(ledger, Number(limitText)), null, 2) + "\n");
-}
-
-async function auditRisk(limitText = "25", path = defaultAuditLedgerPath) {
-  const ledger = await readAuditLedger(path);
-  const registry = await loadArticleRegistry(dataRoot);
-  const timeline = [];
-  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
-    timeline.push(...await readJsonl(file));
-  }
-  process.stdout.write(JSON.stringify(buildAuditRiskQueue({
-    ledger,
-    timeline,
-    articles: registry.articles,
-    limit: Number(limitText),
-  }), null, 2) + "\n");
-}
-
-function compactRiskCandidate(candidate) {
-  return {
-    id: candidate.id,
-    date: candidate.date,
-    timeOfDay: candidate.timeOfDay,
-    importance: candidate.importance,
-    title: candidate.title,
-    riskScore: candidate.riskScore,
-    signals: candidate.signals.map(({ code }) => code),
-  };
-}
-
-async function auditPick(limitText = "10", scanLimitText = "60", { claim = false } = {}) {
-  const limit = Math.max(1, Math.min(50, Number(limitText) || 10));
-  const scanLimit = Math.max(limit, Math.min(200, Number(scanLimitText) || Math.max(60, limit * 4)));
-  const primary = primaryWorktreeInfo();
-  if (!primary.path || !primary.head) throw new Error("audit-pick could not resolve the primary worktree");
-  const currentRoot = gitText(["rev-parse", "--show-toplevel"]);
-  const isPrimary = resolve(currentRoot).toLowerCase() === resolve(primary.path).toLowerCase();
-  if (claim && isPrimary) {
-    throw new Error("audit-pick --claim requires an isolated linked worktree");
-  }
-
-  const primaryDataRoot = resolve(primary.path, "data");
-  const ledger = await readJson(resolve(primary.path, ".work", "audit-ledger.json"));
-  const registry = await loadArticleRegistry(primaryDataRoot);
-  const timeline = [];
-  for (const file of await listFiles(join(primaryDataRoot, "timeline"), ".jsonl")) {
-    timeline.push(...await readJsonl(file));
-  }
-  const risk = buildAuditRiskQueue({
-    ledger,
-    timeline,
-    articles: registry.articles,
-    limit: scanLimit,
-  });
-
-  const worktrees = parseWorktreePorcelain(gitText(["worktree", "list", "--porcelain"]));
-  const possibleScanTargets = worktrees.filter((entry) => shouldScanAuditWorktree(entry.path, primary.path));
-  const claimRoot = resolve(primary.path, ".work", "audit-claims");
-  const explicit = loadAuditClaims(claimRoot, worktrees.map(({ path }) => path));
-  const primaryAncestorHeads = new Set(
-    gitText(["rev-list", primary.head]).split(/\r?\n/u).map((line) => line.trim()).filter(Boolean),
-  );
-  const scanTargets = [];
-  const failures = [];
-  let skippedCleanAncestorWorktreeCount = 0;
-  let ancestorTimelineStatusCheckCount = 0;
-  for (const worktree of possibleScanTargets) {
-    if (!primaryAncestorHeads.has(worktree.head)) {
-      scanTargets.push(worktree);
-      continue;
-    }
-    ancestorTimelineStatusCheckCount += 1;
-    const timelineStatus = auditWorktreeTimelineStatus(worktree.path, (path) => gitTextAt(path, [
-      "status",
-      "--porcelain",
-      "--untracked-files=all",
-      "--",
-      "data/timeline",
-    ]));
-    if (!timelineStatus.ok) {
-      failures.push({
-        worktree: worktree.path,
-        error: timelineStatus.error || "git status unavailable",
-      });
-      continue;
-    }
-    const timelineDirty = timelineStatus.timelineDirty;
-    if (auditWorktreeNeedsConflictScan({ head: worktree.head, primaryAncestorHeads, timelineDirty })) {
-      scanTargets.push(worktree);
-    } else {
-      skippedCleanAncestorWorktreeCount += 1;
-    }
-  }
-  const primaryRows = new Map(timeline.map((event) => [event.id, JSON.stringify(event)]));
-  const candidatesByFile = new Map();
-  for (const candidate of risk.candidates) {
-    const month = String(candidate.date || "").slice(0, 7);
-    if (!/^\d{4}-\d{2}$/u.test(month)) continue;
-    const relativePath = join("data", "timeline", `${month}.jsonl`);
-    if (!candidatesByFile.has(relativePath)) candidatesByFile.set(relativePath, []);
-    candidatesByFile.get(relativePath).push(candidate);
-  }
-  const claims = [...explicit.claims];
-  const diffTasks = [];
-  for (const worktree of scanTargets) {
-    if (!existsSync(worktree.path)) continue;
-    try {
-      const divergentByFile = new Map();
-      for (const [relativePath, fileCandidates] of candidatesByFile) {
-        const path = resolve(worktree.path, relativePath);
-        if (!existsSync(path)) continue;
-        const text = readFileSync(path, "utf8");
-        const lines = text.split(/\r?\n/u);
-        for (const candidate of fileCandidates) {
-          const needle = `\"id\":\"${candidate.id}\"`;
-          const line = lines.find((row) => row.includes(needle));
-          if (!line || line.trim() !== primaryRows.get(candidate.id)) {
-            if (!divergentByFile.has(relativePath)) divergentByFile.set(relativePath, []);
-            divergentByFile.get(relativePath).push(candidate);
-          }
-        }
-      }
-      if (!divergentByFile.size) continue;
-      const divergent = [...divergentByFile.values()].flat();
-      diffTasks.push({ worktree, divergent });
-    } catch (error) {
-      failures.push({
-        worktree: worktree.path,
-        error: String(error?.message || error).split(/\r?\n/u)[0],
-      });
-    }
-  }
-  const diffResults = await mapBatches(diffTasks, AUDIT_DIFF_CONCURRENCY, async ({ worktree, divergent }) => {
-    try {
-      const diff = await gitTextAtAsync(worktree.path, [
-        "diff",
-        "--merge-base",
-        primary.head,
-        "--",
-        "data/timeline",
-      ]);
-      return { claims: claimsFromTimelineDiff(divergent, diff, worktree.path), failure: null };
-    } catch (error) {
-      return {
-        claims: [],
-        failure: {
-          worktree: worktree.path,
-          error: String(error?.message || error).split(/\r?\n/u)[0],
-        },
-      };
-    }
-  });
-  for (const result of diffResults) {
-    claims.push(...result.claims);
-    if (result.failure) failures.push(result.failure);
-  }
-  const mergeBaseDiffScanCount = diffTasks.length;
-
-  let picked = pickUnclaimedCandidates(risk.candidates, claims, limit);
-  let acquiredClaim = null;
-  if (claim) {
-    while (picked.selected.length) {
-      const candidate = picked.selected[0];
-      const attempt = createAuditClaim(claimRoot, {
-        id: candidate.id,
-        worktree: currentRoot,
-      });
-      if (attempt.owned) {
-        acquiredClaim = attempt.claim;
-        picked = { ...picked, selected: [candidate] };
-        break;
-      }
-      claims.push(attempt.claim);
-      picked = pickUnclaimedCandidates(risk.candidates, claims, 1);
-    }
-  }
-  process.stdout.write(JSON.stringify({
-    reviewOnly: true,
-    primaryHead: primary.head,
-    pendingTimelineCount: risk.pendingTimelineCount,
-    flaggedCount: risk.flaggedCount,
-    scannedCandidateCount: risk.candidates.length,
-    discoveredWorktreeCount: possibleScanTargets.length,
-    scannedWorktreeCount: scanTargets.length,
-    skippedCleanAncestorWorktreeCount,
-    ancestorTimelineStatusCheckCount,
-    mergeBaseDiffScanCount,
-    worktreeScanFailureCount: failures.length,
-    candidates: picked.selected.map(compactRiskCandidate),
-    claimed: picked.claimed,
-    explicitClaimCount: explicit.claims.length,
-    staleClaimCountRemoved: explicit.staleRemoved.length,
-    acquiredClaim,
-    failures,
-  }, null, 2) + "\n");
-}
-
-async function auditRelease(id) {
-  if (!id) throw new Error("audit-release requires <id>");
-  const primary = primaryWorktreeInfo();
-  if (!primary.path) throw new Error("audit-release could not resolve the primary worktree");
-  const currentRoot = gitText(["rev-parse", "--show-toplevel"]);
-  const result = releaseAuditClaim(resolve(primary.path, ".work", "audit-claims"), id, currentRoot);
-  process.stdout.write(JSON.stringify({ id, ...result }, null, 2) + "\n");
-}
-
-async function auditClaim(ids) {
-  const requested = [...new Set((ids || []).map((id) => String(id || "").trim()).filter(Boolean))];
-  if (!requested.length) throw new Error("audit-claim requires one or more <id> values");
-  const primary = primaryWorktreeInfo();
-  if (!primary.path || !primary.head) throw new Error("audit-claim could not resolve the primary worktree");
-  const currentRoot = gitText(["rev-parse", "--show-toplevel"]);
-  if (resolve(currentRoot).toLowerCase() === resolve(primary.path).toLowerCase()) {
-    throw new Error("audit-claim requires an isolated linked worktree");
-  }
-  const primaryRecords = await loadAuditRecords(resolve(primary.path, "data"));
-  const timelineIds = new Set(primaryRecords.filter(({ kind }) => kind === "timeline").map(({ id }) => id));
-  const missing = requested.filter((id) => !timelineIds.has(id));
-  if (missing.length) throw new Error(`unknown primary timeline id(s): ${missing.join(", ")}`);
-
-  const result = createAuditClaims(resolve(primary.path, ".work", "audit-claims"), {
-    ids: requested,
-    worktree: currentRoot,
-  });
-  if (!result.owned) {
-    throw new Error(
-      `audit claim ${result.conflict.id} belongs to ${result.conflict.worktree || result.conflict.label}`,
-    );
-  }
-  process.stdout.write(JSON.stringify({
-    worktree: currentRoot,
-    claims: result.claims,
-  }, null, 2) + "\n");
-}
-
-async function auditMark(id, status, noteParts) {
-  if (!id || !status) throw new Error("audit-mark requires <id> <status> [note]");
-  const currentRoot = gitText(["rev-parse", "--show-toplevel"]);
-  const primary = primaryWorktreeInfo();
-  const primaryRoot = primary.path || currentRoot;
-  const primaryLedgerPath = resolve(primaryRoot, ".work", "audit-ledger.json");
-  if (!existsSync(primaryLedgerPath)) {
-    throw new Error("primary audit ledger is missing; run audit-init from the primary checkout");
-  }
-  const primaryDataRoot = resolve(primaryRoot, "data");
-  const isPrimary = resolve(currentRoot).toLowerCase() === resolve(primaryRoot).toLowerCase();
-  const dataStatus = gitTextAt(primaryRoot, [
-    "status",
-    "--porcelain",
-    "--untracked-files=all",
-    "--",
-    "data",
-  ]).trim();
-  if (!isPrimary) {
-    if (dataStatus) {
-      throw new Error(
-        "audit-mark from a linked worktree requires clean primary canonical data; finish or integrate the active primary correction first",
-      );
-    }
-  }
-  const primaryRecords = await loadAuditRecords(primaryDataRoot);
-  if (!isPrimary) {
-    assertAuditRecordMatchesPrimary(await loadAuditRecords(dataRoot), primaryRecords, id);
-  }
-  const ledger = await readAuditLedger(primaryLedgerPath);
-  const commit = gitTextAt(primaryRoot, ["rev-parse", "HEAD"]).trim();
-  const mark = {
-    id,
-    status,
-    note: noteParts.join(" "),
-  };
-  const item = ledger.currentCommit !== commit || dataStatus
-    ? syncAndMarkAuditItem(ledger, primaryRecords, { commit, ...mark })
-    : markAuditItem(ledger, id, status, mark.note);
-  await writeAuditLedger(primaryLedgerPath, ledger);
-  if (item.kind === "timeline") {
-    releaseAuditClaim(resolve(primaryRoot, ".work", "audit-claims"), id, currentRoot, { force: true });
-  }
-  process.stdout.write(JSON.stringify(item, null, 2) + "\n");
-}
-
-async function auditSync(ref = "HEAD", path = defaultAuditLedgerPath) {
-  const ledger = await readAuditLedger(path);
-  const commit = gitText(["rev-parse", ref]);
-  syncAuditLedger(ledger, await loadAuditRecords(dataRoot), { commit });
-  await writeAuditLedger(resolve(path), ledger);
-  process.stdout.write(JSON.stringify(auditLedgerSummary(ledger), null, 2) + "\n");
+  process.stdout.write(JSON.stringify(await buildCapturedEvidence(capturedPacket), null, 2) + "\n");
 }
 
 async function finish(hoursText, reasonParts) {
-  const nextAction = "Return your final response with the cycle outcome and HARNESS_FEEDBACK. Completed cycles include <!-- GOAL_COMPLETE -->.";
-  const statePath = join(dataRoot, "research-state.json");
-  const state = await readJson(statePath);
+  const nextAction = "Return your final response with the cycle outcome. Include HARNESS_FEEDBACK when you have useful harness feedback.";
   const cycleRuntimePath = resolve(".work", "CYCLE_RUN.json");
   if (!existsSync(cycleRuntimePath)) {
     throw new Error("finish is only available inside a runner cycle");
@@ -1051,6 +450,7 @@ async function finish(hoursText, reasonParts) {
   if (suppliedReason.length > 240) {
     throw new Error("finish reason must be at most 240 characters");
   }
+  validateWorkingDataBeforeFinish();
   const marker = {
     cycleId,
     decision: "complete",
@@ -1104,98 +504,44 @@ if (command === "brief") {
   await archiveRestore(process.argv[3], process.argv[4]);
 } else if (command === "reconstruct") {
   await reconstruct(process.argv[3], process.argv[4] || "HEAD");
-} else if (command === "audit-times") {
-  await auditTimes();
-} else if (command === "audit-time-provenance") {
-  await auditTimeProvenance();
-} else if (command === "audit-chronology") {
-  await auditChronology();
-} else if (command === "audit-humanitarian") {
-  await auditHumanitarian();
-} else if (command === "audit-references") {
-  await auditReferences();
-} else if (command === "show" || command === "audit-show") {
-  await auditShow(process.argv[3]);
-} else if (command === "audit-cluster") {
-  await auditCluster(process.argv[3], process.argv[4], process.argv[5]);
-} else if (command === "captured" || command === "audit-captured") {
-  await auditCaptured(process.argv[3]);
-} else if (command === "audit-prepare") {
-  await auditPrepare(process.argv[3], process.argv[4], process.argv[5]);
-} else if (command === "audit-diagnose") {
-  await auditDiagnose(process.argv[3], process.argv[4], process.argv[5]);
-} else if (command === "audit-recover") {
-  await auditRecover(process.argv[3], process.argv[4], process.argv[5], process.argv[6]);
-} else if (command === "audit-resume") {
-  await auditResume(process.argv[3]);
-} else if (command === "audit-init") {
-  await auditInit(process.argv[3] || "HEAD", process.argv[4] || defaultAuditLedgerPath);
-} else if (command === "audit-status") {
-  await auditStatus(process.argv[3] || defaultAuditLedgerPath);
-} else if (command === "audit-next") {
-  await auditNext(process.argv[3] || "25", process.argv[4] || defaultAuditLedgerPath);
-} else if (command === "audit-risk") {
-  await auditRisk(process.argv[3] || "25", process.argv[4] || defaultAuditLedgerPath);
-} else if (command === "audit-pick") {
-  const args = process.argv.slice(3);
-  const positional = args.filter((arg) => arg !== "--claim");
-  await auditPick(positional[0] || "10", positional[1] || "60", { claim: args.includes("--claim") });
-} else if (command === "audit-triage") {
-  run(process.execPath, [join("research", "automation", "audit-triage.mjs"), ...process.argv.slice(3)]);
-} else if (command === "audit-claim") {
-  await auditClaim(process.argv.slice(3));
-} else if (command === "audit-release") {
-  await auditRelease(process.argv[3]);
-} else if (command === "audit-mark") {
-  await auditMark(process.argv[3], process.argv[4], process.argv.slice(5));
-} else if (command === "audit-sync") {
-  await auditSync(process.argv[3] || "HEAD", process.argv[4] || defaultAuditLedgerPath);
+} else if (command === "check-times") {
+  await checkTimes();
+} else if (command === "check-time-provenance") {
+  await checkTimeProvenance();
+} else if (command === "check-chronology") {
+  await checkChronology();
+} else if (command === "check-humanitarian") {
+  await checkHumanitarian();
+} else if (command === "check-references") {
+  await checkReferences();
+} else if (command === "show") {
+  await show(process.argv[3]);
+} else if (command === "captured") {
+  await captured(process.argv[3]);
 } else if (command === "finish") {
   await finish(process.argv[3], process.argv.slice(4));
-} else if (["help", "--help", "-h", "audit-help"].includes(command)) {
+} else if (["help", "--help", "-h"].includes(command)) {
   process.stdout.write([
     "node research/cli.mjs [context]          # show the compact cycle context",
-    "node research/cli.mjs ingest <file> [--no-localize] # add/reuse article evidence; skip unrelated localization sync for isolated audits",
+    "node research/cli.mjs ingest <file> [--no-localize] # add/reuse article evidence; optionally skip unrelated localization sync",
     "node research/cli.mjs sync-news-localization # strip stale localized titles outside the newest visible domestic window",
     "node research/cli.mjs capture <id> [--force] # capture or retry one stored article",
+    "node research/cli.mjs capture-changed [base-ref] # capture changed news records; hold publisher-ID alias conflicts for review",
     "node research/cli.mjs probe-source <url> [preview-chars] # host/operator network diagnostic; AGY terminal sandbox can block it",
     "node research/cli.mjs archive-verify <id>    # verify the South-local backup copy by checksum",
     "node research/cli.mjs archive-restore <id> [destination] # restore one backup to a review directory",
     "node research/cli.mjs reconstruct <id> [git-ref] # show one historical canonical record with its private capture metadata",
     "node research/cli.mjs show <id>           # show one canonical record with resolved evidence",
     "node research/cli.mjs captured <id>       # show retained publisher text for cited evidence",
-    "node research/cli.mjs audit-times         # inventory exact/date-only times and stored-evidence time support for source review",
-    "node research/cli.mjs audit-time-provenance # flag exact times that mirror article publication time without textual support",
-    "node research/cli.mjs audit-chronology    # flag retrospective evidence whose publication date may have been copied to an event",
-    "node research/cli.mjs audit-humanitarian  # triage single-source humanitarian events with dense numeric summary mismatches",
-    "node research/cli.mjs audit-references    # report canonical evidence references and current source URLs outside the registry",
-    "node research/cli.mjs audit-show <id>     # show one canonical record with resolved article/timeline evidence",
-    "node research/cli.mjs audit-cluster <id> [window-days] [limit] # rank nearby timeline rows that may duplicate or conflate the event",
-    "node research/cli.mjs audit-captured <id> # show archived publisher text for cited evidence with prompt-safe caps",
-    "node research/cli.mjs audit-prepare <id> [window-days] [limit] [--retry-missing] [--force-capture] # one compact cluster/capture packet; retry only uncaptured transient/missing sources unless forced",
-    "node research/cli.mjs audit-diagnose <id> [window-days] [limit] # concise evidence health, exact-time support, and already-known replacement leads",
-    "node research/cli.mjs audit-recover <id> [window-days] [limit] [max-attempts] [--force-capture] # retry uncaptured cited evidence first, then ranked replacement leads, stopping after the first usable archive capture",
-    "node research/cli.mjs audit-resume <id>   # recover the latest reviewer/verifier state and detect stale evidence after an interrupted audit",
-    "node research/cli.mjs audit-init [git-ref] # create the local full-record audit ledger",
-    "node research/cli.mjs audit-next [limit]    # show the next prioritized pending records",
-    "node research/cli.mjs audit-risk [limit]    # rank pending timeline records by deterministic review-risk signals",
-    "node research/cli.mjs audit-pick [limit] [scan-limit] [--claim] # rank high-risk rows; --claim atomically reserves one row from a linked worktree",
-    "node research/cli.mjs audit-triage [limit] [scan-limit] [attempts] [concurrency] # safely pick unclaimed risk rows, batch evidence recovery, and return compact next actions",
-    "node research/cli.mjs audit-claim <id> [id...] # atomically reserve related timeline rows for the current linked worktree",
-    "node research/cli.mjs audit-release <id> # release a reservation when abandoning audit work",
-    "node research/cli.mjs audit-mark <id> <reviewed|corrected|merged|unresolved> [note] # sync stale canonical state, then record one audit result",
-    "node research/cli.mjs audit-sync [git-ref]  # reopen changed/new records after upstream movement",
-    "node research/cli.mjs audit-status          # summarize full-record audit progress",
-    "node research/cli.mjs audit-help            # show historical audit commands",
-    "node research/cli.mjs finish             # request completion; keep current cadence",
+    "node research/cli.mjs check-times        # inspect exact/date-only times and stored-evidence support",
+    "node research/cli.mjs check-time-provenance # flag exact times that may mirror publication metadata",
+    "node research/cli.mjs check-chronology   # flag retrospective evidence with suspicious event dates",
+    "node research/cli.mjs check-humanitarian # triage single-source humanitarian numeric mismatches",
+    "node research/cli.mjs check-references   # report unresolved canonical evidence references",
     "node research/cli.mjs finish <hours> <reason>  # complete cycle and choose next cadence",
     "node research/cli.mjs finish --review <reason> # stop for operator review without publication",
-  ].filter((line) => {
-    const auditCommand = line.startsWith("node research/cli.mjs audit-");
-    const evidenceCommand = /audit-help\b/u.test(line);
-    return command === "audit-help" || !auditCommand || evidenceCommand;
-  }).join("\n") + "\n");
+  ].join("\n") + "\n");
 } else {
-    console.error("Usage: node research/cli.mjs [brief|context|ingest|sync-news-localization|capture|probe-source|archive-verify|archive-restore|reconstruct|show|captured|audit-times|audit-time-provenance|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-cluster|audit-captured|audit-prepare|audit-diagnose|audit-recover|audit-resume|audit-init|audit-next|audit-risk|audit-pick|audit-triage|audit-claim|audit-release|audit-mark|audit-sync|audit-status|finish]");
+    console.error("Usage: node research/cli.mjs [brief|context|check|ingest|sync-news-localization|capture|probe-source|capture-changed|archive-verify|archive-restore|reconstruct|show|captured|check-times|check-time-provenance|check-chronology|check-humanitarian|check-references|finish]");
   process.exit(2);
 }

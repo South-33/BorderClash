@@ -111,14 +111,14 @@ test("brief always gives at least seven days of compact local context", async ()
     assert.equal(brief.contextWindow.lookbackDays, 7);
     assert.equal(brief.contextWindow.cappedAt30Days, false);
     assert.deepEqual(brief.contextWindow.counts, {
-      timeline: 3,
+      timeline: 2,
       news: { thailand: 1, cambodia: 1, international: 1 },
     });
     assert.deepEqual(brief.contextWindow.sinceLastCycleCounts, {
       timeline: 0,
       news: { thailand: 0, cambodia: 0, international: 0 },
     });
-    assert.equal(brief.recentTimeline.length, 3);
+    assert.equal(brief.recentTimeline.length, 2);
     assert.equal(brief.recentNews.thailand.length, 1);
     assert.equal(brief.recentNews.cambodia.length, 1);
     assert.equal(brief.recentNews.international.length, 1);
@@ -232,6 +232,41 @@ test("finish records completion intent without mutating trusted scheduler state"
     assert.equal(marker.intervalHours, 18);
     assert.match(marker.reason, /Stable conditions/u);
     assert.ok(Number.isFinite(marker.requestedAt));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("finish surfaces local validation failures before recording completion", async () => {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
+  try {
+    await mkdir(join(root, "data"), { recursive: true });
+    await writeFile(join(root, "data", "research-state.json"), JSON.stringify({
+      schemaVersion: 1,
+      isPaused: false,
+      lastResearchAt: 1,
+      nextRunAt: 2,
+      lastCycleInterval: 24,
+      schedulingReason: "fixture",
+      researchCycleCount: 1,
+      scheduler: "external",
+    }, null, 2) + "\n");
+    await mkdir(join(root, ".work"), { recursive: true });
+    await writeFile(join(root, ".work", "CYCLE_RUN.json"), JSON.stringify({ runId: "cycle-validation" }) + "\n");
+    await mkdir(join(root, "research"), { recursive: true });
+    await writeFile(join(root, "research", "validate.mjs"), "console.error('current/summary.summaryKh: contains-thai'); process.exit(1);\n");
+
+    const result = spawnSync(process.execPath, [
+      script,
+      "finish",
+      "24",
+      "Fixture cadence.",
+    ], { cwd: root, encoding: "utf8" });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /finish blocked by local validation/u);
+    assert.match(result.stderr, /contains-thai/u);
+    await assert.rejects(readFile(join(root, ".work", "research-finish.json"), "utf8"), /ENOENT/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

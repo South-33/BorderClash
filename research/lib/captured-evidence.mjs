@@ -6,7 +6,7 @@ import { evidenceArchiveRoots } from "./evidence-archive.mjs";
 
 const DEFAULT_PER_ARTICLE_CHARS = 12_000;
 const DEFAULT_TOTAL_CHARS = 60_000;
-const MIN_AUDIT_HTML_TEXT_LENGTH = 300;
+const MIN_CAPTURE_HTML_TEXT_LENGTH = 300;
 const USABLE_CAPTURE_STATUSES = new Set(["captured-html", "captured-document", "captured-text"]);
 const execFileAsync = promisify(execFile);
 
@@ -105,7 +105,7 @@ async function readCapture(article, archiveRoot, remainingChars, perArticleChars
   let qualityStatus = "usable";
   if (!text) qualityStatus = "missing-text";
   else if (!USABLE_CAPTURE_STATUSES.has(latestStatus)) qualityStatus = "status-not-usable";
-  else if (latestStatus === "captured-html" && text.length < MIN_AUDIT_HTML_TEXT_LENGTH) {
+  else if (latestStatus === "captured-html" && text.length < MIN_CAPTURE_HTML_TEXT_LENGTH) {
     qualityStatus = shortHtmlMatchesArticleTitle(article, text)
       ? "usable-short-html-title-match"
       : "short-html-title-mismatch";
@@ -124,13 +124,13 @@ async function readCapture(article, archiveRoot, remainingChars, perArticleChars
   };
 }
 
-export async function buildAuditCapturedEvidence(packet, {
+export async function buildCapturedEvidence(packet, {
   archiveRoot,
   perArticleChars = DEFAULT_PER_ARTICLE_CHARS,
   totalChars = DEFAULT_TOTAL_CHARS,
   pdfTextExtractor = extractPdfText,
 } = {}) {
-  if (!packet?.id) throw new Error("captured evidence requires an audit packet");
+  if (!packet?.id) throw new Error("captured evidence requires a record inspection");
   const articles = Array.isArray(packet.evidence?.articles) ? packet.evidence.articles : [];
   const roots = evidenceArchiveRoots({ archiveRoot });
   const perArticleLimit = Math.max(1_000, Math.min(30_000, Number(perArticleChars) || DEFAULT_PER_ARTICLE_CHARS));

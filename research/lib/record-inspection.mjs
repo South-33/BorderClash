@@ -1,4 +1,7 @@
 import { normalizeArticleUrl } from "./articles.mjs";
+import { join } from "node:path";
+import { loadArticleRegistry } from "./article-ingest.mjs";
+import { listFiles, readJson, readJsonl } from "./files.mjs";
 
 function collectReferences(value, articleIds, timelineIds, missingIds, directSourceUrls, knownArticleIds, knownTimelineIds) {
   if (Array.isArray(value)) {
@@ -22,18 +25,18 @@ function collectReferences(value, articleIds, timelineIds, missingIds, directSou
 
 function canonicalArticle(record) {
   if (!record) return record;
-  const { __file: _file, ...canonical } = record;
+  const canonical = { ...record };
+  delete canonical.__file;
   return canonical;
 }
 
-export function buildAuditPacket({
+export function buildRecordInspection({
   id,
   current = {},
   timeline = [],
   articles = [],
-  deletedRecord = null,
 } = {}) {
-  if (!id) throw new Error("audit packet requires an id");
+  if (!id) throw new Error("record inspection requires an id");
 
   const articlesById = new Map(articles.map((record) => [record.id, record]));
   const articlesByUrl = new Map(
@@ -46,8 +49,6 @@ export function buildAuditPacket({
 
   let kind;
   let record;
-  let baselineRecord = null;
-  let proposedAction = "";
   if (currentName && Object.hasOwn(current, currentName)) {
     kind = "current";
     record = current[currentName];
@@ -57,23 +58,17 @@ export function buildAuditPacket({
   } else if (articlesById.has(id)) {
     kind = "news";
     record = canonicalArticle(articlesById.get(id));
-  } else if (deletedRecord?.id === id) {
-    kind = "timeline";
-    record = null;
-    baselineRecord = deletedRecord;
-    proposedAction = "delete";
   } else {
-    throw new Error(`unknown audit record id: ${id}`);
+    throw new Error(`unknown record id: ${id}`);
   }
 
   const articleIds = new Set();
   const timelineIds = new Set();
   const missingIds = new Set();
   const directSourceUrls = new Set();
-  const referenceRecord = record || baselineRecord;
   if (kind !== "news") {
     collectReferences(
-      referenceRecord,
+      record,
       articleIds,
       timelineIds,
       missingIds,
@@ -84,7 +79,7 @@ export function buildAuditPacket({
   }
 
   // Current records can cite timeline events. Resolve those events to their
-  // canonical article evidence as well so an auditor can inspect one packet.
+  // canonical article evidence as well so an operator can inspect one packet.
   for (const timelineId of timelineIds) {
     const event = timelineById.get(timelineId);
     if (!event) continue;
@@ -119,9 +114,21 @@ export function buildAuditPacket({
       missingDirectSourceUrls,
     },
   };
-  if (proposedAction) {
-    packet.proposedAction = proposedAction;
-    packet.baselineRecord = baselineRecord;
-  }
   return packet;
+}
+
+export async function loadRecordInspection(id, {
+  cwd = process.cwd(),
+  dataRoot = join(cwd, "data"),
+} = {}) {
+  const registry = await loadArticleRegistry(dataRoot);
+  const timeline = [];
+  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
+    timeline.push(...await readJsonl(file));
+  }
+  const current = {};
+  for (const name of ["summary", "thailand", "cambodia", "impact"]) {
+    current[name] = await readJson(join(dataRoot, "current", `${name}.json`));
+  }
+  return buildRecordInspection({ id, articles: registry.articles, timeline, current });
 }

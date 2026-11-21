@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { summarizeTimelineTimes } from "../research/lib/timeline-audit.mjs";
+import { summarizeTimelineTimes } from "../research/lib/timeline-time-check.mjs";
 
-test("timeline audit separates exact, date-only, invalid, and suspiciously repeated times", () => {
+test("timeline check separates exact, date-only, invalid, and suspiciously repeated times", () => {
   const events = [
     ...Array.from({ length: 12 }, (_, index) => ({ id: `ten-${index}`, timeOfDay: "10:00" })),
     { id: "other", timeOfDay: "14:35" },

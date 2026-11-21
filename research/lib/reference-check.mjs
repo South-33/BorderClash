@@ -13,7 +13,7 @@ function walk(value, path, visit) {
   }
 }
 
-export function auditReferenceCoverage({ articles = [], timeline = [], current = {} } = {}) {
+export function checkReferenceCoverage({ articles = [], timeline = [], current = {} } = {}) {
   const articleIds = new Set(articles.map(({ id }) => id).filter(Boolean));
   const timelineIds = new Set(timeline.map(({ id }) => id).filter(Boolean));
   const articleUrls = new Set(

@@ -17,7 +17,7 @@ function evidenceText(article) {
   return [article?.titleEn, article?.title, article?.summary].filter(Boolean).join(" ");
 }
 
-export function auditTimelineChronology(events = [], articles = []) {
+export function checkTimelineChronology(events = [], articles = []) {
   const articlesById = new Map(articles.map((article) => [article.id, article]));
   const candidates = [];
   const missingEvidence = [];

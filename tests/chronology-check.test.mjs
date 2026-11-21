@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditTimelineChronology } from "../research/lib/chronology-audit.mjs";
+import { checkTimelineChronology } from "../research/lib/chronology-check.mjs";
 
-test("chronology audit flags an event copied from a one-year retrospective publication date", () => {
-  const result = auditTimelineChronology([
+test("chronology check flags an event copied from a one-year retrospective publication date", () => {
+  const result = checkTimelineChronology([
     { id: "event-retrospective", date: "2026-05-28", evidenceIds: ["article-retrospective"] },
   ], [
     {
@@ -19,8 +19,8 @@ test("chronology audit flags an event copied from a one-year retrospective publi
   assert.equal(result.candidates[0].reason, "event-date-matches-retrospective-evidence-publication");
 });
 
-test("chronology audit does not flag ordinary same-day reporting", () => {
-  const result = auditTimelineChronology([
+test("chronology check does not flag ordinary same-day reporting", () => {
+  const result = checkTimelineChronology([
     { id: "event-current", date: "2026-05-28", evidenceIds: ["article-current"] },
   ], [
     {
@@ -34,8 +34,8 @@ test("chronology audit does not flag ordinary same-day reporting", () => {
   assert.equal(result.candidateCount, 0);
 });
 
-test("chronology audit ignores generic prior-year and prospective duration wording", () => {
-  const result = auditTimelineChronology([
+test("chronology check ignores generic prior-year and prospective duration wording", () => {
+  const result = checkTimelineChronology([
     { id: "event-context", date: "2026-01-09", evidenceIds: ["article-context", "article-duration"] },
   ], [
     {
@@ -55,8 +55,8 @@ test("chronology audit ignores generic prior-year and prospective duration wordi
   assert.equal(result.candidateCount, 0);
 });
 
-test("chronology audit reports missing evidence ids without inventing candidates", () => {
-  const result = auditTimelineChronology([
+test("chronology check reports missing evidence ids without inventing candidates", () => {
+  const result = checkTimelineChronology([
     { id: "event-broken", date: "2026-05-28", evidenceIds: ["missing"] },
   ], []);
 
