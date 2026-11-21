@@ -65,7 +65,7 @@ test("source cards render a real external-link arrow instead of an entity name",
   assert.equal((source.match(/↗/gu) || []).length >= 2, true);
 });
 
-test("impact evidence metadata stays internal while qualified public metrics stay compact", () => {
+test("impact evidence metadata stays internal while the public metric contract stays stable", () => {
   const impact = {
     updatedAt: 1,
     displaced: {
@@ -92,8 +92,8 @@ test("impact evidence metadata stays internal while qualified public metrics sta
   );
   assert.deepEqual(output, {
     riskLevel: "LOW",
-    displacedCount: "12,345+",
-    deathCount: "7+",
+    displacedCount: ">12,345",
+    deathCount: "≥7",
     updatedAt: 99,
   });
   assert.equal(JSON.stringify(output).includes("claimantName"), false);
