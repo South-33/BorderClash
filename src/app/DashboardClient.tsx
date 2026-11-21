@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
-import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle } from 'lucide-react';
+import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle, FileText } from 'lucide-react';
 import type { BorderClashData, CurrentSummary, NewsArticle, Perspective, TimelineEvent } from '@/lib/dashboard-data';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
@@ -2415,7 +2415,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                         <div className="mt-2 flex items-center gap-1">
                                           <div className="flex -space-x-1">
                                             {[...Array(Math.min(3, event.sources.length))].map((_, i) => (
-                                              <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center text-[8px] font-mono">ðŸ“„</div>
+                                              <div key={i} className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center">
+                                                <FileText size={9} strokeWidth={2} aria-hidden="true" />
+                                              </div>
                                             ))}
                                           </div>
                                           <span className="text-[9px] font-mono opacity-50">+{event.sources.length} {t.sources}</span>

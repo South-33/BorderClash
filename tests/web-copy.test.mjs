@@ -7,7 +7,7 @@ import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
 
 test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "7d648517dd5c8aac3312e8516b29114fc78677d1cbbef435ae17e5de845195ab"],
+    ["src/app/DashboardClient.tsx", "baeb8610e64d0a29056563f9532fda09aa415098e1b139d5687a531bcbabcf93"],
     ["src/app/globals.css", "5cde188cc1816468ca46c8765b99fc2334ea1f32679bbf3aa01846bc7f8f923b"],
     ["src/app/layout.tsx", "b87d7baefddab9e8c3bcd12f9f18c37a140bb25775df30af13a8759f2b683274"],
     ["src/app/loading.tsx", "3e1c0933f619ef400a9c4abbaed0e29a4bf4c6fd63f01e9a9556fde2e7000033"],
@@ -32,6 +32,12 @@ test("open dashboards pick up a newly published research snapshot", () => {
   assert.match(source, /snapshot\.deploymentVersion !== loadedDeploymentVersion/u);
   assert.match(source, /window\.location\.reload\(\)/u);
   assert.match(source, /isPossiblyStale \? 60_000 : 300_000/u);
+});
+
+test("timeline source previews use the dashboard icon system instead of mojibake glyphs", () => {
+  const source = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
+  assert.match(source, /<FileText size=\{9\} strokeWidth=\{2\} aria-hidden="true" \/>/u);
+  assert.doesNotMatch(source, /ðŸ|Ã|Â|�/u);
 });
 
 test("news feeds return to the newest article when their data or filter changes", () => {
