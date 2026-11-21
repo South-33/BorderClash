@@ -67,7 +67,7 @@ Common CLI commands:
 Terminal HTTP is sandboxed and may fail even when a publisher is reachable. Do not treat terminal DNS failure as evidence that a source is unavailable.
 
 The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually.
-Search snippets are leads, not evidence. Stop reformulating an unverified lead when it is unlikely to change the public record. Diagnostics are for concrete questions, not routine sweeps. `finish` validates data and the runner does final verification; do not routinely run full repo test/build/automation suites.
+Search snippets are leads, not evidence; when reformulation stops adding evidence, change approach or drop the lead unless consequential. Run diagnostics only for concrete questions, never as a routine sweep. Do not run `pnpm validate` separately: `finish` validates data and the runner handles final verification.
 
 ## Finish
 

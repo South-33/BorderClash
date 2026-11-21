@@ -535,24 +535,29 @@ if (command === "brief") {
   await finish(process.argv[3], process.argv.slice(4));
 } else if (["help", "--help", "-h"].includes(command)) {
   process.stdout.write([
+    "Routine cycle commands:",
     "node research/cli.mjs [context]          # show the compact cycle context",
     "node research/cli.mjs ingest <file> [--no-localize] # add/reuse article evidence; optionally skip unrelated localization sync",
-    "node research/cli.mjs sync-news-localization # strip stale localized titles outside the newest visible domestic window",
     "node research/cli.mjs capture <id> [--force] # capture or retry one stored article",
+    "node research/cli.mjs show <id>           # show one canonical record with resolved evidence",
+    "node research/cli.mjs captured <id>       # show retained publisher text for cited evidence",
+    "node research/cli.mjs finish <hours> <reason>  # validate data, complete cycle, choose next cadence",
+    "node research/cli.mjs finish --review <reason> # stop for operator review without publication",
+    "",
+    "Targeted diagnostics and recovery (use for a concrete issue; not a routine checklist):",
+    "node research/cli.mjs sync-news-localization # strip stale localized titles outside the newest visible domestic window",
     "node research/cli.mjs capture-changed [base-ref] # capture changed news records; hold publisher-ID alias conflicts for review",
     "node research/cli.mjs probe-source <url> [preview-chars] # host/operator network diagnostic; AGY terminal sandbox can block it",
     "node research/cli.mjs archive-verify <id>    # verify the South-local backup copy by checksum",
     "node research/cli.mjs archive-restore <id> [destination] # restore one backup to a review directory",
     "node research/cli.mjs reconstruct <id> [git-ref] # show one historical canonical record with its private capture metadata",
-    "node research/cli.mjs show <id>           # show one canonical record with resolved evidence",
-    "node research/cli.mjs captured <id>       # show retained publisher text for cited evidence",
     "node research/cli.mjs check-times        # inspect exact/date-only times and stored-evidence support",
     "node research/cli.mjs check-time-provenance # flag exact times that may mirror publication metadata",
     "node research/cli.mjs check-chronology   # flag retrospective evidence with suspicious event dates",
     "node research/cli.mjs check-humanitarian # triage single-source humanitarian numeric mismatches",
     "node research/cli.mjs check-references   # report unresolved canonical evidence references",
-    "node research/cli.mjs finish <hours> <reason>  # complete cycle and choose next cadence",
-    "node research/cli.mjs finish --review <reason> # stop for operator review without publication",
+    "",
+    "Routine cycles should not run pnpm validate/test/build; finish validates working data and the runner performs final verification.",
   ].join("\n") + "\n");
 } else {
     console.error("Usage: node research/cli.mjs [brief|context|check|ingest|sync-news-localization|capture|probe-source|capture-changed|archive-verify|archive-restore|reconstruct|show|captured|check-times|check-time-provenance|check-chronology|check-humanitarian|check-references|finish]");
