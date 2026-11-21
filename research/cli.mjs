@@ -235,7 +235,7 @@ function renderContext(output) {
     "Timeline:",
   );
 
-  for (const row of output.recentTimeline.slice(0, 5)) {
+  for (const row of output.recentTimeline.slice(0, 4)) {
     lines.push(`- ${row.date} ${row.timeOfDay || ""} [${row.id}] ${row.title}`.trim());
   }
   if (!output.recentTimeline.length) lines.push("- none");
@@ -393,7 +393,7 @@ async function captured(id) {
 }
 
 async function finish(hoursText, reasonParts) {
-  const nextAction = "Return your final response with the cycle outcome. Include HARNESS_FEEDBACK when you have useful harness feedback.";
+  const nextAction = "Return the cycle outcome. If any failed/retried command, repeated search, unclear path/CLI, or other recovered friction occurred, include one concrete HARNESS_FEEDBACK line.";
   const cycleRuntimePath = resolve(".work", "CYCLE_RUN.json");
   if (!existsSync(cycleRuntimePath)) {
     throw new Error("finish is only available inside a runner cycle");
@@ -430,7 +430,7 @@ async function finish(hoursText, reasonParts) {
   }
 
   if (hoursText == null) {
-    throw new Error("finish requires an explicit cadence and reason: finish <hours> <reason>");
+    throw new Error(`finish needs cadence and reason. Retry directly: node research/cli.mjs finish <1-${MAX_SCHEDULE_HOURS}> "<reason>". finish runs data validation; do not inspect implementation or run validation first.`);
   }
   const requestedHours = Number(hoursText);
   const hours = Number.isFinite(requestedHours) ? requestedHours : Number.NaN;

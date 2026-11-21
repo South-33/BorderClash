@@ -67,7 +67,7 @@ Common CLI commands:
 Terminal HTTP is sandboxed and may fail even when a publisher is reachable. Do not treat terminal DNS failure as evidence that a source is unavailable.
 
 The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually.
-Do not routinely run full repo test/build/automation suites in a research cycle. `finish` validates data and the runner does final verification; use targeted checks for specific changes or diagnoses.
+Search snippets are leads, not evidence. Stop reformulating an unverified lead when it is unlikely to change the public record. Diagnostics are for concrete questions, not routine sweeps. `finish` validates data and the runner does final verification; do not routinely run full repo test/build/automation suites.
 
 ## Finish
 

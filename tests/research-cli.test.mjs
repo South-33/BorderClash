@@ -224,6 +224,9 @@ test("finish records completion intent without mutating trusted scheduler state"
     ], { cwd: root, encoding: "utf8" });
 
     assert.equal(result.status, 0, result.stderr);
+    const response = JSON.parse(result.stdout);
+    assert.match(response.nextAction, /failed\/retried command/u);
+    assert.match(response.nextAction, /HARNESS_FEEDBACK/u);
     const state = JSON.parse(await readFile(join(root, "data", "research-state.json"), "utf8"));
     assert.deepEqual(state, originalState);
     const marker = JSON.parse(await readFile(join(root, ".work", "research-finish.json"), "utf8"));
@@ -291,7 +294,8 @@ test("finish requires an explicit cadence and reason even when cadence stays the
 
     const missing = spawnSync(process.execPath, [script, "finish"], { cwd: root, encoding: "utf8" });
     assert.notEqual(missing.status, 0);
-    assert.match(missing.stderr, /explicit cadence and reason/u);
+    assert.match(missing.stderr, /Retry directly: node research\/cli\.mjs finish/u);
+    assert.match(missing.stderr, /finish runs data validation/u);
     const result = spawnSync(process.execPath, [
       script,
       "finish",
