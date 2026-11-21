@@ -8,7 +8,7 @@ The production research-agent contract lives in `research/CYCLE_GUIDE.md`. `node
 
 Canonical inputs live in `data/`; `public/data/` is generated. The existing UI is the product contract unless the task explicitly changes it.
 
-Qualified impact-card totals intentionally render as `>N` for `MORE_THAN` and `≥N` for `AT_LEAST`. Trailing-plus `N+` formatting was not approved; do not change it without explicit user permission.
+The user explicitly approved trailing-plus formatting for qualified impact-card totals (`20,000+`, `150+`). Keep canonical `MORE_THAN` / `AT_LEAST` semantics in data, but preserve the compact `N+` presentation unless the user requests another format.
 
 South host maintenance, networking, drivers, power policy, and recovery belong in the sibling `SouthServer` repository. Real production research cycles run through the owned runner on South Server; development and fake-agent tests can run elsewhere.
 
