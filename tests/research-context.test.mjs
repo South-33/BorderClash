@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { EOL } from "node:os";
 import test from "node:test";
 test("generated cycle context stays compact enough for AGY file reads", () => {
@@ -8,8 +7,8 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
-  const guide = readFileSync("research/CYCLE_GUIDE.md", "utf8").trim();
-  assert.ok(result.stdout.includes(guide), "cycle context should embed the canonical research guide");
+  assert.match(result.stdout, /Read research\/CYCLE_GUIDE\.md/u);
+  assert.doesNotMatch(result.stdout, /## Goal/u, "live context should not duplicate the canonical guide");
   assert.match(result.stdout, /^Now: \d{4}-\d{2}-\d{2}T/mu);
   assert.match(result.stdout, /data\/current\/\{summary,thailand,cambodia,impact\}\.json/u);
   assert.match(result.stdout, /data\/\{timeline,news\}\/YYYY-MM\.jsonl/u);

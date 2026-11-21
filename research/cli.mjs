@@ -215,50 +215,41 @@ function borderLocalDate(value) {
 }
 
 function renderContext(output) {
-  const guide = readFileSync(resolve("research", "CYCLE_GUIDE.md"), "utf8").trim();
   const timelineRows = output.recentTimeline.slice(0, 4);
+  const lines = [
+    "# BorderClash live cycle context",
+    "",
+    "Read research/CYCLE_GUIDE.md for the research contract.",
+    "",
+    "## Live",
+    `Now: ${output.cycle.now}`,
+    `Last: ${output.cycle.since || "unknown"} (#${output.cycle.count})`,
+    "data/current/{summary,thailand,cambodia,impact}.json; data/{timeline,news}/YYYY-MM.jsonl",
+    "",
+    "## Recent",
+    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; orientation.`,
+    "",
+    "Timeline",
+  ];
 
-  const build = () => {
-    const lines = [
-      guide,
-      "",
-      "## Live",
-      `Now: ${output.cycle.now}`,
-      `Last: ${output.cycle.since || "unknown"} (#${output.cycle.count})`,
-      "data/current/{summary,thailand,cambodia,impact}.json; data/{timeline,news}/YYYY-MM.jsonl",
-      "",
-      "## Recent",
-      `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; orientation.`,
-      "",
-      "Timeline",
-    ];
-
-    for (const row of timelineRows) {
-      lines.push(`- ${row.date} ${row.timeOfDay || ""} [${row.id}] ${row.title}`.trim());
-    }
-    if (!timelineRows.length) lines.push("- none");
-
-    lines.push("", "Evidence");
-    for (const [label, key] of [["TH", "thailand"], ["KH", "cambodia"], ["INTL", "international"]]) {
-      const rows = output.recentNews[key].slice(0, 1);
-      if (!rows.length) {
-        lines.push(`- ${label}: none`);
-        continue;
-      }
-      for (const row of rows) {
-        lines.push(`- ${label} ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
-      }
-    }
-    lines.push("");
-    return lines.join("\n");
-  };
-
-  let rendered = build();
-  while (Buffer.byteLength(rendered, "utf8") > 9990 && timelineRows.length > 1) {
-    timelineRows.pop();
-    rendered = build();
+  for (const row of timelineRows) {
+    lines.push(`- ${row.date} ${row.timeOfDay || ""} [${row.id}] ${row.title}`.trim());
   }
-  return rendered;
+  if (!timelineRows.length) lines.push("- none");
+
+  lines.push("", "Evidence");
+  for (const [label, key] of [["TH", "thailand"], ["KH", "cambodia"], ["INTL", "international"]]) {
+    const rows = output.recentNews[key].slice(0, 1);
+    if (!rows.length) {
+      lines.push(`- ${label}: none`);
+      continue;
+    }
+    for (const row of rows) {
+      lines.push(`- ${label} ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
 }
 
 async function ingest(path, { localize = true } = {}) {

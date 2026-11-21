@@ -4,7 +4,7 @@ This is the project's AGENTS.md
 
 BorderClash maintains the canonical `data/` behind the public Thailand-Cambodia border dashboard.
 
-The production research-agent contract lives in `research/CYCLE_GUIDE.md`. `node research/cli.mjs context` embeds that guide with live cycle state into `.work/CYCLE_CONTEXT.md`, which is the single runtime brief for a research cycle. Keep research goals and editorial rules there instead of duplicating them across runner prompts, tests, or this file.
+The production research-agent contract lives in `research/CYCLE_GUIDE.md`. `node research/cli.mjs context` generates the live `.work/CYCLE_CONTEXT.md` snapshot for a cycle. The runner tells the agent to read both files, so stable policy does not compete with live context for one file-read budget. Keep research goals and editorial rules in the guide instead of duplicating them across runner prompts, tests, or this file.
 
 Canonical inputs live in `data/`; `public/data/` is generated. The existing UI is the product contract unless the task explicitly changes it.
 

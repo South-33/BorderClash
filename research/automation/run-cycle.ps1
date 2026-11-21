@@ -876,14 +876,14 @@ try {
         }
         if (-not (Test-Path $agy)) { throw "Antigravity CLI not found" }
 
-        $continuationPrompt = "Continue the interrupted BorderClash research cycle. Read .work/CYCLE_CONTEXT.md if needed, preserve completed work, and pursue the highest-quality result even if that requires deep research or rewriting. When search exposes a cited/grounding URL, use node research/cli.mjs probe-source <url> and follow the source rather than repeating equivalent searches without new information."
+        $continuationPrompt = "Continue the interrupted BorderClash research cycle. Read research/CYCLE_GUIDE.md and .work/CYCLE_CONTEXT.md if needed, preserve completed work, and pursue the highest-quality result even if that requires deep research or rewriting. When search exposes a cited/grounding URL, use node research/cli.mjs probe-source <url> and follow the source rather than repeating equivalent searches without new information."
         $effectivePrompt = if ($resuming) {
             $continuationPrompt
         } else {
             # Do not prefix this with /goal. AGY 1.5.5 headless expands the command,
             # then exits before the first planner response.
             @"
-Read .work/CYCLE_CONTEXT.md and complete this BorderClash research cycle. It contains the goal, workflow, tools, and live context for this run.
+Read research/CYCLE_GUIDE.md and .work/CYCLE_CONTEXT.md, then complete this BorderClash research cycle. The guide is the stable research contract; the context contains live state for this run.
 Pursue the highest-quality result even if that requires deep research or rewriting. When search exposes a cited/grounding URL, use node research/cli.mjs probe-source <url> and follow the source rather than repeating equivalent searches without new information.
 "@
         }
