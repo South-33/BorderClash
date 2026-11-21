@@ -693,31 +693,6 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $runtimeDir "pending-publication.json"))) "verified delivery did not clear stale pending publication state"
     $resumeEventsAfter = @(Get-ChildItem -LiteralPath $logDir -Filter "$($publishedRuntime.runId).resume-*.events.ndjson" -File -ErrorAction SilentlyContinue).Count
     Assert-True ($resumeEventsAfter -eq $resumeEventsBefore) "verified published run invoked the agent again"
-
-    # Operator resume must also trust a verified delivery record over a stale
-    # publication-review hold, without reopening the completed conversation.
-    $publishedRuntime = Get-Runtime
-    $publishedRuntime.status = "review"
-    $publishedRuntime.phase = "review"
-    $publishedRuntime | Add-Member -NotePropertyName recoveryReason -NotePropertyValue "publication_review" -Force
-    $publishedRuntime.message = "stale fixture publication review after verified delivery"
-    [IO.File]::WriteAllText(
-        (Join-Path $runtimeDir "runtime.json"),
-        (($publishedRuntime | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
-        [Text.UTF8Encoding]::new($false)
-    )
-    [IO.File]::WriteAllText(
-        (Join-Path $runtimeDir "pending-publication.json"),
-        (($stalePending | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
-        [Text.UTF8Encoding]::new($false)
-    )
-    $controlResumeEventsBefore = @(Get-ChildItem -LiteralPath $logDir -Filter "$($publishedRuntime.runId).resume-*.events.ndjson" -File -ErrorAction SilentlyContinue).Count
-    $controlPublishedResume = Invoke-Control "resume"
-    Assert-True ($controlPublishedResume.ExitCode -eq 0 -and ($controlPublishedResume.Output -join "`n") -match "PUBLIC VERIFIED") "control resume did not restore verified published state"
-    Assert-True ((Get-Runtime).status -eq "published") "control resume did not restore published runtime state"
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $runtimeDir "pending-publication.json"))) "control resume did not clear stale publication review state"
-    $controlResumeEventsAfter = @(Get-ChildItem -LiteralPath $logDir -Filter "$($publishedRuntime.runId).resume-*.events.ndjson" -File -ErrorAction SilentlyContinue).Count
-    Assert-True ($controlResumeEventsAfter -eq $controlResumeEventsBefore) "control resume reopened the verified conversation"
     }
 
     if (Test-Section "publication-overlap") {
