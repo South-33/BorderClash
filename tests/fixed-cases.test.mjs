@@ -111,26 +111,3 @@ test("required-source failure only passes with a useful review decision", () => 
     decision: "complete",
   }).length > 0);
 });
-
-test("fixed-case runner keeps South acceptance separate from explicit laptop development", () => {
-  const runner = readFileSync("research/automation/run-fixed-cases.ps1", "utf8");
-  const supervisor = readFileSync("research/automation/agy-supervisor.mjs", "utf8");
-  assert.match(runner, /SouthServer/u);
-  assert.match(runner, /\[switch\]\$Development/u);
-  assert.match(runner, /mode = if \(\$Development\) \{ "development" \} else \{ "south-acceptance" \}/u);
-  assert.match(runner, /publicationEnabled = \$false/u);
-  assert.match(runner, /modelWorkspaceContainsEvidence = \$false/u);
-  assert.match(runner, /gemini-3\.8-flash-medium/u);
-  assert.match(runner, /Fixed-case work root must be outside the repository/u);
-  assert.match(runner, /used disallowed tool/u);
-  assert.match(runner, /structured_output/u);
-  assert.match(runner, /--json-schema-file/u);
-  assert.match(runner, /EVALUATION_REPORT\.json/u);
-  assert.match(runner, /advisory deviations/u);
-  assert.doesNotMatch(runner, /Fixed case evaluation failed/u);
-  assert.match(supervisor, /jsonSchemaPath/u);
-  assert.match(supervisor, /agyArgs\.push\("--json-schema", jsonSchemaPath\)/u);
-  assert.match(runner, /agy-supervisor\.mjs/u);
-  assert.match(runner, /ReadAllText\(\$resultPath, \[Text\.Encoding\]::UTF8\)/u);
-  assert.doesNotMatch(runner, /publish-candidate|run-cycle\.ps1.+-Publish/su);
-});

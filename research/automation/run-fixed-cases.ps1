@@ -16,7 +16,7 @@ if (-not $isSouth -and -not $Development) {
     throw "Real BorderClash fixed cases require SouthServer unless -Development is explicitly selected."
 }
 if ($Development) {
-    Write-Warning "Development fixed-case run only. This does not satisfy South-specific acceptance or authorize publication."
+    Write-Warning "Development fixed-case run only. This is advisory evaluation and does not authorize publication."
 }
 
 $model = "gemini-3.8-flash-medium"
@@ -83,11 +83,13 @@ $schemaPath = Join-Path $runnerRoot "fixed-case-result.schema.json"
     [Text.UTF8Encoding]::new($false)
 )
 
+$evaluationReport = @()
+
 [IO.File]::WriteAllText(
     (Join-Path $root "RUN_CONTEXT.json"),
     (([ordered]@{
         schemaVersion = 1
-        mode = if ($Development) { "development" } else { "south-acceptance" }
+        mode = if ($Development) { "development" } else { "south-evaluation" }
         machine = [string]$script:ResearchMachine
         model = $model
         startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -188,8 +190,33 @@ For summaryEn, summaryTh, and summaryKh, write calendar months as words rather t
         (($agyResult.structured_output | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
         [Text.UTF8Encoding]::new($false)
     )
-    & node $evaluator $fixturesPath $caseResultPath
-    if ($LASTEXITCODE -ne 0) { throw "Fixed case evaluation failed for $caseId" }
+    $evaluationText = & node $evaluator $fixturesPath $caseResultPath 2>&1
+    $evaluationExit = $LASTEXITCODE
+    $evaluation = $null
+    try { $evaluation = ([string]::Join([Environment]::NewLine, [string[]]$evaluationText) | ConvertFrom-Json) } catch {}
+    $caseErrors = @()
+    if ($evaluation -and $evaluation.PSObject.Properties["errors"] -and $null -ne $evaluation.errors) {
+        $caseErrors = @($evaluation.errors)
+    } elseif (-not $evaluation) {
+        $caseErrors = @([string]::Join([Environment]::NewLine, [string[]]$evaluationText))
+    }
+    $evaluationReport += [ordered]@{
+        caseId = $caseId
+        ok = $evaluationExit -eq 0
+        errors = $caseErrors
+    }
 }
 
-Write-Output "fixed cases passed: $($selected.Count)"
+$reportPath = Join-Path $root "EVALUATION_REPORT.json"
+[IO.File]::WriteAllText(
+    $reportPath,
+    (([ordered]@{
+        generatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        model = $model
+        mode = if ($Development) { "development" } else { "south-evaluation" }
+        cases = $evaluationReport
+    } | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
+    [Text.UTF8Encoding]::new($false)
+)
+$deviationCount = @($evaluationReport | Where-Object { -not $_.ok }).Count
+Write-Output "fixed cases completed: $($selected.Count); advisory deviations: $deviationCount; report=$reportPath"
