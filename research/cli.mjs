@@ -217,20 +217,20 @@ function borderLocalDate(value) {
 function renderContext(output) {
   const guide = readFileSync(resolve("research", "CYCLE_GUIDE.md"), "utf8").trim();
   const lines = [
-    "# BorderClash research cycle",
+    "# BorderClash cycle",
     "",
     guide,
     "",
     "## Live",
     `Now: ${output.cycle.now}`,
-    `Last: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
+    `Last: ${output.cycle.since || "unknown"} (#${output.cycle.count})`,
     "Data: data/current/{summary,thailand,cambodia,impact}.json; data/{timeline,news}/YYYY-MM.jsonl",
   ];
 
   lines.push(
     "",
     "## Recent",
-    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; not rank/quota.`,
+    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; orientation only.`,
     "",
     "Timeline:",
   );
@@ -541,13 +541,13 @@ if (command === "brief") {
     "node research/cli.mjs capture <id> [--force] # capture or retry one stored article",
     "node research/cli.mjs show <id>           # show one canonical record with resolved evidence",
     "node research/cli.mjs captured <id>       # show retained publisher text for cited evidence",
+    "node research/cli.mjs probe-source <url> [preview-chars] # resolve/fetch a search-result URL and report the final publisher URL",
     "node research/cli.mjs finish <hours> <reason>  # validate data, complete cycle, choose next cadence",
     "node research/cli.mjs finish --review <reason> # stop for operator review without publication",
     "",
     "Targeted diagnostics and recovery (use for a concrete issue; not a routine checklist):",
     "node research/cli.mjs sync-news-localization # strip stale localized titles outside the newest visible domestic window",
     "node research/cli.mjs capture-changed [base-ref] # capture changed news records; hold publisher-ID alias conflicts for review",
-    "node research/cli.mjs probe-source <url> [preview-chars] # host/operator network diagnostic; AGY terminal sandbox can block it",
     "node research/cli.mjs archive-verify <id>    # verify the South-local backup copy by checksum",
     "node research/cli.mjs archive-restore <id> [destination] # restore one backup to a review directory",
     "node research/cli.mjs reconstruct <id> [git-ref] # show one historical canonical record with its private capture metadata",

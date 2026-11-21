@@ -14,4 +14,6 @@ South host maintenance, networking, drivers, power policy, and recovery belong i
 
 Prefer the simplest reliable implementation. Tests and validators should protect objective behavior and data contracts, not freeze prose or prior research judgments. Remove obsolete machinery instead of preserving it for history.
 
+Do not encode model search depth, tool sequence, rewrite count, source count, prompt wording, translation naturalness, or editorial judgment as deterministic pass/fail tests. Evaluate those with real-cycle traces and advisory benchmarks; deterministic checks are for objective invariants only.
+
 Use `pnpm test` and `pnpm validate` for repository verification. For research CLI behavior, use `node research/cli.mjs --help`.

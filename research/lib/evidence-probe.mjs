@@ -5,11 +5,16 @@ const USABLE_STATUSES = new Set(["captured-html", "captured-document", "captured
 export function summarizeEvidenceProbe(fetched, previewChars = 800) {
   const text = typeof fetched?.text === "string" ? fetched.text.trim() : "";
   const maxPreview = Math.max(0, Math.min(4000, Number(previewChars) || 0));
+  const requestedUrl = fetched?.requestedUrl || "";
+  const finalUrl = fetched?.finalUrl || "";
+  const resolved = Boolean(requestedUrl && finalUrl && requestedUrl !== finalUrl);
+  const usable = USABLE_STATUSES.has(fetched?.status);
   return {
-    usable: USABLE_STATUSES.has(fetched?.status),
+    usable,
+    resolved,
     status: fetched?.status || "",
-    requestedUrl: fetched?.requestedUrl || "",
-    finalUrl: fetched?.finalUrl || "",
+    requestedUrl,
+    finalUrl,
     canonicalUrl: fetched?.canonicalUrl || "",
     httpStatus: fetched?.httpStatus ?? null,
     contentType: fetched?.contentType || "",
@@ -18,6 +23,11 @@ export function summarizeEvidenceProbe(fetched, previewChars = 800) {
     redirectChain: fetched?.redirectChain || [],
     error: fetched?.error || "",
     preview: maxPreview && text ? text.slice(0, maxPreview) : "",
+    nextAction: usable
+      ? "Use this source as evidence input; ingest/capture it if it belongs in the canonical record."
+      : resolved
+        ? "The redirect resolved even though the publisher body is unavailable. Use finalUrl as provenance and seek accessible primary or independent corroboration; do not repeat search variants just to rediscover this lead."
+        : "The source could not be read or resolved here. Try another accessible source or corroboration; lack of access is not evidence against the claim.",
   };
 }
 

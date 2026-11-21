@@ -85,7 +85,6 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(runner, /runner_interrupted_after_success/);
   assert.match(runner, /runner_interrupted_after_error/);
   assert.match(runner, /RECOVER:.*validating without another model call/);
-  assert.match(runner, /Use search_web only for broad discovery; for a specific consequential lead, switch to browser\/source-reading tools\. Do not use curl, Python HTTP, or terminal HTML parsing for live pages/u);
   assert.doesNotMatch(runner, /AGY_ERROR:/, 'PowerShell must not parse AGY stderr protocol');
 
   assert.match(supervisor, /--output-format"[\s\S]+"stream-json"/);

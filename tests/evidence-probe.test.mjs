@@ -17,6 +17,7 @@ test("summarizeEvidenceProbe omits raw bodies and reports a bounded preview", ()
   }, 10);
 
   assert.equal(result.usable, true);
+  assert.equal(result.resolved, false);
   assert.equal(result.textLength, 16);
   assert.equal(result.preview, "alpha beta");
   assert.equal("body" in result, false);
@@ -29,9 +30,28 @@ test("probeEvidenceUrl reports blocked sources without writing archive state", a
   });
 
   assert.equal(result.usable, false);
+  assert.equal(result.resolved, false);
   assert.equal(result.status, "access-blocked");
   assert.equal(result.httpStatus, 403);
   assert.equal(result.preview, "");
+});
+
+test("probe summary preserves a resolved publisher URL when the body is blocked", () => {
+  const result = summarizeEvidenceProbe({
+    status: "access-blocked",
+    requestedUrl: "https://search.example/grounding/abc",
+    finalUrl: "https://publisher.example/story/123",
+    httpStatus: 403,
+    redirectChain: [{
+      from: "https://search.example/grounding/abc",
+      to: "https://publisher.example/story/123",
+      status: 302,
+    }],
+  });
+
+  assert.equal(result.usable, false);
+  assert.equal(result.resolved, true);
+  assert.equal(result.finalUrl, "https://publisher.example/story/123");
 });
 
 test("probeEvidenceUrl returns readable HTML metadata and preview", async () => {
