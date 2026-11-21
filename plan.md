@@ -77,9 +77,9 @@ Acceptance: fewer ways to ask the same deterministic question, with no reduction
 - [x] Run small same-input A/B model evaluations of the current and proposed research guide on real BorderClash data.
 - [x] Prefer consistent gains or neutral quality with clearer/shorter input over one-off judge wins.
 - [x] Inspect actual candidate text and traces, not only aggregate scores.
-- [ ] After the routine interface is coherent, run one isolated full research cycle without publication and inspect its trace for tool discovery, source handling, unnecessary source-code inspection, validation recovery, research depth, and finish judgment.
-- [ ] Ask the model for concise harness feedback at cycle end, but treat that feedback as evidence rather than instructions.
-- [ ] Make only generalizable follow-up fixes; do not chase every model mistake.
+- [x] Run isolated full research cycles without publication and inspect their traces for tool discovery, source handling, unnecessary source-code inspection, validation recovery, research depth, and finish judgment.
+- [x] Ask the completed-cycle model for concise harness feedback, then compare it with trace evidence rather than treating it as instructions.
+- [x] Make only generalizable follow-up fixes; do not chase every model mistake.
 
 Acceptance: the new surface preserves or improves research quality while reducing avoidable harness navigation and implementation leakage in a real shadow cycle.
 
@@ -94,11 +94,11 @@ Acceptance: the new surface preserves or improves research quality while reducin
 
 ## Verification
 
-- [x] `pnpm test` — 136/136 pass.
+- [x] `pnpm test` — 137/137 pass after the final record-output compaction.
 - [x] `pnpm validate` — 585 timeline events / 3,345 articles / 0 warnings.
 - [x] `pnpm test:automation` — all runner/recovery/publication sections pass on a frozen tree.
 - [x] Advisory model benchmark reports retained under `.work/`.
-- [ ] One non-publishing shadow-cycle report reviewed before declaring the new harness surface complete.
+- [x] Two non-publishing shadow-cycle reports reviewed; both completed successfully with sensible no-change decisions and no publication.
 
 ## Evaluation notes
 
@@ -106,4 +106,10 @@ Acceptance: the new surface preserves or improves research quality while reducin
 - Routine help is now one-screen and intent-oriented. Compatibility commands, narrow diagnostics, and archive recovery remain available under advanced help rather than disappearing from the system.
 - Live context now carries the previous cadence reason and current English working picture, explicitly labeled revisable orientation rather than scope or authority.
 - Objective validation now reports exact cross-script characters/code points and owns canonical current-source URL membership. Correction verification no longer repeats a separate reference-check subprocess.
-- First non-publishing shadow cycle completed successfully in about 2.6 minutes with a correct no-change decision and 24-hour cadence. The model discovered `--help` and `review` immediately and did not inspect implementation source. Its main inefficiency was spending most of the cycle on `pnpm validate && pnpm test` and probing runner history because root `AGENTS.md` still presented development/debugging instructions without clearly excluding routine research. That instruction-ownership conflict is being corrected and will be checked with one second shadow cycle.
+- First non-publishing shadow cycle completed successfully in about 2.6 minutes with a correct no-change decision and 24-hour cadence. The model discovered `--help` and `review` immediately and did not inspect implementation source. Its main inefficiency was spending most of the cycle on `pnpm validate && pnpm test` and probing runner history because root `AGENTS.md` still presented development/debugging instructions without clearly excluding routine research.
+- After separating development/debugging guidance from live-cycle guidance in `AGENTS.md`, the second shadow cycle completed successfully in about 1.9 minutes. It did not run development tests or seek runner history; it spent the cycle on multilingual search, current-state inspection, `review`, and targeted `record` inspection instead.
+- The second trace showed `record` could exceed 10 KB and be truncated when an event had several linked articles. Default `record` output is now compact and the same real four-source event is about 5 KB; `--full` and `--captured` preserve explicit expansion.
+- The second trace also showed two manual Thai/Khmer script checks. A narrow same-input A/B removed only the guide's ASCII-digit and cross-script clauses; that candidate lost substantial editorial/multilingual quality and produced one fatal judge sample. Those clauses therefore remain despite some mechanical redundancy: quality wins over architectural purity.
+- Post-cycle model feedback strongly endorsed the guide/context separation, structured `review`/`finish` outputs, and `record`. Its suggestions to add shadow-trigger metadata or rubric internals to live context were not adopted because they add test/development state that is not needed for the research goal. Its redirect-resolution suggestion is already covered by `source`, which follows redirects and uses final/canonical publisher identity when available.
+- `source add` intentionally continues to use the existing small candidate file as the single mutation input rather than adding a second flag-heavy mutation API. The new help makes that contract discoverable; no evaluated cycle needed to retain a new source, so a parallel direct-add interface would currently add complexity without trace evidence that it improves outcomes.
+- Hill-climb stopping point: remaining observed behavior is mostly model/editorial variance or low-cost optional checking, not a general harness defect with a clearly better low-complexity solution.

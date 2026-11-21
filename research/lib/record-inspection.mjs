@@ -30,6 +30,66 @@ function canonicalArticle(record) {
   return canonical;
 }
 
+function compactArticle(record) {
+  if (!record) return record;
+  return {
+    id: record.id,
+    source: record.source,
+    sourceUrl: record.sourceUrl,
+    category: record.category,
+    mediaEnvironment: record.mediaEnvironment,
+    status: record.status,
+    credibility: record.credibility,
+    publishedAt: record.publishedAt,
+    title: record.titleEn || record.title,
+    summary: record.summary,
+    provenanceId: record.provenanceId,
+  };
+}
+
+function compactTimeline(record) {
+  if (!record) return record;
+  return {
+    id: record.id,
+    date: record.date,
+    timeOfDay: record.timeOfDay,
+    category: record.category,
+    status: record.status,
+    importance: record.importance,
+    title: record.title,
+    description: record.description,
+    evidenceIds: record.evidenceIds,
+  };
+}
+
+function withoutLocalizedFields(value) {
+  if (Array.isArray(value)) return value.map(withoutLocalizedFields);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !/(?:Th|Kh)$/u.test(key))
+      .map(([key, child]) => [key, withoutLocalizedFields(child)]),
+  );
+}
+
+export function compactRecordInspection(packet) {
+  if (!packet?.evidence) return packet;
+  const record = packet.kind === "timeline"
+    ? compactTimeline(packet.record)
+    : packet.kind === "news"
+      ? compactArticle(packet.record)
+      : withoutLocalizedFields(packet.record);
+  return {
+    ...packet,
+    record,
+    evidence: {
+      ...packet.evidence,
+      timeline: (packet.evidence.timeline || []).map(compactTimeline),
+      articles: (packet.evidence.articles || []).map(compactArticle),
+    },
+  };
+}
+
 export function buildRecordInspection({
   id,
   current = {},

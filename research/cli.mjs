@@ -22,7 +22,7 @@ import { checkTimelineTimeProvenance, checkTimelineTimeSupport } from "./lib/tim
 import { checkTimelineChronology } from "./lib/chronology-check.mjs";
 import { checkHumanitarianSummaryRisk } from "./lib/humanitarian-check.mjs";
 import { checkReferenceCoverage } from "./lib/reference-check.mjs";
-import { loadRecordInspection } from "./lib/record-inspection.mjs";
+import { compactRecordInspection, loadRecordInspection } from "./lib/record-inspection.mjs";
 import { buildCapturedEvidence } from "./lib/captured-evidence.mjs";
 import { matchSourceInspection } from "./lib/source-inspection.mjs";
 
@@ -373,19 +373,22 @@ async function record(args) {
   const id = args.find((value) => !value.startsWith("--"));
   if (!id) throw new Error("record requires a canonical record id");
   const packet = await loadRecordInspection(id, { cwd: process.cwd(), dataRoot });
-  let output = packet;
+  const full = args.includes("--full");
+  let output = full ? packet : compactRecordInspection(packet);
   if (args.includes("--captured")) {
     const capturedPacket = packet.kind === "news"
       ? { ...packet, evidence: { ...packet.evidence, articles: [packet.record] } }
       : packet;
-    output = { ...packet, captured: await buildCapturedEvidence(capturedPacket) };
+    output = { ...output, captured: await buildCapturedEvidence(capturedPacket) };
   }
   process.stdout.write(JSON.stringify({
     ...output,
     readOnly: true,
     nextAction: args.includes("--captured")
       ? "Use this packet as research evidence; edit canonical data only when your judgment warrants it."
-      : "Add --captured to inspect retained publisher text for this record's article evidence.",
+      : full
+        ? "Add --captured to inspect retained publisher text for this record's article evidence."
+        : "Use --full for every linked canonical field or --captured for retained publisher text.",
   }, null, 2) + "\n");
 }
 
@@ -746,10 +749,12 @@ function renderHelp(topic = "") {
       "record — understand one canonical record",
       "",
       "  node research/cli.mjs record <id>",
+      "  node research/cli.mjs record <id> --full",
       "  node research/cli.mjs record <id> --captured",
       "",
-      "Reads an article, timeline event, or current/{summary,thailand,cambodia,impact} record",
-      "with resolved canonical evidence. --captured also returns retained publisher text.",
+      "Reads an article, timeline event, or current/{summary,thailand,cambodia,impact} record.",
+      "Default output keeps linked evidence compact. --full returns every canonical field;",
+      "--captured also returns retained publisher text.",
       "This command is read-only.",
     ].join("\n");
   }
@@ -797,7 +802,7 @@ function renderHelp(topic = "") {
     "BorderClash research tools:",
     "  source <url>                    understand a source (read-only)",
     "  source add <file>               retain or reuse article evidence",
-    "  record <id> [--captured]        understand a canonical record and its evidence",
+    "  record <id> [--full|--captured] understand a canonical record and its evidence",
     "  review [id]                     inspect changed work or one record",
     "  finish <hours> <reason>         complete the cycle and choose next cadence",
     "  finish --review <reason>        stop for operator review when trustworthy completion is blocked",

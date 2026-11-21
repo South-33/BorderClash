@@ -617,7 +617,7 @@ test("--help is a successful alias for help", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /source <url>.*read-only/u);
   assert.match(result.stdout, /source add <file>/u);
-  assert.match(result.stdout, /record <id> \[--captured\]/u);
+  assert.match(result.stdout, /record <id> \[--full\|--captured\]/u);
   assert.match(result.stdout, /review \[id\]/u);
   assert.match(result.stdout, /finish <hours> <reason>/u);
   assert.doesNotMatch(result.stdout, /probe-source/u);

@@ -91,11 +91,12 @@ Routine research helpers are intent-oriented and self-described:
 pnpm research --help
 pnpm research source <url>
 pnpm research source add .work/candidates.jsonl
+pnpm research record <record-id>
 pnpm research record <record-id> --captured
 pnpm research review
 ```
 
-`source <url>` is read-only: it resolves source identity and reports canonical matches before any mutation. `source add` retains a small evidence batch, reuses existing article IDs when normalized URLs, safe redirects, publisher canonical URLs, or known publisher article IDs identify the same article, and holds ambiguous identity for review instead of guessing. `record` and `review` are read-only research aids. Lower-level capture, diagnostics, archive recovery, and compatibility commands remain available through `pnpm research --help advanced`.
+`source <url>` is read-only: it resolves source identity and reports canonical matches before any mutation. `source add` retains a small evidence batch, reuses existing article IDs when normalized URLs, safe redirects, publisher canonical URLs, or known publisher article IDs identify the same article, and holds ambiguous identity for review instead of guessing. `record` is compact by default; use `--full` for every linked canonical field or `--captured` for retained publisher text. `record` and `review` are read-only research aids. Lower-level capture, diagnostics, archive recovery, and compatibility commands remain available through `pnpm research --help advanced`.
 
 Source capture is private and stays outside Git. By default it uses `~/.borderclash/evidence` with a second South-local copy under `~/.borderclash/evidence-backup`; the roots can be overridden with `BORDERCLASH_EVIDENCE_ARCHIVE` and `BORDERCLASH_EVIDENCE_BACKUP`.
 

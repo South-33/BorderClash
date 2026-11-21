@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRecordInspection } from "../research/lib/record-inspection.mjs";
+import { buildRecordInspection, compactRecordInspection } from "../research/lib/record-inspection.mjs";
 
 const articles = [
   { id: "article-1", sourceUrl: "https://example.com/a", title: "Article A" },
@@ -89,4 +89,43 @@ test("record inspection reports unresolved evidence IDs", () => {
     articles,
   });
   assert.deepEqual(packet.evidence.missingEvidenceIds, ["missing-article"]);
+});
+
+test("compact record inspection keeps evidence judgment fields without multilingual duplication", () => {
+  const packet = buildRecordInspection({
+    id: "event-1",
+    timeline,
+    articles: [{
+      ...articles[0],
+      source: "Example",
+      category: "diplomatic",
+      mediaEnvironment: "international",
+      status: "active",
+      credibility: 80,
+      publishedAt: 1_790_000_000_000,
+      titleEn: "English title",
+      titleTh: "หัวข้อ",
+      titleKh: "ចំណងជើង",
+      summary: "Claim-tight evidence summary.",
+      provenanceId: "example-chain",
+    }, articles[1]],
+  });
+  const compact = compactRecordInspection(packet);
+  assert.equal(compact.record.id, "event-1");
+  assert.equal(compact.record.title, "Event");
+  assert.deepEqual(compact.evidence.articles[0], {
+    id: "article-1",
+    source: "Example",
+    sourceUrl: "https://example.com/a",
+    category: "diplomatic",
+    mediaEnvironment: "international",
+    status: "active",
+    credibility: 80,
+    publishedAt: 1_790_000_000_000,
+    title: "English title",
+    summary: "Claim-tight evidence summary.",
+    provenanceId: "example-chain",
+  });
+  assert.equal(Object.hasOwn(compact.evidence.articles[0], "titleTh"), false);
+  assert.equal(Object.hasOwn(compact.evidence.articles[0], "titleKh"), false);
 });
