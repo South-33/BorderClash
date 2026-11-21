@@ -18,6 +18,7 @@ export function summarizeEvidenceProbe(fetched, previewChars = 800) {
     canonicalUrl: fetched?.canonicalUrl || "",
     httpStatus: fetched?.httpStatus ?? null,
     contentType: fetched?.contentType || "",
+    publishedAtHint: fetched?.publishedAtHint || null,
     byteLength: fetched?.byteLength ?? null,
     textLength: text.length,
     redirectChain: fetched?.redirectChain || [],

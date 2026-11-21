@@ -270,6 +270,62 @@ export function extractCanonicalUrl(html, finalUrl) {
   return "";
 }
 
+function parsePublishedAtValue(value, source) {
+  const raw = String(value || "").trim();
+  const dateMatch = raw.match(/^(\d{4}-\d{2}-\d{2})(?:$|T)/u);
+  if (!dateMatch) return null;
+  if (raw === dateMatch[1]) {
+    return {
+      raw,
+      source,
+      date: dateMatch[1],
+      precision: "date",
+      publishedAt: Date.parse(`${dateMatch[1]}T00:00:00Z`),
+    };
+  }
+  const publishedAt = Date.parse(raw);
+  if (!Number.isFinite(publishedAt)) return null;
+  return { raw, source, date: dateMatch[1], precision: "datetime", publishedAt };
+}
+
+function findPublishedDates(value, out = []) {
+  if (Array.isArray(value)) {
+    for (const item of value) findPublishedDates(item, out);
+    return out;
+  }
+  if (!value || typeof value !== "object") return out;
+  if (typeof value.datePublished === "string") out.push(value.datePublished);
+  for (const child of Object.values(value)) findPublishedDates(child, out);
+  return out;
+}
+
+export function extractPublishedAtHint(html) {
+  for (const match of String(html || "").matchAll(/<meta\b[^>]*>/giu)) {
+    const attributes = tagAttributes(match[0]);
+    const key = String(attributes.get("property") || attributes.get("name") || "").toLowerCase();
+    if (!["article:published_time", "datepublished", "pubdate", "publishdate"].includes(key)) continue;
+    const parsed = parsePublishedAtValue(attributes.get("content"), `meta:${key}`);
+    if (parsed) return parsed;
+  }
+  for (const match of String(html || "").matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/giu)) {
+    try {
+      for (const value of findPublishedDates(JSON.parse(match[1].trim()))) {
+        const parsed = parsePublishedAtValue(value, "jsonld:datePublished");
+        if (parsed) return parsed;
+      }
+    } catch {
+      // Ignore malformed publisher metadata and continue to visible time tags.
+    }
+  }
+  for (const match of String(html || "").matchAll(/<time\b[^>]*>/giu)) {
+    const attributes = tagAttributes(match[0]);
+    if (String(attributes.get("itemprop") || "").toLowerCase() !== "datepublished") continue;
+    const parsed = parsePublishedAtValue(attributes.get("datetime"), "time:datePublished");
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
 async function readBoundedBody(response, maxBytes) {
   if (Buffer.isBuffer(response.body)) {
     if (response.body.length > maxBytes) throw new Error(`response exceeds ${maxBytes} byte capture limit`);
@@ -515,6 +571,7 @@ export async function fetchEvidence(
         ...result,
         status: text.length >= MIN_USABLE_TEXT_LENGTH ? "captured-html" : "unusable-extraction",
         canonicalUrl: extractCanonicalUrl(html, current.href),
+        publishedAtHint: extractPublishedAtHint(html),
         encoding: decoded.encoding,
         text,
       };
@@ -628,6 +685,7 @@ export async function storeEvidenceAttempt(articleId, fetched, options = {}) {
       encoding: fetched.encoding || "",
       byteLength: fetched.byteLength,
       sha256: fetched.sha256,
+      publishedAtHint: fetched.publishedAtHint || null,
       textLength: typeof fetched.text === "string" ? fetched.text.length : 0,
     };
     const metadataPath = join(captureRoot, "metadata.json");

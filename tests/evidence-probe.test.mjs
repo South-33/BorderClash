@@ -55,7 +55,7 @@ test("probe summary preserves a resolved publisher URL when the body is blocked"
 });
 
 test("probeEvidenceUrl returns readable HTML metadata and preview", async () => {
-  const html = `<html><head><title>Example</title></head><body><article><h1>Useful evidence</h1><p>${"Evidence sentence. ".repeat(20)}</p></article></body></html>`;
+  const html = `<html><head><title>Example</title><meta property="article:published_time" content="2026-10-31T15:32:59+07:00"></head><body><article><h1>Useful evidence</h1><p>${"Evidence sentence. ".repeat(20)}</p></article></body></html>`;
   const result = await probeEvidenceUrl("https://example.com/story", {
     lookupImpl: async () => [{ address: "93.184.216.34", family: 4 }],
     fetchImpl: async () => new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } }),
@@ -65,6 +65,13 @@ test("probeEvidenceUrl returns readable HTML metadata and preview", async () => 
   assert.equal(result.usable, true);
   assert.equal(result.status, "captured-html");
   assert.equal(result.contentType, "text/html");
+  assert.deepEqual(result.publishedAtHint, {
+    raw: "2026-10-31T15:32:59+07:00",
+    source: "meta:article:published_time",
+    date: "2026-10-31",
+    precision: "datetime",
+    publishedAt: Date.parse("2026-10-31T15:32:59+07:00"),
+  });
   assert.ok(result.textLength >= 120);
   assert.ok(result.preview.length <= 60);
   assert.match(result.preview, /Useful evidence/u);

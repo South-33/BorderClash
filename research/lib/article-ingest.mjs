@@ -114,6 +114,29 @@ function validateCandidate(candidate) {
   monthFor(candidate);
 }
 
+function reconcilePublisherTime(candidate, fetched) {
+  const hint = fetched?.publishedAtHint;
+  if (!hint || !Number.isFinite(hint.publishedAt)) return { adjustment: null };
+  const supplied = Number(candidate.publishedAt || candidate.fetchedAt || 0);
+  if (!Number.isFinite(supplied) || supplied <= 0) return { adjustment: null };
+  const distanceMs = Math.abs(supplied - hint.publishedAt);
+  if (distanceMs > 36 * 3_600_000) {
+    return {
+      review: {
+        action: "review",
+        sourceUrl: fetched.canonicalUrl || fetched.finalUrl || candidate.sourceUrl,
+        reason: "candidate publication date conflicts with retained publisher metadata",
+        candidatePublishedAt: supplied,
+        publisherPublishedAtHint: hint,
+      },
+    };
+  }
+  if (supplied === hint.publishedAt) return { adjustment: null };
+  const adjustment = { from: supplied, to: hint.publishedAt, publisherPublishedAtHint: hint };
+  candidate.publishedAt = hint.publishedAt;
+  return { adjustment };
+}
+
 function identityUrls(candidate, fetched) {
   return [candidate.sourceUrl, fetched?.finalUrl, fetched?.canonicalUrl]
     .filter(Boolean)
@@ -211,6 +234,12 @@ export async function ingestCandidates(candidates, options = {}) {
       });
       continue;
     }
+    const publication = reconcilePublisherTime(candidate, fetched);
+    if (publication.review) {
+      results.push(publication.review);
+      continue;
+    }
+    const publicationAdjustment = publication.adjustment;
     const identities = identityUrls(candidate, fetched);
     const existing = identities.map((url) => registry.byUrl.get(url)).find(Boolean);
     if (existing) {
@@ -278,6 +307,7 @@ export async function ingestCandidates(candidates, options = {}) {
       sourceUrl: article.sourceUrl,
       file: relative(dataRoot, file).replaceAll("\\", "/"),
       sharedProvenanceWith,
+      publicationAdjustment,
       capture,
     });
   }

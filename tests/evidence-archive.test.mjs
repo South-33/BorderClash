@@ -562,6 +562,57 @@ test("ingest refuses a non-public source before creating a canonical article", a
   }
 });
 
+test("ingest reconciles same-day publisher metadata but holds a conflicting publication date", async () => {
+  const roots = await tempRoots();
+  try {
+    await mkdir(join(roots.dataRoot, "news"), { recursive: true });
+    const body = `<article><p>${"Publisher evidence text. ".repeat(30)}</p></article>`;
+    const responses = new Map([
+      ["https://example.com/exact", `<html><head><meta property="article:published_time" content="2026-11-21T03:31:44Z"></head><body>${body}</body></html>`],
+      ["https://example.com/date-only", `<html><body><time itemprop="datePublished" datetime="2026-11-21">21 November 2026</time>${body}</body></html>`],
+      ["https://example.com/wrong-date", `<html><head><meta property="article:published_time" content="2026-10-31T15:32:59+07:00"></head><body>${body}</body></html>`],
+    ]);
+    const options = {
+      ...roots,
+      lookupImpl: publicLookup,
+      fetchImpl: async (url) => htmlResponse(responses.get(url)),
+      now: Date.UTC(2026, 10, 22, 0, 0, 0),
+    };
+    const exact = await ingestCandidates([article({
+      sourceUrl: "https://example.com/exact",
+      title: "Exact publication time",
+      publishedAt: Date.parse("2026-11-21T07:02:00Z"),
+    })], options);
+    assert.equal(exact[0].action, "added");
+    assert.equal(exact[0].publicationAdjustment.to, Date.parse("2026-11-21T03:31:44Z"));
+
+    const dateOnly = await ingestCandidates([article({
+      sourceUrl: "https://example.com/date-only",
+      title: "Date only publication",
+      publishedAt: Date.parse("2026-11-21T07:02:00Z"),
+    })], options);
+    assert.equal(dateOnly[0].action, "added");
+    assert.equal(dateOnly[0].publicationAdjustment.to, Date.parse("2026-11-21T00:00:00Z"));
+
+    const conflict = await ingestCandidates([article({
+      sourceUrl: "https://example.com/wrong-date",
+      title: "Wrong publication date",
+      publishedAt: Date.parse("2026-11-21T07:02:00Z"),
+    })], options);
+    assert.equal(conflict[0].action, "review");
+    assert.match(conflict[0].reason, /publication date conflicts/u);
+    assert.equal(conflict[0].publisherPublishedAtHint.date, "2026-10-31");
+
+    const rows = (await readFile(join(roots.dataRoot, "news", "2026-11.jsonl"), "utf8"))
+      .trim().split(/\r?\n/u).map(JSON.parse);
+    assert.equal(rows.find((row) => row.sourceUrl === "https://example.com/exact").publishedAt, Date.parse("2026-11-21T03:31:44Z"));
+    assert.equal(rows.find((row) => row.sourceUrl === "https://example.com/date-only").publishedAt, Date.parse("2026-11-21T00:00:00Z"));
+    assert.equal(rows.some((row) => row.sourceUrl === "https://example.com/wrong-date"), false);
+  } finally {
+    await rm(roots.root, { recursive: true, force: true });
+  }
+});
+
 test("capture-changed only captures new or source-changed rows from touched and untracked months", async () => {
   const roots = await tempRoots();
   try {
