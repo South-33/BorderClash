@@ -1,12 +1,12 @@
 {
-  "updatedAt": 1795250950000,
-  "summary": "Cambodia says it has repeatedly asked Thailand to resume Joint Boundary Commission meetings and joint survey work. Cambodian leaders defend raising the dispute internationally, allege Thai occupation in disputed areas, and say that, as of November 10, more than 20,000 displaced Cambodians were still unable to return home.",
-  "summaryTh": "กัมพูชาระบุว่าได้ขอให้ไทยกลับมาเปิดการประชุมคณะกรรมาธิการเขตแดนร่วมและการสำรวจร่วมหลายครั้ง ผู้นำกัมพูชาปกป้องการหยิบยกข้อพิพาทสู่เวทีระหว่างประเทศ กล่าวหาว่าไทยยึดครองพื้นที่พิพาท และระบุว่า ณ วันที่ 10 พฤศจิกายน ยังมีชาวกัมพูชามากกว่า 20,000 คนที่พลัดถิ่นและยังกลับบ้านไม่ได้",
-  "summaryKh": "កម្ពុជានិយាយថា ខ្លួនបានស្នើឱ្យថៃបន្តកិច្ចប្រជុំគណៈកម្មការព្រំដែនចម្រុះ និងការងារវាស់វែងរួមជាច្រើនលើក។ ថ្នាក់ដឹកនាំកម្ពុជាការពារការលើកយកជម្លោះទៅវេទិកាអន្តរជាតិ ចោទប្រកាន់ថាថៃកាន់កាប់តំបន់មានជម្លោះ និងនិយាយថា គិតត្រឹមថ្ងៃទី 10 ខែវិច្ឆិកា ប្រជាជនកម្ពុជាជាង 20,000 នាក់នៅតែផ្លាស់ទីលំនៅ និងមិនទាន់អាចត្រឡប់ទៅផ្ទះបាន។",
+  "updatedAt": 1795252230192,
+  "summary": "Cambodia says it has repeatedly asked Thailand to resume Joint Boundary Commission meetings and joint survey work. Prime Minister Hun Manet defends raising the border dispute and civilian displacement at multilateral forums, says the roughly 20,000 displaced-person figure is based on ground data, and calls for demarcation to enable returns. Cambodian authorities continue to allege Thai occupation in disputed areas.",
+  "summaryTh": "กัมพูชาระบุว่าได้ขอให้ไทยกลับมาเปิดการประชุมคณะกรรมาธิการเขตแดนร่วมและการสำรวจร่วมหลายครั้ง นายกรัฐมนตรีฮุน มาเนต ปกป้องการยกข้อพิพาทชายแดนและปัญหาการพลัดถิ่นของพลเรือนสู่เวทีพหุภาคี โดยระบุว่าตัวเลขผู้พลัดถิ่นราว 20,000 คนมาจากข้อมูลภาคสนาม และเรียกร้องให้เดินหน้าการปักปันเขตแดนเพื่อให้ประชาชนกลับบ้านได้ ทางการกัมพูชายังคงกล่าวหาว่าไทยยึดครองพื้นที่พิพาท",
+  "summaryKh": "កម្ពុជានិយាយថា ខ្លួនបានស្នើឱ្យថៃបន្តកិច្ចប្រជុំគណៈកម្មការព្រំដែនចម្រុះ និងការងារស្ទង់ព្រំដែនរួមជាច្រើនលើក។ នាយករដ្ឋមន្ត្រី ហ៊ុន ម៉ាណែត ការពារការលើកឡើងជម្លោះព្រំដែន និងបញ្ហាជនស៊ីវិលផ្លាស់ទីលំនៅនៅវេទិកាពហុភាគី ដោយនិយាយថា តួលេខជនផ្លាស់ទីលំនៅប្រមាណ 20,000 នាក់ផ្អែកលើទិន្នន័យជាក់ស្តែងនៅលើដី និងអំពាវនាវឱ្យបន្តការកំណត់ព្រំដែន ដើម្បីឱ្យប្រជាពលរដ្ឋអាចត្រឡប់ទៅផ្ទះបាន។ អាជ្ញាធរកម្ពុជាបន្តចោទប្រកាន់ថា ថៃកាន់កាប់តំបន់មានជម្លោះ។",
   "sourceNames": [
+    "Cambodian People's Party",
     "Kampuchea Thmey Daily",
-    "Cambodia Ministry of Interior",
-    "Khmer Times"
+    "Cambodia Ministry of Interior"
   ],
   "activityLabel": "Defensive positions",
   "activityLabelTh": "ที่ตั้งแนวรับ",
@@ -24,10 +24,10 @@
     "basis": "Confirmed defensive trench construction remains the strongest current military-action signal; the current record reports no new armed clash."
   },
   "summaryEvidenceIds": [
+    "548fc7759e640ca5dfcc15174e8c12b9",
     "324ba2aec0b55f2d385bca51c6f10c7c",
     "5c9acd655bd4144ca17384f382acc092",
-    "3799c455fb54e43d6d2e17ef066d8fc9",
-    "244e13c2522d0423ea09bf9e4e0ad47f"
+    "3799c455fb54e43d6d2e17ef066d8fc9"
   ],
   "activityEvidenceIds": [
     "k975q9bzh7b6r3es5dbr5yagt589464t",

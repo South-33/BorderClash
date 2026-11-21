@@ -1,10 +1,11 @@
 {
-  "updatedAt": 1795250950000,
-  "summary": "Thailand insists border disputes must be resolved bilaterally, warning other talks will halt if Cambodia continues compulsory UNCLOS maritime conciliation. Thai officials urge adherence to all 2025 ceasefire terms and reject Cambodia’s displacement figures as unverified.",
-  "summaryTh": "ไทยย้ำว่าข้อพิพาทชายแดนต้องแก้ผ่านกลไกทวิภาคี โดยเตือนว่าการเจรจาอื่นจะหยุดลงหากกัมพูชายังเดินหน้ากระบวนการไกล่เกลี่ย UNCLOS ทางทะเลแบบบังคับ เจ้าหน้าที่ไทยเรียกร้องให้ปฏิบัติตามข้อตกลงหยุดยิงปี 2025 ทั้งหมด และปฏิเสธตัวเลขผู้พลัดถิ่นของกัมพูชาว่ายังไม่ได้รับการตรวจสอบ",
-  "summaryKh": "ថៃទទូចថាជម្លោះព្រំដែនត្រូវតែដោះស្រាយតាមយន្តការទ្វេភាគី ដោយព្រមានថាកិច្ចចរចាផ្សេងទៀតនឹងត្រូវបញ្ឈប់ ប្រសិនបើកម្ពុជានៅតែបន្តការផ្សះផ្សាផ្លូវសមុទ្រជាកាតព្វកិច្ចក្រោម UNCLOS។ មន្ត្រីថៃជំរុញឱ្យគោរពលក្ខខណ្ឌបទឈប់បាញ់ឆ្នាំ 2025 ទាំងអស់ និងច្រានចោលតួលេខអ្នកផ្លាស់ទីលំនៅរបស់កម្ពុជាថាមិនទាន់ត្រូវបានផ្ទៀងផ្ទាត់។",
+  "updatedAt": 1795252230192,
+  "summary": "Thailand says direct bilateral talks should take precedence in resolving disputed issues. Prime Minister Anutin warned that other bilateral negotiations would halt if Cambodia continues compulsory UNCLOS maritime conciliation, while supporting continued joint demining and border demarcation. Thai officials also reject Cambodia’s displacement figures as unverified.",
+  "summaryTh": "ไทยระบุว่าควรให้การเจรจาโดยตรงระหว่างสองประเทศมีลำดับก่อนในการแก้ประเด็นพิพาท นายกรัฐมนตรีอนุทินเตือนว่าการเจรจาทวิภาคีเรื่องอื่นจะหยุด หากกัมพูชายังเดินหน้ากระบวนการประนอมข้อพิพาททางทะเลแบบบังคับภายใต้ UNCLOS ขณะเดียวกันยังสนับสนุนให้เดินหน้าการเก็บกู้ทุ่นระเบิดร่วมและการปักปันเขตแดน เจ้าหน้าที่ไทยยังปฏิเสธตัวเลขผู้พลัดถิ่นของกัมพูชาว่ายังไม่ได้รับการตรวจสอบ",
+  "summaryKh": "ថៃនិយាយថា គួរផ្តល់អាទិភាពដល់ការចរចាផ្ទាល់រវាងប្រទេសទាំងពីរក្នុងការដោះស្រាយបញ្ហាវិវាទ។ នាយករដ្ឋមន្ត្រី អនុទិន បានព្រមានថា កិច្ចចរចាទ្វេភាគីផ្សេងទៀតនឹងត្រូវបញ្ឈប់ ប្រសិនបើកម្ពុជាបន្តដំណើរការសម្រុះសម្រួលដែនសមុទ្រជាកំហិតក្រោម UNCLOS ខណៈលោកនៅតែគាំទ្រការបន្តបោសសម្អាតមីនរួម និងការកំណត់ព្រំដែន។ មន្ត្រីថៃនៅតែច្រានចោលតួលេខជនផ្លាស់ទីលំនៅរបស់កម្ពុជាថាមិនទាន់បានផ្ទៀងផ្ទាត់។",
   "sourceNames": [
     "Thailand Ministry of Foreign Affairs",
+    "ThaiPost",
     "The Nation Thailand",
     "Khaosod English"
   ],
@@ -25,9 +26,9 @@
     "basis": "Confirmed permanent border fencing and unit reorganization remain the strongest current military-action signals; the current record reports no new armed clash."
   },
   "summaryEvidenceIds": [
+    "a8aadb7d12ebbe9cbae6c38743b1ef95",
     "8f195ceb066d4ebc5ab952aa4413cd79",
     "cfc959deb505f3c6ccc5c906341a2cd6",
-    "5d5428fb0bf13e8e39b160558b371fc0",
     "305c945747e78d32b00775c7b324664d",
     "cf51f9415064bebbda45d177fe10e197"
   ],
