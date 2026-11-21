@@ -1,8 +1,8 @@
 {
-  "updatedAt": 1795252230192,
-  "summary": "The border remains calm with no major new armed clash reported, but territorial and displacement disputes remain unresolved. Diplomatic friction has sharpened over maritime conciliation ahead of talks in Kuala Lumpur, while Cambodia says land-boundary talks remain stalled. ASEAN observers continue field monitoring.",
-  "summaryTh": "สถานการณ์ชายแดนยังสงบและไม่มีรายงานการปะทะด้วยอาวุธครั้งใหญ่ระลอกใหม่ แต่ข้อพิพาทเรื่องดินแดนและการพลัดถิ่นยังไม่คลี่คลาย ความตึงเครียดทางการทูตเพิ่มขึ้นเกี่ยวกับการไกล่เกลี่ยเขตแดนทางทะเลก่อนการเจรจาที่กรุงกัวลาลัมเปอร์ ขณะที่กัมพูชาระบุว่าการเจรจาเขตแดนทางบกยังหยุดชะงัก ผู้สังเกตการณ์อาเซียนยังคงลงพื้นที่ติดตามสถานการณ์",
-  "summaryKh": "ស្ថានភាពព្រំដែននៅតែស្ងប់ស្ងាត់ ហើយមិនមានរបាយការណ៍អំពីការប៉ះទង្គិចប្រដាប់អាវុធធំថ្មីទេ ប៉ុន្តែជម្លោះដែនដី និងបញ្ហាការផ្លាស់ទីលំនៅនៅមិនទាន់ដោះស្រាយ។ ភាពតានតឹងផ្នែកការទូតបានកើនឡើងជុំវិញការផ្សះផ្សាព្រំដែនសមុទ្រមុនកិច្ចចរចានៅគូឡាឡាំពួរ ខណៈកម្ពុជានិយាយថាកិច្ចចរចាព្រំដែនគោកនៅតែជាប់គាំង។ អ្នកសង្កេតការណ៍អាស៊ានបន្តចុះតាមដាននៅតាមព្រំដែន។",
+  "updatedAt": 1795294883834,
+  "summary": "The border remains calm with no major new armed clash reported, but territorial and displacement disputes remain unresolved. Diplomatic friction has sharpened over maritime conciliation ahead of talks in Kuala Lumpur, while both sides signal prolonged land border closures as Cambodia cites domestic trade resilience. ASEAN observers continue field monitoring.",
+  "summaryTh": "สถานการณ์ชายแดนยังสงบและไม่มีรายงานการปะทะด้วยอาวุธครั้งใหญ่ระลอกใหม่ แต่ข้อพิพาทเรื่องดินแดนและการพลัดถิ่นยังไม่คลี่คลาย ความตึงเครียดทางการทูตเพิ่มขึ้นเกี่ยวกับการไกล่เกลี่ยเขตแดนทางทะเลก่อนการเจรจาที่กรุงกัวลาลัมเปอร์ ขณะที่ทั้งสองฝ่ายส่งสัญญาณว่าการปิดด่านชายแดนทางบกจะยืดเยื้อต่อไปโดยกัมพูชาชี้ถึงความเข้มแข็งของการค้าในประเทศ ผู้สังเกตการณ์อาเซียนยังคงลงพื้นที่ติดตามสถานการณ์",
+  "summaryKh": "ស្ថានភាពព្រំដែននៅតែស្ងប់ស្ងាត់ ហើយមិនមានរបាយការណ៍អំពីការប៉ះទង្គិចប្រដាប់អាវុធធំថ្មីទេ ប៉ុន្តែជម្លោះដែនដី និងបញ្ហាការផ្លាស់ទីលំនៅនៅមិនទាន់ដោះស្រាយ។ ភាពតានតឹងផ្នែកការទូតបានកើនឡើងជុំវិញការផ្សះផ្សាព្រំដែនសមុទ្រមុនកិច្ចចរចានៅគូឡាឡាំពួរ ខណៈភាគីទាំងពីរបង្ហាញសញ្ញាថាការបិទច្រកព្រំដែនគោកនឹងបន្តអូសបន្លាយ ដោយកម្ពុជាលើកឡើងពីភាពធន់នៃពាណិជ្ជកម្មក្នុងស្រុក។ អ្នកសង្កេតការណ៍អាស៊ានបន្តចុះតាមដាននៅតាមព្រំដែន។",
   "keyUpdates": [
     {
       "text": "Anutin said other bilateral negotiations would halt if Cambodia continues compulsory UNCLOS conciliation; the November 24–27 conciliation meeting remains scheduled",
@@ -12,7 +12,17 @@
         "a8aadb7d12ebbe9cbae6c38743b1ef95",
         "8f195ceb066d4ebc5ab952aa4413cd79",
         "3ae337cea857a2dea84f44523ae4b645",
-        "5d5428fb0bf13e8e39b160558b371fc0"
+        "5d5428fb0bf13e8e39b160558b371fc0",
+        "9103e67d78b02e925e2044e3ed222204"
+      ]
+    },
+    {
+      "text": "Hun Manet said Thailand's border closure has not crippled Cambodia's economy, citing domestic resilience and redirected agricultural exports to China",
+      "textTh": "ฮุน มาเนต ระบุว่าการปิดด่านของไทยไม่ได้ทำให้เศรษฐกิจกัมพูชาหยุดชะงัก โดยอ้างความเข้มแข็งในประเทศและการกระจายการส่งออกสินค้าเกษตรไปยังจีน",
+      "textKh": "ហ៊ុន ម៉ាណែត និយាយថា ការបិទច្រកព្រំដែនរបស់ថៃមិនបានធ្វើឱ្យសេដ្ឋកិច្ចកម្ពុជាដួលរលំទេ ដោយលើកឡើងពីភាពធន់ក្នុងស្រុក និងការបង្វែរការនាំចេញកសិផលទៅប្រទេសចិន",
+      "evidenceIds": [
+        "ff8fce3b1071c1d38a25e3140f4c1390",
+        "252d30ecad922fbe74661ba9c626f688"
       ]
     },
     {
@@ -21,14 +31,6 @@
       "textKh": "កម្ពុជានិយាយថា សំណើ 12 លើកឱ្យបន្តកិច្ចប្រជុំគណៈកម្មការព្រំដែនចម្រុះ និងការងារវាស់វែងរួម មិនទាន់ទទួលបានចម្លើយ",
       "evidenceIds": [
         "324ba2aec0b55f2d385bca51c6f10c7c"
-      ]
-    },
-    {
-      "text": "Thailand rejected Cambodia’s more-than-20,000 displaced-person figure at ASEAN-AIPA, calling it unverified",
-      "textTh": "ไทยปฏิเสธตัวเลขผู้พลัดถิ่นมากกว่า 20,000 คนที่กัมพูชาเสนอในที่ประชุมอาเซียน-AIPA โดยระบุว่ายังไม่ได้รับการตรวจสอบ",
-      "textKh": "ថៃច្រានចោលតួលេខអ្នកផ្លាស់ទីលំនៅជាង 20,000 នាក់ដែលកម្ពុជាលើកឡើងនៅកិច្ចប្រជុំអាស៊ាន-AIPA ដោយនិយាយថាមិនទាន់បានផ្ទៀងផ្ទាត់",
-      "evidenceIds": [
-        "cf51f9415064bebbda45d177fe10e197"
       ]
     }
   ],
@@ -40,6 +42,9 @@
     "7d42c3782a30a3eb11a5e2ad2b06cd70",
     "3799c455fb54e43d6d2e17ef066d8fc9",
     "8f195ceb066d4ebc5ab952aa4413cd79",
-    "a8aadb7d12ebbe9cbae6c38743b1ef95"
+    "a8aadb7d12ebbe9cbae6c38743b1ef95",
+    "9103e67d78b02e925e2044e3ed222204",
+    "ff8fce3b1071c1d38a25e3140f4c1390",
+    "252d30ecad922fbe74661ba9c626f688"
   ]
 }
