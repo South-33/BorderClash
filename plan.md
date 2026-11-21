@@ -8,6 +8,8 @@ The system should be simple: one operating brief, one research agent, one struct
 
 The hill climb covers the entire research loop, not only synthesis or current-page prose: source discovery and coverage, source diversity, ingestion and canonical identity, capture/retention, evidence scoring and attribution, event selection and deduplication, dates/times, timeline construction, current impact/country/activity/synthesis fields, multilingual fidelity, cadence, diagnostics, runner behavior, validation, and publication. Improve whichever layer the observed evidence says is limiting quality.
 
+The timeline is a continuously maintained reconstruction, not an append-only archive or a mirror of the news feed. Every cycle may add, rewrite, redraft translations, redate, reclassify, reprioritize, merge, split, archive, or remove events when the accumulated evidence supports a better historical structure. New sources should improve the existing timeline when appropriate instead of automatically creating another event.
+
 Do not optimize for churn, fixed length, fixed update counts, or passing prose snapshots. A researched no-change cycle is valid. Git preserves history; current public copy should represent the best current judgment.
 
 ## Working method

@@ -12,8 +12,8 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
   assert.match(result.stdout, /^# BorderClash research cycle/mu);
   assert.ok(result.stdout.includes(guide), "cycle context should embed the canonical research guide");
   assert.match(result.stdout, /Research reference time:/u);
-  assert.match(result.stdout, /current=data\/current\/\{summary,thailand,cambodia,impact\}\.json/u);
-  assert.match(result.stdout, /monthly=data\/\{timeline,news\}\/YYYY-MM\.jsonl/u);
+  assert.match(result.stdout, /data\/current\/\{summary,thailand,cambodia,impact\}\.json/u);
+  assert.match(result.stdout, /data\/\{timeline,news\}\/YYYY-MM\.jsonl/u);
   const productionText = result.stdout.trimEnd().split(/\r?\n/u).join(EOL) + EOL;
   assert.ok(Buffer.byteLength(productionText, "utf8") <= 10000, `cycle context too large: ${Buffer.byteLength(productionText, "utf8")} bytes`);
   assert.doesNotMatch(result.stdout, /https?:\/\//u, "cycle context should keep source URLs on demand");

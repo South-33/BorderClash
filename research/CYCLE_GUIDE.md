@@ -12,7 +12,7 @@ Use judgment. The normal flow is:
 
 1. Research material developments since the last cycle, with enough overlap to avoid missing context. Follow older leads when they matter.
 2. Curate evidence. Add or reuse source records, verify consequential claims, and correct existing records when better evidence warrants it.
-3. Maintain the timeline. Add, correct, merge, archive, or remove meaningful events so the history remains reconstructable.
+3. Maintain the timeline as a living reconstruction, not an append-only feed. New evidence may add, rewrite, redate, merge, split, archive, or remove events. Do not map articles 1:1 to events; repair references when structure changes.
 4. Maintain the current picture. Update country summaries, impact, posture, and synthesis only when the evidence or reader value justifies it.
 5. Re-read changed public copy as an ordinary reader. Remove avoidable repetition, jargon, and lower-value detail without weakening attribution or uncertainty.
 6. Finish the cycle and choose the next cadence.
@@ -45,7 +45,7 @@ Timeline prose should record what happened and enough context to understand why 
 
 - `data/current/` - latest public picture: impact, Thailand, Cambodia, and overall synthesis.
 - `data/news/` - one canonical evidence/article record per evaluated URL.
-- `data/timeline/` - durable history of distinct meaningful events; timeline records cite article IDs through `evidenceIds`.
+- `data/timeline/` - living history of distinct meaningful events, revised as evidence changes; records cite article IDs through `evidenceIds`.
 - `data/research-state.json` - cycle timing and scheduler state.
 - `public/data/` - generated output, not canonical input.
 
