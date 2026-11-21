@@ -305,6 +305,10 @@ try {
     $validated = Get-Runtime
     Assert-True ($validated.status -eq "validated") "shadow cycle did not reach validated state"
     Assert-True (Test-Path -LiteralPath ([string]$validated.runDir)) "validated workspace was not retained"
+    $historyPath = Join-Path $testRoot "history\$($validated.runId)\report.json"
+    $cycleHistory = Read-JsonSafe $historyPath
+    Assert-True ($cycleHistory -and [string]$cycleHistory.status -eq "validated") "runner did not save the completed cycle review"
+    Assert-True ($null -ne $cycleHistory.PSObject.Properties["steps"]) "saved cycle review is missing its tool-trace field"
     Remove-Item Env:BORDERCLASH_EXPECT_MODEL -ErrorAction SilentlyContinue
 
     # Structured finish state is authoritative. Final-response formatting is
@@ -324,6 +328,7 @@ try {
     $cleaned = Invoke-Control "cleanup" -Apply
     Assert-True ($cleaned.ExitCode -eq 0) "cleanup apply failed"
     Assert-True (-not (Test-Path -LiteralPath ([string]$validated.runDir))) "cleanup left validated workspace"
+    Assert-True (Test-Path -LiteralPath (Join-Path $testRoot "history\$($validated.runId)\report.md")) "cleanup removed the saved cycle review"
 
     # Windows readers can briefly lock AGY_SESSION.json. Atomic session-state
     # writes must retry the rename instead of crashing the supervisor.

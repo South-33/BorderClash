@@ -84,6 +84,27 @@ function Write-RuntimeState {
         foreach ($key in $Extra.Keys) { $payload[$key] = $Extra[$key] }
     }
     Write-JsonAtomicFile (Join-Path $runtimeDir "runtime.json") $payload
+    # Keep a human-readable, private review record for every cycle, including
+    # incomplete/reviewed cycles. The underlying event logs remain authoritative.
+    # History generation must never veto a valid research or publication state.
+    if ($RunId -match '^\d{8}T\d{9}Z$') {
+        $historyScript = Join-Path $PSScriptRoot "cycle-history.mjs"
+        if (Test-Path -LiteralPath $historyScript) {
+            try {
+                $historyArgs = @(
+                    "save", $RunId,
+                    "--log-dir", $logDir,
+                    "--runtime-dir", $runtimeDir,
+                    "--runs-root", $runsRoot,
+                    "--history-dir", (Join-Path (Split-Path -Parent $logDir) "history")
+                )
+                & node $historyScript @historyArgs | Out-Null
+                if ($LASTEXITCODE -ne 0) { Write-Warning "Cycle review report could not be saved for $RunId" }
+            } catch {
+                Write-Warning "Cycle review report could not be saved for $RunId`: $($_.Exception.Message)"
+            }
+        }
+    }
 }
 
 function Read-RuntimeState {

@@ -37,6 +37,18 @@ journalctl --user -u borderclash-research -n 30
 
 `stop` preserves unfinished work and blocks automatic relaunch. `restart-fresh` retires the checkpoint. `cleanup` previews eligible scratch directories, and `cleanup -Apply` removes them. Evidence archives remain outside cleanup. Install the timer with `bash research/automation/install-scheduler.sh`, then enable it with `systemctl --user enable --now borderclash-research.timer` after acceptance. User lingering keeps the timer available before desktop login.
 
+### Review past research cycles
+
+The runner retains raw tool/event traces in `.work/runner/logs/` and automatically writes a readable report to `.work/runner/history/<run-id>/` when cycle state changes. Reports include the actual research tool steps, completion reason, changed files, cadence, and publication receipt. They remain available when operator cleanup removes a cycle workspace.
+
+```sh
+node research/automation/cycle-history.mjs list
+node research/automation/cycle-history.mjs show <run-id>
+node research/automation/cycle-history.mjs save --all  # backfill past runs
+```
+
+Each saved run has `report.md` and `report.json`; the full raw logs remain under `logs/`. Reports and logs are **local/private on South Server**, excluded from Git and the website. This is local retention, not an off-machine backup.
+
 ## Repository map
 
 - `src/`: the Next.js website.

@@ -43,6 +43,26 @@ function Write-JsonAtomic {
     Move-Item -LiteralPath $temp -Destination $Path -Force
 }
 
+function Save-CycleReview {
+    param([string]$RunId)
+
+    if ($RunId -notmatch '^\d{8}T\d{9}Z$') { return }
+    try {
+        $historyScript = Join-Path $PSScriptRoot "cycle-history.mjs"
+        $historyArgs = @(
+            "save", $RunId,
+            "--log-dir", $logDir,
+            "--runtime-dir", $runtimeDir,
+            "--runs-root", $runsRoot,
+            "--history-dir", (Join-Path (Split-Path -Parent $logDir) "history")
+        )
+        & node $historyScript @historyArgs | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Warning "Could not save cycle review for $RunId" }
+    } catch {
+        Write-Warning "Could not save cycle review for $RunId`: $($_.Exception.Message)"
+    }
+}
+
 function Read-JsonSafe {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
@@ -294,6 +314,7 @@ switch ($Command) {
         $runtime = Read-JsonSafe $runtimePath
         $stoppedProcess = Stop-OwnedRunner $runtime
         Set-RuntimeAfterStop $runtime
+        if ($runtime) { Save-CycleReview ([string]$runtime.runId) }
         Write-Output ("ownedProcessStopped=" + $stoppedProcess.ToString().ToLowerInvariant())
         Show-Status
         exit 0
@@ -367,6 +388,7 @@ switch ($Command) {
             Remove-Item -LiteralPath $pendingPublicationPath -Force
         }
         Retire-Checkpoint $runtime
+        if ($runtime) { Save-CycleReview ([string]$runtime.runId) }
         Save-Control -Paused $false -Stopped $false | Out-Null
         Invoke-Runner -Force
         exit $script:runnerExitCode
@@ -384,6 +406,7 @@ switch ($Command) {
         foreach ($candidate in $candidates) {
             $owned = Get-OwnedRunDirectory ([string]$candidate.runDir)
             if (-not $owned -or -not (Test-Path -LiteralPath $owned)) { continue }
+            Save-CycleReview ([string]$candidate.runId)
             Remove-Item -LiteralPath $owned -Recurse -Force
             if (Test-Path -LiteralPath $owned) { throw "Could not remove $owned" }
             $removed += [string]$candidate.runId
