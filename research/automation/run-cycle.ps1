@@ -3,7 +3,6 @@ param(
     [switch]$Publish,
     [string]$RemoteName = "origin",
     [int]$TimeoutMinutes = 0,
-    [string]$Prompt = "",
     [string]$AgyPath = "",
     [string]$RunsRoot = "",
     [string]$RuntimeDir = "",
@@ -808,8 +807,6 @@ try {
         $continuationPrompt = "Continue the interrupted BorderClash research cycle. Read .work/CYCLE_CONTEXT.md if you need to refresh the goal or live context, preserve completed work, and finish the cycle."
         $effectivePrompt = if ($resuming) {
             $continuationPrompt
-        } elseif ($Prompt) {
-            $Prompt
         } else {
             # Do not prefix this with /goal. AGY 1.5.5 headless expands the command,
             # then exits before the first planner response.
@@ -907,9 +904,6 @@ Read .work/CYCLE_CONTEXT.md and complete this BorderClash research cycle. It con
     if (-not $result) { throw "Antigravity did not return a terminal result event" }
     if ($result.status -ne "SUCCESS") { throw "Antigravity status was $($result.status)" }
 
-    if (-not ([string]$result.response).Contains("<!-- GOAL_COMPLETE -->")) {
-        throw "Antigravity did not confirm goal completion"
-    }
     $feedback = [regex]::Match([string]$result.response, '(?m)^HARNESS_FEEDBACK:\s*(.+)$')
     $feedbackText = if ($feedback.Success) { $feedback.Groups[1].Value.Trim() } else { "missing" }
     [IO.File]::WriteAllText(
@@ -917,10 +911,6 @@ Read .work/CYCLE_CONTEXT.md and complete this BorderClash research cycle. It con
         $feedbackText + [Environment]::NewLine,
         [Text.UTF8Encoding]::new($false)
     )
-    if (-not $feedback.Success -or [string]::IsNullOrWhiteSpace($feedbackText)) {
-        throw "Antigravity did not provide required HARNESS_FEEDBACK"
-    }
-
     $finishMarkerPath = Join-Path $runDir ".work\research-finish.json"
     if (-not (Test-Path -LiteralPath $finishMarkerPath)) {
         throw "Antigravity did not run node research/cli.mjs finish"

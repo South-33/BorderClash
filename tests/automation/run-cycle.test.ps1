@@ -307,6 +307,15 @@ try {
     Assert-True (Test-Path -LiteralPath ([string]$validated.runDir)) "validated workspace was not retained"
     Remove-Item Env:BORDERCLASH_EXPECT_MODEL -ErrorAction SilentlyContinue
 
+    # Structured finish state is authoritative. Final-response formatting is
+    # useful observability but must not veto an otherwise valid cycle.
+    Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "missing-feedback"
+    $plainResponse = Invoke-TestRunner
+    Assert-True ($plainResponse.ExitCode -eq 0 -and ($plainResponse.Output -join "`n") -match "SHADOW SUCCESS") "plain final response incorrectly blocked structured completion"
+    $validated = Get-Runtime
+    Assert-True ($validated.status -eq "validated") "plain final response did not leave a validated workspace"
+
     # Cleanup is preview-first and only removes eligible owned workspaces.
     $preview = Invoke-Control "cleanup"
     Assert-True ($preview.ExitCode -eq 0) "cleanup preview failed"
@@ -438,6 +447,10 @@ try {
     $env:BORDERCLASH_FAKE_AGY_MODE = "stuck-resume"
     $env:BORDERCLASH_TRUSTED_RESEARCH_CLI = $trustedResearchCli
     try {
+        # Give PowerShell process startup enough headroom that the resumed
+        # attempt cannot be mistaken for inactivity on a loaded host. The
+        # first attempt still sleeps for 30 seconds, so this 12-second
+        # fixture threshold continues to exercise the watchdog kill path.
         & node $supervisor `
             --agy $fakeExe `
             --cwd $watchdogDir `
@@ -450,7 +463,7 @@ try {
             --session-file $watchdogSession `
             --agy-log-base (Join-Path $logDir "watchdog.agy") `
             --timeout-minutes "0" `
-            --stuck-minutes "0.05" `
+            --stuck-minutes "0.2" `
             --retry-delay-ms "0"
         $watchdogExit = $LASTEXITCODE
     } finally {

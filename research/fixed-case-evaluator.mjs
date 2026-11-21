@@ -34,6 +34,10 @@ export function evaluateFixedCase(caseDefinition, result) {
     add(errors, Number.isInteger(result?.credibility) && result.credibility % 10 === 0, "credibility must be a decile");
     add(errors, Number(result?.credibility) <= expected.maxCredibility, "credibility must not exceed " + expected.maxCredibility);
   }
+  if (expected.minCredibility !== undefined) {
+    add(errors, Number.isInteger(result?.credibility) && result.credibility % 10 === 0, "credibility must be a decile");
+    add(errors, Number(result?.credibility) >= expected.minCredibility, "credibility must be at least " + expected.minCredibility);
+  }
   if (expected.independentEvidenceChains !== undefined) {
     add(errors, result?.independentEvidenceChains === expected.independentEvidenceChains, "independentEvidenceChains must be " + expected.independentEvidenceChains);
   }

@@ -4,7 +4,6 @@ param(
     [string]$BackupRoot = "",
     [string]$ProbeArticleId = "",
     [int]$TimeoutMinutes = 0,
-    [string]$Prompt = "",
     [string]$AgyPath = ""
 )
 
@@ -144,7 +143,6 @@ try {
         "-LogDir", $logDir,
         "-MutexName", $mutexName
     )
-    if ($Prompt) { $arguments += @("-Prompt", $Prompt) }
     if ($AgyPath) { $arguments += @("-AgyPath", $AgyPath) }
 
     Write-Output "SUPERVISED: publication disabled"

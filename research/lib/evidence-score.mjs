@@ -18,19 +18,15 @@ export const EVIDENCE_ALLOWED_SCORES = new Set(EVIDENCE_SCORE_GUIDE.map(([score]
 
 export const EVIDENCE_SCORING_RULES = Object.freeze([
   "Score the article/report as stored, not the publisher's general reputation, nationality, or viewpoint.",
-  "Judge the material factual content carried by the stored title/summary. If important claims have different support levels, use the lower score that honestly represents the unresolved material claim.",
-  "When the stored report explicitly says that a named actor said, announced, alleged, protested, or acknowledged something, score the evidence that the actor made that statement; do not treat the quoted allegation as independently proven or disproven.",
+  "First identify the proposition the stored title/summary actually makes. 'Actor says Y' and 'Y happened' are different propositions. If important propositions have different support levels, use the lower score that honestly represents the unresolved material proposition.",
+  "For an explicitly attributed proposition such as 'Ministry alleges Y', score how strongly the evidence establishes that the ministry made the allegation. The opponent-claim ceiling does not apply to that attribution proposition. Do not silently turn Y itself into an independently proven fact.",
   "A primary source can strongly prove what that source itself said, published, acknowledged, ordered, or did; it does not automatically prove its disputed claims about another actor.",
-  "A conflict party's material allegation about its opponent is capped at 60 until genuinely independent evidence corroborates the underlying fact.",
+  "For an underlying proposition such as 'Y happened', if support is only a conflict party's disputed allegation about its opponent, cap that proposition at 60 until genuinely independent evidence corroborates it.",
   "Several outlets repeating the same statement, wire copy, image, witness, or document are one evidence chain, not independent corroboration.",
   "Use 100 rarely. It requires the report's material factual content to be directly established or exceptionally well corroborated, with no material unresolved contradiction.",
   "Lack of evidence is uncertainty, not falsity. Use 0 or 10 only when credible contrary evidence supports that judgment.",
   "When evidence materially conflicts or two adjacent scores both seem defensible, use the lower score until the uncertainty is resolved.",
 ]);
-
-export function evidenceRubricPrompt() {
-  return "Evidence score, deciles only: 100 verified; 90 very strong; 80 strong; 70 credible; 60 attributed; 50 uncertain; 40 weak; 30 very weak; 20 likely unreliable; 10 very likely false; 0 false/fabricated. One URL, one score. Score the report, not outlet reputation. If it says X alleged Y, score whether X said it, not whether Y is true. Unattributed opponent claims cap at 60 without independent corroboration; repeated provenance is one chain; 0/10 require credible contrary evidence; ties round down.";
-}
 
 export function isEvidenceScore(value) {
   return EVIDENCE_ALLOWED_SCORES.has(value);

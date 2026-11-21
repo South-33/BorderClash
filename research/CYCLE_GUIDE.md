@@ -4,7 +4,7 @@ Maintain the canonical BorderClash data as the best available public record of t
 
 Write for ordinary civilians. A reader should quickly understand what is happening, what each side says, what the evidence supports, and what remains uncertain. Accuracy, neutrality, attribution, and useful context matter more than producing a change.
 
-The repository is working memory, not authority. Existing records and past reviews can be wrong or stale. Improve old material when there is a concrete reason; otherwise leave it alone. A well-researched no-change cycle is a good result, and a new cycle does not require new wording.
+The repository is working memory, not authority. Existing records and past reviews can be wrong or stale. Improve old material when there is a concrete reason; otherwise leave it alone. Do not rewrite for freshness. A well-researched no-change cycle is a good result, but fix error, stale emphasis, jargon, repetition, or poor language when you encounter it.
 
 ## Work
 
@@ -27,19 +27,19 @@ For consequential claims such as fighting, casualties, territorial control, incu
 
 Use the event date for timeline records, not merely the publication date. Record an exact time only when evidence supports it. Never invent a URL, quote, number, date, time, translation, source, or certainty.
 
-Each article URL has one canonical record and one `credibility` score. Scores use deciles from 0 to 100. Score the material report, not the outlet's general reputation. A conflict party's material allegation about its opponent cannot exceed 60 without genuinely independent corroboration. Lack of evidence is uncertainty, not falsity; 0 and 10 require credible contrary evidence. When two adjacent scores are defensible, use the lower one.
+Each article URL has one canonical record and a decile `credibility` score for how strongly retained evidence supports the report as worded, not outlet reputation. `The ministry alleges Y` and `Y happened` are different propositions: a primary statement can strongly support the first without proving the second. Cap at 60 only a stored assertion of an opponent's disputed act that lacks independent corroboration. Lack of evidence is uncertainty, not falsity; 0 and 10 require credible contrary evidence; ties round down.
 
 ## Public copy
 
-Write public copy in English, Thai, and Khmer. Each language should read like natural local general news, not like a literal translation or a policy memo. Prefer familiar language over institutional or technical terminology when both are accurate. If a specialist term is necessary, make its meaning clear from context.
+Write public copy in English, Thai, and Khmer from the same underlying facts. Each version should read like natural local general news, not like a clause-by-clause translation or a policy memo. Prefer familiar language over institutional or technical terminology when both are accurate. If a specialist term is necessary, make its meaning clear from context.
 
-Preserve material names, dates, numbers, actors, negation, attribution, uncertainty, and claim strength across languages. Keep the claimant in the same sentence as a disputed claim.
+Preserve material names, dates, numbers, actors, negation, attribution, uncertainty, scope, and claim strength across languages. Do not add intensifiers, narrower specificity, motive, direction, or implications that the evidence does not support. Use ASCII digits in public copy. Do not mix Thai script into Khmer or Khmer script into Thai; use the target script or Latin text for foreign proper names when needed. Before finalizing changed copy, compare each language with the evidence for who did what, what happened versus what was only possible or alleged, and how strongly the source states it. Keep evidence limits attached to the evidence: `the source does not establish X` must not become `a party did not say X`. Keep the claimant in the same sentence as a disputed claim. Do not adopt a party's loaded label as narrator voice; words such as `provocation`, `occupation`, `distorted`, or `unilateral` remain that actor's characterization unless independently established.
 
-Select for reader value. Public copy does not need every supported fact. Keep the highest-value current information in synthesis and summaries; lower-value detail can remain in the timeline and evidence registry.
+Select for reader value. Public copy does not need every supported fact. Ask whether omitting a detail would materially change a cold reader's understanding of safety, civilian impact, the central dispute, or what is likely to happen next. If not, keep it lower in the timeline or evidence registry.
 
-During synthesis, distinguish each side's stated position from observed military activity. Do not force a fixed number of key updates. Keep good existing wording when the public picture has not materially changed.
+Give each current field one job. The overall synthesis explains the shared current picture and major uncertainty. Key updates identify material recent or imminent changes that add information rather than repeat the synthesis; zero updates is valid. Country summaries explain that side's current priorities, positions, and material claims. Activity fields describe supported physical military posture. When one fact could fit several fields, put it in the most useful specific field and omit it elsewhere unless repetition is necessary for understanding. In particular, country summaries usually do not need to repeat shared meeting logistics, observer visits, or physical posture already represented by key updates or activity fields.
 
-Timeline prose should record what happened and enough context to understand why it mattered. Evidence links preserve the source trail; the public description does not need to read like a verification memo.
+Timeline prose should record what happened and enough context to understand why it mattered. The UI already shows the event date, so do not mechanically repeat it unless the sentence needs to distinguish the event date from another date. Evidence links preserve the source trail. Verify rigorously in the research process, but do not narrate the audit in public prose with formulaic lines such as `this record establishes...` or `this does not independently verify...` when clear attribution already carries the uncertainty.
 
 ## Data
 
@@ -74,4 +74,4 @@ Before finishing, re-open evidence for consequential new or changed claims. Chec
 
 Choose the next cadence from current activity, risk, uncertainty, and likely information value: faster during significant developments, slower during sustained calm.
 
-End the final response with `<!-- GOAL_COMPLETE -->` and a non-empty `HARNESS_FEEDBACK:` line. Report material friction honestly; use `HARNESS_FEEDBACK: none` when nothing material got in the way.
+Return a concise cycle outcome. If the harness materially helped or got in the way, include a `HARNESS_FEEDBACK:` line so operators can improve it; feedback is useful observability, not proof of completion.

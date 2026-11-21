@@ -123,7 +123,7 @@ Evidence:
 $evidence
 </FIXED_CASE>
 
-Return the schema-required object for this case. Use null only where a field is genuinely unsupported or does not apply. For every completed factual case, set credibility to a decile evidence score and independentEvidenceChains to the number of genuinely independent underlying evidence chains supported by the supplied evidence; repeated publication of one statement is one chain. Keep disputed claims attributed. Use ASCII digits in Thai and Khmer. If the supplied evidence is insufficient for a trustworthy required conclusion, choose review and explain why in reviewReason.
+Return the schema-required object for this case. Use null only where a field is genuinely unsupported or does not apply. For every completed factual case, set credibility to a decile evidence score and independentEvidenceChains to the number of genuinely independent underlying evidence chains supported by the supplied evidence; repeated publication of one statement is one chain. When the evidence names a specific claimant, use that actor rather than a broader country label. Keep disputed claims attributed. Use ASCII digits in Thai and Khmer. If the supplied evidence is insufficient for a trustworthy required conclusion, choose review and explain why in reviewReason.
 
 For structured qualifiers, use the canonical enum spelling: when the supplied evidence says "more than", set qualifier to "MORE_THAN" while preserving the same meaning in all three summaries.
 For summaryEn, summaryTh, and summaryKh, write calendar months as words rather than numeric month tokens. For example, prefer "28 May 2025" over "2025-05-28" so translated month names do not create a false numeric-fidelity mismatch. Keep eventDate itself in YYYY-MM-DD form.

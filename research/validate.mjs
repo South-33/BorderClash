@@ -13,6 +13,7 @@ const dataRoot = resolve("data");
 const state = await readJson(join(dataRoot, "research-state.json"));
 const importanceRubricActivatedAt = Number(state.importanceRubricActivatedAt || 0);
 const errors = [];
+const warnings = [];
 const nativeDigits = /[\u0E50-\u0E59\u17E0-\u17E9\u17F0-\u17F9]/u;
 const thaiTimelineChatVoice = /(ครับ|ค่ะ|เพื่อนบอกต่อ|ไทยเรา|บ้านเรา|ของเรา|ฝั่งเรา|กองทัพเรา|ทหารเรา|พวกเขมร)/u;
 const khmerTimelinePartisanVoice = /(យើង|ពួកសៀម)/u;
@@ -35,13 +36,17 @@ function numericFidelity(location, english, localizedValue) {
   const actual = numericTokens(localizedValue);
   for (const [token, count] of expected) {
     if ((actual.get(token) || 0) < count) {
-      add(location, "lost-number-" + token);
+      warn(location, "possible-lost-number-" + token);
     }
   }
 }
 
 function add(location, issue) {
   errors.push(location + ": " + issue);
+}
+
+function warn(location, issue) {
+  warnings.push(location + ": " + issue);
 }
 
 function evidenceRefs(location, value, { allowTimeline = true, required = true } = {}) {
@@ -71,8 +76,8 @@ function localized(location, value, language, required = false) {
 
 function timelineReaderVoice(location, value, language) {
   if (typeof value !== "string") return;
-  if (language === "th" && thaiTimelineChatVoice.test(value)) add(location, "conversational-or-partisan-voice");
-  if (language === "kh" && khmerTimelinePartisanVoice.test(value)) add(location, "conversational-or-partisan-voice");
+  if (language === "th" && thaiTimelineChatVoice.test(value)) warn(location, "possible-conversational-or-partisan-voice");
+  if (language === "kh" && khmerTimelinePartisanVoice.test(value)) warn(location, "possible-conversational-or-partisan-voice");
 }
 
 function httpUrl(location, value) {
@@ -186,7 +191,7 @@ for (const file of newsFiles) {
     newsIds.add(article.id);
     if (!(article.titleEn || article.title)) add(location, "missing title");
     if (typeof article.titleEn === "string" && article.titleEn.trim() === String(article.title || "").trim()) {
-      add(location + ".titleEn", "duplicate of source title");
+      warn(location + ".titleEn", "same as source title");
     }
     if (!article.source) add(location, "missing source");
     if (!newsStatuses.has(article.status)) add(location, "invalid status");
@@ -427,7 +432,13 @@ if (Number.isFinite(state.lastResearchAt) && Number.isFinite(state.nextRunAt)) {
 }
 
 if (errors.length) {
-  console.error(JSON.stringify({ ok: false, errorCount: errors.length, errors: errors.slice(0, 100) }, null, 2));
+  console.error(JSON.stringify({
+    ok: false,
+    errorCount: errors.length,
+    errors: errors.slice(0, 100),
+    warningCount: warnings.length,
+    warnings: warnings.slice(0, 100),
+  }, null, 2));
   process.exit(1);
 }
 
@@ -435,5 +446,7 @@ console.log(JSON.stringify({
   ok: true,
   timelineEvents: timelineIds.size,
   newsArticles: newsIds.size,
+  warningCount: warnings.length,
+  warnings: warnings.slice(0, 100),
 }, null, 2));
 

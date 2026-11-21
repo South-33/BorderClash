@@ -351,7 +351,7 @@ $response = if ($mode -eq "unicode") {
 } elseif ($mode -eq "feedback") {
     "HARNESS_FEEDBACK: Fake harness feedback." + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
 } elseif ($mode -eq "missing-feedback") {
-    "fake cycle complete" + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
+    "fake cycle complete"
 } else {
     "fake cycle complete" + [Environment]::NewLine + "HARNESS_FEEDBACK: none" + [Environment]::NewLine + "<!-- GOAL_COMPLETE -->"
 }

@@ -41,14 +41,14 @@ test("retrospective case rejects publication year and unsupported exact time", (
   assert.ok(evaluateFixedCase(fixture, { ...good, eventTime: "10:00" }).some((error) => /time/u.test(error)));
 });
 
-test("disputed case enforces attribution, provenance-aware corroboration, and credibility ceiling", () => {
+test("disputed case scores the attributed statement without treating the allegation as proven", () => {
   const fixture = cases.find(({ id }) => id === "disputed-single-chain");
   const base = {
     caseId: fixture.id,
     decision: "complete",
     eventDate: "2026-02-14",
     claimant: "Cambodian Ministry of National Defence",
-    credibility: 60,
+    credibility: 80,
     independentEvidenceChains: 1,
     ...localized(
       "The Cambodian Ministry of National Defence says Thai troops crossed the border on 14 February 2026.",
@@ -65,7 +65,7 @@ test("disputed case enforces attribution, provenance-aware corroboration, and cr
     ...base,
     summaryEn: "Thai troops crossed the border on 14 February 2026.",
   }).some((error) => /attributed/u.test(error)));
-  assert.ok(evaluateFixedCase(fixture, { ...base, credibility: 70 }).some((error) => /exceed 60/u.test(error)));
+  assert.ok(evaluateFixedCase(fixture, { ...base, credibility: 60 }).some((error) => /at least 80/u.test(error)));
   assert.ok(evaluateFixedCase(fixture, { ...base, independentEvidenceChains: 2 }).some((error) => /independentEvidenceChains/u.test(error)));
 });
 

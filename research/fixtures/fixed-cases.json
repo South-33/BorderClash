@@ -19,7 +19,7 @@
     "id": "disputed-single-chain",
     "title": "Material allegation repeated through one underlying statement",
     "evidence": [
-      "The Cambodian Ministry of National Defence says Thai troops crossed into Cambodian territory on 2026-02-14.",
+      "A Cambodian Ministry of National Defence press release says Thai troops crossed into Cambodian territory on 2026-02-14.",
       "A domestic article reports the ministry statement. A second publisher republishes the same statement without independent observation.",
       "No neutral observation, geolocation, imagery analysis, or independent witness evidence is available in the fixture."
     ],
@@ -27,7 +27,8 @@
       "decision": "complete",
       "eventDate": "2026-02-14",
       "claimant": "Cambodian Ministry of National Defence",
-      "maxCredibility": 60,
+      "minCredibility": 80,
+      "maxCredibility": 100,
       "independentEvidenceChains": 1,
       "mustRemainAttributed": true
     }

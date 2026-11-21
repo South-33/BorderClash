@@ -78,6 +78,14 @@ test("evidence-linked current records validate while exporting the exact legacy 
     assert.equal(Object.hasOwn(dashboard.summary, "summaryEvidenceIds"), false);
     assert.equal(JSON.stringify(dashboard).includes("activityEvidenceIds"), false);
 
+    summary.summary = "Talks are set for 2026-11-24.";
+    summary.summaryTh = "การเจรจากำหนดไว้วันที่ 24 พฤศจิกายน 2026";
+    summary.summaryKh = "កិច្ចពិភាក្សាត្រូវបានកំណត់សម្រាប់ថ្ងៃទី 24 ខែវិច្ឆិកា ឆ្នាំ 2026";
+    await writeJson(summaryPath, summary);
+    const warned = runNode(validator, root);
+    assert.equal(warned.status, 0, warned.stderr || warned.stdout);
+    assert.match(warned.stdout, /possible-lost-number-11/u);
+
     summary.keyUpdates[0].evidenceIds = ["missing-evidence-id"];
     await writeJson(summaryPath, summary);
     const rejected = runNode(validator, root);
