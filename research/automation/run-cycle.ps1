@@ -831,7 +831,7 @@ try {
         }
         if (-not (Test-Path $agy)) { throw "Antigravity CLI not found" }
 
-        $continuationPrompt = "Continue the interrupted BorderClash research cycle. Read .work/CYCLE_CONTEXT.md if you need to refresh the goal or live context, preserve completed work, and finish the cycle."
+        $continuationPrompt = "Continue the interrupted BorderClash research cycle. Read .work/CYCLE_CONTEXT.md if you need to refresh the goal or live context, preserve completed work, and finish the cycle. Use search_web only for broad discovery; for a specific consequential lead, switch to browser/source-reading tools. Do not use curl, Python HTTP, or terminal HTML parsing for live pages."
         $effectivePrompt = if ($resuming) {
             $continuationPrompt
         } else {
@@ -839,6 +839,7 @@ try {
             # then exits before the first planner response.
             @"
 Read .work/CYCLE_CONTEXT.md and complete this BorderClash research cycle. It contains the goal, workflow, tools, and live context for this run.
+Use search_web only for broad discovery; for a specific consequential lead, switch to browser/source-reading tools. Do not use curl, Python HTTP, or terminal HTML parsing for live pages.
 "@
         }
         $attemptStem = if ($resuming) { "$runId.resume-$resumeCount" } else { $runId }

@@ -229,8 +229,8 @@ function renderContext(output) {
 
   lines.push(
     "",
-    "## Recent anchors",
-    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; orientation, not rank/quota.`,
+    "## Recent",
+    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; not rank/quota.`,
     "",
     "Timeline:",
   );

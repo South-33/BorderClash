@@ -64,10 +64,10 @@ Common CLI commands:
 - `node research/cli.mjs finish <hours> <reason>` - complete the cycle and choose the next cadence.
 - `node research/cli.mjs finish --review <reason>` - stop for operator review when a trustworthy result is blocked.
 
-Terminal HTTP is sandboxed and may fail even when a publisher is reachable. Do not treat terminal DNS failure as evidence that a source is unavailable.
+Use web/browser tools for live pages; not `curl`, Python HTTP, or terminal HTML parsing. Terminal networking is sandboxed; failures do not prove a source unavailable.
 
 The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually.
-Search discovers leads; source reading verifies them. For a lead, use one broad search and at most one targeted follow-up. Then open a source or corroboration, or drop the claim if evidence is unavailable. Consequential claims need stronger evidence, not more snippets. Diagnostics are for concrete questions, not routine sweeps. `finish` validates data; do not run `pnpm validate`.
+Use `search_web` for discovery, not verification. For consequential leads, use `browser_subagent`, `open_browser_url`, or `read_url_content` to read a publisher or corroboration before searching again. If unresolved, omit the claim. Diagnostics answer concrete questions, not routine sweeps. `finish` validates data; do not run `pnpm validate`.
 
 ## Finish
 
