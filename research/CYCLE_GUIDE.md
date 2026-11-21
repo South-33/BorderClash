@@ -53,7 +53,7 @@ News is grouped by the media environment its audience actually encounters: `thai
 
 ## Tools
 
-Use web tools for live public research. Use the repository directly when that is simpler.
+Use the best channel for the question: web/search, official documents/statements, publisher archives, specialist tools/data, and relevant community sources such as Reddit. Community posts can surface leads, reactions, or lived experience; verify factual claims before relying on them.
 
 Common CLI commands:
 
@@ -65,7 +65,7 @@ Common CLI commands:
 - `node research/cli.mjs finish --review <reason>` - stop for operator review when a trustworthy result is blocked.
 
 The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually.
-Research deeply for a trustworthy record: inspect relevant sources, revisit judgments, and rewrite/update records when useful. Do not minimize tool calls or edits. Search finds leads; sources verify them. Resolve cited/grounding URLs with `node research/cli.mjs probe-source <url>` instead of repeating searches that add no evidence. If capture is blocked, keep `finalUrl` as provenance and corroborate elsewhere. No fixed search/rewrite count. Diagnostics answer concrete questions, not routine sweeps. `finish` validates data; do not run `pnpm validate`.
+Research deeply; do not optimize for fewer calls or edits. Search discovers leads; sources verify them. Resolve grounding URLs with `node research/cli.mjs probe-source <url>` before repeating searches. If capture is blocked, retain `finalUrl` and corroborate elsewhere. No fixed search/rewrite count. Use diagnostics only for concrete questions; `finish` validates data.
 
 ## Finish
 
