@@ -579,5 +579,7 @@ test("--help is a successful alias for help", () => {
   assert.match(result.stdout, /node research\/cli\.mjs \[context\]/u);
   assert.match(result.stdout, /--no-localize/u);
   assert.match(result.stdout, /node research\/cli\.mjs finish/u);
+  assert.match(result.stdout, /Targeted diagnostics and recovery \(use for a concrete issue; not a routine checklist\)/u);
+  assert.match(result.stdout, /finish validates working data and the runner performs final verification/u);
   assert.doesNotMatch(result.stdout, /research check/u);
 });
