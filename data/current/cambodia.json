@@ -1,11 +1,12 @@
 {
-  "updatedAt": 1795238831267,
-  "summary": "Cambodia says it has repeatedly asked Thailand to resume Joint Boundary Commission meetings and joint survey work. Cambodian authorities continue to allege Thai occupation and civilian harm in disputed areas and say that, as of November 10, more than 20,000 displaced Cambodians were still unable to return home.",
-  "summaryTh": "กัมพูชาระบุว่าได้ขอให้ไทยกลับมาเปิดการประชุมคณะกรรมาธิการเขตแดนร่วมและการสำรวจร่วมหลายครั้ง ทางการกัมพูชายังคงกล่าวหาว่าไทยยึดครองพื้นที่พิพาทและทำให้พลเรือนได้รับผลกระทบ พร้อมระบุว่า ณ วันที่ 10 พฤศจิกายน ยังมีชาวกัมพูชามากกว่า 20,000 คนที่พลัดถิ่นและยังกลับบ้านไม่ได้",
-  "summaryKh": "កម្ពុជានិយាយថា ខ្លួនបានស្នើឱ្យថៃបន្តកិច្ចប្រជុំគណៈកម្មការព្រំដែនចម្រុះ និងការងារវាស់វែងរួមជាច្រើនលើក។ អាជ្ញាធរកម្ពុជាបន្តចោទប្រកាន់ថាថៃកាន់កាប់តំបន់មានជម្លោះ និងបង្កផលប៉ះពាល់ដល់ជនស៊ីវិល ហើយនិយាយថា គិតត្រឹមថ្ងៃទី 10 ខែវិច្ឆិកា ប្រជាជនកម្ពុជាជាង 20,000 នាក់នៅតែផ្លាស់ទីលំនៅ និងមិនទាន់អាចត្រឡប់ទៅផ្ទះបាន។",
+  "updatedAt": 1795250950000,
+  "summary": "Cambodia says it has repeatedly asked Thailand to resume Joint Boundary Commission meetings and joint survey work. Cambodian leaders defend raising the dispute internationally, allege Thai occupation in disputed areas, and say that, as of November 10, more than 20,000 displaced Cambodians were still unable to return home.",
+  "summaryTh": "กัมพูชาระบุว่าได้ขอให้ไทยกลับมาเปิดการประชุมคณะกรรมาธิการเขตแดนร่วมและการสำรวจร่วมหลายครั้ง ผู้นำกัมพูชาปกป้องการหยิบยกข้อพิพาทสู่เวทีระหว่างประเทศ กล่าวหาว่าไทยยึดครองพื้นที่พิพาท และระบุว่า ณ วันที่ 10 พฤศจิกายน ยังมีชาวกัมพูชามากกว่า 20,000 คนที่พลัดถิ่นและยังกลับบ้านไม่ได้",
+  "summaryKh": "កម្ពុជានិយាយថា ខ្លួនបានស្នើឱ្យថៃបន្តកិច្ចប្រជុំគណៈកម្មការព្រំដែនចម្រុះ និងការងារវាស់វែងរួមជាច្រើនលើក។ ថ្នាក់ដឹកនាំកម្ពុជាការពារការលើកយកជម្លោះទៅវេទិកាអន្តរជាតិ ចោទប្រកាន់ថាថៃកាន់កាប់តំបន់មានជម្លោះ និងនិយាយថា គិតត្រឹមថ្ងៃទី 10 ខែវិច្ឆិកា ប្រជាជនកម្ពុជាជាង 20,000 នាក់នៅតែផ្លាស់ទីលំនៅ និងមិនទាន់អាចត្រឡប់ទៅផ្ទះបាន។",
   "sourceNames": [
     "Kampuchea Thmey Daily",
-    "Cambodia Ministry of Interior"
+    "Cambodia Ministry of Interior",
+    "Khmer Times"
   ],
   "activityLabel": "Defensive positions",
   "activityLabelTh": "ที่ตั้งแนวรับ",
@@ -25,7 +26,8 @@
   "summaryEvidenceIds": [
     "324ba2aec0b55f2d385bca51c6f10c7c",
     "5c9acd655bd4144ca17384f382acc092",
-    "3799c455fb54e43d6d2e17ef066d8fc9"
+    "3799c455fb54e43d6d2e17ef066d8fc9",
+    "244e13c2522d0423ea09bf9e4e0ad47f"
   ],
   "activityEvidenceIds": [
     "k975q9bzh7b6r3es5dbr5yagt589464t",

@@ -1,10 +1,11 @@
 {
-  "updatedAt": 1795238831267,
-  "summary": "Thailand says land-border disputes should be handled through bilateral mechanisms while it participates in the separate maritime conciliation process. Thai officials reject Cambodia’s displacement figures as unverified and object to what they see as attempts to internationalize the dispute.",
-  "summaryTh": "ไทยย้ำว่าข้อพิพาทชายแดนทางบกควรแก้ผ่านกลไกทวิภาคี ขณะเดียวกันยังเข้าร่วมกระบวนการไกล่เกลี่ยเขตแดนทางทะเลแยกต่างหาก เจ้าหน้าที่ไทยปฏิเสธตัวเลขผู้พลัดถิ่นของกัมพูชาว่ายังไม่ได้รับการตรวจสอบ และคัดค้านสิ่งที่ไทยมองว่าเป็นการนำข้อพิพาทไปสู่เวทีระหว่างประเทศ",
-  "summaryKh": "ថៃបន្តអះអាងថាជម្លោះព្រំដែនគោកគួរដោះស្រាយតាមយន្តការទ្វេភាគី ខណៈខ្លួនចូលរួមដំណើរការផ្សះផ្សាព្រំដែនសមុទ្រដាច់ដោយឡែក។ មន្ត្រីថៃច្រានចោលតួលេខអ្នកផ្លាស់ទីលំនៅដែលកម្ពុជាលើកឡើងថាមិនទាន់ត្រូវបានផ្ទៀងផ្ទាត់ និងជំទាស់នឹងអ្វីដែលថៃចាត់ទុកថាជាការនាំជម្លោះទៅវេទិកាអន្តរជាតិ។",
+  "updatedAt": 1795250950000,
+  "summary": "Thailand insists border disputes must be resolved bilaterally, warning other talks will halt if Cambodia continues compulsory UNCLOS maritime conciliation. Thai officials urge adherence to all 2025 ceasefire terms and reject Cambodia’s displacement figures as unverified.",
+  "summaryTh": "ไทยย้ำว่าข้อพิพาทชายแดนต้องแก้ผ่านกลไกทวิภาคี โดยเตือนว่าการเจรจาอื่นจะหยุดลงหากกัมพูชายังเดินหน้ากระบวนการไกล่เกลี่ย UNCLOS ทางทะเลแบบบังคับ เจ้าหน้าที่ไทยเรียกร้องให้ปฏิบัติตามข้อตกลงหยุดยิงปี 2025 ทั้งหมด และปฏิเสธตัวเลขผู้พลัดถิ่นของกัมพูชาว่ายังไม่ได้รับการตรวจสอบ",
+  "summaryKh": "ថៃទទូចថាជម្លោះព្រំដែនត្រូវតែដោះស្រាយតាមយន្តការទ្វេភាគី ដោយព្រមានថាកិច្ចចរចាផ្សេងទៀតនឹងត្រូវបញ្ឈប់ ប្រសិនបើកម្ពុជានៅតែបន្តការផ្សះផ្សាផ្លូវសមុទ្រជាកាតព្វកិច្ចក្រោម UNCLOS។ មន្ត្រីថៃជំរុញឱ្យគោរពលក្ខខណ្ឌបទឈប់បាញ់ឆ្នាំ 2025 ទាំងអស់ និងច្រានចោលតួលេខអ្នកផ្លាស់ទីលំនៅរបស់កម្ពុជាថាមិនទាន់ត្រូវបានផ្ទៀងផ្ទាត់។",
   "sourceNames": [
     "Thailand Ministry of Foreign Affairs",
+    "The Nation Thailand",
     "Khaosod English"
   ],
   "activityLabel": "Monitoring, fencing and unit readiness",
@@ -24,6 +25,8 @@
     "basis": "Confirmed permanent border fencing and unit reorganization remain the strongest current military-action signals; the current record reports no new armed clash."
   },
   "summaryEvidenceIds": [
+    "8f195ceb066d4ebc5ab952aa4413cd79",
+    "cfc959deb505f3c6ccc5c906341a2cd6",
     "5d5428fb0bf13e8e39b160558b371fc0",
     "305c945747e78d32b00775c7b324664d",
     "cf51f9415064bebbda45d177fe10e197"
