@@ -66,8 +66,19 @@ test("evidence-linked current records validate while exporting the exact legacy 
     }
     await writeJson(impactPath, impact);
 
+    impact.displaced.sourceUrl = firstArticle.sourceUrl;
+    await writeJson(impactPath, impact);
     const validated = runNode(validator, root);
     assert.equal(validated.status, 0, validated.stderr || validated.stdout);
+
+    impact.displaced.sourceUrl = "https://example.invalid/not-canonical";
+    await writeJson(impactPath, impact);
+    const badSourceUrl = runNode(validator, root);
+    assert.notEqual(badSourceUrl.status, 0);
+    assert.match(badSourceUrl.stderr + badSourceUrl.stdout, /must match a canonical article URL/u);
+    impact.displaced.sourceUrl = firstArticle.sourceUrl;
+    await writeJson(impactPath, impact);
+
     const generated = runNode(generator, root);
     assert.equal(generated.status, 0, generated.stderr || generated.stdout);
 

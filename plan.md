@@ -1,120 +1,109 @@
-# BorderClash research-quality hill climb
+# BorderClash research-harness refinement
 
 ## Goal
 
-Make routine BorderClash research produce a clear, fair, useful public picture for ordinary civilians without sacrificing evidence discipline or publication safety.
+Build a model-agnostic research harness that gives the research agent a clear objective, strong evidence/editorial criteria, useful live orientation, and a small set of intuitive deterministic tools while preserving broad freedom over how to investigate and revise the record.
 
-The system should be simple: one operating brief, one research agent, one structured finish decision, objective validation, and safe publication. Editorial judgment stays with the agent where it cannot be faithfully reduced to deterministic checks.
+Quality comes first. Efficiency matters when it removes mechanical work, duplicated context, needless tool discovery, or repeated failure recovery without narrowing research judgment.
 
-The hill climb covers the entire research loop, not only synthesis or current-page prose: source discovery and coverage, source diversity, ingestion and canonical identity, capture/retention, evidence scoring and attribution, event selection and deduplication, dates/times, timeline construction, current impact/country/activity/synthesis fields, multilingual fidelity, cadence, diagnostics, runner behavior, validation, and publication. Improve whichever layer the observed evidence says is limiting quality.
+The target is not a workflow engine. The model should choose what to research, how deeply to pursue it, which evidence matters, what the evidence means, how the canonical record should change, and when further work has low expected value. Deterministic code should make objective operations reliable and explain objective failures precisely.
 
-The timeline is a continuously maintained reconstruction, not an append-only archive or a mirror of the news feed. Every cycle may add, rewrite, redraft translations, redate, reclassify, reprioritize, merge, split, archive, or remove events when the accumulated evidence supports a better historical structure. New sources should improve the existing timeline when appropriate instead of automatically creating another event.
+## Design principles
 
-Do not optimize for churn, fixed length, fixed update counts, or passing prose snapshots. A researched no-change cycle is valid. Git preserves history; current public copy should represent the best current judgment.
+- Optimize the whole agent input surface: bootstrap prompt, stable guide, live context, tool descriptions, tool results, validation errors, and the canonical data the model opens on demand.
+- Prefer progressive disclosure. Put durable research judgment in the guide, live orientation in cycle context, tool syntax in tool help, mechanical contracts in code/validation, and provider/runtime quirks in the runner.
+- Give each concept one authoritative owner. Remove duplicated instructions unless repetition protects a real safety boundary.
+- Express success criteria and information-value tradeoffs rather than fixed search counts, source quotas, rewrite counts, or prescribed tool sequences.
+- Keep editorial and evidentiary judgment with the model. Hard checks protect objective invariants; heuristics remain advisory.
+- Prefer a few capability-oriented tools with obvious verbs over many implementation-oriented commands.
+- Make exploration read-only by default and mutation explicit.
+- A normal tool should explain what it did, why, what remains model judgment, and the useful next action. Normal misuse should not require reading implementation source.
+- Do not accumulate prompt scars for one model's behavior. Fix the narrowest general layer: tool UX, context, adapter/runtime, validator diagnostics, or stable guidance.
+- Judge changes with real traces and real BorderClash material. Benchmarks inform decisions; they do not become publication gates.
 
-## Working method
+## 1. Refine the agent input surface
 
-- Change one coherent behavior at a time where practical.
-- Do not make UI changes without explicit user approval. Treat layout, CSS, typography, component structure, animation, interactions, and static UI copy as fixed; canonical research data and public editorial content may still change when evidence or reader value warrants it.
-- Use current BorderClash records and evidence for evaluation, not invented toy prose when real material is available.
-- Use small isolated model evaluations instead of full production cycles when the question is wording, selection, translation, or prompt behavior.
-- Compare alternatives against the same inputs. Keep changes only when they improve reader value without weakening attribution, uncertainty, or factual fidelity.
-- After real cycles, inspect the full trace for concrete friction or missed value across discovery, sources, evidence, records, timeline, current fields, localization, finish/cadence, validation, and delivery. Fix the narrowest responsible layer rather than assuming every problem belongs in synthesis prose.
-- Treat model/judge scores as evidence, never as publication gates.
-- Keep hard failures for objective state, data, and publication invariants. Keep heuristics as warnings or review aids.
-- Do not restart a full historical audit. Reopen old records only for a concrete reason.
+- [x] Preserve `research/CYCLE_GUIDE.md` as the durable research contract; benchmark candidate rewrites before removing editorial/evidence detail, and keep detail that demonstrably improves fidelity or judgment.
+- [x] Add an information-value principle: pursue work while it can materially improve accuracy, confidence, attribution, context, or reader understanding; stop when remaining uncertainty is understood and further available work has low expected value.
+- [x] Remove routine CLI syntax and provider/sandbox implementation details from the stable guide without deleting domain guidance that still improves model fidelity.
+- [x] Reduce the runner bootstrap prompt to locating the stable guide, live context, and discoverable research tools. Do not name individual routine tools there.
+- [x] Keep provider-specific quirks in runner/adapters rather than the research contract.
 
-## 1. Restore trustworthy harness behavior
+Acceptance: a capable model can explain the research goal, judgment boundary, and finish condition after reading the guide without learning a prescribed research sequence.
 
-- [x] Repair the reader-copy benchmark so it uses `research/CYCLE_GUIDE.md` instead of the removed `AGENTS.md` editorial section.
-- [x] Remove the obsolete bare `finish` help entry.
-- [x] Disable Next.js automatic `AGENTS.md` mutation in development.
-- [x] Make `.work/research-finish.json` the authoritative completion/review decision. Final-response markers may be logged but must not veto otherwise valid structured completion.
-- [x] Remove the routine production custom-prompt bypass if no real caller depends on it; keep experiments in explicit development/evaluation paths.
-- [x] Remove dead prompt-prose helpers/tests that freeze wording instead of behavior.
-- [x] Keep the existing automation watchdog unchanged unless a reproducible failure proves a production defect.
+## 2. Improve live cycle orientation
 
-Acceptance: `pnpm test`, `pnpm validate`, and `pnpm test:automation` pass; benchmark starts successfully with the canonical guide.
+- [x] Keep `.work/CYCLE_CONTEXT.md` compact and explicitly label it orientation rather than scope or authority.
+- [x] Include the previous cycle's cadence reason so the new cycle can test the last researcher's expectation.
+- [x] Include the current English synthesis and compact key updates as revisable working memory, avoiding unnecessary multilingual duplication.
+- [x] Preserve recent timeline/evidence anchors without implying source quotas or importance rankings.
+- [x] Keep enough canonical path guidance to prevent predictable filename guessing.
 
-## 2. Put validation on the right side of the judgment boundary
+Acceptance: the agent can orient to the current situation and previous intent without immediately opening predictable files, while remaining free to investigate older or broader material.
 
-- [x] Keep structural hard failures: schema/shape, IDs, canonical URL identity, evidence references, valid dates/times/enums/ranges, required language fields, script/mojibake integrity, runner-owned state, allowed paths, publication reconciliation, and delivery verification.
-- [x] Demote free-text numeric-token parity from publication blocker to diagnostic warning/review signal.
-- [x] Demote Thai/Khmer tone/partisan-word regexes from publication blocker to diagnostic warning/review signal.
-- [x] Remove the hard failure for `titleEn === title`.
-- [x] Review other source-code/prompt regex tests while touching their code; prefer behavioral tests over exact implementation text.
+## 3. Simplify the routine tool surface
 
-Acceptance: known false positives no longer block; objective corruption and referential errors still fail.
+- [x] Introduce capability-oriented routine verbs around four intents: `source`, `record`, `review`, and `finish`.
+- [x] `source`: inspect a URL read-only by default; resolve identity/metadata/capture/existing matches; make retention an explicit mutation and leave semantic fields to model judgment.
+- [x] `record`: inspect a canonical record with resolved evidence/backlinks and optionally retained publisher text; absorb normal `show`/`captured` discovery.
+- [x] `review`: inspect changed work or one record, run relevant objective/advisory diagnostics, clearly separate blockers from review signals, and avoid imposing editorial answers.
+- [x] `finish`: remain the explicit research completion/cadence decision and local objective validation boundary.
+- [x] Keep archive/recovery and narrow diagnostic primitives available under advanced help rather than the routine mental model.
+- [x] Preserve compatible internal primitives where they are useful; do not rewrite working internals merely to rename them.
 
-## 3. Resolve evidence-score semantics without a bulk rescore
+Acceptance: routine `--help` fits on one screen and describes researcher intent, while advanced maintenance remains discoverable.
 
-- [x] Define one meaning for article `credibility`: how strongly the retained evidence supports the stored report as actually worded, including its attribution boundary.
-- [x] Align `CYCLE_GUIDE.md`, `research/lib/evidence-score.mjs`, fixed cases, and validators with that meaning. Static UI wording is outside this research task and remains unchanged without explicit approval.
-- [x] Make clear that a primary source can strongly establish that an actor made a statement without proving the actor's disputed allegation true.
-- [x] Remove contradictory blanket handling of attributed opponent claims.
-- [x] Keep evidence-score semantics authoritative in the research contract and evaluator rather than changing static UI copy as part of this task.
-- [x] Do not rescore the archive wholesale. Revisit existing records only when a concrete current use or obvious inconsistency warrants it.
+## 4. Make tools self-describing
 
-Acceptance: the same attributed report receives the same conceptual treatment in the guide, library, fixture evaluator, and validator without requiring a UI change.
+- [x] Add command-specific help for routine tools, including mutation/read-only behavior, required model judgments, examples, and result semantics.
+- [x] Standardize routine outputs around outcome, reason, remaining judgment, and next action where they materially help the next model decision.
+- [x] Improve ambiguous/review outcomes so no canonical mutation occurs and the output explains how to resolve the ambiguity.
+- [x] Improve objective validation errors with precise locations and actionable details; in particular, report unexpected script characters/code points instead of only `wrong-script`.
+- [x] Keep auto-fix limited to lossless mechanical facts; never auto-translate or resolve semantic/editorial uncertainty.
 
-## 4. Clarify editorial roles and simplify the operating brief
+Acceptance: normal use and normal recovery do not require opening CLI/library source code.
 
-- [x] Keep `research/CYCLE_GUIDE.md` as the single durable research contract and keep it compact.
-- [x] Define field roles: overall synthesis = shared current picture; key updates = material recent/imminent changes; country summaries = each side's current position/material claims; activity fields = supported physical military posture; timeline = reconstructable history.
-- [x] Tell the agent to verify rigorously but not narrate its audit process in public prose.
-- [x] Prefer ordinary language; keep loaded labels explicitly attributed; draft English/Thai/Khmer from the same facts rather than translating clauses literally.
-- [x] Preserve permission to leave good copy unchanged, while permitting quiet-day edits for error, stale emphasis, jargon, repetition, or poor language.
-- [x] Keep dynamic context free of previous synthesis/reasoning. Label recent anchors as orientation, not importance or scope.
-- [x] Normalize displayed context dates to border-local time where appropriate and remove/rename counts that imply more than they measure.
+## 5. Remove redundant deterministic paths
 
-Acceptance: one brief remains the production contract, stays compact, and contains no previous synthesis or hidden editorial quota.
+- [x] Audit routine and correction verification for duplicated objective reference checks and give each invariant one canonical validator owner.
+- [x] Keep repeated validation at distinct trust boundaries (agent finish, trusted runner, publication candidate) where the state or trust assumption changes.
+- [x] Keep runner-only primitives such as the hidden generic `check` command out of routine help while retaining them where the trusted runner still needs them.
+- [x] Keep advisory chronology/time/humanitarian signals advisory; do not convert them into publication gates.
 
-## 5. Build a small real-data editorial evaluation loop
+Acceptance: fewer ways to ask the same deterministic question, with no reduction in publication safety.
 
-- [x] Repair and extend the optional reader-copy benchmark with representative real BorderClash material covering synthesis selection, timeline prose, attribution, and EN/TH/KH parity.
-- [x] Add an explicit A/B evaluation mode for candidate guide/prompt variants without changing production data.
-- [x] Use the production-qualified model for candidate generation when available; keep judge output advisory and inspect the actual prose.
-- [x] Compare at least the current guide against the proposed guide on the same real inputs.
-- [x] Record concise evaluation results under `.work/`, not canonical data.
+## 6. Evaluate before and after
 
-Acceptance: chosen guidance wins on real examples for clarity/selection/naturalness while preserving material facts, attribution, and uncertainty.
+- [x] Run small same-input A/B model evaluations of the current and proposed research guide on real BorderClash data.
+- [x] Prefer consistent gains or neutral quality with clearer/shorter input over one-off judge wins.
+- [x] Inspect actual candidate text and traces, not only aggregate scores.
+- [ ] After the routine interface is coherent, run one isolated full research cycle without publication and inspect its trace for tool discovery, source handling, unnecessary source-code inspection, validation recovery, research depth, and finish judgment.
+- [ ] Ask the model for concise harness feedback at cycle end, but treat that feedback as evidence rather than instructions.
+- [ ] Make only generalizable follow-up fixes; do not chase every model mistake.
 
-## 6. Repair the current public picture once the system is improved
+Acceptance: the new surface preserves or improves research quality while reducing avoidable harness navigation and implementation leakage in a real shadow cycle.
 
-- [x] Re-open supporting evidence for the current synthesis, country summaries, and recent visible timeline records before editing them.
-- [x] Remove duplicated roles, low-value precision, institutional alphabet soup, verification-memo tails, and unattributed loaded framing.
-- [x] Correct material Thai/Khmer semantic drift in the current public copy.
-- [x] Let key-update count be dynamic, including zero.
-- [x] Keep lower-value supported facts in timeline/evidence rather than forcing them into the current overview.
-- [x] Inspect the real dashboard at 1440x900 in English, Thai, and Khmer, plus a mobile viewport. No UI change is part of this work. The military activity label is a looping banner, so transient edge clipping during motion is expected and should not trigger UI or content changes by itself.
+## Boundaries
 
-Acceptance: all three languages fit/read materially better, with no loss of important attribution or uncertainty; validation and tests remain green.
+- No UI redesign.
+- No bulk historical audit or archive rescore.
+- No production publication merely to evaluate the harness.
+- No deterministic source-count/search-count/tool-order/editorial gates.
+- No model-specific prompt rule unless the behavior is a true domain requirement shared by future models.
+- Stop the hill climb when remaining issues are predominantly editorial/model variance rather than harness friction with a general solution.
 
-## 7. Retire completed historical-audit orchestration separately
+## Verification
 
-- [x] Preserve useful capabilities first: `show`, `captured`, capture/archive/reconstruct, reference checks, targeted chronology/time/humanitarian diagnostics, and generic correction verification.
-- [x] Remove or archive full-audit queue progression, worktree claims, risk queues, batch triage/review orchestration, stale packet refresh, and other machinery that exists only to continue the completed sweep.
-- [x] Preserve final audit artifacts as operator history outside routine production inputs.
-- [x] Keep old records editable and targeted diagnostics available without recreating a perpetual audit backlog.
+- [x] `pnpm test` — 136/136 pass.
+- [x] `pnpm validate` — 585 timeline events / 3,345 articles / 0 warnings.
+- [x] `pnpm test:automation` — all runner/recovery/publication sections pass on a frozen tree.
+- [x] Advisory model benchmark reports retained under `.work/`.
+- [ ] One non-publishing shadow-cycle report reviewed before declaring the new harness surface complete.
 
-Acceptance: routine research CLI/runtime no longer carries bulk-audit workflow complexity, while targeted correction/evidence work remains straightforward.
+## Evaluation notes
 
-## Finish
-
-- [x] Run all normal and automation verification (`pnpm test`, `pnpm validate`, `pnpm test:automation`, and `pnpm build` passed).
-- [x] Run the repaired editorial benchmark/evaluation suite and inspect its outputs manually.
-- [x] Confirm production runner still has one canonical brief and safe publication/recovery behavior.
-- [x] Confirm no full-cycle production publication was required merely to test editorial behavior.
-- [x] Update this plan so completed items reflect observed results, then leave only concrete follow-up work that genuinely remains.
-
-## Verification ledger (2026-11-21)
-
-- `pnpm test`: 127 passed. `pnpm validate`: 582 timeline events, 3,337 articles, zero warnings. `pnpm build`: succeeded.
-- `pnpm test:automation`: passed all run-cycle sections, including structured completion, restart/recovery, operator review, and publication reconciliation.
-- Current-copy A/B reports in `.work/benchmarks/current-copy/` support the field-role guidance in both candidate orderings. The live guide keeps that role split without fixed word or update counts.
-- Reader-copy qualification is advisory. A one-pass production-model sample reached 8.5/10 fidelity but exposed one cross-script error and a few translation-category mistakes. A same-model repair pass removed hard issues and raised fidelity to 9.5/10, but took about 186 seconds / 47.8k candidate tokens and reduced Thai/Khmer naturalness to 6.5/10. That tradeoff does not justify a second production model stage.
-- Current summaries and five recent timeline entries were shortened after evidence review. At 1440x900 the full page and center card have 0 px overflow in English, Thai, and Khmer; the Khmer whole-page check also shows no country-card overflow. The 390x844 mobile view has 0 horizontal overflow and no hidden center-card content.
-- Bulk historical-audit queue/orchestration removed from working tree; `show`, `captured`, archive/restore/reconstruct, targeted diagnostics, and correction verification remain. New record/capture helpers are test-covered.
-- A real production research cycle was subsequently run from the improved system and monitored end to end. It researched Thai, Cambodian, ASEAN-observer, and international angles; made a justified no-canonical-copy-change decision; updated only research cadence/state; published commit `2bfcd33`; and the public dashboard verified that exact served commit. No historical bulk rescore was run.
-- That live run exposed two harmless but wasteful filename guesses (`synthesis.json` and monthly `.json` instead of the canonical `summary.json` / `.jsonl` paths). Generated cycle context now names the canonical current and monthly data paths; the context remains below its 10 KB budget and the full test suite passes.
-- The optional reader-copy benchmark remains advisory; use its failures to find general fidelity problems, not as a publication gate or a reason to encode fixture-specific prose rules.
+- Three same-input guide candidates were compared with the existing production guide using the production model on real BorderClash current-state material. Every more aggressive rewrite lost meaningful quality; some samples introduced fatal attribution or factual errors. The production change therefore preserves the strong editorial/evidence contract and only removes measured operational duplication while adding the general information-value stopping principle.
+- Routine help is now one-screen and intent-oriented. Compatibility commands, narrow diagnostics, and archive recovery remain available under advanced help rather than disappearing from the system.
+- Live context now carries the previous cadence reason and current English working picture, explicitly labeled revisable orientation rather than scope or authority.
+- Objective validation now reports exact cross-script characters/code points and owns canonical current-source URL membership. Correction verification no longer repeats a separate reference-check subprocess.
+- One non-publishing supervised model cycle remains. Its trace, not more speculative design, will decide whether any further harness change is justified.

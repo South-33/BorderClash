@@ -3,7 +3,7 @@ import { LOCALIZED_NEWS_LIMIT, NEWS_MEDIA_ENVIRONMENTS, newsEnvironmentKey, sele
 import { isValidProvenanceId, normalizeArticleUrl } from "./lib/articles.mjs";
 import { isCanonicalDataPath } from "./lib/data-paths.mjs";
 import { keyUpdateRecords } from "./lib/current-shape.mjs";
-import { getLocalizedTextIssue } from "./lib/localization.mjs";
+import { getLocalizedTextIssueDetails } from "./lib/localization.mjs";
 import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
 import { MILITARY_RUBRIC_VERSION, militaryAssessmentFor } from "./lib/military-assessment.mjs";
 import { EVIDENCE_RUBRIC_VERSION, isEvidenceScore } from "./lib/evidence-score.mjs";
@@ -69,8 +69,15 @@ function localized(location, value, language, required = false) {
     if (required) add(location, "missing");
     return;
   }
-  const issue = getLocalizedTextIssue(value, language);
-  if (issue) add(location, issue);
+  const details = getLocalizedTextIssueDetails(value, language);
+  if (details.issue) {
+    const suffix = details.unexpectedCharacters.length
+      ? ` (${details.unexpectedCharacters
+        .map(({ text, codePoint, index, script }) => `${script} ${JSON.stringify(text)} ${codePoint} at index ${index}`)
+        .join(", ")})`
+      : "";
+    add(location, details.issue + suffix);
+  }
   if (nativeDigits.test(value)) add(location, "native-digit");
 }
 
@@ -392,7 +399,14 @@ for (const field of ["displaced", "deaths"]) {
   } else if (metric.claimantNameTh !== undefined || metric.claimantNameKh !== undefined) {
     add("current/impact." + field + ".claimantName", "missing while localized claimant exists");
   }
-  if (metric.sourceUrl !== undefined) directSourceUrl("current/impact." + field + ".sourceUrl", metric.sourceUrl);
+  if (metric.sourceUrl !== undefined) {
+    const location = "current/impact." + field + ".sourceUrl";
+    directSourceUrl(location, metric.sourceUrl);
+    const normalizedSourceUrl = normalizeArticleUrl(metric.sourceUrl);
+    if (normalizedSourceUrl && !newsUrls.has(normalizedSourceUrl)) {
+      add(location, "must match a canonical article URL");
+    }
+  }
   if (metric.evidenceIds !== undefined) {
     evidenceRefs("current/impact." + field + ".evidenceIds", metric.evidenceIds, { allowTimeline: false });
     if (typeof metric.sourceName !== "string" || !metric.sourceName.trim()) {

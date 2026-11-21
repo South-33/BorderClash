@@ -85,14 +85,19 @@ pnpm research context
 
 Real research cycles run only on South and use `gemini-3.8-flash-medium`. Development and fake-agent tests can run elsewhere. Advisory model checks are kept separate from the publication path: fixed cases use prompt-supplied evidence only, and optional benchmarks live under `benchmarks/`.
 
-New evidence can enter through a small batch ingest file, or an existing source can be captured again:
+Routine research helpers are intent-oriented and self-described:
 
 ```powershell
-pnpm research ingest .work/candidates.jsonl
-pnpm research capture <article-id> --force
+pnpm research --help
+pnpm research source <url>
+pnpm research source add .work/candidates.jsonl
+pnpm research record <record-id> --captured
+pnpm research review
 ```
 
-Ingest reuses existing article IDs when normalized URLs, safe redirects, publisher canonical URLs, or known publisher article IDs identify the same underlying article. Ambiguous matches stop for review instead of creating a duplicate. Source capture is private and stays outside Git. By default it uses `~/.borderclash/evidence` with a second South-local copy under `~/.borderclash/evidence-backup`; the roots can be overridden with `BORDERCLASH_EVIDENCE_ARCHIVE` and `BORDERCLASH_EVIDENCE_BACKUP`.
+`source <url>` is read-only: it resolves source identity and reports canonical matches before any mutation. `source add` retains a small evidence batch, reuses existing article IDs when normalized URLs, safe redirects, publisher canonical URLs, or known publisher article IDs identify the same article, and holds ambiguous identity for review instead of guessing. `record` and `review` are read-only research aids. Lower-level capture, diagnostics, archive recovery, and compatibility commands remain available through `pnpm research --help advanced`.
+
+Source capture is private and stays outside Git. By default it uses `~/.borderclash/evidence` with a second South-local copy under `~/.borderclash/evidence-backup`; the roots can be overridden with `BORDERCLASH_EVIDENCE_ARCHIVE` and `BORDERCLASH_EVIDENCE_BACKUP`.
 
 For the pre-rollout supervised South verification, use `research/automation/run-supervised.ps1`. It always runs the real cycle without publication, keeps runner state separate from production state, and places evidence plus its backup in isolated directories outside Git. Before a real model turn it runs a non-mutating privilege preflight and stops if the model context can still reach publication write access or the result is inconclusive. It records `SUPERVISED_CONTEXT.json`, `AGENT_AUTH_PROBE.json`, and `SUPERVISED_REPORT.json` in the isolated session root; `-ProbeArticleId` also exercises capture, backup verification, and restore. A real supervised run shares the production cycle lock, so it cannot overlap a production cycle, and it does not change the scheduler task.
 

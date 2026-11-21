@@ -24,6 +24,7 @@ import { checkHumanitarianSummaryRisk } from "./lib/humanitarian-check.mjs";
 import { checkReferenceCoverage } from "./lib/reference-check.mjs";
 import { loadRecordInspection } from "./lib/record-inspection.mjs";
 import { buildCapturedEvidence } from "./lib/captured-evidence.mjs";
+import { matchSourceInspection } from "./lib/source-inspection.mjs";
 
 const dataRoot = resolve("data");
 const command = process.argv[2] || "context";
@@ -151,7 +152,10 @@ function selectBriefContext({ state, news, timeline, nowMs }) {
 }
 
 async function brief() {
-  const state = await readJson(join(dataRoot, "research-state.json"));
+  const [state, currentSummary] = await Promise.all([
+    readJson(join(dataRoot, "research-state.json")),
+    readJson(join(dataRoot, "current", "summary.json")),
+  ]);
 
   const timeline = [];
   for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
@@ -183,6 +187,14 @@ async function brief() {
       now: new Date(nowMs).toISOString(),
       since: toIso(state.lastResearchAt),
       count: state.researchCycleCount,
+      previousIntervalHours: state.lastCycleInterval,
+      previousReason: state.schedulingReason || "",
+    },
+    workingCurrent: {
+      summary: currentSummary.summary || "",
+      keyUpdates: (currentSummary.keyUpdates || [])
+        .map((item) => item?.text)
+        .filter((value) => typeof value === "string" && value.trim()),
     },
     contextWindow: {
       start: toIso(context.windowStart),
@@ -216,21 +228,41 @@ function borderLocalDate(value) {
 
 function renderContext(output) {
   const timelineRows = output.recentTimeline.slice(0, 4);
+  const environmentLabels = { thailand: "TH", cambodia: "KH", international: "INTL" };
+  const evidenceRows = Object.entries(output.recentNews)
+    .flatMap(([environment, rows]) => rows.map((row) => ({ ...row, environment })))
+    .sort((a, b) => latestTimestamp(b) - latestTimestamp(a))
+    .slice(0, 4);
   const lines = [
     "# BorderClash live cycle context",
     "",
-    "Read research/CYCLE_GUIDE.md for the research contract.",
+    "Orientation only: this is revisable working memory, not scope or authority.",
     "",
     "## Live",
     `Now: ${output.cycle.now}`,
-    `Last: ${output.cycle.since || "unknown"} (#${output.cycle.count})`,
-    "data/current/{summary,thailand,cambodia,impact}.json; data/{timeline,news}/YYYY-MM.jsonl",
+    `Last completed cycle: ${output.cycle.since || "unknown"} (#${output.cycle.count})`,
+  ];
+  if (output.cycle.previousReason) {
+    lines.push(`Previous cadence: ${output.cycle.previousIntervalHours || "?"}h — ${output.cycle.previousReason}`);
+  }
+  lines.push(
+    "Canonical paths: data/current/{summary,thailand,cambodia,impact}.json; data/{timeline,news}/YYYY-MM.jsonl",
     "",
-    "## Recent",
-    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; orientation.`,
+    "## Working current picture",
+    output.workingCurrent.summary || "No current synthesis.",
+  );
+  if (output.workingCurrent.keyUpdates.length) {
+    lines.push("", "Key updates");
+    for (const update of output.workingCurrent.keyUpdates.slice(0, 4)) lines.push(`- ${update}`);
+  }
+
+  lines.push(
+    "",
+    "## Recent anchors",
+    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}`,
     "",
     "Timeline",
-  ];
+  );
 
   for (const row of timelineRows) {
     lines.push(`- ${row.date} ${row.timeOfDay || ""} [${row.id}] ${row.title}`.trim());
@@ -238,16 +270,11 @@ function renderContext(output) {
   if (!timelineRows.length) lines.push("- none");
 
   lines.push("", "Evidence");
-  for (const [label, key] of [["TH", "thailand"], ["KH", "cambodia"], ["INTL", "international"]]) {
-    const rows = output.recentNews[key].slice(0, 1);
-    if (!rows.length) {
-      lines.push(`- ${label}: none`);
-      continue;
-    }
-    for (const row of rows) {
-      lines.push(`- ${label} ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
-    }
+  for (const row of evidenceRows) {
+    const label = environmentLabels[row.environment] || row.environment;
+    lines.push(`- ${label} ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
   }
+  if (!evidenceRows.length) lines.push("- none");
   lines.push("");
   return lines.join("\n");
 }
@@ -280,7 +307,22 @@ async function ingest(path, { localize = true } = {}) {
   const localization = localize
     ? await syncNewsLocalization(dataRoot)
     : { skipped: true };
-  process.stdout.write(JSON.stringify({ ok: true, count: results.length, results, evidenceGaps, localization }, null, 2) + "\n");
+  const created = results.filter(({ action }) => action === "added").length;
+  const reused = results.filter(({ action }) => action === "existing").length;
+  const needsReview = results.filter(({ action }) => action === "review").length;
+  process.stdout.write(JSON.stringify({
+    ok: true,
+    count: results.length,
+    created,
+    reused,
+    needsReview,
+    results,
+    evidenceGaps,
+    localization,
+    nextAction: needsReview
+      ? "Resolve needs-review items before relying on them. Other successful batch items remain retained."
+      : "Use retained article IDs when your research judgment warrants linking them to timeline/current records.",
+  }, null, 2) + "\n");
 }
 
 async function syncLocalization() {
@@ -300,6 +342,181 @@ async function capture(id, force = false) {
 async function probeSource(url, previewChars = "800") {
   const result = await probeEvidenceUrl(url, { previewChars: Number(previewChars) || 800 });
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
+async function source(args) {
+  if (args[0] === "add") {
+    const path = args.find((value, index) => index > 0 && value !== "--no-localize");
+    return ingest(path, { localize: !args.includes("--no-localize") });
+  }
+  const url = args[0];
+  if (!url) throw new Error("source requires a URL or: source add <file>");
+  const previewChars = args[1] || "1200";
+  const registry = await loadArticleRegistry(dataRoot);
+  const known = matchSourceInspection(url, { status: "not-fetched", requestedUrl: url }, registry);
+  if (known.outcome !== "new") {
+    process.stdout.write(JSON.stringify({
+      ...known,
+      probe: {
+        status: "not-needed",
+        requestedUrl: url,
+        reason: "canonical identity already exists; use record --captured for retained evidence",
+      },
+    }, null, 2) + "\n");
+    return;
+  }
+  const probe = await probeEvidenceUrl(url, { previewChars: Number(previewChars) || 1200 });
+  process.stdout.write(JSON.stringify(matchSourceInspection(url, probe, registry), null, 2) + "\n");
+}
+
+async function record(args) {
+  const id = args.find((value) => !value.startsWith("--"));
+  if (!id) throw new Error("record requires a canonical record id");
+  const packet = await loadRecordInspection(id, { cwd: process.cwd(), dataRoot });
+  let output = packet;
+  if (args.includes("--captured")) {
+    const capturedPacket = packet.kind === "news"
+      ? { ...packet, evidence: { ...packet.evidence, articles: [packet.record] } }
+      : packet;
+    output = { ...packet, captured: await buildCapturedEvidence(capturedPacket) };
+  }
+  process.stdout.write(JSON.stringify({
+    ...output,
+    readOnly: true,
+    nextAction: args.includes("--captured")
+      ? "Use this packet as research evidence; edit canonical data only when your judgment warrants it."
+      : "Add --captured to inspect retained publisher text for this record's article evidence.",
+  }, null, 2) + "\n");
+}
+
+function gitOutput(args) {
+  const result = spawnSync("git", args, {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.status !== 0) throw new Error(String(result.stderr || result.stdout || "git command failed").trim());
+  return result.stdout;
+}
+
+function parseJsonlText(text) {
+  return String(text || "").split(/\r?\n/u).filter((line) => line.trim()).map((line) => JSON.parse(line));
+}
+
+function changedTimelineIds(baseRef, paths) {
+  const ids = new Set();
+  const removedIds = new Set();
+  for (const path of paths.filter((value) => /^data\/timeline\/.*\.jsonl$/u.test(value))) {
+    let before = [];
+    try {
+      before = parseJsonlText(gitOutput(["show", `${baseRef}:${path}`]));
+    } catch {
+      before = [];
+    }
+    let after = [];
+    try {
+      after = parseJsonlText(readFileSync(resolve(path), "utf8"));
+    } catch {
+      after = [];
+    }
+    const beforeById = new Map(before.map((row) => [row.id, row]));
+    const afterById = new Map(after.map((row) => [row.id, row]));
+    for (const [id, row] of afterById) {
+      if (!beforeById.has(id) || JSON.stringify(beforeById.get(id)) !== JSON.stringify(row)) ids.add(id);
+    }
+    for (const id of beforeById.keys()) if (!afterById.has(id)) removedIds.add(id);
+  }
+  return { ids: [...ids], removedIds: [...removedIds] };
+}
+
+function runWorkingValidator() {
+  const result = spawnSync(process.execPath, [resolve("research", "validate.mjs")], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const text = String(result.status === 0 ? result.stdout : (result.stderr || result.stdout)).trim();
+  let payload = null;
+  try { payload = JSON.parse(text); } catch {}
+  return {
+    ok: result.status === 0,
+    errors: Array.isArray(payload?.errors) ? payload.errors : result.status === 0 ? [] : [text || "validation failed"],
+    warnings: Array.isArray(payload?.warnings) ? payload.warnings : [],
+  };
+}
+
+function advisoryFindings(events, articles) {
+  if (!events.length) return [];
+  const findings = [];
+  const append = (kind, result) => {
+    for (const candidate of result.candidates || []) {
+      findings.push({ kind, reviewOnly: true, ...candidate });
+    }
+  };
+  append("chronology", checkTimelineChronology(events, articles));
+  append("humanitarian", checkHumanitarianSummaryRisk(events, articles));
+  append("time-support", checkTimelineTimeSupport(events, articles, { limit: 100 }));
+  append("time-provenance", checkTimelineTimeProvenance(events, articles));
+  return findings;
+}
+
+async function review(args) {
+  const requestedId = args.find((value) => !value.startsWith("--")) || "";
+  const validation = runWorkingValidator();
+  const registry = await loadArticleRegistry(dataRoot);
+  const allTimeline = [];
+  for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
+    allTimeline.push(...await readJsonl(file));
+  }
+
+  let changedPaths = [];
+  let timelineIds = [];
+  let removedTimelineIds = [];
+  let events = [];
+  let target = null;
+
+  if (requestedId) {
+    target = await loadRecordInspection(requestedId, { cwd: process.cwd(), dataRoot });
+    if (target.kind === "timeline") events = [target.record];
+    else if (target.kind === "current") events = target.evidence.timeline || [];
+  } else {
+    let baseRef = "HEAD";
+    const runtimePath = resolve(".work", "CYCLE_RUN.json");
+    if (existsSync(runtimePath)) {
+      const runtime = await readJson(runtimePath);
+      if (runtime.baseHead) baseRef = String(runtime.baseHead);
+    }
+    changedPaths = gitOutput(["diff", "--name-only", baseRef, "--", "data"])
+      .split(/\r?\n/u).map((value) => value.trim()).filter(Boolean);
+    const changed = changedTimelineIds(baseRef, changedPaths);
+    timelineIds = changed.ids;
+    removedTimelineIds = changed.removedIds;
+    const wanted = new Set(timelineIds);
+    events = allTimeline.filter(({ id }) => wanted.has(id));
+  }
+
+  const advisories = advisoryFindings(events, registry.articles);
+  const output = {
+    ok: validation.ok,
+    readOnly: true,
+    scope: requestedId ? { recordId: requestedId, kind: target.kind } : {
+      changedPaths,
+      changedTimelineIds: timelineIds,
+      removedTimelineIds,
+    },
+    blockers: validation.errors,
+    warnings: validation.warnings,
+    advisories,
+    nextAction: !validation.ok
+      ? "Fix the objective blockers, then rerun review or finish."
+      : advisories.length
+        ? "Review advisory findings against source evidence; they do not require a change if your judgment says the record is already correct."
+        : "No objective blockers or targeted advisory findings were found. Continue research if it can still materially improve the record; otherwise finish.",
+  };
+  process.stdout.write(JSON.stringify(output, null, 2) + "\n");
+  if (!validation.ok) process.exitCode = 1;
 }
 
 async function captureChanged(baseRef) {
@@ -492,6 +709,108 @@ async function finish(hoursText, reasonParts) {
   process.stdout.write(JSON.stringify({ ...marker, nextAction }) + "\n");
 }
 
+function renderHelp(topic = "") {
+  if (topic === "source") {
+    return [
+      "source — inspect or retain article evidence",
+      "",
+      "Read-only:",
+      "  node research/cli.mjs source <url> [preview-chars]",
+      "  Resolves/fetches the URL, checks canonical/publisher identity, and reports existing matches.",
+      "",
+      "Retain:",
+      "  node research/cli.mjs source add <json-or-jsonl-file> [--no-localize]",
+      "  Safely adds or reuses a small evidence batch and captures publisher evidence.",
+      "",
+      "Candidate fields:",
+      "  sourceUrl, source, category, title or titleEn,",
+      "  mediaEnvironment: thailand-domestic | cambodia-domestic | international",
+      "  status: active | archived | unverified",
+      "  credibility: 0..100 in steps of 10 (unverified records cannot exceed 50)",
+      "  publishedAt or fetchedAt: Unix milliseconds",
+      "  provenanceId is optional.",
+      "",
+      "Example candidate:",
+      '  {"sourceUrl":"https://publisher.example/a","source":"Publisher",',
+      '   "category":"diplomatic","mediaEnvironment":"international",',
+      '   "status":"active","credibility":80,"titleEn":"...",',
+      '   "publishedAt":1790000000000}',
+      "",
+      "The tool owns URL identity, reuse, canonical placement, publisher-time reconciliation,",
+      "stable article IDs, and capture. You own semantic judgments such as category,",
+      "media environment, credibility, status, and whether the evidence belongs in the record.",
+    ].join("\n");
+  }
+  if (topic === "record") {
+    return [
+      "record — understand one canonical record",
+      "",
+      "  node research/cli.mjs record <id>",
+      "  node research/cli.mjs record <id> --captured",
+      "",
+      "Reads an article, timeline event, or current/{summary,thailand,cambodia,impact} record",
+      "with resolved canonical evidence. --captured also returns retained publisher text.",
+      "This command is read-only.",
+    ].join("\n");
+  }
+  if (topic === "review") {
+    return [
+      "review — inspect changed work without making editorial decisions for you",
+      "",
+      "  node research/cli.mjs review",
+      "  node research/cli.mjs review <record-id>",
+      "",
+      "Runs objective validation and relevant advisory diagnostics. With no ID, timeline",
+      "diagnostics are limited to events changed in this cycle. Advisory findings never",
+      "require a change by themselves. This command is read-only.",
+    ].join("\n");
+  }
+  if (topic === "finish") {
+    return [
+      "finish — complete the research decision",
+      "",
+      "  node research/cli.mjs finish <hours> <reason>",
+      "  node research/cli.mjs finish --review <reason>",
+      "",
+      "Validates working canonical data and records your next-cadence judgment.",
+      "The trusted runner owns final verification, scheduler-state advancement, and publication.",
+    ].join("\n");
+  }
+  if (topic === "advanced") {
+    return [
+      "Advanced diagnostics, compatibility, and recovery:",
+      "  ingest <file> [--no-localize]   compatibility alias for source add",
+      "  probe-source <url> [chars]      low-level source probe",
+      "  show <id> / captured <id>       compatibility record inspection",
+      "  capture <id> [--force]          retry stored evidence capture",
+      "  sync-news-localization          maintain visible-news localization window",
+      "  capture-changed [base-ref]      capture manually edited news records",
+      "  archive-verify / archive-restore",
+      "  reconstruct <id> [git-ref]",
+      "  check-times / check-time-provenance / check-chronology / check-humanitarian",
+      "  check-references",
+      "",
+      "These are targeted instruments, not a routine checklist.",
+    ].join("\n");
+  }
+  return [
+    "BorderClash research tools:",
+    "  source <url>                    understand a source (read-only)",
+    "  source add <file>               retain or reuse article evidence",
+    "  record <id> [--captured]        understand a canonical record and its evidence",
+    "  review [id]                     inspect changed work or one record",
+    "  finish <hours> <reason>         complete the cycle and choose next cadence",
+    "  finish --review <reason>        stop for operator review when trustworthy completion is blocked",
+    "  context                         show compact live orientation",
+    "",
+    "Use: node research/cli.mjs <command> --help",
+    "Advanced/recovery: node research/cli.mjs --help advanced",
+    "",
+    "Routine cycles do not need pnpm validate/test/build; finish validates working data",
+    "and the trusted runner performs final verification.",
+  ].join("\n");
+}
+
 function run(name, args) {
   const result = spawnSync(name, args, {
     cwd: process.cwd(),
@@ -516,6 +835,18 @@ if (command === "brief") {
   process.stdout.write(renderContext(await brief()) + "\n");
 } else if (command === "check") {
   check();
+} else if (command === "source") {
+  const args = process.argv.slice(3);
+  if (args.includes("--help") || args.includes("-h")) process.stdout.write(renderHelp("source") + "\n");
+  else await source(args);
+} else if (command === "record") {
+  const args = process.argv.slice(3);
+  if (args.includes("--help") || args.includes("-h")) process.stdout.write(renderHelp("record") + "\n");
+  else await record(args);
+} else if (command === "review") {
+  const args = process.argv.slice(3);
+  if (args.includes("--help") || args.includes("-h")) process.stdout.write(renderHelp("review") + "\n");
+  else await review(args);
 } else if (command === "ingest") {
   const args = process.argv.slice(3);
   const path = args.find((arg) => arg !== "--no-localize");
@@ -549,34 +880,11 @@ if (command === "brief") {
 } else if (command === "captured") {
   await captured(process.argv[3]);
 } else if (command === "finish") {
-  await finish(process.argv[3], process.argv.slice(4));
+  if (process.argv.includes("--help") || process.argv.includes("-h")) process.stdout.write(renderHelp("finish") + "\n");
+  else await finish(process.argv[3], process.argv.slice(4));
 } else if (["help", "--help", "-h"].includes(command)) {
-  process.stdout.write([
-    "Routine cycle commands:",
-    "node research/cli.mjs [context]          # show the compact cycle context",
-    "node research/cli.mjs ingest <file> [--no-localize] # add/reuse article evidence; optionally skip unrelated localization sync",
-    "node research/cli.mjs capture <id> [--force] # capture or retry one stored article",
-    "node research/cli.mjs show <id>           # show one canonical record with resolved evidence",
-    "node research/cli.mjs captured <id>       # show retained publisher text for cited evidence",
-    "node research/cli.mjs probe-source <url> [preview-chars] # resolve/fetch a search-result URL and report the final publisher URL",
-    "node research/cli.mjs finish <hours> <reason>  # validate data, complete cycle, choose next cadence",
-    "node research/cli.mjs finish --review <reason> # stop for operator review without publication",
-    "",
-    "Targeted diagnostics and recovery (use for a concrete issue; not a routine checklist):",
-    "node research/cli.mjs sync-news-localization # strip stale localized titles outside the newest visible domestic window",
-    "node research/cli.mjs capture-changed [base-ref] # capture changed news records; hold publisher-ID alias conflicts for review",
-    "node research/cli.mjs archive-verify <id>    # verify the South-local backup copy by checksum",
-    "node research/cli.mjs archive-restore <id> [destination] # restore one backup to a review directory",
-    "node research/cli.mjs reconstruct <id> [git-ref] # show one historical canonical record with its private capture metadata",
-    "node research/cli.mjs check-times        # inspect exact/date-only times and stored-evidence support",
-    "node research/cli.mjs check-time-provenance # flag exact times that may mirror publication metadata",
-    "node research/cli.mjs check-chronology   # flag retrospective evidence with suspicious event dates",
-    "node research/cli.mjs check-humanitarian # triage single-source humanitarian numeric mismatches",
-    "node research/cli.mjs check-references   # report unresolved canonical evidence references",
-    "",
-    "Routine cycles should not run pnpm validate/test/build; finish validates working data and the runner performs final verification.",
-  ].join("\n") + "\n");
+  process.stdout.write(renderHelp(process.argv[3] || "") + "\n");
 } else {
-    console.error("Usage: node research/cli.mjs [brief|context|check|ingest|sync-news-localization|capture|probe-source|capture-changed|archive-verify|archive-restore|reconstruct|show|captured|check-times|check-time-provenance|check-chronology|check-humanitarian|check-references|finish]");
+  console.error("Unknown research command. Run: node research/cli.mjs --help");
   process.exit(2);
 }

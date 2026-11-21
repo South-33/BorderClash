@@ -197,6 +197,52 @@ test("brief extends to the previous cycle but caps automatic context at thirty d
   }
 });
 
+test("context carries previous intent and revisable current orientation without source quotas", async () => {
+  const now = Date.parse("2026-11-10T12:00:00Z");
+  const lastResearchAt = Date.parse("2026-11-09T12:00:00Z");
+  const root = await makeBriefFixture({
+    lastResearchAt,
+    lastCycleInterval: 18,
+    news: {
+      thailand: [localizedNews("th-1", "Thailand update", now - 1_000)],
+      cambodia: [localizedNews("kh-1", "Cambodia update", now - 2_000)],
+      international: [
+        localizedNews("intl-1", "International update", now - 3_000),
+        localizedNews("intl-2", "Second international update", now - 4_000),
+      ],
+    },
+    timeline: [{ id: "tl-1", date: "2026-11-10", timeOfDay: "10:00", title: "Recent event" }],
+  });
+  try {
+    const statePath = join(root, "data", "research-state.json");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.schedulingReason = "Previous researcher expected little material change before talks.";
+    await writeJsonFile(statePath, state);
+    await writeJsonFile(join(root, "data", "current", "summary.json"), {
+      updatedAt: lastResearchAt,
+      summary: "Working synthesis for orientation.",
+      keyUpdates: [{ text: "One material update." }],
+    });
+
+    const result = spawnSync(process.execPath, [script, "context"], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, BORDERCLASH_NOW_MS: String(now) },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Orientation only: this is revisable working memory/u);
+    assert.match(result.stdout, /Previous cadence: 18h/u);
+    assert.match(result.stdout, /Previous researcher expected little material change/u);
+    assert.match(result.stdout, /Working synthesis for orientation/u);
+    assert.match(result.stdout, /One material update/u);
+    assert.ok(result.stdout.includes("Canonical paths: data/current"));
+    assert.match(result.stdout, /TH .*Thailand update/u);
+    assert.match(result.stdout, /INTL .*International update/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("finish records completion intent without mutating trusted scheduler state", async () => {
   const root = await mkdtemp(join(tmpdir(), "borderclash-research-cli-"));
   try {
@@ -569,10 +615,13 @@ test("--help is a successful alias for help", () => {
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /node research\/cli\.mjs \[context\]/u);
-  assert.match(result.stdout, /--no-localize/u);
-  assert.match(result.stdout, /node research\/cli\.mjs finish/u);
-  assert.match(result.stdout, /node research\/cli\.mjs probe-source/u);
+  assert.match(result.stdout, /source <url>.*read-only/u);
+  assert.match(result.stdout, /source add <file>/u);
+  assert.match(result.stdout, /record <id> \[--captured\]/u);
+  assert.match(result.stdout, /review \[id\]/u);
+  assert.match(result.stdout, /finish <hours> <reason>/u);
+  assert.doesNotMatch(result.stdout, /probe-source/u);
+  assert.match(result.stdout, /--help advanced/u);
 });
 
 test("ingest reports the isolated workspace when its candidate file is missing", async () => {

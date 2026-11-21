@@ -19,6 +19,8 @@ Use judgment. The normal flow is:
 
 Do not re-audit the full archive merely because standards improved. Revisit older material when new evidence, a contradiction, an obvious quality problem, or meaningful downstream impact makes the work worthwhile. Prefer the best-supported current judgment over consistency with an older one.
 
+Choose the next action by expected information value. Continue while plausible research or revision could materially improve accuracy, confidence, attribution, context, or reader understanding. Stop when remaining uncertainty is understood and further available work has low expected value.
+
 ## Evidence
 
 Apply the same standard regardless of which side benefits. Keep disputed claims attributed. A primary source is strong evidence for what that actor said or did, not automatically for the truth of a disputed allegation.
@@ -55,21 +57,13 @@ News is grouped by the media environment its audience actually encounters: `thai
 
 Use the best channel for the question: web/search, official documents/statements, publisher archives, specialist tools/data, and relevant community sources such as Reddit. Community posts can surface leads, reactions, or lived experience; verify factual claims before relying on them.
 
-Common CLI commands:
+Research helpers are self-described by `node research/cli.mjs --help`. The routine intents are to understand or retain a `source`, inspect a canonical `record`, `review` changed work when useful, and `finish` the cycle. Use tools when they make mechanical work or checking more reliable; they assist judgment rather than replace it, and they are not a required sequence.
 
-- `node research/cli.mjs --help` - show available research tools.
-- `node research/cli.mjs ingest <file>` - add or reuse a small batch of article evidence.
-- `node research/cli.mjs show <id>` - inspect one canonical record with resolved evidence.
-- `node research/cli.mjs captured <id>` - inspect retained publisher text for cited evidence.
-- `node research/cli.mjs finish <hours> <reason>` - complete the cycle and choose the next cadence.
-- `node research/cli.mjs finish --review <reason>` - stop for operator review when a trustworthy result is blocked.
-
-The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually.
-Research deeply; do not optimize for fewer calls or edits. Search discovers leads; sources verify them. Resolve grounding URLs with `node research/cli.mjs probe-source <url>` before repeating searches. If capture is blocked or a grounding redirect is unreachable in the sandbox, do not bypass the sandbox; seek the direct publisher URL or corroborate elsewhere. No fixed search/rewrite count. Use diagnostics only for concrete questions; `finish` validates data.
+The runner handles final validation, generated public data, committing, publication, and delivery verification. Do not publish manually. Search discovers leads; source evidence verifies them. If a source is inaccessible, seek the direct publisher material or useful corroboration; lack of access is not evidence against a claim. There is no fixed search count, source count, rewrite count, or tool sequence.
 
 ## Finish
 
-Before finishing, re-open retained evidence for consequential current/timeline claims, especially changed material (`captured <id>` when useful). If publisher text is unavailable, seek readable corroboration or lower certainty honestly. Recheck date/time, attribution, source independence, and English/Thai/Khmer factual parity.
+Before finishing, re-open retained evidence for consequential current/timeline claims, especially changed material. If publisher text is unavailable, seek readable corroboration or lower certainty honestly. Recheck date/time, attribution, source independence, and English/Thai/Khmer factual parity.
 
 Choose the next cadence by asking when another full cycle is likely to produce materially new information. Weight current activity, civilian risk, unresolved uncertainty, recent cycle yield, and the timing of the next plausible information-producing event. Do not shorten the cadence merely because a notable meeting is approaching or because this cycle found a new statement; if conditions are calm and little is likely to change before that event, daily or longer review is usually more useful. Use shorter intervals when facts can change quickly, such as active fighting, fast-moving civilian safety impacts, unresolved breaking claims, or a known announcement likely before the next check. In the finish reason, explain why another cycle at that time is worth running; if you cannot identify a plausible source of new material information by then, wait longer.
 

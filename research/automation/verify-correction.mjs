@@ -253,9 +253,9 @@ async function verifyReferenceIntegrity() {
     current[name] = await readJson(join(dataRoot, "current", `${name}.json`));
   }
   const coverage = checkReferenceCoverage({ articles: registry.articles, timeline, current });
-  if (coverage.missingTimelineEvidenceIds.length || coverage.missingCurrentEvidenceIds.length) {
+  if (!coverage.ok) {
     throw new Error(
-      `Canonical evidence references are incomplete: timeline=${coverage.missingTimelineEvidenceIds.length} current=${coverage.missingCurrentEvidenceIds.length}`,
+      `Canonical evidence references are incomplete: timeline=${coverage.missingTimelineEvidenceIds.length} current=${coverage.missingCurrentEvidenceIds.length} urls=${coverage.missingCurrentSourceUrls.length}`,
     );
   }
   return coverage;
@@ -389,7 +389,6 @@ async function main() {
       { name: "validate", command: node, args: ["research/validate.mjs"] },
       { name: "check-chronology", command: node, args: ["research/cli.mjs", "check-chronology"] },
       { name: "check-humanitarian", command: node, args: ["research/cli.mjs", "check-humanitarian"] },
-      { name: "check-references", command: node, args: ["research/cli.mjs", "check-references"] },
       { name: "diff-check", command: "git", args: ["diff", "--check", args.baseline, "--"] },
     ];
     if (args.build) {

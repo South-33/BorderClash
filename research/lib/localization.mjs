@@ -30,3 +30,34 @@ export function getLocalizedTextIssue(value, language) {
   if (!KHMER_RE.test(value)) return "no-target-script";
   return null;
 }
+
+function scriptNameForCodePoint(codePoint) {
+  if (codePoint >= 0x0e00 && codePoint <= 0x0e7f) return "Thai";
+  if (codePoint >= 0x1780 && codePoint <= 0x17ff) return "Khmer";
+  return "";
+}
+
+export function getLocalizedTextIssueDetails(value, language) {
+  const issue = getLocalizedTextIssue(value, language);
+  if (!issue || typeof value !== "string") return { issue, unexpectedCharacters: [] };
+
+  const unexpectedRange = language === "th"
+    ? (codePoint) => codePoint >= 0x1780 && codePoint <= 0x17ff
+    : (codePoint) => codePoint >= 0x0e00 && codePoint <= 0x0e7f;
+  const unexpectedCharacters = [];
+  let codeUnitIndex = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (issue === "wrong-script" && unexpectedRange(codePoint)) {
+      unexpectedCharacters.push({
+        text: character,
+        codePoint: `U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}`,
+        index: codeUnitIndex,
+        script: scriptNameForCodePoint(codePoint),
+      });
+    }
+    codeUnitIndex += character.length;
+  }
+
+  return { issue, unexpectedCharacters };
+}
