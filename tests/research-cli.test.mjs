@@ -574,3 +574,22 @@ test("--help is a successful alias for help", () => {
   assert.match(result.stdout, /node research\/cli\.mjs finish/u);
   assert.match(result.stdout, /node research\/cli\.mjs probe-source/u);
 });
+
+test("ingest reports the isolated workspace when its candidate file is missing", async () => {
+  const root = await mkdtemp(join(tmpdir(), "borderclash-ingest-path-"));
+  try {
+    await mkdir(join(root, "data"), { recursive: true });
+    const result = spawnSync(process.execPath, [script, "ingest", ".work/candidates.json"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+
+    assert.equal(result.status, 2);
+    const error = JSON.parse(result.stderr);
+    assert.equal(error.error, "ingest candidate file not found");
+    assert.equal(error.workspace, root);
+    assert.equal(error.path, resolve(root, ".work", "candidates.json"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

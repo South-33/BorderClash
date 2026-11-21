@@ -257,7 +257,19 @@ function renderContext(output) {
 
 async function ingest(path, { localize = true } = {}) {
   if (!path) throw new Error("ingest requires a JSON or JSONL candidate file");
-  const candidates = await readCandidateFile(resolve(path));
+  const candidatePath = resolve(path);
+  if (!existsSync(candidatePath)) {
+    process.stderr.write(JSON.stringify({
+      ok: false,
+      error: "ingest candidate file not found",
+      path: candidatePath,
+      workspace: process.cwd(),
+      nextAction: "Retry with the exact absolute Path returned by write_file, or write the candidate inside this workspace and pass that path.",
+    }, null, 2) + "\n");
+    process.exitCode = 2;
+    return;
+  }
+  const candidates = await readCandidateFile(candidatePath);
   if (!Array.isArray(candidates) || candidates.length === 0) throw new Error("ingest candidate file is empty");
   const results = await ingestCandidates(candidates, { dataRoot });
   const localization = localize
