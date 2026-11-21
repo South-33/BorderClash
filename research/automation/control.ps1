@@ -305,6 +305,43 @@ switch ($Command) {
             $runtime -and
             [string]$runtime.status -eq "review" -and
             [string]$runtime.recoveryReason -eq "publication_review" -and
+            $runtime.runId
+        ) {
+            $deliveryPath = Join-Path $logDir "$([string]$runtime.runId).delivery.json"
+            $delivery = Read-JsonSafe $deliveryPath
+            if (
+                $delivery -and
+                [string]$delivery.status -eq "verified" -and
+                [string]$delivery.runId -eq [string]$runtime.runId
+            ) {
+                Remove-Item -LiteralPath $pendingPublicationPath -Force -ErrorAction SilentlyContinue
+                $published = [ordered]@{
+                    updatedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+                    status = "published"
+                    phase = "published"
+                    runId = [string]$delivery.runId
+                    model = if ($runtime.PSObject.Properties["model"]) { [string]$runtime.model } else { "gemini-3.8-flash-medium" }
+                    message = "Public dashboard verified for $([string]$delivery.candidateCommit)"
+                    runDir = if ($delivery.PSObject.Properties["sourceRunDir"]) { [string]$delivery.sourceRunDir } else { [string]$runtime.runDir }
+                    baseHead = if ($delivery.PSObject.Properties["baseHead"]) { [string]$delivery.baseHead } else { [string]$runtime.baseHead }
+                    publishCandidate = if ($delivery.PSObject.Properties["candidateDir"]) { [string]$delivery.candidateDir } else { "" }
+                    publishCommit = if ($delivery.PSObject.Properties["candidateCommit"]) { [string]$delivery.candidateCommit } else { "" }
+                    verifiedAt = [int64]$delivery.verifiedAt
+                    servedCommit = [string]$delivery.servedCommit
+                }
+                foreach ($name in @("conversationId", "resumeCount")) {
+                    if ($runtime.PSObject.Properties[$name] -and $runtime.$name) { $published[$name] = $runtime.$name }
+                }
+                Write-JsonAtomic $runtimePath $published
+                Write-Output "PUBLIC VERIFIED: $([string]$delivery.candidateCommit) served=$([string]$delivery.servedCommit)"
+                Show-Status
+                exit 0
+            }
+        }
+        if (
+            $runtime -and
+            [string]$runtime.status -eq "review" -and
+            [string]$runtime.recoveryReason -eq "publication_review" -and
             (Test-Path -LiteralPath $pendingPublicationPath)
         ) {
             $pending = Read-JsonSafe $pendingPublicationPath
