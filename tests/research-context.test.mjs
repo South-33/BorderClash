@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { EOL } from "node:os";
 import test from "node:test";
 test("generated cycle context stays compact enough for AGY file reads", () => {
@@ -7,24 +8,11 @@ test("generated cycle context stays compact enough for AGY file reads", () => {
     encoding: "utf8",
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^# BorderClash cycle context/mu);
-  assert.match(result.stdout, /not verified truth/u);
+  const guide = readFileSync("research/CYCLE_GUIDE.md", "utf8").trim();
+  assert.match(result.stdout, /^# BorderClash research cycle/mu);
+  assert.ok(result.stdout.includes(guide), "cycle context should embed the canonical research guide");
   assert.match(result.stdout, /Research reference time:/u);
-  assert.match(result.stdout, /## Current structured state/u);
-  assert.doesNotMatch(result.stdout, /^Overall:/mu);
-  assert.doesNotMatch(result.stdout, /Current key updates/u);
-  assert.match(result.stdout, /## Latest retained evidence anchors/u);
-  assert.match(result.stdout, /A no-change cycle is valid/u);
-  assert.match(result.stdout, /## Recent repository context/u);
-  assert.doesNotMatch(result.stdout, /## Research window/u);
-  assert.doesNotMatch(result.stdout, /2025 deaths/u);
-  assert.doesNotMatch(result.stdout, /## Source mix/u);
-  assert.match(result.stdout, /Finish with `node research\/cli\.mjs finish`/u);
-  assert.match(result.stdout, /Terminal HTTP is sandboxed/u);
-  assert.match(result.stdout, /node research\/cli\.mjs finish/u);
-  assert.doesNotMatch(result.stdout, /pnpm research/u);
-  assert.doesNotMatch(result.stdout, /After 3 searches/u);
   const productionText = result.stdout.trimEnd().split(/\r?\n/u).join(EOL) + EOL;
-  assert.ok(Buffer.byteLength(productionText, "utf8") <= 4500, `cycle context too large: ${Buffer.byteLength(productionText, "utf8")} bytes`);
+  assert.ok(Buffer.byteLength(productionText, "utf8") <= 10000, `cycle context too large: ${Buffer.byteLength(productionText, "utf8")} bytes`);
   assert.doesNotMatch(result.stdout, /https?:\/\//u, "cycle context should keep source URLs on demand");
 });

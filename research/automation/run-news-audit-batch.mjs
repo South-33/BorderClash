@@ -118,8 +118,8 @@ async function main() {
   await mkdir(runner, { recursive: true });
   if (pathWithin(repoRoot, root)) throw new Error("audit-review work root must stay outside the repository");
 
-  const agents = await readFile(join(repoRoot, "AGENTS.md"), utf8);
-  const prompt = buildBatchReviewPrompt({ agents, entries });
+  const guide = await readFile(join(repoRoot, "research", "CYCLE_GUIDE.md"), utf8);
+  const prompt = buildBatchReviewPrompt({ guide, entries });
   assertBatchPromptSize(prompt);
   const promptPath = join(runner, "prompt.txt");
   const continuationPath = join(runner, "continuation.txt");

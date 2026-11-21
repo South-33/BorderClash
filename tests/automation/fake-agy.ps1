@@ -128,7 +128,7 @@ if (($cycleContextText -split "`r?`n").Count -lt 10) {
     [Console]::Error.WriteLine("cycle context must be compact multiline text")
     exit 21
 }
-if (-not $cycleContextText.Contains("# BorderClash cycle context")) {
+if (-not $cycleContextText.Contains("# BorderClash research cycle")) {
     [Console]::Error.WriteLine("cycle context is missing its heading")
     exit 20
 }

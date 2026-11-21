@@ -4,7 +4,6 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { newsEnvironmentKey, selectVisibleNews } from "./lib/news.mjs";
 import { listFiles, readJson, readJsonl, writeJson } from "./lib/files.mjs";
-import { militaryAssessmentFor } from "./lib/military-assessment.mjs";
 import { syncNewsLocalization } from "./lib/news-localization.mjs";
 import {
   captureChangedArticles,
@@ -175,15 +174,6 @@ function selectBriefContext({ state, news, timeline, nowMs }) {
 
 async function brief() {
   const state = await readJson(join(dataRoot, "research-state.json"));
-  const impact = await readJson(join(dataRoot, "current", "impact.json"));
-  const current = Object.fromEntries(
-    await Promise.all(
-      ["thailand", "cambodia"].map(async (name) => [
-        name,
-        await readJson(join(dataRoot, "current", name + ".json")),
-      ]),
-    ),
-  );
 
   const timeline = [];
   for (const file of await listFiles(join(dataRoot, "timeline"), ".jsonl")) {
@@ -214,26 +204,7 @@ async function brief() {
     cycle: {
       now: new Date(nowMs).toISOString(),
       since: toIso(state.lastResearchAt),
-      next: toIso(state.nextRunAt),
-      intervalHours: state.lastCycleInterval,
-      reason: state.schedulingReason,
       count: state.researchCycleCount,
-      paused: state.isPaused,
-    },
-    current: {
-      impact: {
-        displaced: impact.displaced,
-        deaths: impact.deaths,
-        updatedAt: impact.updatedAt,
-      },
-      thailand: {
-        updatedAt: current.thailand?.updatedAt,
-        militaryTier: current.thailand?.militaryAssessment?.tier,
-      },
-      cambodia: {
-        updatedAt: current.cambodia?.updatedAt,
-        militaryTier: current.cambodia?.militaryAssessment?.tier,
-      },
     },
     contextWindow: {
       start: toIso(context.windowStart),
@@ -250,10 +221,6 @@ async function brief() {
         values.map(compactNews),
       ]),
     ),
-    archive: {
-      timeline: timeline.length,
-      news: Object.values(news).reduce((sum, values) => sum + values.length, 0),
-    },
   };
 
   return output;
@@ -263,44 +230,23 @@ function isoDate(value) {
   return Number.isFinite(value) ? new Date(value).toISOString() : "unknown";
 }
 
-function compactMetric(metric) {
-  if (!metric || metric.value == null) {
-    return metric?.qualifier === "NO_COMBINED_TOTAL" ? "no combined total" : "unknown";
-  }
-  const prefix = metric.qualifier === "MORE_THAN"
-    ? ">"
-    : metric.qualifier === "AT_LEAST"
-      ? ">="
-      : "";
-  return `${prefix}${metric.value}`;
-}
-
 function renderContext(output) {
+  const guide = readFileSync(resolve("research", "CYCLE_GUIDE.md"), "utf8").trim();
   const lines = [
-    "# BorderClash cycle context",
+    "# BorderClash research cycle",
     "",
-    "Repository claims, not verified truth. Verify sources and use the repository, history, or web as useful.",
-    "A no-change cycle is valid.",
-    "Canonical files: data/current/{impact,thailand,cambodia,summary}.json; data/news/YYYY-MM.jsonl; data/timeline/YYYY-MM.jsonl.",
-    "News/cycle timestamps use Unix milliseconds; timeline date uses YYYY-MM-DD and optional timeOfDay uses supported local time.",
+    guide,
     "",
-    "## Cycle",
+    "## Live context",
     `Research reference time: ${output.cycle.now}`,
     `Last completed: ${output.cycle.since || "unknown"} (cycle ${output.cycle.count})`,
-    `Scheduled next: ${output.cycle.next || "unset"}`,
-    `Previous cadence: ${output.cycle.intervalHours || "unknown"}h - ${output.cycle.reason || "no reason recorded"}`,
-    "",
-    "## Current structured state",
-    `Impact: displaced ${compactMetric(output.current.impact.displaced)}; deaths ${compactMetric(output.current.impact.deaths)}`,
-    `Thailand military posture: ${output.current.thailand.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.thailand.militaryTier)?.score ?? "—"}.`,
-    `Cambodia military posture: ${output.current.cambodia.militaryTier || "unrated"}/${militaryAssessmentFor(output.current.cambodia.militaryTier)?.score ?? "—"}.`,
   ];
 
   const counts = output.contextWindow.counts;
   const since = output.contextWindow.sinceLastCycleCounts;
   lines.push(
     "",
-    "## Recent repository context",
+    "## Recent repository anchors",
     `${output.contextWindow.lookbackDays} days from ${output.contextWindow.start} to ${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (automatic context capped at 30 days)" : ""}.`,
     `In context: timeline ${counts.timeline}; news Thailand domestic ${counts.news.thailand}, Cambodia domestic ${counts.news.cambodia}, international ${counts.news.international}.`,
     `Since last completed cycle: timeline ${since.timeline}; news Thailand domestic ${since.news.thailand}, Cambodia domestic ${since.news.cambodia}, international ${since.news.international}.`,
@@ -328,9 +274,7 @@ function renderContext(output) {
 
   lines.push(
     "",
-    `Archive: ${output.archive.timeline} timeline events; ${output.archive.news} news records.`,
-    "Terminal HTTP is sandboxed; use web tools. EAI_AGAIN from probe-source does not prove publisher failure.",
-    "Finish with `node research/cli.mjs finish`; help: `node research/cli.mjs --help`.",
+    "These automated anchors are only a starting point, not the research scope or ground truth. Build the context you need from the canonical records, evidence, and web.",
     "",
   );
   return lines.join("\n");
@@ -1170,11 +1114,11 @@ if (command === "brief") {
   await auditHumanitarian();
 } else if (command === "audit-references") {
   await auditReferences();
-} else if (command === "audit-show") {
+} else if (command === "show" || command === "audit-show") {
   await auditShow(process.argv[3]);
 } else if (command === "audit-cluster") {
   await auditCluster(process.argv[3], process.argv[4], process.argv[5]);
-} else if (command === "audit-captured") {
+} else if (command === "captured" || command === "audit-captured") {
   await auditCaptured(process.argv[3]);
 } else if (command === "audit-prepare") {
   await auditPrepare(process.argv[3], process.argv[4], process.argv[5]);
@@ -1218,6 +1162,8 @@ if (command === "brief") {
     "node research/cli.mjs archive-verify <id>    # verify the South-local backup copy by checksum",
     "node research/cli.mjs archive-restore <id> [destination] # restore one backup to a review directory",
     "node research/cli.mjs reconstruct <id> [git-ref] # show one historical canonical record with its private capture metadata",
+    "node research/cli.mjs show <id>           # show one canonical record with resolved evidence",
+    "node research/cli.mjs captured <id>       # show retained publisher text for cited evidence",
     "node research/cli.mjs audit-times         # inventory exact/date-only times and stored-evidence time support for source review",
     "node research/cli.mjs audit-time-provenance # flag exact times that mirror article publication time without textual support",
     "node research/cli.mjs audit-chronology    # flag retrospective evidence whose publication date may have been copied to an event",
@@ -1246,10 +1192,10 @@ if (command === "brief") {
     "node research/cli.mjs finish --review <reason> # stop for operator review without publication",
   ].filter((line) => {
     const auditCommand = line.startsWith("node research/cli.mjs audit-");
-    const evidenceCommand = /audit-(?:captured|help)\b/u.test(line);
+    const evidenceCommand = /audit-help\b/u.test(line);
     return command === "audit-help" || !auditCommand || evidenceCommand;
   }).join("\n") + "\n");
 } else {
-    console.error("Usage: node research/cli.mjs [brief|context|ingest|sync-news-localization|capture|probe-source|archive-verify|archive-restore|reconstruct|audit-times|audit-time-provenance|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-cluster|audit-captured|audit-prepare|audit-diagnose|audit-recover|audit-resume|audit-init|audit-next|audit-risk|audit-pick|audit-triage|audit-claim|audit-release|audit-mark|audit-sync|audit-status|finish]");
+    console.error("Usage: node research/cli.mjs [brief|context|ingest|sync-news-localization|capture|probe-source|archive-verify|archive-restore|reconstruct|show|captured|audit-times|audit-time-provenance|audit-chronology|audit-humanitarian|audit-references|audit-show|audit-cluster|audit-captured|audit-prepare|audit-diagnose|audit-recover|audit-resume|audit-init|audit-next|audit-risk|audit-pick|audit-triage|audit-claim|audit-release|audit-mark|audit-sync|audit-status|finish]");
   process.exit(2);
 }

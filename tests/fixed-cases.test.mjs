@@ -123,7 +123,7 @@ test("fixed-case runner keeps South acceptance separate from explicit laptop dev
   assert.match(runner, /modelWorkspaceContainsEvidence = \$false/u);
   assert.match(runner, /gemini-3\.8-flash-medium/u);
   assert.match(runner, /Do not use tools, browse, inspect files or directories, or use facts outside this prompt/u);
-  assert.match(runner, /<CANONICAL_AGENTS>/u);
+  assert.match(runner, /<CANONICAL_GUIDE>/u);
   assert.match(runner, /model workspace is intentionally empty/u);
   assert.match(runner, /Fixed-case work root must be outside the repository/u);
   assert.match(runner, /used disallowed tool/u);

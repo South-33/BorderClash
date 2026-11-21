@@ -805,12 +805,7 @@ try {
         }
         if (-not (Test-Path $agy)) { throw "Antigravity CLI not found" }
 
-        $continuationPrompt = "Continue the interrupted BorderClash research cycle from this existing workspace and conversation. Preserve completed work, verify what remains, and finish the original cycle per AGENTS.md."
-        $postCycleExpectation = if ($Publish) {
-            "The runner has already passed preflight checks and will validate, generate, publish, and verify public delivery afterward."
-        } else {
-            "The runner has already passed preflight checks and will validate and generate afterward. Publication is disabled for this supervised cycle."
-        }
+        $continuationPrompt = "Continue the interrupted BorderClash research cycle. Read .work/CYCLE_CONTEXT.md if you need to refresh the goal or live context, preserve completed work, and finish the cycle."
         $effectivePrompt = if ($resuming) {
             $continuationPrompt
         } elseif ($Prompt) {
@@ -819,7 +814,7 @@ try {
             # Do not prefix this with /goal. AGY 1.5.5 headless expands the command,
             # then exits before the first planner response.
             @"
-Maintain the BorderClash data that powers the existing dashboard. Read AGENTS.md and .work/CYCLE_CONTEXT.md, then use the repository and web as useful. Treat the context as a snapshot of repository state, not ground truth. Your deliverable is canonical data/ only. Report harness problems through feedback and use research finish --review when they prevent a trustworthy result. Leave the canonical record as accurate, current, well-sourced, and useful as the available evidence allows. Correct, add, merge, archive, or remove data when justified; a no-change cycle is valid. $postCycleExpectation Complete the cycle as described in AGENTS.md. End with <!-- GOAL_COMPLETE --> and always include an honest HARNESS_FEEDBACK review of any friction, missing context, constraint, or tool problem; use HARNESS_FEEDBACK: none only when there was genuinely no material issue.
+Read .work/CYCLE_CONTEXT.md and complete this BorderClash research cycle. It contains the goal, workflow, tools, and live context for this run.
 "@
         }
         $attemptStem = if ($resuming) { "$runId.resume-$resumeCount" } else { $runId }

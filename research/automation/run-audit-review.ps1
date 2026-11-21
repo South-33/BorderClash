@@ -141,7 +141,7 @@ if ($SupplementalEvidenceFile) {
     if (-not $supplemental) { throw "Supplemental evidence file is empty" }
 }
 
-$agents = [IO.File]::ReadAllText((Join-Path $repoRoot "AGENTS.md"), [Text.Encoding]::UTF8)
+$guide = [IO.File]::ReadAllText((Join-Path $repoRoot "research\CYCLE_GUIDE.md"), [Text.Encoding]::UTF8)
 $settings = [ordered]@{
     permissions = [ordered]@{
         deny = @(
@@ -189,11 +189,11 @@ You are reviewing one real BorderClash canonical record from evidence supplied d
 
 Do not use tools, browse, inspect files, or use facts outside the supplied evidence. The model workspace is intentionally empty and sandboxed. Session permissions deny terminal, file, URL/download, and MCP access before execution; the runner also discards any review that emits a tool event. This is a nonpublishing audit review: do not propose operational actions and do not assume inaccessible South-only captures.
 
-Apply the editorial/evidence rules in CANONICAL_AGENTS, but ignore its operational commands and publication procedures for this review.
+Apply the editorial/evidence rules in CANONICAL_GUIDE, but ignore its operational commands and publication procedures for this review.
 
-<CANONICAL_AGENTS>
-$agents
-</CANONICAL_AGENTS>
+<CANONICAL_GUIDE>
+$guide
+</CANONICAL_GUIDE>
 
 <AUDIT_PACKET>
 $packetText

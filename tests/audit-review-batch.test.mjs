@@ -49,7 +49,7 @@ test("batch output must contain the exact requested id set", () => {
 
 test("batch prompt isolates records and forbids cross-record inference", () => {
   const prompt = buildBatchReviewPrompt({
-    agents: "rules",
+    guide: "rules",
     entries: [
       { recordId: "a", packetText: "{\"id\":\"a\"}", capturedText: "publisher A" },
       { recordId: "b", packetText: "{\"id\":\"b\"}", capturedText: "publisher B" },

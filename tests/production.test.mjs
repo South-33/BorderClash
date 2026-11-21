@@ -76,8 +76,6 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(runner, /\$productionModel = "gemini-3\.8-flash-medium"/);
   assert.doesNotMatch(runner, /BORDERCLASH_RESEARCH_MODEL/);
   assert.doesNotMatch(runner, /\[string\]\$Model/);
-  assert.match(runner, /Publication is disabled for this supervised cycle/u);
-  assert.match(runner, /verify public delivery afterward/u);
   assert.match(runner, /capture-changed/u);
   assert.match(runner, /canonical validation will continue/u);
   assert.match(runner, /Evidence identity review required for a manually edited article/u);

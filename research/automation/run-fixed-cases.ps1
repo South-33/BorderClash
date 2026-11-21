@@ -45,10 +45,7 @@ $fixtures = Get-Content -LiteralPath $fixturesPath -Raw | ConvertFrom-Json
 $selected = @($fixtures | Where-Object { $Case -eq "all" -or $_.id -eq $Case })
 if (-not $selected.Count) { throw "No fixed case selected" }
 
-$canonicalAgents = [IO.File]::ReadAllText((Join-Path $repoRoot "AGENTS.md"), [Text.Encoding]::UTF8)
-if (-not $canonicalAgents.StartsWith("This is the project's AGENTS.md")) {
-    throw "Canonical AGENTS.md has an unexpected first line"
-}
+$canonicalGuide = [IO.File]::ReadAllText((Join-Path $repoRoot "research\CYCLE_GUIDE.md"), [Text.Encoding]::UTF8)
 
 $nullableString = @{ anyOf = @(@{ type = "string" }, @{ type = "null" }) }
 $nullableInteger = @{ anyOf = @(@{ type = "integer" }, @{ type = "null" }) }
@@ -112,11 +109,11 @@ foreach ($fixture in $selected) {
     $prompt = @"
 You are evaluating one controlled BorderClash editorial case. This is not a live research cycle.
 
-Do not use tools, browse, inspect files or directories, or use facts outside this prompt. The model workspace is intentionally empty. The canonical AGENTS.md text below is provided directly so you can apply its editorial and evidence rules; operational commands, paths, scheduling, publication, and repository procedures inside it do not apply to this fixture.
+Do not use tools, browse, inspect files or directories, or use facts outside this prompt. The model workspace is intentionally empty. The canonical research guide below is provided directly so you can apply its editorial and evidence rules; operational commands, paths, scheduling, publication, and repository procedures inside it do not apply to this fixture.
 
-<CANONICAL_AGENTS>
-$canonicalAgents
-</CANONICAL_AGENTS>
+<CANONICAL_GUIDE>
+$canonicalGuide
+</CANONICAL_GUIDE>
 
 <FIXED_CASE>
 Case ID: $caseId
