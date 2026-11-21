@@ -69,7 +69,7 @@ Research deeply for a trustworthy record: inspect relevant sources, revisit judg
 
 ## Finish
 
-Before finishing, re-open evidence for consequential new or changed claims. Check the claim, event date/year, any exact time, attribution, and claimed independence from shared provenance. Check English, Thai, and Khmer for the same material facts and uncertainty.
+Before finishing, re-open retained evidence for consequential current/timeline claims, especially changed material (`captured <id>` when useful). If publisher text is unavailable, seek readable corroboration or lower certainty honestly. Recheck date/time, attribution, source independence, and English/Thai/Khmer factual parity.
 
 Choose the next cadence from current activity, risk, uncertainty, and likely information value: faster during significant developments, slower during sustained calm.
 

@@ -216,43 +216,49 @@ function borderLocalDate(value) {
 
 function renderContext(output) {
   const guide = readFileSync(resolve("research", "CYCLE_GUIDE.md"), "utf8").trim();
-  const lines = [
-    "# BorderClash cycle",
-    "",
-    guide,
-    "",
-    "## Live",
-    `Now: ${output.cycle.now}`,
-    `Last: ${output.cycle.since || "unknown"} (#${output.cycle.count})`,
-    "Data: data/current/{summary,thailand,cambodia,impact}.json; data/{timeline,news}/YYYY-MM.jsonl",
-  ];
+  const timelineRows = output.recentTimeline.slice(0, 4);
 
-  lines.push(
-    "",
-    "## Recent",
-    `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; orientation only.`,
-    "",
-    "Timeline:",
-  );
+  const build = () => {
+    const lines = [
+      guide,
+      "",
+      "## Live",
+      `Now: ${output.cycle.now}`,
+      `Last: ${output.cycle.since || "unknown"} (#${output.cycle.count})`,
+      "data/current/{summary,thailand,cambodia,impact}.json; data/{timeline,news}/YYYY-MM.jsonl",
+      "",
+      "## Recent",
+      `${output.contextWindow.lookbackDays}d ${output.contextWindow.start}..${output.contextWindow.end}${output.contextWindow.cappedAt30Days ? " (30d cap)" : ""}; orientation.`,
+      "",
+      "Timeline",
+    ];
 
-  for (const row of output.recentTimeline.slice(0, 4)) {
-    lines.push(`- ${row.date} ${row.timeOfDay || ""} [${row.id}] ${row.title}`.trim());
-  }
-  if (!output.recentTimeline.length) lines.push("- none");
-
-  lines.push("", "Evidence:");
-  for (const [label, key] of [["TH", "thailand"], ["KH", "cambodia"], ["INTL", "international"]]) {
-    const rows = output.recentNews[key].slice(0, 1);
-    if (!rows.length) {
-      lines.push(`- ${label}: none`);
-      continue;
+    for (const row of timelineRows) {
+      lines.push(`- ${row.date} ${row.timeOfDay || ""} [${row.id}] ${row.title}`.trim());
     }
-    for (const row of rows) {
-      lines.push(`- ${label} ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
+    if (!timelineRows.length) lines.push("- none");
+
+    lines.push("", "Evidence");
+    for (const [label, key] of [["TH", "thailand"], ["KH", "cambodia"], ["INTL", "international"]]) {
+      const rows = output.recentNews[key].slice(0, 1);
+      if (!rows.length) {
+        lines.push(`- ${label}: none`);
+        continue;
+      }
+      for (const row of rows) {
+        lines.push(`- ${label} ${borderLocalDate(row.publishedAt || row.fetchedAt)} [${row.id}] ${row.source}: ${row.title}`);
+      }
     }
+    lines.push("");
+    return lines.join("\n");
+  };
+
+  let rendered = build();
+  while (Buffer.byteLength(rendered, "utf8") > 9990 && timelineRows.length > 1) {
+    timelineRows.pop();
+    rendered = build();
   }
-  lines.push("");
-  return lines.join("\n");
+  return rendered;
 }
 
 async function ingest(path, { localize = true } = {}) {
@@ -272,10 +278,18 @@ async function ingest(path, { localize = true } = {}) {
   const candidates = await readCandidateFile(candidatePath);
   if (!Array.isArray(candidates) || candidates.length === 0) throw new Error("ingest candidate file is empty");
   const results = await ingestCandidates(candidates, { dataRoot });
+  const usableCaptureStatuses = new Set(["captured-html", "captured-document", "captured-text"]);
+  const evidenceGaps = results
+    .filter(({ capture }) => capture?.status && !usableCaptureStatuses.has(capture.status))
+    .map(({ id, sourceUrl, capture }) => ({
+      id: id || capture.articleId || null,
+      sourceUrl: sourceUrl || null,
+      status: capture.status,
+    }));
   const localization = localize
     ? await syncNewsLocalization(dataRoot)
     : { skipped: true };
-  process.stdout.write(JSON.stringify({ ok: true, count: results.length, results, localization }, null, 2) + "\n");
+  process.stdout.write(JSON.stringify({ ok: true, count: results.length, results, evidenceGaps, localization }, null, 2) + "\n");
 }
 
 async function syncLocalization() {
