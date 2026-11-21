@@ -40,8 +40,7 @@ export function currentSummaryPublic(value) {
 export function metricDisplay(metric) {
   if (!metric || metric.value == null) return "—";
   const number = Number(metric.value).toLocaleString("en-US");
-  if (metric.qualifier === "MORE_THAN") return `>${number}`;
-  if (metric.qualifier === "AT_LEAST") return `≥${number}`;
+  if (metric.qualifier === "MORE_THAN" || metric.qualifier === "AT_LEAST") return `${number}+`;
   return number;
 }
 
