@@ -781,7 +781,6 @@ const MilitaryIntensityGauge = ({
           {displayRationale && (
             <div className="mt-2 p-3 bg-riso-ink/5 border-l-4 border-l-riso-ink border-y border-r border-y-riso-ink/10 border-r-riso-ink/10">
               <p className={`font-mono text-justify leading-relaxed ${labelFontSize}`}>
-                <span className="mr-2 uppercase tracking-wider opacity-70">[{t.analysis}]:</span>
                 {displayRationale}
               </p>
             </div>
@@ -887,6 +886,7 @@ interface DashboardClientProps {
 
 function DashboardClientInner({ initialData }: DashboardClientProps) {
   const [clockNow, setClockNow] = useState(initialData.snapshotAt);
+  const [requestedLang, setRequestedLang] = useState<Lang | null>(null);
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
   const [viewMode, setViewModeRaw] = useState<ViewMode>('ANALYSIS');
@@ -1226,6 +1226,23 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   } = useCascadeLayout({
     awaitBeforeMeasure: waitForCascadeFadeOut
   });
+
+  const activeLanguage = requestedLang ?? lang;
+
+  useEffect(() => {
+    if (!requestedLang || requestedLang === lang || !isLayoutReady) return;
+
+    // Guarantee that the tiny selector feedback gets a paint before the full
+    // dashboard begins fading out for the language/layout transaction.
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => setLang(requestedLang));
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      if (secondFrame) cancelAnimationFrame(secondFrame);
+    };
+  }, [requestedLang, lang, isLayoutReady, setLang]);
 
   // Get translations for current lang
   const t = TRANSLATIONS[lang as Lang];
@@ -1861,7 +1878,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       : 'font-display text-3xl leading-snug';
   const timelineModalMetaDateClass = isLocalLang ? 'font-body font-[550]' : 'font-bold';
   const sideNarrativeClass = isLocalLang
-    ? 'text-[20px] font-mono'
+    ? 'text-[18px] font-mono'
     : 'text-[17.5px] font-serif';
 
   return (
@@ -1996,19 +2013,20 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               ].map((l) => (
                 <button
                   key={l.id}
-                  onClick={() => setLang(l.id as Lang)}
+                  onClick={() => setRequestedLang(l.id as Lang)}
                   aria-label={`Switch language to ${l.label}`}
+                  aria-pressed={activeLanguage === l.id}
                   data-language-option={l.id}
                   className={`
                     flex-1 flex items-center justify-center py-2 px-1 border-2 active:scale-95
-                    transition-all duration-100 ease-out
-                    ${lang === l.id
+                    transition-[transform,box-shadow] duration-100 ease-out
+                    ${activeLanguage === l.id
                       ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[3px_3px_0px_rgba(30,58,138,0.3)]'
                       : 'bg-riso-ink/5 text-riso-ink border-transparent hover:bg-riso-ink/10 hover:border-riso-ink/20'
                     }
                   `}
                 >
-                  <span lang={l.htmlLang} className={`font-bold tracking-tight whitespace-nowrap leading-none ${l.id === 'en' ? 'text-sm' : 'text-[13px]'}`}>
+                  <span lang={l.htmlLang} className="font-bold tracking-tight whitespace-nowrap leading-none text-[14px]">
                     {l.label}
                   </span>
                 </button>

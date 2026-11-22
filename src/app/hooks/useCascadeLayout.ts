@@ -19,6 +19,7 @@ const FADE_MS = 150;
 const MOBILE_BREAKPOINT = 1280; // Below this = automatic mobile view
 const MIN_SNUG_WIDTH = 1800;
 const MAX_RATIO = 1.35;
+const LANGUAGE_STORAGE_KEY = 'borderclash-language';
 
 // Precision Settings
 const SEARCH_PRECISION_PX = 100; // Stop searching when range is smaller than this
@@ -316,12 +317,27 @@ export function useCascadeLayout({ awaitBeforeMeasure }: CascadeLayoutOptions = 
 
     useEffect(() => {
         // This hook intentionally starts its DOM measurement state machine on mount.
-        recalculate();
+        let initialLang: 'en' | 'th' | 'kh' | undefined;
+        try {
+            const savedLang = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+            if (savedLang === 'en' || savedLang === 'th' || savedLang === 'kh') {
+                initialLang = savedLang;
+            }
+        } catch {
+            // Storage can be unavailable in strict privacy modes. Language
+            // persistence is an enhancement; the dashboard must still load.
+        }
+        recalculate(initialLang);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const setLang = useCallback((newLang: 'en' | 'th' | 'kh') => {
         if (newLang === lang) return;
+        try {
+            window.localStorage.setItem(LANGUAGE_STORAGE_KEY, newLang);
+        } catch {
+            // Keep the language switch functional even if persistence fails.
+        }
         recalculate(newLang);
     }, [lang, recalculate]);
 
