@@ -1652,10 +1652,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // TanStack can measure only the rows we actually mount and reuse those
   // measurements. Clear cached row sizes when the typography/layout geometry
   // changes so offscreen estimates never become stale across languages or
-  // desktop/mobile layout changes.
+  // desktop/mobile layout changes. isLayoutReady also catches physical mobile
+  // width changes, where containerWidth intentionally remains null.
   useLayoutEffect(() => {
-    if (viewMode === 'TIMELINE') rowVirtualizer.measure();
-  }, [rowVirtualizer, viewMode, lang, containerWidth, forceMobile]);
+    if (viewMode === 'TIMELINE' && isLayoutReady) rowVirtualizer.measure();
+  }, [rowVirtualizer, viewMode, lang, containerWidth, forceMobile, isLayoutReady]);
 
   // Scroll to selected date section (uses virtualizer for smooth navigation)
   const scrollToDate = useCallback((date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
