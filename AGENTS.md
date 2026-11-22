@@ -14,6 +14,8 @@ South host maintenance, networking, drivers, power policy, and recovery belong i
 
 Prefer the simplest reliable implementation. Tests and validators should protect objective behavior and data contracts, not freeze prose or prior research judgments. Remove obsolete machinery instead of preserving it for history.
 
+For substantial multi-step repository work, use `plan.md` as living working memory: keep the goal, workstreams, acceptance criteria, boundaries, verification, and decision-changing evidence current, then reset it to its reusable template when the work is complete.
+
 Do not encode model search depth, tool sequence, rewrite count, source count, prompt wording, translation naturalness, or editorial judgment as deterministic pass/fail tests. Evaluate those with real-cycle traces and advisory benchmarks; deterministic checks are for objective invariants only.
 
 For repository development or harness changes, verify with `pnpm test` and `pnpm validate` as appropriate. A live research cycle should not run development verification commands merely for reassurance: `finish` validates the working canonical data and the trusted runner performs the later verification boundaries. For research CLI behavior, use `node research/cli.mjs --help`.

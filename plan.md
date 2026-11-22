@@ -1,115 +1,87 @@
-# BorderClash research-harness refinement
+# Project plan
 
-## Goal
+This file is reusable working memory for substantial repository changes. It should describe the current plan, not preserve completed task history.
 
-Build a model-agnostic research harness that gives the research agent a clear objective, strong evidence/editorial criteria, useful live orientation, and a small set of intuitive deterministic tools while preserving broad freedom over how to investigate and revise the record.
+Use it when the work has several dependent steps, meaningful design choices, risky migrations, or acceptance criteria that are easy to lose across turns. Small fixes do not need a plan.
 
-Quality comes first. Efficiency matters when it removes mechanical work, duplicated context, needless tool discovery, or repeated failure recovery without narrowing research judgment.
+## How to use this file
 
-The target is not a workflow engine. The model should choose what to research, how deeply to pursue it, which evidence matters, what the evidence means, how the canonical record should change, and when further work has low expected value. Deterministic code should make objective operations reliable and explain objective failures precisely.
+- Start with the user-visible goal. Describe the outcome, not the implementation.
+- State the quality order when tradeoffs matter, for example correctness before efficiency or compatibility before cleanup.
+- Record only constraints that materially affect decisions. Do not duplicate `AGENTS.md`, stable product contracts, or command help.
+- Break the work into a small number of coherent workstreams. Each workstream should have checkboxes and one explicit acceptance statement.
+- Keep checkboxes truthful. Rewrite or remove obsolete steps when the plan changes; do not preserve abandoned work for history.
+- Put non-goals and scope limits under **Boundaries** so they do not get confused with unfinished work.
+- Put objective commands and observable checks under **Verification**. Do not use vague entries such as "test everything."
+- Use **Evaluation notes** only for evidence that changed a decision, exposed a real risk, or explains why an apparently obvious alternative was rejected.
+- Prefer measured evidence over intuition for consequential choices. Use traces, tests, benchmarks, real data, or direct product behavior when available.
+- Do not turn model behavior, editorial judgment, or heuristic quality into deterministic pass/fail gates unless the requirement is objectively testable.
+- Stop adding complexity when the remaining problems are mostly judgment variance or low-value edge cases without a clear general solution.
+- Commit only coherent checkpoints. The plan can span several commits, but it should always describe the current intended end state.
 
-## Design principles
+When the plan is complete, verify the acceptance criteria, remove task-specific history, and return this file to a reusable template rather than leaving a finished checklist behind.
 
-- Optimize the whole agent input surface: bootstrap prompt, stable guide, live context, tool descriptions, tool results, validation errors, and the canonical data the model opens on demand.
-- Prefer progressive disclosure. Put durable research judgment in the guide, live orientation in cycle context, tool syntax in tool help, mechanical contracts in code/validation, and provider/runtime quirks in the runner.
-- Give each concept one authoritative owner. Remove duplicated instructions unless repetition protects a real safety boundary.
-- Express success criteria and information-value tradeoffs rather than fixed search counts, source quotas, rewrite counts, or prescribed tool sequences.
-- Keep editorial and evidentiary judgment with the model. Hard checks protect objective invariants; heuristics remain advisory.
-- Prefer a few capability-oriented tools with obvious verbs over many implementation-oriented commands.
-- Make exploration read-only by default and mutation explicit.
-- A normal tool should explain what it did, why, what remains model judgment, and the useful next action. Normal misuse should not require reading implementation source.
-- Do not accumulate prompt scars for one model's behavior. Fix the narrowest general layer: tool UX, context, adapter/runtime, validator diagnostics, or stable guidance.
-- Judge changes with real traces and real BorderClash material. Benchmarks inform decisions; they do not become publication gates.
+---
 
-## 1. Refine the agent input surface
+## Active plan
 
-- [x] Preserve `research/CYCLE_GUIDE.md` as the durable research contract; benchmark candidate rewrites before removing editorial/evidence detail, and keep detail that demonstrably improves fidelity or judgment.
-- [x] Add an information-value principle: pursue work while it can materially improve accuracy, confidence, attribution, context, or reader understanding; stop when remaining uncertainty is understood and further available work has low expected value.
-- [x] Remove routine CLI syntax and provider/sandbox implementation details from the stable guide without deleting domain guidance that still improves model fidelity.
-- [x] Reduce the runner bootstrap prompt to locating the stable guide, live context, and discoverable research tools. Do not name individual routine tools there.
-- [x] Keep provider-specific quirks in runner/adapters rather than the research contract.
+### Goal
 
-Acceptance: a capable model can explain the research goal, judgment boundary, and finish condition after reading the guide without learning a prescribed research sequence.
+> Replace this block with the concrete user-visible outcome.
 
-## 2. Improve live cycle orientation
+Explain:
 
-- [x] Keep `.work/CYCLE_CONTEXT.md` compact and explicitly label it orientation rather than scope or authority.
-- [x] Include the previous cycle's cadence reason so the new cycle can test the last researcher's expectation.
-- [x] Include the current English synthesis and compact key updates as revisable working memory, avoiding unnecessary multilingual duplication.
-- [x] Preserve recent timeline/evidence anchors without implying source quotas or importance rankings.
-- [x] Keep enough canonical path guidance to prevent predictable filename guessing.
+- what should be true when the work is finished;
+- the important quality or priority order;
+- what judgment remains flexible;
+- what the plan deliberately does not try to optimize.
 
-Acceptance: the agent can orient to the current situation and previous intent without immediately opening predictable files, while remaining free to investigate older or broader material.
+### Principles and constraints
 
-## 3. Simplify the routine tool surface
+- Replace with the few design rules that materially shape this task.
+- Prefer one authoritative owner for each concept or invariant.
+- Prefer the simplest complete solution; add machinery only for a measurable gain.
+- Preserve existing product behavior unless the goal explicitly changes it.
 
-- [x] Introduce capability-oriented routine verbs around four intents: `source`, `record`, `review`, and `finish`.
-- [x] `source`: inspect a URL read-only by default; resolve identity/metadata/capture/existing matches; make retention an explicit mutation and leave semantic fields to model judgment.
-- [x] `record`: inspect a canonical record with resolved evidence/backlinks and optionally retained publisher text; absorb normal `show`/`captured` discovery.
-- [x] `review`: inspect changed work or one record, run relevant objective/advisory diagnostics, clearly separate blockers from review signals, and avoid imposing editorial answers.
-- [x] `finish`: remain the explicit research completion/cadence decision and local objective validation boundary.
-- [x] Keep archive/recovery and narrow diagnostic primitives available under advanced help rather than the routine mental model.
-- [x] Preserve compatible internal primitives where they are useful; do not rewrite working internals merely to rename them.
+## 1. First workstream
 
-Acceptance: routine `--help` fits on one screen and describes researcher intent, while advanced maintenance remains discoverable.
+- [ ] Describe a concrete action or decision.
+- [ ] Keep related work together instead of splitting by file or implementation detail.
+- [ ] Add investigation steps only when they answer a real decision.
 
-## 4. Make tools self-describing
+Acceptance: state the observable condition that proves this workstream is good enough.
 
-- [x] Add command-specific help for routine tools, including mutation/read-only behavior, required model judgments, examples, and result semantics.
-- [x] Standardize routine outputs around outcome, reason, remaining judgment, and next action where they materially help the next model decision.
-- [x] Improve ambiguous/review outcomes so no canonical mutation occurs and the output explains how to resolve the ambiguity.
-- [x] Improve objective validation errors with precise locations and actionable details; in particular, report unexpected script characters/code points instead of only `wrong-script`.
-- [x] Keep auto-fix limited to lossless mechanical facts; never auto-translate or resolve semantic/editorial uncertainty.
+## 2. Second workstream
 
-Acceptance: normal use and normal recovery do not require opening CLI/library source code.
+- [ ] Replace with the next coherent part of the work.
+- [ ] Include migration, compatibility, or cleanup work here when it is part of the same decision.
 
-## 5. Remove redundant deterministic paths
+Acceptance: state what must be true before moving on.
 
-- [x] Audit routine and correction verification for duplicated objective reference checks and give each invariant one canonical validator owner.
-- [x] Keep repeated validation at distinct trust boundaries (agent finish, trusted runner, publication candidate) where the state or trust assumption changes.
-- [x] Keep runner-only primitives such as the hidden generic `check` command out of routine help while retaining them where the trusted runner still needs them.
-- [x] Keep advisory chronology/time/humanitarian signals advisory; do not convert them into publication gates.
+## 3. Final integration
 
-Acceptance: fewer ways to ask the same deterministic question, with no reduction in publication safety.
+- [ ] Reconcile interactions between earlier workstreams.
+- [ ] Remove obsolete code, data, prompts, docs, or compatibility paths that no longer have an owner.
+- [ ] Re-read the result from the user, operator, and agent perspectives where relevant.
 
-## 6. Evaluate before and after
-
-- [x] Run small same-input A/B model evaluations of the current and proposed research guide on real BorderClash data.
-- [x] Prefer consistent gains or neutral quality with clearer/shorter input over one-off judge wins.
-- [x] Inspect actual candidate text and traces, not only aggregate scores.
-- [x] Run isolated full research cycles without publication and inspect their traces for tool discovery, source handling, unnecessary source-code inspection, validation recovery, research depth, and finish judgment.
-- [x] Ask the completed-cycle model for concise harness feedback, then compare it with trace evidence rather than treating it as instructions.
-- [x] Make only generalizable follow-up fixes; do not chase every model mistake.
-
-Acceptance: the new surface preserves or improves research quality while reducing avoidable harness navigation and implementation leakage in a real shadow cycle.
+Acceptance: the repository reaches the intended end state without hidden parallel paths or unresolved ownership.
 
 ## Boundaries
 
-- No UI redesign.
-- No bulk historical audit or archive rescore.
-- No production publication merely to evaluate the harness.
-- No deterministic source-count/search-count/tool-order/editorial gates.
-- No model-specific prompt rule unless the behavior is a true domain requirement shared by future models.
-- Stop the hill climb when remaining issues are predominantly editorial/model variance rather than harness friction with a general solution.
+- Replace with explicit non-goals and scope limits for the current task.
+- Keep these narrow. A boundary should prevent real scope drift, not forbid useful judgment.
 
 ## Verification
 
-- [x] `pnpm test` — 137/137 pass after the final record-output compaction.
-- [x] `pnpm validate` — 585 timeline events / 3,345 articles / 0 warnings.
-- [x] `pnpm test:automation` — all runner/recovery/publication sections pass on a frozen tree.
-- [x] Advisory model benchmark reports retained under `.work/`.
-- [x] Two non-publishing shadow-cycle reports reviewed; both completed successfully with sensible no-change decisions and no publication.
+- [ ] Run the smallest objective checks that cover the changed behavior.
+- [ ] Run broader repository validation when the change crosses shared contracts or publication boundaries.
+- [ ] Inspect important outputs or traces directly when tests cannot prove quality.
+- [ ] Confirm the working tree and remote state are what the task expects before declaring completion.
 
 ## Evaluation notes
 
-- Three same-input guide candidates were compared with the existing production guide using the production model on real BorderClash current-state material. Every more aggressive rewrite lost meaningful quality; some samples introduced fatal attribution or factual errors. The production change therefore preserves the strong editorial/evidence contract and only removes measured operational duplication while adding the general information-value stopping principle.
-- Routine help is now one-screen and intent-oriented. Compatibility commands, narrow diagnostics, and archive recovery remain available under advanced help rather than disappearing from the system.
-- Live context now carries the previous cadence reason and current English working picture, explicitly labeled revisable orientation rather than scope or authority.
-- Objective validation now reports exact cross-script characters/code points and owns canonical current-source URL membership. Correction verification no longer repeats a separate reference-check subprocess.
-- First non-publishing shadow cycle completed successfully in about 2.6 minutes with a correct no-change decision and 24-hour cadence. The model discovered `--help` and `review` immediately and did not inspect implementation source. Its main inefficiency was spending most of the cycle on `pnpm validate && pnpm test` and probing runner history because root `AGENTS.md` still presented development/debugging instructions without clearly excluding routine research.
-- After separating development/debugging guidance from live-cycle guidance in `AGENTS.md`, the second shadow cycle completed successfully in about 1.9 minutes. It did not run development tests or seek runner history; it spent the cycle on multilingual search, current-state inspection, `review`, and targeted `record` inspection instead.
-- The second trace showed `record` could exceed 10 KB and be truncated when an event had several linked articles. Default `record` output is now compact and the same real four-source event is about 5 KB; `--full` and `--captured` preserve explicit expansion.
-- The second trace also showed two manual Thai/Khmer script checks. A narrow same-input A/B removed only the guide's ASCII-digit and cross-script clauses; that candidate lost substantial editorial/multilingual quality and produced one fatal judge sample. Those clauses therefore remain despite some mechanical redundancy: quality wins over architectural purity. Instead, `review` now states the objective coverage it already ran (including script/digit and numeric-fidelity checks), so the agent can keep the useful guidance without needing to reimplement the validator.
-- Post-cycle model feedback strongly endorsed the guide/context separation, structured `review`/`finish` outputs, and `record`. Its suggestions to add shadow-trigger metadata or rubric internals to live context were not adopted because they add test/development state that is not needed for the research goal. Its redirect-resolution suggestion is already covered by `source`, which follows redirects and uses final/canonical publisher identity when available.
-- `source add` intentionally continues to use the existing small candidate file as the single mutation input rather than adding a second flag-heavy mutation API. The new help makes that contract discoverable; no evaluated cycle needed to retain a new source, so a parallel direct-add interface would currently add complexity without trace evidence that it improves outcomes.
-- Hill-climb stopping point: remaining observed behavior is mostly model/editorial variance or low-cost optional checking, not a general harness defect with a clearly better low-complexity solution.
+Keep this section short and current.
+
+- Record evidence that changed the plan or justified keeping/rejecting an alternative.
+- Record important residual uncertainty that affects future decisions.
+- Delete notes once they are obvious from the final code, docs, or tests.
