@@ -137,12 +137,30 @@ const snapshot = {
 
 const dashboardPath = join(publicRoot, "dashboard.json");
 const timelinePath = join(publicRoot, "timeline.json");
-await writeJson(dashboardPath, snapshot);
+const statusPath = join(publicRoot, "status.json");
+const status = {
+  deploymentVersion: snapshot.deploymentVersion,
+  researchState: {
+    lastResearchAt: snapshot.researchState.lastResearchAt,
+    nextRunAt: snapshot.researchState.nextRunAt,
+    status: snapshot.researchState.status,
+    paused: snapshot.researchState.paused,
+  },
+};
+await Promise.all([
+  writeJson(dashboardPath, snapshot),
+  writeJson(statusPath, status),
+]);
 await writeJsonArrayOnePerLine(timelinePath, timeline);
-const [dashboardFile, timelineFile] = await Promise.all([stat(dashboardPath), stat(timelinePath)]);
+const [dashboardFile, statusFile, timelineFile] = await Promise.all([
+  stat(dashboardPath),
+  stat(statusPath),
+  stat(timelinePath),
+]);
 
 console.log(JSON.stringify({
   dashboardBytes: dashboardFile.size,
+  statusBytes: statusFile.size,
   timelineBytes: timelineFile.size,
   timelineEvents: timeline.length,
   articleCounts: snapshot.articleCounts,

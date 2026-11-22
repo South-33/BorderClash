@@ -17,7 +17,7 @@ $runtimePath = Join-Path $repoRoot ".work\runner\runtime\runtime.json"
 $controlPath = Join-Path $repoRoot ".work\runner\runtime\control.json"
 $logDir = Join-Path $repoRoot ".work\runner\logs"
 $script:preflightMessage = $null
-$defaultLeadMinutes = 90
+$defaultLeadMinutes = 10
 . (Join-Path $PSScriptRoot "schedule-policy.ps1")
 $script:leadMinutes = Get-ResearchLeadMinutes -LogDir $logDir -DefaultLeadMinutes $defaultLeadMinutes
 
@@ -163,10 +163,10 @@ function Test-SharedCredentialReady {
     return $true
 }
 
-# The Windows task polls frequently so a due cycle starts promptly. Avoid
-# waking Git/network/Node on every idle poll; the dedicated production checkout
-# owns this scheduler state, so the local state is sufficient until a cycle is
-# actually due. The normal runner still re-checks the synced state below.
+# The external scheduler normally wakes exactly at the configured pre-target
+# start time. Keep this local preflight anyway: persistent missed wakes,
+# recovery retries, manual service starts, and stale timer state must not wake
+# Git/network work before research is actually due.
 if (-not (Test-ResearchDue)) {
     Write-Output $script:preflightMessage
     exit 0

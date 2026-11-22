@@ -8,6 +8,12 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
+import {
+  getResearchTimerPhase,
+  RESEARCH_OVERDUE_CHECK_MS,
+  RESEARCH_RUNNING_CHECK_MS,
+  RESEARCH_RUNNING_GRACE_SECONDS,
+} from '@/app/research-timing';
 import { getLocalizedStyleIssue, isValidLocalizedText, normalizeLocalizedDigits } from '@/lib/localized-display';
 
 const DASHBOARD_TIME_ZONE = 'Asia/Phnom_Penh';
@@ -862,8 +868,14 @@ const AutoScanCountdown = ({
   if (researchState?.paused) return <span className="text-yellow-600">{pausedLabel}</span>;
   if (researchState?.status === 'syncing') return <span className="animate-pulse text-riso-accent">{runningLabel}</span>;
   if (remainingSeconds === null) return <HackerScramble />;
-  if (remainingSeconds <= 0) return <span className="text-riso-accent">{formatCountdown(remainingSeconds)}</span>;
-  return formatCountdown(remainingSeconds);
+  const timerPhase = getResearchTimerPhase(remainingSeconds);
+  if (timerPhase.phase === 'running') {
+    return <span className="animate-pulse text-riso-accent">{runningLabel}</span>;
+  }
+  if (timerPhase.phase === 'overdue') {
+    return <span className="text-riso-accent">+{formatCountdown(timerPhase.seconds)}</span>;
+  }
+  return formatCountdown(timerPhase.seconds);
 };
 
 // --- Main Application ---
@@ -1002,16 +1014,20 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       ?? initialData.snapshotAt,
   );
 
-  // The deployment is immutable after load. Re-check only when the user comes
-  // back to this page/window instead of polling a static snapshot forever.
+  // The deployment is immutable after load. Re-check the tiny status artifact
+  // when the user returns, and temporarily during the expected publication
+  // window so an already-open page can move from RUNNING to fresh data.
   useEffect(() => {
     const loadedResearchAt = researchState?.lastResearchAt ?? 0;
     const loadedDeploymentVersion = initialData.deploymentVersion;
-    if (!loadedResearchAt) return;
+    if (!loadedResearchAt || researchState?.paused) return;
 
     let cancelled = false;
     let controller: AbortController | null = null;
-    let lastCheckedAt = Date.now();
+    let lastCheckedAt = 0;
+    let targetTimer: number | null = null;
+    let graceTimer: number | null = null;
+    let checkInterval: number | null = null;
 
     const checkForNewSnapshot = async () => {
       if (document.visibilityState !== 'visible') return;
@@ -1022,7 +1038,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       controller = new AbortController();
 
       try {
-        const response = await fetch(`/data/dashboard.json?research=${now}`, {
+        const response = await fetch(`/data/status.json?research=${now}`, {
           cache: 'no-store',
           signal: controller.signal,
         });
@@ -1044,6 +1060,35 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       }
     };
 
+    const startInterval = (milliseconds: number) => {
+      if (checkInterval !== null) window.clearInterval(checkInterval);
+      void checkForNewSnapshot();
+      checkInterval = window.setInterval(checkForNewSnapshot, milliseconds);
+    };
+
+    const startTargetWindowChecks = () => {
+      const intervalMs = researchState?.intervalHours && researchState.intervalHours > 0
+        ? researchState.intervalHours * 60 * 60 * 1000
+        : 12 * 60 * 60 * 1000;
+      const targetAt = researchState?.nextRunAt ?? ((researchState?.lastResearchAt ?? 0) + intervalMs);
+      if (!targetAt) return;
+
+      const now = Date.now();
+      const graceEndsAt = targetAt + RESEARCH_RUNNING_GRACE_SECONDS * 1000;
+      const enterRunningWindow = () => {
+        startInterval(RESEARCH_RUNNING_CHECK_MS);
+        const remainingGrace = graceEndsAt - Date.now();
+        if (remainingGrace > 0) {
+          graceTimer = window.setTimeout(() => startInterval(RESEARCH_OVERDUE_CHECK_MS), remainingGrace);
+        } else {
+          startInterval(RESEARCH_OVERDUE_CHECK_MS);
+        }
+      };
+
+      if (now >= targetAt) enterRunningWindow();
+      else targetTimer = window.setTimeout(enterRunningWindow, targetAt - now);
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') void checkForNewSnapshot();
     };
@@ -1051,13 +1096,23 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
+    startTargetWindowChecks();
     return () => {
       cancelled = true;
       controller?.abort();
+      if (targetTimer !== null) window.clearTimeout(targetTimer);
+      if (graceTimer !== null) window.clearTimeout(graceTimer);
+      if (checkInterval !== null) window.clearInterval(checkInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [initialData.deploymentVersion, researchState?.lastResearchAt]);
+  }, [
+    initialData.deploymentVersion,
+    researchState?.intervalHours,
+    researchState?.lastResearchAt,
+    researchState?.nextRunAt,
+    researchState?.paused,
+  ]);
 
   // Article age labels only have minute-level precision. Keep that clock out of
   // the one-second countdown path so the whole dashboard does not rerender each

@@ -7,7 +7,9 @@ import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
 
 test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "3e82a45e0b06641b74c8b2a37fc5adcbc818ec80be6bdd60ca0dadaa77c7d919"],
+    ["src/app/DashboardClient.tsx", "bd95cf6abea6292917d9d8910501d6b83d6b00f5790e671cc338e82dc3ff545f"],
+    ["src/app/research-timing.ts", "09d03a502c4d8f8fccff48beb5e3cfda494ab21bf1c6f89ed41da352ffb018af"],
+    ["src/app/research-timing.ts", "09d03a502c4d8f8fccff48beb5e3cfda494ab21bf1c6f89ed41da352ffb018af"],
     ["src/app/hooks/useCascadeLayout.ts", "9209147c08b53145da64c7c9989b266a4dec28418d7c364ca168c584c9d40753"],
     ["src/app/globals.css", "5cde188cc1816468ca46c8765b99fc2334ea1f32679bbf3aa01846bc7f8f923b"],
     ["src/app/layout.tsx", "b87d7baefddab9e8c3bcd12f9f18c37a140bb25775df30af13a8759f2b683274"],
@@ -25,9 +27,10 @@ test("user-facing dashboard files remain on the approved UI contract", () => {
   }
 });
 
-test("open dashboards pick up a newly published research snapshot", () => {
+test("open dashboards check a tiny status artifact only when freshness matters", () => {
   const source = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
-  assert.match(source, /fetch\(`\/data\/dashboard\.json\?research=\$\{now\}`/u);
+  assert.match(source, /fetch\(`\/data\/status\.json\?research=\$\{now\}`/u);
+  assert.doesNotMatch(source, /fetch\(`\/data\/dashboard\.json\?research=/u);
   assert.match(source, /cache: 'no-store'/u);
   assert.match(source, /publishedResearchAt > loadedResearchAt/u);
   assert.match(source, /snapshot\.deploymentVersion !== loadedDeploymentVersion/u);
@@ -35,8 +38,21 @@ test("open dashboards pick up a newly published research snapshot", () => {
   assert.match(source, /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/u);
   assert.match(source, /window\.addEventListener\('focus', handleFocus\)/u);
   assert.match(source, /now - lastCheckedAt < 15_000/u);
-  assert.doesNotMatch(source, /setInterval\(checkForNewSnapshot/u);
-  assert.doesNotMatch(source, /void checkForNewSnapshot\(\);\s*const interval/u);
+  const timing = fs.readFileSync("src/app/research-timing.ts", "utf8");
+  assert.match(timing, /RESEARCH_RUNNING_CHECK_MS = 30_000/u);
+  assert.match(timing, /RESEARCH_OVERDUE_CHECK_MS = 60_000/u);
+  assert.match(source, /startTargetWindowChecks\(\)/u);
+});
+
+test("research target shows RUNNING before it becomes overdue", () => {
+  const source = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
+  const timing = fs.readFileSync("src/app/research-timing.ts", "utf8");
+  assert.match(timing, /RESEARCH_RUNNING_GRACE_SECONDS = 20 \* 60/u);
+  assert.match(timing, /phase: 'running'/u);
+  assert.match(timing, /phase: 'overdue'/u);
+  assert.match(source, /getResearchTimerPhase\(remainingSeconds\)/u);
+  assert.match(source, /animate-pulse text-riso-accent.*runningLabel/su);
+  assert.match(source, />\+\{formatCountdown\(timerPhase\.seconds\)\}<\/span>/u);
 });
 
 test("timeline source previews use the dashboard icon system instead of mojibake glyphs", () => {
@@ -60,6 +76,8 @@ test("public dashboard freshness and feed depth follow the static-data contract"
   assert.match(news, /export const PUBLIC_NEWS_LIMIT = 60;/u);
   assert.match(currentShape, /updatedAt: lastResearchAt \|\| value\.updatedAt/u);
   assert.match(generator, /currentImpactPublic\(impact, thailandPerspective, cambodiaPerspective, researchState\.lastResearchAt\)/u);
+  assert.match(generator, /status\.json/u);
+  assert.match(generator, /statusBytes/u);
   assert.equal(generator.includes("civilianInjuredCount"), false);
   assert.equal(generator.includes("militaryInjuredCount"), false);
 });

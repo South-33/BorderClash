@@ -785,7 +785,8 @@ function renderHelp(topic = "") {
       "  node research/cli.mjs finish <hours> <reason>",
       "  node research/cli.mjs finish --review <reason>",
       "",
-      "Validates working canonical data and records your next-cadence judgment.",
+      "Validates working canonical data and records your target-to-target cadence judgment.",
+      "The runner preserves the target clock phase so a late publication does not drift later targets.",
       "The trusted runner owns final verification, scheduler-state advancement, and publication.",
     ].join("\n");
   }
@@ -812,7 +813,7 @@ function renderHelp(topic = "") {
     "  source add <file>               retain or reuse article evidence",
     "  record <id> [--full|--captured] understand a canonical record and its evidence",
     "  review [id]                     inspect changed work or one record",
-    "  finish <hours> <reason>         complete the cycle and choose next cadence",
+    "  finish <hours> <reason>         complete the cycle and choose target-to-target cadence",
     "  finish --review <reason>        stop for operator review when trustworthy completion is blocked",
     "  context                         show compact live orientation",
     "",

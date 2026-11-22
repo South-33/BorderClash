@@ -15,6 +15,12 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$script:usesCustomSchedulerRoots = (
+    -not [string]::IsNullOrWhiteSpace($RunsRoot) -or
+    -not [string]::IsNullOrWhiteSpace($RuntimeDir) -or
+    -not [string]::IsNullOrWhiteSpace($LogDir) -or
+    -not [string]::IsNullOrWhiteSpace($AgyPath)
+)
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $runnerRoot = Join-Path $repoRoot ".work\runner"
 $runsRoot = if ($RunsRoot) { [IO.Path]::GetFullPath($RunsRoot) } else { Join-Path $runnerRoot "runs" }
@@ -235,6 +241,22 @@ function Invoke-Runner {
     $script:runnerExitCode = $LASTEXITCODE
 }
 
+function Sync-ProductionScheduler {
+    if (
+        $env:OS -eq "Windows_NT" -or
+        $script:usesCustomSchedulerRoots
+    ) {
+        return
+    }
+
+    $rearm = Join-Path $PSScriptRoot "rearm-scheduler.sh"
+    if (-not (Test-Path -LiteralPath $rearm)) { return }
+    & bash $rearm
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Could not re-arm production scheduler."
+    }
+}
+
 function Retire-Checkpoint {
     param($Runtime)
     if ($null -eq $Runtime -or -not $Runtime.runId) { return }
@@ -305,6 +327,7 @@ switch ($Command) {
     "pause" {
         $control = Read-Control
         Save-Control -Paused $true -Stopped ([bool]$control.stopped) | Out-Null
+        Sync-ProductionScheduler
         Show-Status
         exit 0
     }
@@ -315,6 +338,7 @@ switch ($Command) {
         $stoppedProcess = Stop-OwnedRunner $runtime
         Set-RuntimeAfterStop $runtime
         if ($runtime) { Save-CycleReview ([string]$runtime.runId) }
+        Sync-ProductionScheduler
         Write-Output ("ownedProcessStopped=" + $stoppedProcess.ToString().ToLowerInvariant())
         Show-Status
         exit 0
@@ -336,6 +360,7 @@ switch ($Command) {
             if ($pending.PSObject.Properties["reason"]) { $pending.PSObject.Properties.Remove("reason") }
             Write-JsonAtomic $pendingPublicationPath $pending
             Invoke-Runner -Force
+            Sync-ProductionScheduler
             exit $script:runnerExitCode
         }
         if ($runtime -and [string]$runtime.status -eq "review") {
@@ -361,8 +386,10 @@ switch ($Command) {
         $runtime = Read-JsonSafe $runtimePath
         if ($runtime -and [string]$runtime.status -in @("resumable", "ready", "pending-publication")) {
             Invoke-Runner -Force
+            Sync-ProductionScheduler
             exit $script:runnerExitCode
         }
+        Sync-ProductionScheduler
         Show-Status
         exit 0
     }
@@ -370,6 +397,7 @@ switch ($Command) {
         $control = Read-Control
         Save-Control -Paused ([bool]$control.paused) -Stopped $false | Out-Null
         Invoke-Runner -Force
+        Sync-ProductionScheduler
         exit $script:runnerExitCode
     }
     "restart-fresh" {
@@ -391,6 +419,7 @@ switch ($Command) {
         if ($runtime) { Save-CycleReview ([string]$runtime.runId) }
         Save-Control -Paused $false -Stopped $false | Out-Null
         Invoke-Runner -Force
+        Sync-ProductionScheduler
         exit $script:runnerExitCode
     }
     "cleanup" {

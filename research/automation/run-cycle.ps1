@@ -15,6 +15,7 @@ param(
 )
 
 . (Join-Path $PSScriptRoot "platform.ps1")
+. (Join-Path $PSScriptRoot "schedule-policy.ps1")
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -463,12 +464,14 @@ function Get-OrCreateRunnerCompletion {
     if ($completedAt -le [int64]$BaseState.lastResearchAt) {
         $completedAt = [int64]$BaseState.lastResearchAt + 1
     }
+    $previousTargetAt = if ($BaseState.PSObject.Properties["nextRunAt"]) { [int64]$BaseState.nextRunAt } else { 0 }
+    $nextRunAt = Get-NextResearchTargetAt -PreviousTargetAt $previousTargetAt -LastResearchAt ([int64]$BaseState.lastResearchAt) -CompletedAt $completedAt -IntervalHours $hours -LeadMinutes 10
     $completion = [ordered]@{
         schemaVersion = 1
         cycleId = $RunId
         baseHead = $BaseHead
         completedAt = $completedAt
-        nextRunAt = $completedAt + [int64][Math]::Round($hours * 3600000)
+        nextRunAt = $nextRunAt
         intervalHours = $hours
         reason = $reason
         researchCycleCount = [int64]$BaseState.researchCycleCount + 1

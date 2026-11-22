@@ -30,6 +30,9 @@ async function runPolicy(records) {
       "  dueBefore = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now + [int64]($lead + 1) * 60000) -LeadMinutes $lead",
       "  dueAt = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now + [int64]$lead * 60000) -LeadMinutes $lead",
       "  overdue = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now - 60000) -LeadMinutes $lead",
+      "  anchoredLate = Get-NextResearchTargetAt -PreviousTargetAt $now -LastResearchAt ($now - 86400000) -CompletedAt ($now + 120000) -IntervalHours 24 -LeadMinutes $lead",
+      "  anchoredEarly = Get-NextResearchTargetAt -PreviousTargetAt $now -LastResearchAt ($now - 86400000) -CompletedAt ($now - 300000) -IntervalHours 24 -LeadMinutes $lead",
+      "  manualEarly = Get-NextResearchTargetAt -PreviousTargetAt ($now + 14400000) -LastResearchAt ($now - 86400000) -CompletedAt $now -IntervalHours 4 -LeadMinutes $lead",
       "} | ConvertTo-Json -Compress",
     ].join("\r\n");
     await writeFile(scriptPath, script, "utf8");
@@ -50,24 +53,27 @@ function delivery(minutes, offset = 0) {
   return { status: "verified", cycleStartedAt: started, verifiedAt: started + minutes * 60_000 };
 }
 
-test("schedule policy keeps the conservative default until enough delivery samples exist", async () => {
+test("schedule policy uses the fixed product start lead", async () => {
   const empty = await runPolicy([]);
-  assert.equal(empty.lead, 90);
+  assert.equal(empty.lead, 10);
   const sparse = await runPolicy([delivery(40), delivery(55)]);
-  assert.equal(sparse.lead, 90);
+  assert.equal(sparse.lead, 10);
 });
 
-test("schedule policy learns start-to-public duration plus buffer and exposes cadence pressure", async () => {
+test("schedule policy does not let delivery-history variance move the public start window", async () => {
   const result = await runPolicy([delivery(40), delivery(55, 1), delivery(70, 2)]);
-  assert.equal(result.lead, 100);
-  assert.match(result.warningShort, /recent cycle-to-public lead requires about 100m/u);
+  assert.equal(result.lead, 10);
+  assert.equal(result.warningShort, "");
   assert.equal(result.warningLong, "");
   assert.equal(result.dueBefore, false);
   assert.equal(result.dueAt, true);
   assert.equal(result.overdue, true);
+  assert.equal(result.anchoredLate - result.manualEarly, 20 * 60 * 60 * 1000);
+  assert.equal(result.anchoredEarly, result.anchoredLate);
+  assert.equal(result.manualEarly > 0, true);
 });
 
-test("schedule policy ignores invalid delivery records and caps extreme lead time", async () => {
+test("schedule policy stays at ten minutes even with extreme or invalid delivery records", async () => {
   const result = await runPolicy([
     delivery(400),
     delivery(390, 1),
@@ -75,5 +81,5 @@ test("schedule policy ignores invalid delivery records and caps extreme lead tim
     { status: "awaiting-public", cycleStartedAt: 1, verifiedAt: 999999 },
     { status: "verified", cycleStartedAt: 1000, verifiedAt: 500 },
   ]);
-  assert.equal(result.lead, 360);
+  assert.equal(result.lead, 10);
 });
