@@ -737,8 +737,9 @@ try {
     }
 
     $hasRecoveryCheckpoint = $checkpoint -and [string]$checkpoint.status -in @("resumable", "ready")
-    if (-not $Force -and -not $hasRecoveryCheckpoint -and $ScheduledTargetAt -le 0) {
-        throw "Scheduled research requires an explicit ScheduledTargetAt from the scheduler planner."
+    $hasSchedulerIntent = $PSBoundParameters.ContainsKey("ScheduledTargetAt")
+    if (-not $Force -and -not $hasRecoveryCheckpoint -and -not $hasSchedulerIntent) {
+        throw "Scheduled research requires explicit scheduler intent."
     }
 
     if ($Publish) {

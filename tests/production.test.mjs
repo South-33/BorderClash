@@ -74,8 +74,8 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(schedulePolicy, /Get-NextResearchTargetAt/);
   assert.doesNotMatch(schedulePolicy, /ResearchLead|CadenceWarning|TimeDue|LEAD_MINUTES/);
   assert.match(runner, /\[int64\]\$ScheduledTargetAt = 0/);
+  assert.match(runner, /PSBoundParameters\.ContainsKey\("ScheduledTargetAt"\)/);
   assert.match(runner, /scheduledTargetAt = \$cycleScheduledTargetAt/);
-  assert.match(runner, /requires an explicit ScheduledTargetAt from the scheduler planner/);
   assert.doesNotMatch(runner, /StartLeadMinutes/);
   assert.doesNotMatch(platform, /agy-unattended/);
   assert.match(platform, /Get-Command agy /);

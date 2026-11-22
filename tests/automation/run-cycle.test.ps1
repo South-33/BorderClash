@@ -310,7 +310,7 @@ try {
         $ErrorActionPreference = $oldErrorAction
     }
     Assert-True ($unscheduledExit -ne 0) "non-forced runner started without scheduler intent"
-    Assert-True (($unscheduled -join "`n") -match "requires an explicit ScheduledTargetAt") "unscheduled runner rejection did not explain the scheduler boundary"
+    Assert-True (($unscheduled -join "`n") -match "requires explicit scheduler intent") "unscheduled runner rejection did not explain the scheduler boundary"
 
     $env:BORDERCLASH_EXPECT_MODEL = "gemini-3.8-flash-medium"
     $env:BORDERCLASH_FAKE_AGY_MODE = "success"
