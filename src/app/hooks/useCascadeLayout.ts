@@ -109,6 +109,7 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
         // This avoids force-mobile <-> desktop probing flicker while preserving cascade fade.
         if (isLanguageSwitchOutsideAnalysis) {
             setLangState(langToUse);
+            await nextFrame();
             updateState({ isLayoutReady: true });
             isTransitioning.current = false;
             return;
@@ -127,8 +128,10 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
                 containerWidth: null,
                 neutralRatio: 1.0,
                 isMeasuring: false,
-                isLayoutReady: true
+                isLayoutReady: false
             });
+            await nextFrame();
+            updateState({ isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
@@ -146,7 +149,9 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
         await nextFrame();
 
         if (!checkOverflow()) {
-            updateState({ isMeasuring: false, isLayoutReady: true });
+            updateState({ isMeasuring: false, isLayoutReady: false });
+            await nextFrame();
+            updateState({ isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
@@ -184,8 +189,9 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
                 }
             }
 
-
-            updateState({ containerWidth: bestFit, isMeasuring: false, isLayoutReady: true });
+            updateState({ containerWidth: bestFit, isMeasuring: false, isLayoutReady: false });
+            await nextFrame();
+            updateState({ isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
@@ -223,7 +229,9 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
                 }
             }
 
-            updateState({ neutralRatio: bestRatio, isMeasuring: false, isLayoutReady: true });
+            updateState({ neutralRatio: bestRatio, isMeasuring: false, isLayoutReady: false });
+            await nextFrame();
+            updateState({ isLayoutReady: true });
             isTransitioning.current = false;
             return;
         }
@@ -234,8 +242,10 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
             neutralRatio: 1.0,
             containerWidth: null,
             isMeasuring: false,
-            isLayoutReady: true
+            isLayoutReady: false
         });
+        await nextFrame();
+        updateState({ isLayoutReady: true });
         isTransitioning.current = false;
 
     // updateState is a local state helper. Keeping it out preserves the original
