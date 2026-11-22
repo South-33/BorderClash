@@ -14,7 +14,7 @@ South host maintenance, networking, drivers, power policy, and recovery belong i
 
 Prefer the simplest reliable implementation. Tests and validators should protect objective behavior and data contracts, not freeze prose or prior research judgments. Remove obsolete machinery instead of preserving it for history.
 
-For substantial multi-step repository work, use `plan.md` as living working memory: keep the goal, workstreams, acceptance criteria, boundaries, verification, and decision-changing evidence current, then reset it to its reusable template when the work is complete.
+For substantial multi-step repository work, use `plan.md` as living working memory. Treat its workstreams as hypotheses to test and reshape around the goal, not instructions to follow after evidence points to a better design. Keep reasoning, acceptance criteria, boundaries, verification, and decision-changing evidence current, then reset it to the reusable template when the work is complete.
 
 Do not encode model search depth, tool sequence, rewrite count, source count, prompt wording, translation naturalness, or editorial judgment as deterministic pass/fail tests. Evaluate those with real-cycle traces and advisory benchmarks; deterministic checks are for objective invariants only.
 
