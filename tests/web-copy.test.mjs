@@ -7,7 +7,8 @@ import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
 
 test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "baeb8610e64d0a29056563f9532fda09aa415098e1b139d5687a531bcbabcf93"],
+    ["src/app/DashboardClient.tsx", "3e82a45e0b06641b74c8b2a37fc5adcbc818ec80be6bdd60ca0dadaa77c7d919"],
+    ["src/app/hooks/useCascadeLayout.ts", "498728c106b6fd51fa072580cc546d0cd8015b741104d088dea25dd3a015eed6"],
     ["src/app/globals.css", "5cde188cc1816468ca46c8765b99fc2334ea1f32679bbf3aa01846bc7f8f923b"],
     ["src/app/layout.tsx", "b87d7baefddab9e8c3bcd12f9f18c37a140bb25775df30af13a8759f2b683274"],
     ["src/app/loading.tsx", "3e1c0933f619ef400a9c4abbaed0e29a4bf4c6fd63f01e9a9556fde2e7000033"],
@@ -26,12 +27,16 @@ test("user-facing dashboard files remain on the approved UI contract", () => {
 
 test("open dashboards pick up a newly published research snapshot", () => {
   const source = fs.readFileSync("src/app/DashboardClient.tsx", "utf8");
-  assert.match(source, /fetch\(`\/data\/dashboard\.json\?research=\$\{Date\.now\(\)\}`/u);
+  assert.match(source, /fetch\(`\/data\/dashboard\.json\?research=\$\{now\}`/u);
   assert.match(source, /cache: 'no-store'/u);
   assert.match(source, /publishedResearchAt > loadedResearchAt/u);
   assert.match(source, /snapshot\.deploymentVersion !== loadedDeploymentVersion/u);
   assert.match(source, /window\.location\.reload\(\)/u);
-  assert.match(source, /isPossiblyStale \? 60_000 : 300_000/u);
+  assert.match(source, /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/u);
+  assert.match(source, /window\.addEventListener\('focus', handleFocus\)/u);
+  assert.match(source, /now - lastCheckedAt < 15_000/u);
+  assert.doesNotMatch(source, /setInterval\(checkForNewSnapshot/u);
+  assert.doesNotMatch(source, /void checkForNewSnapshot\(\);\s*const interval/u);
 });
 
 test("timeline source previews use the dashboard icon system instead of mojibake glyphs", () => {

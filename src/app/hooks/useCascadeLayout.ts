@@ -38,16 +38,14 @@ export interface CascadeLayoutResult {
 
 export interface CascadeLayoutOptions {
     viewMode?: 'analysis' | 'timeline' | 'guide';
-    isLoading?: boolean;
     awaitBeforeMeasure?: () => Promise<void>;
 }
 
-export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awaitBeforeMeasure }: CascadeLayoutOptions = {}): CascadeLayoutResult {
+export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: CascadeLayoutOptions = {}): CascadeLayoutResult {
     // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const neutralCardRef = useRef<HTMLDivElement>(null);
     const isTransitioning = useRef(false);
-    const prevLoading = useRef(isLoading);
     const lastProcessedWidth = useRef<number | null>(null);
 
     // State
@@ -119,6 +117,7 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
         // Now that we're faded out, enable measuring mode (shows ANALYSIS view for measurements)
         updateState({ isMeasuring: true });
         setLangState(langToUse);
+        await nextFrame();
 
         // If physically on mobile/tablet, skip all logic
         if (!isDesktopNow) {
@@ -271,13 +270,6 @@ export function useCascadeLayout({ viewMode = 'analysis', isLoading = false, awa
         if (newLang === lang) return;
         recalculate(newLang);
     }, [lang, recalculate]);
-
-    useEffect(() => {
-        if (prevLoading.current && !isLoading) {
-            setTimeout(() => recalculate(), 100);
-        }
-        prevLoading.current = isLoading;
-    }, [isLoading, recalculate]);
 
     return {
         containerRef,

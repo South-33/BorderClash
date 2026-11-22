@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle, FileText } from 'lucide-react';
 import type { BorderClashData, CurrentSummary, NewsArticle, Perspective, TimelineEvent } from '@/lib/dashboard-data';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -22,6 +23,62 @@ type TimelineVirtualItem =
   | { type: 'header'; date: string; eventsInDate: number; estimatedSize: number }
   | { type: 'event'; date: string; event: TimelineEvent; eventIndex: number; estimatedSize: number };
 const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
+const TIMELINE_IMPORTANCE_THRESHOLD = 70;
+
+let timelineCache: { version: string; promise: Promise<TimelineEvent[]> } | null = null;
+
+const loadTimeline = (version: string) => {
+  if (timelineCache?.version === version) return timelineCache.promise;
+
+  const promise = fetch(`/data/timeline.json?v=${encodeURIComponent(version)}`, {
+    cache: 'force-cache',
+  })
+    .then((response) => {
+      if (!response.ok) throw new Error(`Timeline fetch failed: ${response.status}`);
+      return response.json() as Promise<TimelineEvent[]>;
+    })
+    .catch((error) => {
+      if (timelineCache?.version === version) timelineCache = null;
+      throw error;
+    });
+
+  timelineCache = { version, promise };
+  return promise;
+};
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+const waitForPaint = async () => {
+  await nextFrame();
+  await nextFrame();
+};
+
+const waitForOpacity = (element: HTMLElement | null, target: number, timeoutMs = 300) => {
+  if (!element) return Promise.resolve();
+
+  const atTarget = () => Math.abs(Number.parseFloat(getComputedStyle(element).opacity || '1') - target) <= 0.01;
+  if (atTarget()) return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      element.removeEventListener('transitionend', onTransitionEnd);
+      window.clearTimeout(timeoutId);
+      resolve();
+    };
+    const onTransitionEnd = (event: TransitionEvent) => {
+      if (event.target === element && event.propertyName === 'opacity' && atTarget()) finish();
+    };
+    const timeoutId = window.setTimeout(finish, timeoutMs);
+
+    element.addEventListener('transitionend', onTransitionEnd);
+    requestAnimationFrame(() => {
+      if (atTarget()) finish();
+    });
+  });
+};
 
 const localizedText = (
   lang: Lang,
@@ -284,13 +341,12 @@ const GuideIcon = ({ size = 24, strokeWidth = 1.5, className = "", ...props }: D
 
 
 // --- Reusable Components ---
-const Card = ({ children, className = "", title, icon: Icon, loading = false, refreshing = false }: {
+const Card = ({ children, className = "", title, icon: Icon, loading = false }: {
   children: React.ReactNode;
   className?: string;
   title?: React.ReactNode;
   icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   loading?: boolean;
-  refreshing?: boolean;
 }) => {
   // When h-full is used, we need flex layout to properly distribute space
   const isFlexLayout = className.includes('h-full');
@@ -303,11 +359,6 @@ const Card = ({ children, className = "", title, icon: Icon, loading = false, re
             <RefreshCw className="w-8 h-8 text-riso-ink animate-spin mb-2" />
             <span className="font-mono text-xs uppercase tracking-widest">Updating Data Stream...</span>
           </div>
-        </div>
-      )}
-      {!loading && refreshing && (
-        <div className="absolute top-2 right-2 z-20 pointer-events-none">
-          <RefreshCw className="w-3 h-3 text-riso-ink/40 animate-spin" />
         </div>
       )}
       {(title || Icon) && (
@@ -459,13 +510,11 @@ const IntelligenceLog = ({
   articles,
   perspective,
   lang = 'en',
-  isLoading,
   now,
 }: {
-  articles: DashboardNewsArticle[] | undefined;
+  articles: DashboardNewsArticle[];
   perspective: 'thailand' | 'cambodia';
   lang?: 'en' | 'th' | 'kh';
-  isLoading: boolean;
   now: number;
 }) => {
   const t = TRANSLATIONS[lang as Lang];
@@ -496,11 +545,7 @@ const IntelligenceLog = ({
 
         {/* Scrollable Feed */}
         <div ref={feedScrollRef} className="flex-1 max-h-[220px] xl:max-h-[350px] overflow-y-auto scrollbar-thin">
-          {isLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <RefreshCw className="w-5 h-5 animate-spin opacity-40" />
-            </div>
-          ) : filteredArticles.length > 0 ? (
+          {filteredArticles.length > 0 ? (
             <ul className="pr-1">
               {filteredArticles.map((article) => (
                 <NewsItem
@@ -760,6 +805,67 @@ const HackerScramble = ({ className = "" }: { className?: string }) => {
   return <span className={`font-mono ${className}`}>{text}</span>;
 };
 
+const formatCountdown = (seconds: number): React.ReactNode => {
+  const overdue = seconds < 0;
+  const absoluteSeconds = Math.abs(seconds);
+  const h = Math.floor(absoluteSeconds / 3600);
+  const m = Math.floor((absoluteSeconds % 3600) / 60);
+  const s = absoluteSeconds % 60;
+  const pad = (n: number) => n < 10 ? `0${n}` : String(n);
+
+  if (absoluteSeconds >= 3600) {
+    return (
+      <>
+        {overdue ? '+' : ''}{h}:{pad(m)}<span className="text-[0.6em] opacity-80">:{pad(s)}</span>
+      </>
+    );
+  }
+  return <>{overdue ? '+' : ''}{pad(m)}:{pad(s)}</>;
+};
+
+const AutoScanCountdown = ({
+  researchState,
+  pausedLabel,
+  runningLabel,
+}: {
+  researchState: BorderClashData['researchState'];
+  pausedLabel: string;
+  runningLabel: string;
+}) => {
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!researchState?.lastResearchAt || researchState.paused || researchState.status === 'syncing') {
+      return;
+    }
+
+    const update = () => {
+      const now = Date.now();
+      const intervalMs = researchState.intervalHours && researchState.intervalHours > 0
+        ? researchState.intervalHours * 60 * 60 * 1000
+        : 12 * 60 * 60 * 1000;
+      const target = researchState.nextRunAt ?? (researchState.lastResearchAt + intervalMs);
+      setRemainingSeconds(Math.floor((target - now) / 1000));
+    };
+
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [
+    researchState?.intervalHours,
+    researchState?.lastResearchAt,
+    researchState?.nextRunAt,
+    researchState?.paused,
+    researchState?.status,
+  ]);
+
+  if (researchState?.paused) return <span className="text-yellow-600">{pausedLabel}</span>;
+  if (researchState?.status === 'syncing') return <span className="animate-pulse text-riso-accent">{runningLabel}</span>;
+  if (remainingSeconds === null) return <HackerScramble />;
+  if (remainingSeconds <= 0) return <span className="text-riso-accent">{formatCountdown(remainingSeconds)}</span>;
+  return formatCountdown(remainingSeconds);
+};
+
 // --- Main Application ---
 interface DashboardClientProps {
   initialData: BorderClashData;
@@ -768,8 +874,6 @@ interface DashboardClientProps {
 
 
 function DashboardClientInner({ initialData }: DashboardClientProps) {
-  const [nextUpdateIn, setNextUpdateIn] = useState<number | null>(null); // Start null to prevent 5:00 flash
-  const [isPossiblyStale, setIsPossiblyStale] = useState(false);
   const [clockNow, setClockNow] = useState(initialData.snapshotAt);
 
   // Always start with ANALYSIS for SSR hydration, then sync from hash on client mount
@@ -779,63 +883,79 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const hasInitializedFromHash = useRef(false);
   const hasAutoScrolledTimeline = useRef(false);
   const fadeShellRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const requestedViewRef = useRef<ViewMode>('ANALYSIS');
+  const viewTransitionActiveRef = useRef(false);
 
   const waitForCascadeFadeOut = useCallback(() => {
     const shell = fadeShellRef.current;
     if (!shell) return Promise.resolve();
 
+    // On first mount the shell already starts hidden. Keep two browser frames
+    // before measuring so font/sidebar/layout observers settle exactly as they
+    // did in the original adaptive-fit path. During language switches this
+    // also waits for the real opacity transition to finish.
     return new Promise<void>((resolve) => {
       let settled = false;
-
       const finish = () => {
         if (settled) return;
         settled = true;
         shell.removeEventListener('transitionend', onTransitionEnd);
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId);
         resolve();
       };
-
       const onTransitionEnd = (event: TransitionEvent) => {
         if (event.target !== shell || event.propertyName !== 'opacity') return;
         const opacity = Number.parseFloat(getComputedStyle(shell).opacity || '1');
         if (opacity <= 0.01) finish();
       };
-
       const timeoutId = window.setTimeout(finish, 300);
 
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const opacity = Number.parseFloat(getComputedStyle(shell).opacity || '1');
-          if (opacity <= 0.01) {
-            finish();
-            return;
-          }
-          shell.addEventListener('transitionend', onTransitionEnd);
+          if (opacity <= 0.01) finish();
+          else shell.addEventListener('transitionend', onTransitionEnd);
         });
       });
     });
   }, []);
 
-  // Animated view mode switch - fade out, switch, fade in
-  const setViewMode = useCallback((mode: 'ANALYSIS' | 'TIMELINE' | 'GUIDE') => {
-    if (mode === viewMode) return;
-    if (mode === 'TIMELINE') {
-      setShouldFetchFullTimeline(true);
-    }
+  const runViewTransition = useCallback(async () => {
+    if (viewTransitionActiveRef.current) return;
+    viewTransitionActiveRef.current = true;
     setIsViewTransitioning(true);
-    setTimeout(() => {
-      setViewModeRaw(mode);
-      setTimeout(() => setIsViewTransitioning(false), 50);
-    }, 150);
-  }, [viewMode]);
+    await waitForOpacity(mainRef.current, 0);
+
+    while (true) {
+      const target = requestedViewRef.current;
+      flushSync(() => setViewModeRaw(target));
+      await waitForPaint();
+      if (requestedViewRef.current === target) break;
+    }
+
+    setIsViewTransitioning(false);
+    viewTransitionActiveRef.current = false;
+  }, []);
+
+  // Fade the existing view fully out, swap the hidden layout, wait for a
+  // stable paint, then fade the destination in.
+  const setViewMode = useCallback((mode: ViewMode) => {
+    requestedViewRef.current = mode;
+    if (mode === 'TIMELINE') setShouldFetchFullTimeline(true);
+    if (mode === viewMode && !viewTransitionActiveRef.current) return;
+    void runViewTransition();
+  }, [viewMode, runViewTransition]);
 
   // On mount, read URL hash and update viewMode (client-only, avoids hydration mismatch)
   useEffect(() => {
     const hash = window.location.hash.toLowerCase().replace('#', '');
     if (hash === 'timeline' || hash === 'TIMELINE') {
       setShouldFetchFullTimeline(true);
+      requestedViewRef.current = 'TIMELINE';
       setViewModeRaw('TIMELINE');
     } else if (hash === 'guide') {
+      requestedViewRef.current = 'GUIDE';
       setViewModeRaw('GUIDE');
     }
     hasInitializedFromHash.current = true;
@@ -872,40 +992,37 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // lazily from the same deployment only when the Timeline view is opened.
   // =============================================================================
 
-  const [tabFocusKey, setTabFocusKey] = useState(0);
   const [clientTimelineEvents, setClientTimelineEvents] = useState<TimelineEvent[] | undefined>(undefined);
-  const [clientTimelineLoading, setClientTimelineLoading] = useState(false);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        setTabFocusKey(prev => prev + 1);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
 
   const researchState = initialData.researchState;
   const activeSnapshot = initialData;
-  const timelineVersion = researchState?.lastResearchAt ?? initialData.snapshotAt;
+  const timelineVersion = String(
+    initialData.deploymentVersion
+      ?? researchState?.lastResearchAt
+      ?? initialData.snapshotAt,
+  );
 
-  // A deployment is static, but an already-open tab can outlive several
-  // research cycles. Poll only the tiny dashboard snapshot and reload once a
-  // newer completed cycle is published so the countdown and data cannot drift.
+  // The deployment is immutable after load. Re-check only when the user comes
+  // back to this page/window instead of polling a static snapshot forever.
   useEffect(() => {
     const loadedResearchAt = researchState?.lastResearchAt ?? 0;
     const loadedDeploymentVersion = initialData.deploymentVersion;
     if (!loadedResearchAt) return;
 
     let cancelled = false;
-    const controller = new AbortController();
+    let controller: AbortController | null = null;
+    let lastCheckedAt = Date.now();
 
     const checkForNewSnapshot = async () => {
       if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastCheckedAt < 15_000) return;
+      lastCheckedAt = now;
+      controller?.abort();
+      controller = new AbortController();
 
       try {
-        const response = await fetch(`/data/dashboard.json?research=${Date.now()}`, {
+        const response = await fetch(`/data/dashboard.json?research=${now}`, {
           cache: 'no-store',
           signal: controller.signal,
         });
@@ -927,48 +1044,97 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       }
     };
 
-    void checkForNewSnapshot();
-    const interval = window.setInterval(checkForNewSnapshot, isPossiblyStale ? 60_000 : 300_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void checkForNewSnapshot();
+    };
+    const handleFocus = () => void checkForNewSnapshot();
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      cancelled = true;
+      controller?.abort();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [initialData.deploymentVersion, researchState?.lastResearchAt]);
+
+  // Article age labels only have minute-level precision. Keep that clock out of
+  // the one-second countdown path so the whole dashboard does not rerender each
+  // second.
+  useEffect(() => {
+    const updateClock = () => setClockNow(Date.now());
+    updateClock();
+    const timer = window.setInterval(updateClock, 60_000);
+    document.addEventListener('visibilitychange', updateClock);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', updateClock);
+    };
+  }, []);
+
+  const warmTimeline = useCallback(() => {
+    void loadTimeline(timelineVersion).catch((error) => {
+      if (error instanceof Error) {
+        console.error('[BorderClash] Failed to warm timeline:', error);
+      }
+    });
+  }, [timelineVersion]);
+
+  // Warm the large optional asset only after the browser has spare time. A
+  // versioned shared promise means hover, deep-link, idle warmup and click all
+  // converge on one request/parse.
+  useEffect(() => {
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (connection?.saveData || connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g') return;
+
+    const idleWindow = window as unknown as {
+      requestIdleCallback?: Window['requestIdleCallback'];
+      cancelIdleCallback?: Window['cancelIdleCallback'];
+    };
+    let idleId: number | null = null;
+    let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
+    let cancelled = false;
+
+    const scheduleWarm = () => {
+      if (cancelled) return;
+      if (idleWindow.requestIdleCallback && idleWindow.cancelIdleCallback) {
+        idleId = idleWindow.requestIdleCallback(warmTimeline, { timeout: 2_000 });
+      } else {
+        timer = globalThis.setTimeout(warmTimeline, 1_000);
+      }
+    };
+
+    if (document.readyState === 'complete') scheduleWarm();
+    else window.addEventListener('load', scheduleWarm, { once: true });
 
     return () => {
       cancelled = true;
-      controller.abort();
-      window.clearInterval(interval);
+      window.removeEventListener('load', scheduleWarm);
+      if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
+      if (timer !== null) globalThis.clearTimeout(timer);
     };
-  }, [initialData.deploymentVersion, researchState?.lastResearchAt, isPossiblyStale, tabFocusKey]);
+  }, [warmTimeline]);
 
   useEffect(() => {
     if (!shouldFetchFullTimeline || clientTimelineEvents !== undefined) return;
 
-    const controller = new AbortController();
     let active = true;
-    setClientTimelineLoading(true);
-
-    fetch(`/data/timeline.json?v=${timelineVersion}`, {
-      cache: 'force-cache',
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Timeline fetch failed: ${response.status}`);
-        }
-        return response.json() as Promise<TimelineEvent[]>;
-      })
+    loadTimeline(timelineVersion)
       .then((events) => {
         if (active) setClientTimelineEvents(events);
       })
       .catch((error) => {
-        if (active && error instanceof Error && error.name !== 'AbortError') {
+        if (active && error instanceof Error) {
           console.error('[BorderClash] Failed to load timeline:', error);
+          setShouldFetchFullTimeline(false);
         }
-      })
-      .finally(() => {
-        if (active) setClientTimelineLoading(false);
       });
 
     return () => {
       active = false;
-      controller.abort();
     };
   }, [shouldFetchFullTimeline, clientTimelineEvents, timelineVersion]);
 
@@ -981,30 +1147,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const articleCounts = activeSnapshot.articleCounts;
   const dashboardRiskLevel = (impact?.riskLevel || 'LOW').toUpperCase();
 
-  const isAwaitingInitialFullTimeline = viewMode === 'TIMELINE'
-    && shouldFetchFullTimeline
-    && clientTimelineEvents === undefined
-    && clientTimelineLoading;
   const timelineEvents = viewMode === 'TIMELINE'
     ? (clientTimelineEvents ?? EMPTY_TIMELINE_EVENTS)
     : EMPTY_TIMELINE_EVENTS;
 
-  const sysStatsLoading = false;
-  const thNewsLoading = false;
-  const khNewsLoading = false;
-  const thMetaLoading = false;
-  const khMetaLoading = false;
-  const summaryLoading = false;
-  const dashboardLoading = false;
-  const countsLoading = false;
-  const timelineLoading = viewMode === 'TIMELINE' && isAwaitingInitialFullTimeline;
-  const thNewsRefreshing = false;
-  const khNewsRefreshing = false;
-  const thMetaRefreshing = false;
-  const khMetaRefreshing = false;
-  const summaryRefreshing = false;
-  const dashboardRefreshing = false;
-  const timelineRefreshing = false;
+  const timelineLoading = viewMode === 'TIMELINE' && clientTimelineEvents === undefined;
 
   // Keep all desktop views capped to the rendered sidebar height. This is the
   // original dashboard behavior from before the short-desktop layout rewrite.
@@ -1047,7 +1194,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     setLang
   } = useCascadeLayout({
     viewMode: viewMode.toLowerCase() as 'analysis' | 'timeline' | 'guide',
-    isLoading: summaryLoading,
     awaitBeforeMeasure: waitForCascadeFadeOut
   });
 
@@ -1150,35 +1296,77 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
   // --- TIMELINE STATE AND LOGIC ---
   const [selectedTimelineDate, setSelectedTimelineDate] = useState<string | null>(null);
+  const selectedTimelineDateRef = useRef<string | null>(null);
   const [isScrollJump, setIsScrollJump] = useState(false);
   const [showMinorEvents, setShowMinorEventsRaw] = useState(false); // Toggle for showing events with importance < 70
   const [isFilterTransitioning, setIsFilterTransitioning] = useState(false); // For fade animation
-  const IMPORTANCE_THRESHOLD = 70; // Events below this are considered "minor" - gives meaningful 65/35 split
 
   // Ref to remember date during filter toggle (for scroll restoration)
   const filterToggleDateRef = useRef<string | null>(null);
-
-  // Animated filter toggle handler - fade out, remember date, update, fade in
-  const setShowMinorEvents = useCallback((value: boolean) => {
-    if (value === showMinorEvents) return;
-    // Remember current date before transition
-    filterToggleDateRef.current = selectedTimelineDate;
-    setIsFilterTransitioning(true);
-    setTimeout(() => {
-      setShowMinorEventsRaw(value);
-      setTimeout(() => setIsFilterTransitioning(false), 50);
-    }, 200);
-  }, [showMinorEvents, selectedTimelineDate]);
+  const requestedMinorEventsRef = useRef(showMinorEvents);
+  const filterTransitionActiveRef = useRef(false);
+  const timelineContentRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
+  const scrollToDateRef = useRef<(date: string, behavior?: 'auto' | 'smooth') => void>(() => {});
+
+  // Fade fully out, change the event set, restore the equivalent date while
+  // hidden, then reveal the settled timeline.
+  const setShowMinorEvents = useCallback((value: boolean) => {
+    requestedMinorEventsRef.current = value;
+    if (value === showMinorEvents && !filterTransitionActiveRef.current) return;
+    filterToggleDateRef.current = selectedTimelineDate;
+    if (filterTransitionActiveRef.current) return;
+
+    filterTransitionActiveRef.current = true;
+    void (async () => {
+      setIsFilterTransitioning(true);
+      await waitForOpacity(timelineContentRef.current, 0);
+
+      let applied = showMinorEvents;
+      while (true) {
+        const target = requestedMinorEventsRef.current;
+        if (target !== applied) {
+          flushSync(() => setShowMinorEventsRaw(target));
+          applied = target;
+        }
+        await waitForPaint();
+        if (requestedMinorEventsRef.current === applied) break;
+      }
+
+      const rememberedDate = filterToggleDateRef.current;
+      if (rememberedDate) {
+        const availableDates = Array.from(new Set(
+          timelineEvents
+            .filter((event) => event.date && (applied || (event.importance || 0) >= TIMELINE_IMPORTANCE_THRESHOLD))
+            .map((event) => event.date),
+        )).sort();
+
+        if (availableDates.length > 0) {
+          const restoreDate = availableDates.includes(rememberedDate)
+            ? rememberedDate
+            : availableDates.reduce((nearest, date) => (
+              Math.abs(new Date(date).getTime() - new Date(rememberedDate).getTime())
+                < Math.abs(new Date(nearest).getTime() - new Date(rememberedDate).getTime())
+                ? date
+                : nearest
+            ), availableDates[0]);
+          scrollToDateRef.current(restoreDate, 'auto');
+          await nextFrame();
+        }
+      }
+
+      filterToggleDateRef.current = null;
+      setIsFilterTransitioning(false);
+      filterTransitionActiveRef.current = false;
+    })();
+  }, [showMinorEvents, selectedTimelineDate, timelineEvents]);
 
   // Anti-Snapback Refs: Lock updates during programmatic scrolling
   const isProgrammaticScroll = useRef(false);
   const scrollTargetDate = useRef<string | null>(null);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
-  
-  // Ref to access scrollToDate in effects (defined later, updated via useEffect)
-  const scrollToDateRef = useRef<(date: string, behavior?: 'auto' | 'smooth') => void>(() => {});
+  const scrollJumpToken = useRef(0);
 
   // Derive available dates and group events by date (filtered by importance)
   const { timelineDates, groupedEvents, dateCounts, totalEventsCount, filteredEventsCount } = useMemo(() => {
@@ -1197,7 +1385,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         total++;
         // Filter by importance threshold unless showMinorEvents is enabled
         const importance = e.importance || 0;
-        if (showMinorEvents || importance >= IMPORTANCE_THRESHOLD) {
+        if (showMinorEvents || importance >= TIMELINE_IMPORTANCE_THRESHOLD) {
           filtered++;
           counts[e.date] = (counts[e.date] || 0) + 1;
           if (!groups[e.date]) groups[e.date] = [];
@@ -1220,72 +1408,53 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     const dates = Object.keys(counts).sort();
 
     return { timelineDates: dates, groupedEvents: groups, dateCounts: counts, totalEventsCount: total, filteredEventsCount: filtered };
-  }, [timelineEvents, showMinorEvents, IMPORTANCE_THRESHOLD]);
+  }, [timelineEvents, showMinorEvents]);
 
   // Set default selected date to the last (newest) because users want the most recent info
   useEffect(() => {
     if (!selectedTimelineDate && timelineDates.length > 0) {
       const latestDate = timelineDates[timelineDates.length - 1];
+      selectedTimelineDateRef.current = latestDate;
       setSelectedTimelineDate(latestDate);
     }
   }, [timelineDates, selectedTimelineDate]);
+
+  useEffect(() => {
+    selectedTimelineDateRef.current = selectedTimelineDate;
+  }, [selectedTimelineDate]);
 
   // Handle auto-scroll to latest date on initial load or view switch (ONLY ONCE)
   useEffect(() => {
     if (viewMode === 'TIMELINE' && timelineDates.length > 0 && !hasAutoScrolledTimeline.current) {
       const latestDate = timelineDates[timelineDates.length - 1];
-      // Small delay to ensure the timeline container is rendered and height is calculated
-      const timer = setTimeout(() => {
+      let cancelled = false;
+      void waitForPaint().then(() => {
+        if (cancelled) return;
         scrollToDateRef.current(latestDate, 'auto');
         hasAutoScrolledTimeline.current = true;
-      }, 150);
-      return () => clearTimeout(timer);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [viewMode, timelineDates]);
 
-  // Restore scroll position after filter toggle completes
-  useEffect(() => {
-    // Only run when filter transition just ended and we have a remembered date
-    if (!isFilterTransitioning && filterToggleDateRef.current && timelineDates.length > 0) {
-      const targetDate = filterToggleDateRef.current;
-      // Clear the ref first to prevent re-triggering
-      filterToggleDateRef.current = null;
-
-      // Small delay to let the new layout render
-      const timer = setTimeout(() => {
-        // Check if the remembered date exists in the current filtered dates
-        if (timelineDates.includes(targetDate)) {
-          scrollToDateRef.current(targetDate, 'auto');
-        } else {
-          // If the date doesn't exist in filtered view, find the nearest one
-          const nearestDate = timelineDates.reduce((nearest, date) => {
-            const targetTime = new Date(targetDate).getTime();
-            const dateTime = new Date(date).getTime();
-            const nearestTime = new Date(nearest).getTime();
-            return Math.abs(dateTime - targetTime) < Math.abs(nearestTime - targetTime) ? date : nearest;
-          }, timelineDates[0]);
-          scrollToDateRef.current(nearestDate, 'auto');
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isFilterTransitioning, timelineDates]);
-
   // Auto-scroll date picker to show selected date
-  // Needs delay on initial render since the picker may not be visible yet
   useEffect(() => {
     if (!selectedTimelineDate || !datePickerRef.current) return;
 
-    // Small delay to ensure the date picker is rendered (especially on view switch)
-    const timer = setTimeout(() => {
+    let cancelled = false;
+    void waitForPaint().then(() => {
+      if (cancelled) return;
       const button = datePickerRef.current?.querySelector(`[data-date="${selectedTimelineDate}"]`) as HTMLElement;
       if (button) {
-        // Scroll the button into view within the horizontal container
         button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
-    }, 200);
+    });
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+    };
   }, [selectedTimelineDate, viewMode, timelineDates.length]); // Also re-run when viewMode changes or filter toggle changes available dates
 
   // NOTE: Lenis removed from timeline - it conflicts with virtualization.
@@ -1367,72 +1536,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       document.body.style.removeProperty('user-select');
     };
   }, [viewMode]);
-
-  // Timer Logic for countdown display. Once a scheduled scan is overdue, use
-  // the existing indeterminate animation instead of looking frozen at 00:00.
-
-  useEffect(() => {
-    // Use the last adaptive interval when available, otherwise fall back to 12h.
-    const hasAdaptiveScheduling = researchState?.intervalHours && researchState.intervalHours > 0;
-
-    if (!researchState?.lastResearchAt) return;
-
-    const updateCountdown = () => {
-      const now = Date.now();
-      setClockNow(now);
-      if (researchState?.nextRunAt) {
-        const remainingToRun = researchState.nextRunAt - now;
-        setNextUpdateIn(Math.floor(remainingToRun / 1000));
-        setIsPossiblyStale(remainingToRun <= 0);
-
-        return;
-      }
-
-      // Get the interval in milliseconds (from server-stored hours)
-      const intervalMs = hasAdaptiveScheduling
-        ? (researchState.intervalHours || 12) * 60 * 60 * 1000
-        : 720 * 60 * 1000; // 12 hours default
-
-      // Calculate elapsed time since last research completed
-      const timeSinceLastUpdate = now - (researchState.lastResearchAt || 0);
-
-      // Remaining = interval - elapsed
-      const remaining = intervalMs - timeSinceLastUpdate;
-
-      setNextUpdateIn(Math.floor(remaining / 1000));
-      setIsPossiblyStale(remaining <= 0);
-
-    };
-
-    updateCountdown();
-    const timer = setInterval(updateCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [researchState?.lastResearchAt, researchState?.nextRunAt, researchState?.intervalHours, researchState?.paused, tabFocusKey]);
-
-  const formatTime = (seconds: number): React.ReactNode => {
-    const overdue = seconds < 0;
-    const absoluteSeconds = Math.abs(seconds);
-    const h = Math.floor(absoluteSeconds / 3600);
-    const m = Math.floor((absoluteSeconds % 3600) / 60);
-    const s = absoluteSeconds % 60;
-    const pad = (n: number) => n < 10 ? '0' + n : n;
-
-    // Format: H:MM:ss with seconds smaller and faded
-    if (absoluteSeconds >= 3600) {
-      return (
-        <>
-          {overdue ? '+' : ''}{h}:{pad(m)}<span className="text-[0.6em] opacity-80">:{pad(s)}</span>
-        </>
-      );
-    }
-    // Under 1 hour: M:SS
-    return (
-      <>
-        {overdue ? '+' : ''}{m}:{pad(s)}
-      </>
-    );
-  };
-
 
   // Helper to format dates correctly for all languages (fixing Chrome/Khmer issues)
   const formatDate = (dateInput: string | number | Date, formatStr: 'short' | 'long' | 'weekday' | 'weekday-short' = 'long') => {
@@ -1520,7 +1623,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const dateToVirtualIndex = useMemo(() => {
     const map: Record<string, number> = {};
     virtualItems.forEach((item, idx) => {
-      if (item.type === 'header' && !map[item.date]) {
+      if (item.type === 'header' && map[item.date] === undefined) {
         map[item.date] = idx;
       }
     });
@@ -1552,11 +1655,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       setIsScrollJump(false); // Safety reset
     }, 1200);
 
+    selectedTimelineDateRef.current = date;
     setSelectedTimelineDate(date);
     const index = dateToVirtualIndex[date];
 
     if (index !== undefined) {
       if (behavior === 'auto') {
+        scrollJumpToken.current += 1;
         rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
         setIsScrollJump(false);
         return;
@@ -1568,23 +1673,19 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const isVisible = items.some(item => Math.abs(item.index - index) < 3);
 
       if (isVisible) {
+        scrollJumpToken.current += 1;
         // Smooth scroll for visible/nearby items
         rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' });
       } else {
-        // Fade-Jump for off-screen items
-        setIsScrollJump(true); // Fade out
-
-        setTimeout(() => {
-          // Instant jump after fade out
+        const token = ++scrollJumpToken.current;
+        setIsScrollJump(true);
+        void (async () => {
+          await waitForOpacity(timelineScrollRef.current, 0);
+          if (scrollJumpToken.current !== token) return;
           rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
-
-          // Fade back in after brief delay to allow layout to settle
-          requestAnimationFrame(() => {
-            setTimeout(() => {
-              setIsScrollJump(false);
-            }, 50);
-          });
-        }, 200);
+          await waitForPaint();
+          if (scrollJumpToken.current === token) setIsScrollJump(false);
+        })();
       }
     }
   }, [dateToVirtualIndex, rowVirtualizer]);
@@ -1606,8 +1707,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   useEffect(() => {
     if (!timelineScrollRef.current || timelineDates.length === 0) return;
 
-    let debounceTimer: NodeJS.Timeout | null = null;
-    const lastSelectedDateRef = { current: selectedTimelineDate };
+    let scrollFrame: number | null = null;
 
     const handleScroll = () => {
       const container = timelineScrollRef.current;
@@ -1623,18 +1723,16 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
         // Always force update if at bottom, but respect lock if we aimed for an earlier date?
         // Actually, if we aimed for bottom, this is fine. If we aimed elsewhere, we shouldn't be at bottom.
-        if (latestDate !== lastSelectedDateRef.current) {
-          lastSelectedDateRef.current = latestDate;
+        if (latestDate !== selectedTimelineDateRef.current) {
+          selectedTimelineDateRef.current = latestDate;
           setSelectedTimelineDate(latestDate);
         }
         return;
       }
 
-      // 2. Clear previous debounce
-      if (debounceTimer) clearTimeout(debounceTimer);
-
-      // 3. Debounce the precise calculation
-      debounceTimer = setTimeout(() => {
+      if (scrollFrame !== null) return;
+      scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = null;
         // Calculate threshold line (20% from top of view)
         const threshold = container.scrollTop + (container.clientHeight * 0.2);
 
@@ -1661,13 +1759,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               }
             }
 
-            if (date && date !== lastSelectedDateRef.current) {
-              lastSelectedDateRef.current = date;
+            if (date && date !== selectedTimelineDateRef.current) {
+              selectedTimelineDateRef.current = date;
               setSelectedTimelineDate(date);
             }
           }
         }
-      }, 100); // Debounce for performance
+      });
     };
 
     const container = timelineScrollRef.current;
@@ -1688,9 +1786,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('wheel', unlockScroll);
       container.removeEventListener('touchstart', unlockScroll);
-      if (debounceTimer) clearTimeout(debounceTimer);
+      if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
     };
-  }, [timelineDates, lang, selectedTimelineDate]);
+  }, [timelineDates]);
 
   // Category colors for event rendering
   const categoryColors: Record<string, string> = {
@@ -1795,27 +1893,17 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               <div className="flex flex-col justify-between">
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'} whitespace-nowrap`}>{t.nextAutoScan}</p>
                 <p className="font-mono text-3xl font-bold" suppressHydrationWarning>
-                  {researchState?.paused ? (
-                    <span className="text-yellow-600">{t.paused}</span>
-                  ) : isSyncing ? (
-                    <span className="animate-pulse text-riso-accent">{t.running}</span>
-                  ) : (sysStatsLoading || nextUpdateIn === null) ? (
-                    <HackerScramble />
-                  ) : isPossiblyStale ? (
-                    <span className="text-riso-accent">{formatTime(nextUpdateIn)}</span>
-                  ) : (
-                    formatTime(nextUpdateIn)
-                  )}
+                  <AutoScanCountdown
+                    researchState={researchState}
+                    pausedLabel={t.paused}
+                    runningLabel={t.running}
+                  />
                 </p>
               </div>
               <div className="text-right flex flex-col justify-between">
                 <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'} whitespace-nowrap`}>{t.sourcesTracked}</p>
                 <p className="font-mono text-2xl opacity-80">
-                  {sysStatsLoading || countsLoading ? (
-                    <HackerScramble />
-                  ) : (
-                    (articleCounts?.cambodia || 0) + (articleCounts?.international || 0) + (articleCounts?.thailand || 0)
-                  )}
+                  {(articleCounts?.cambodia || 0) + (articleCounts?.international || 0) + (articleCounts?.thailand || 0)}
                 </p>
               </div>
             </div>
@@ -1922,13 +2010,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                 <button
                   key={mode.id}
                   onMouseEnter={() => {
-                    if (mode.id === 'TIMELINE') setShouldFetchFullTimeline(true);
+                    if (mode.id === 'TIMELINE') warmTimeline();
                   }}
                   onFocus={() => {
-                    if (mode.id === 'TIMELINE') setShouldFetchFullTimeline(true);
+                    if (mode.id === 'TIMELINE') warmTimeline();
                   }}
                   onTouchStart={() => {
-                    if (mode.id === 'TIMELINE') setShouldFetchFullTimeline(true);
+                    if (mode.id === 'TIMELINE') warmTimeline();
                   }}
                   onClick={() => setViewMode(mode.id as ViewMode)}
                   className={`dashboard-view-button
@@ -1988,7 +2076,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         </aside>
 
         {/* Main Content Grid */}
-        <main className={`flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch transition-opacity duration-150 ${isViewTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+        <main ref={mainRef} className={`flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch transition-opacity duration-150 ${isViewTransitioning ? 'opacity-0' : 'opacity-100'}`}>
 
 
           {/* ANALYSIS VIEW - Always render during measuring phase for overflow measurement */}
@@ -1996,7 +2084,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
             <div className="dashboard-analysis flex flex-col gap-4" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
-                <Card className="dashboard-stats-card" title={t.damageAssessment} icon={Crosshair} loading={dashboardLoading} refreshing={dashboardRefreshing}>
+                <Card className="dashboard-stats-card" title={t.damageAssessment} icon={Crosshair}>
 
                   <div className="stats-grid grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                     {/* Displaced Civilians */}
@@ -2077,7 +2165,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <div className="bg-riso-ink text-riso-paper py-2 px-2 text-center font-display uppercase tracking-widest text-xl flex items-center justify-center gap-2">
                       <Scale size={18} /> {t.neutralAI}
                     </div>
-                    <Card className="h-full flex flex-col border-dotted border-2 !shadow-none" loading={summaryLoading} refreshing={summaryRefreshing}>
+                    <Card className="h-full flex flex-col border-dotted border-2 !shadow-none">
                       <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
                         <div className="dashboard-neutral-header mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
                           <h3 className={`dashboard-neutral-title font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
@@ -2114,7 +2202,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <div className="bg-[#032EA1] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.cambodia}
                     </div>
-                    <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2" loading={khNewsLoading || khMetaLoading} refreshing={khNewsRefreshing || khMetaRefreshing}>
+                    <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2">
                       <div className="dashboard-perspective-content flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         <div>
                           {getPerspectiveSummary(cambodiaPerspective) ? (
@@ -2146,7 +2234,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           articles={cambodiaNews}
                           perspective="cambodia"
                           lang={lang}
-                          isLoading={cambodiaNews === undefined}
                           now={clockNow}
                         />
                       </div>
@@ -2158,7 +2245,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <div className="bg-[#241D4F] text-[#f2f0e6] p-2 text-center font-display uppercase tracking-widest text-lg flex-none">
                       {t.thailand}
                     </div>
-                    <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2" loading={thNewsLoading || thMetaLoading} refreshing={thNewsRefreshing || thMetaRefreshing}>
+                    <Card className="dashboard-perspective-card flex-1 flex flex-col overflow-hidden !pb-2">
                       <div className="dashboard-perspective-content flex-1 flex flex-col space-y-3 min-h-0 pb-2">
                         <div>
                           {getPerspectiveSummary(thailandPerspective) ? (
@@ -2191,7 +2278,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           articles={thailandNews}
                           perspective="thailand"
                           lang={lang}
-                          isLoading={thailandNews === undefined}
                           now={clockNow}
                         />
                       </div>
@@ -2205,7 +2291,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           {/* LOSSES VIEW */}
           <div className={`xl:col-span-3 ${(viewMode !== 'TIMELINE' || isMeasuring) ? 'hidden' : ''}`}>
             <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
-              <Card loading={timelineLoading} refreshing={timelineRefreshing} className="h-full flex flex-col overflow-hidden">
+              <Card loading={timelineLoading} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
                   <h3 className={timelineHeadingClass}>{t.historicalTimeline}</h3>
@@ -2240,7 +2326,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <p className="font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
                   </div>
                 ) : (
-                  <div className={`flex flex-col h-full min-h-0 transition-opacity duration-200 ease-out ${isFilterTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+                  <div ref={timelineContentRef} className={`flex flex-col h-full min-h-0 transition-opacity duration-200 ease-out ${isFilterTransitioning ? 'opacity-0' : 'opacity-100'}`}>
                     {/* --- DATE SELECTOR BAR --- */}
                     <div className="flex-none p-4 border-b border-riso-ink/10 bg-riso-ink/5 relative group">
 
