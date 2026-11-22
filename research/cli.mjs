@@ -186,6 +186,7 @@ async function brief() {
     cycle: {
       now: new Date(nowMs).toISOString(),
       since: toIso(state.lastResearchAt),
+      nextTarget: toIso(state.nextRunAt),
       count: state.researchCycleCount,
       previousIntervalHours: state.lastCycleInterval,
       previousReason: state.schedulingReason || "",
@@ -226,6 +227,23 @@ function borderLocalDate(value) {
   }).format(new Date(value));
 }
 
+function borderLocalDateTime(value) {
+  if (!Number.isFinite(value)) return "unknown";
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Phnom_Penh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date(value)).map(({ type, value: part }) => [type, part]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} ICT (Asia/Phnom_Penh)`;
+}
+
 function renderContext(output) {
   const timelineRows = output.recentTimeline.slice(0, 4);
   const environmentLabels = { thailand: "TH", cambodia: "KH", international: "INTL" };
@@ -241,6 +259,7 @@ function renderContext(output) {
     "## Live",
     `Now: ${output.cycle.now}`,
     `Last completed cycle: ${output.cycle.since || "unknown"} (#${output.cycle.count})`,
+    `Next public target: ${output.cycle.nextTarget || "unknown"} (${borderLocalDateTime(Date.parse(output.cycle.nextTarget || ""))})`,
   ];
   if (output.cycle.previousReason) {
     lines.push(`Previous cadence: ${output.cycle.previousIntervalHours || "?"}h — ${output.cycle.previousReason}`);

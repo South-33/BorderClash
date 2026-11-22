@@ -1,85 +1,51 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import test from "node:test";
 
 const policyPath = resolve("research", "automation", "schedule-policy.ps1");
 
-async function runPolicy(records) {
-  const root = await mkdtemp(join(tmpdir(), "borderclash-schedule-policy-"));
-  const logDir = join(root, "logs");
-  await mkdir(logDir, { recursive: true });
-  try {
-    for (let index = 0; index < records.length; index += 1) {
-      await writeFile(join(logDir, `${index}.delivery.json`), JSON.stringify(records[index]) + "\n", "utf8");
-    }
-    const scriptPath = join(root, "probe.ps1");
-    const escapedPolicy = policyPath.replaceAll("'", "''");
-    const escapedLog = logDir.replaceAll("'", "''");
-    const script = [
-      "$ErrorActionPreference = 'Stop'",
-      `. '${escapedPolicy}'`,
-      `$lead = Get-ResearchLeadMinutes -LogDir '${escapedLog}'`,
-      "$now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()",
-      "[ordered]@{",
-      "  lead = $lead",
-      "  warningShort = Get-ResearchCadenceWarning -IntervalHours 1 -LeadMinutes $lead",
-      "  warningLong = Get-ResearchCadenceWarning -IntervalHours 4 -LeadMinutes $lead",
-      "  dueBefore = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now + [int64]($lead + 1) * 60000) -LeadMinutes $lead",
-      "  dueAt = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now + [int64]$lead * 60000) -LeadMinutes $lead",
-      "  overdue = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now - 60000) -LeadMinutes $lead",
-      "  anchoredLate = Get-NextResearchTargetAt -PreviousTargetAt $now -LastResearchAt ($now - 86400000) -CompletedAt ($now + 120000) -IntervalHours 24 -LeadMinutes $lead",
-      "  anchoredEarly = Get-NextResearchTargetAt -PreviousTargetAt $now -LastResearchAt ($now - 86400000) -CompletedAt ($now - 300000) -IntervalHours 24 -LeadMinutes $lead",
-      "  manualEarly = Get-NextResearchTargetAt -PreviousTargetAt ($now + 14400000) -LastResearchAt ($now - 86400000) -CompletedAt $now -IntervalHours 4 -LeadMinutes $lead",
-      "} | ConvertTo-Json -Compress",
-    ].join("\r\n");
-    await writeFile(scriptPath, script, "utf8");
-    const shell = process.platform === "win32" ? "powershell.exe" : "pwsh";
-    const result = spawnSync(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath], {
-      encoding: "utf8",
-      windowsHide: true,
-    });
-    assert.equal(result.status, 0, result.stderr);
-    return JSON.parse(result.stdout.trim());
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+function runPolicy() {
+  const escapedPolicy = policyPath.replaceAll("'", "''");
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `. '${escapedPolicy}'`,
+    "$lead = [int]$RESEARCH_START_LEAD_MINUTES",
+    "$now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()",
+    "[ordered]@{",
+    "  lead = $lead",
+    "  warningShort = Get-ResearchCadenceWarning -IntervalHours 1 -LeadMinutes $lead",
+    "  warningLong = Get-ResearchCadenceWarning -IntervalHours 4 -LeadMinutes $lead",
+    "  dueBefore = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now + [int64]($lead + 1) * 60000) -LeadMinutes $lead",
+    "  dueAt = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now + [int64]$lead * 60000) -LeadMinutes $lead",
+    "  overdue = Test-ResearchTimeDue -NowMs $now -NextRunAt ($now - 60000) -LeadMinutes $lead",
+    "  anchoredLate = Get-NextResearchTargetAt -PreviousTargetAt $now -LastResearchAt ($now - 86400000) -CompletedAt ($now + 120000) -IntervalHours 24 -LeadMinutes $lead",
+    "  anchoredEarly = Get-NextResearchTargetAt -PreviousTargetAt $now -LastResearchAt ($now - 86400000) -CompletedAt ($now - 300000) -IntervalHours 24 -LeadMinutes $lead",
+    "  manualEarly = Get-NextResearchTargetAt -PreviousTargetAt ($now + 14400000) -LastResearchAt ($now - 86400000) -CompletedAt $now -IntervalHours 4 -LeadMinutes $lead",
+    "} | ConvertTo-Json -Compress",
+  ].join("\r\n");
+  const shell = process.platform === "win32" ? "powershell.exe" : "pwsh";
+  const result = spawnSync(shell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout.trim());
 }
 
-function delivery(minutes, offset = 0) {
-  const started = Date.UTC(2026, 10, 13, 0, offset, 0);
-  return { status: "verified", cycleStartedAt: started, verifiedAt: started + minutes * 60_000 };
-}
-
-test("schedule policy uses the fixed product start lead", async () => {
-  const empty = await runPolicy([]);
-  assert.equal(empty.lead, 10);
-  const sparse = await runPolicy([delivery(40), delivery(55)]);
-  assert.equal(sparse.lead, 10);
-});
-
-test("schedule policy does not let delivery-history variance move the public start window", async () => {
-  const result = await runPolicy([delivery(40), delivery(55, 1), delivery(70, 2)]);
+test("schedule policy uses the fixed ten-minute product lead", () => {
+  const result = runPolicy();
   assert.equal(result.lead, 10);
   assert.equal(result.warningShort, "");
   assert.equal(result.warningLong, "");
+});
+
+test("schedule policy gates the target window and preserves scheduled clock phase", () => {
+  const result = runPolicy();
   assert.equal(result.dueBefore, false);
   assert.equal(result.dueAt, true);
   assert.equal(result.overdue, true);
-  assert.equal(result.anchoredLate - result.manualEarly, 20 * 60 * 60 * 1000);
   assert.equal(result.anchoredEarly, result.anchoredLate);
+  assert.equal(result.anchoredLate - result.manualEarly, 20 * 60 * 60 * 1000);
   assert.equal(result.manualEarly > 0, true);
-});
-
-test("schedule policy stays at ten minutes even with extreme or invalid delivery records", async () => {
-  const result = await runPolicy([
-    delivery(400),
-    delivery(390, 1),
-    delivery(380, 2),
-    { status: "awaiting-public", cycleStartedAt: 1, verifiedAt: 999999 },
-    { status: "verified", cycleStartedAt: 1000, verifiedAt: 500 },
-  ]);
-  assert.equal(result.lead, 10);
 });

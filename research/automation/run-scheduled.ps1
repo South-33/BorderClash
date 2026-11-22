@@ -17,9 +17,8 @@ $runtimePath = Join-Path $repoRoot ".work\runner\runtime\runtime.json"
 $controlPath = Join-Path $repoRoot ".work\runner\runtime\control.json"
 $logDir = Join-Path $repoRoot ".work\runner\logs"
 $script:preflightMessage = $null
-$defaultLeadMinutes = 10
 . (Join-Path $PSScriptRoot "schedule-policy.ps1")
-$script:leadMinutes = Get-ResearchLeadMinutes -LogDir $logDir -DefaultLeadMinutes $defaultLeadMinutes
+$script:leadMinutes = [int]$RESEARCH_START_LEAD_MINUTES
 
 function Read-JsonSafe {
     param([string]$Path)

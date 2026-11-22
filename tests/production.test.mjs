@@ -22,15 +22,19 @@ test('production research runs from main through the owned scheduler', () => {
   assert.doesNotMatch(linuxInstaller, /OnBootSec=/);
   assert.match(linuxInstaller, /ExecStopPost=.*rearm-scheduler\.sh/);
   assert.match(linuxInstaller, /rearm-scheduler\.sh/);
+  assert.match(linuxInstaller, /WantedBy=default\.target/);
+  assert.match(linuxInstaller, /enable borderclash-research\.service/);
+  assert.match(linuxInstaller, /Linger --value/);
   assert.match(linuxInstaller, /KillMode=control-group/);
   assert.match(linuxInstaller, /DBUS_SESSION_BUS_ADDRESS/);
   assert.doesNotMatch(linuxInstaller, /After=network-online\.target/);
-  assert.match(rearmScheduler, /OnCalendar=\$wake_calendar/);
+  assert.match(rearmScheduler, /OnCalendar=\$wake_calendar \$schedule_timezone/);
   assert.match(rearmScheduler, /Persistent=true/);
   assert.match(rearmScheduler, /AccuracySec=1s/);
   assert.match(rearmScheduler, /RandomizedDelaySec=0/);
-  assert.match(rearmScheduler, /--lead-minutes 10/);
-  assert.match(rearmScheduler, /--retry-minutes 5/);
+  assert.match(rearmScheduler, /schedule_timezone="Asia\/Phnom_Penh"/);
+  assert.match(schedulerPlan, /DEFAULT_LEAD_MINUTES = 10/);
+  assert.match(schedulerPlan, /DEFAULT_RETRY_MINUTES = 5/);
   assert.match(schedulerPlan, /reason: "due_retry"/);
   assert.match(schedulerPlan, /reason: "next_target"/);
 
@@ -74,10 +78,8 @@ test('production research runs from main through the owned scheduler', () => {
   );
   assert.doesNotMatch(preflight, /Write-Output/, 'preflight must return only a boolean');
   assert.match(production, /Write-Output \$script:preflightMessage/);
-  assert.match(production, /Get-ResearchLeadMinutes/);
   assert.match(production, /-StartLeadMinutes \$script:leadMinutes/);
-  assert.match(production, /\$defaultLeadMinutes = 10/);
-  assert.match(schedulePolicy, /DefaultLeadMinutes = 10/);
+  assert.match(schedulePolicy, /\$RESEARCH_START_LEAD_MINUTES = 10/);
   assert.match(schedulePolicy, /Get-NextResearchTargetAt/);
   assert.doesNotMatch(schedulePolicy, /BufferMinutes/);
   assert.doesNotMatch(schedulePolicy, /MaximumLeadMinutes/);

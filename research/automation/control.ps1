@@ -203,7 +203,7 @@ function Show-Status {
     $control = Read-Control
     $runtime = Read-JsonSafe $runtimePath
     $state = Read-JsonSafe (Join-Path $repoRoot "data\research-state.json")
-    $leadMinutes = Get-ResearchLeadMinutes -LogDir $logDir
+    $leadMinutes = [int]$RESEARCH_START_LEAD_MINUTES
     $cadenceWarning = if ($state) {
         Get-ResearchCadenceWarning -IntervalHours ([double]$state.lastCycleInterval) -LeadMinutes $leadMinutes
     } else { "" }

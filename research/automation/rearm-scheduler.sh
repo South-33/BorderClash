@@ -5,6 +5,7 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 unit_root="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 timer_name="borderclash-research.timer"
 timer_path="$unit_root/$timer_name"
+schedule_timezone="Asia/Phnom_Penh"
 dry_run=false
 now_ms=""
 
@@ -25,7 +26,7 @@ while (($#)); do
   esac
 done
 
-planner_args=(--repo-root "$repo_root" --lead-minutes 10 --retry-minutes 5)
+planner_args=(--repo-root "$repo_root")
 if [[ -n "$now_ms" ]]; then
   planner_args+=(--now-ms "$now_ms")
 fi
@@ -50,14 +51,15 @@ if [[ ! "$wake_ms" =~ ^[0-9]+$ ]]; then
 fi
 
 wake_seconds=$((wake_ms / 1000))
-wake_calendar=$(date --date="@$wake_seconds" '+%Y-%m-%d %H:%M:%S')
+wake_calendar=$(TZ="$schedule_timezone" date --date="@$wake_seconds" '+%Y-%m-%d %H:%M:%S')
 
 if $dry_run; then
   node -e '
     const p=JSON.parse(process.argv[1]);
     p.wakeCalendar=process.argv[2];
+    p.wakeTimeZone=process.argv[3];
     process.stdout.write(JSON.stringify(p)+"\n");
-  ' "$plan" "$wake_calendar"
+  ' "$plan" "$wake_calendar" "$schedule_timezone"
   exit 0
 fi
 
@@ -68,7 +70,7 @@ cat > "$temp_path" <<EOF_TIMER
 Description=Wake BorderClash for the next research target
 
 [Timer]
-OnCalendar=$wake_calendar
+OnCalendar=$wake_calendar $schedule_timezone
 Persistent=true
 AccuracySec=1s
 RandomizedDelaySec=0

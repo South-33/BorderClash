@@ -30,22 +30,14 @@ export function buildSchedulerPlan({
   control,
   runtime,
   nowMs = Date.now(),
-  leadMinutes = DEFAULT_LEAD_MINUTES,
-  retryMinutes = DEFAULT_RETRY_MINUTES,
 }) {
   if (!Number.isFinite(nowMs) || nowMs <= 0) throw new Error("nowMs must be a positive timestamp");
-  if (!Number.isFinite(leadMinutes) || leadMinutes < 0 || leadMinutes > 120) {
-    throw new Error("leadMinutes must be between 0 and 120");
-  }
-  if (!Number.isFinite(retryMinutes) || retryMinutes < 1 || retryMinutes > 60) {
-    throw new Error("retryMinutes must be between 1 and 60");
-  }
 
   if (control?.stopped) return { action: "stop", reason: "operator_stopped" };
   if (control?.paused || state?.isPaused) return { action: "stop", reason: "paused" };
   if (runtime?.status === "review") return { action: "stop", reason: "review_hold" };
 
-  const retryMs = Math.round(retryMinutes * 60_000);
+  const retryMs = DEFAULT_RETRY_MINUTES * 60_000;
   if (RECOVERY_STATUSES.has(runtime?.status)) {
     return {
       action: "arm",
@@ -65,7 +57,7 @@ export function buildSchedulerPlan({
     };
   }
 
-  const startAt = Math.round(targetAt - leadMinutes * 60_000);
+  const startAt = Math.round(targetAt - DEFAULT_LEAD_MINUTES * 60_000);
   if (startAt <= nowMs) {
     return {
       action: "arm",
@@ -110,10 +102,12 @@ function parseArgs(argv) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  const supported = new Set(["repo-root", "now-ms"]);
+  for (const key of Object.keys(options)) {
+    if (!supported.has(key)) throw new Error(`Unknown option: --${key}`);
+  }
   const repoRoot = resolve(options["repo-root"] || ".");
   const nowMs = options["now-ms"] ? Number(options["now-ms"]) : Date.now();
-  const leadMinutes = options["lead-minutes"] ? Number(options["lead-minutes"]) : DEFAULT_LEAD_MINUTES;
-  const retryMinutes = options["retry-minutes"] ? Number(options["retry-minutes"]) : DEFAULT_RETRY_MINUTES;
   const state = await readJsonSafe(resolve(repoRoot, options.state || "data/research-state.json"));
   const control = await readJsonSafe(resolve(repoRoot, options.control || ".work/runner/runtime/control.json"));
   const runtime = await readJsonSafe(resolve(repoRoot, options.runtime || ".work/runner/runtime/runtime.json"));
@@ -127,8 +121,6 @@ async function main() {
     control,
     runtime,
     nowMs,
-    leadMinutes,
-    retryMinutes,
   })) + "\n");
 }
 

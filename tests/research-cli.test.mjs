@@ -231,6 +231,8 @@ test("context carries previous intent and revisable current orientation without 
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Orientation only: this is revisable working memory/u);
+    assert.match(result.stdout, /Next public target: 2026-11-10T12:00:00.000Z/u);
+    assert.match(result.stdout, /2026-11-10 19:00:00 ICT \(Asia\/Phnom_Penh\)/u);
     assert.match(result.stdout, /Previous cadence: 18h/u);
     assert.match(result.stdout, /Previous researcher expected little material change/u);
     assert.match(result.stdout, /Working synthesis for orientation/u);

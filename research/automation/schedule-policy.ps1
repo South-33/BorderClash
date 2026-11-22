@@ -1,14 +1,4 @@
-function Get-ResearchLeadMinutes {
-    param(
-        [string]$LogDir = "",
-        [int]$DefaultLeadMinutes = 10
-    )
-
-    if ($DefaultLeadMinutes -lt 0 -or $DefaultLeadMinutes -gt 120) {
-        throw "Research start lead must be between 0 and 120 minutes."
-    }
-    return $DefaultLeadMinutes
-}
+$RESEARCH_START_LEAD_MINUTES = 10
 
 function Get-ResearchCadenceWarning {
     param([double]$IntervalHours, [int]$LeadMinutes)
@@ -39,7 +29,7 @@ function Get-NextResearchTargetAt {
         [int64]$LastResearchAt,
         [int64]$CompletedAt,
         [double]$IntervalHours,
-        [int]$LeadMinutes = 10
+        [int]$LeadMinutes = $RESEARCH_START_LEAD_MINUTES
     )
 
     if ($CompletedAt -le 0) { throw "CompletedAt must be positive." }

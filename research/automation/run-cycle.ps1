@@ -465,7 +465,7 @@ function Get-OrCreateRunnerCompletion {
         $completedAt = [int64]$BaseState.lastResearchAt + 1
     }
     $previousTargetAt = if ($BaseState.PSObject.Properties["nextRunAt"]) { [int64]$BaseState.nextRunAt } else { 0 }
-    $nextRunAt = Get-NextResearchTargetAt -PreviousTargetAt $previousTargetAt -LastResearchAt ([int64]$BaseState.lastResearchAt) -CompletedAt $completedAt -IntervalHours $hours -LeadMinutes 10
+    $nextRunAt = Get-NextResearchTargetAt -PreviousTargetAt $previousTargetAt -LastResearchAt ([int64]$BaseState.lastResearchAt) -CompletedAt $completedAt -IntervalHours $hours -LeadMinutes $RESEARCH_START_LEAD_MINUTES
     $completion = [ordered]@{
         schemaVersion = 1
         cycleId = $RunId
