@@ -25,14 +25,14 @@ const inter = Inter({
 
 const chakraPetch = Chakra_Petch({
   variable: "--font-chakra",
-  subsets: ["thai", "latin"],
+  subsets: ["thai"],
   display: "swap",
   weight: ["400", "700"],
 });
 
 const ibmPlexThai = IBM_Plex_Sans_Thai({
   variable: "--font-ibm-thai",
-  subsets: ["thai", "latin"],
+  subsets: ["thai"],
   display: "swap",
   weight: ["400", "700"],
 });
@@ -46,7 +46,7 @@ const moul = Moul({
 
 const kantumruy = Kantumruy_Pro({
   variable: "--font-kantumruy",
-  subsets: ["khmer", "latin"],
+  subsets: ["khmer"],
   display: "swap",
   weight: ["400", "700"],
 });

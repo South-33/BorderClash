@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 
 // =============================================================================
 // CASCADE LAYOUT HOOK - ADAPTIVE SNUG FIT ALGORITHM
@@ -10,7 +11,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 // 2. Max Width Check (Window Width). Fails? -> Go to Step 3. 
 //      -> Fits? -> Perform Binary Search between Min and Max to find "Snug" width.
 //                  (Stops when precision is within 100px).
-// 3. Max Ratio Check (Ratio 1.5, Max Width). Fits? -> Done.
+// 3. Max Ratio Check (Ratio 1.35, Max Width). Fits? -> Done.
 // 4. Force Mobile.
 // =============================================================================
 
@@ -25,7 +26,9 @@ const MAX_SEARCH_STEPS = 5;      // Hard cap to prevent layout thrashing
 
 export interface CascadeLayoutResult {
     containerRef: React.RefObject<HTMLDivElement | null>;
+    sidebarRef: React.RefObject<HTMLElement | null>;
     neutralCardRef: React.RefObject<HTMLDivElement | null>;
+    perspectivesRef: React.RefObject<HTMLDivElement | null>;
     isDesktop: boolean;
     containerWidth: number | null;
     neutralRatio: number;
@@ -37,20 +40,25 @@ export interface CascadeLayoutResult {
 }
 
 export interface CascadeLayoutOptions {
-    viewMode?: 'analysis' | 'timeline' | 'guide';
     awaitBeforeMeasure?: () => Promise<void>;
 }
 
-export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: CascadeLayoutOptions = {}): CascadeLayoutResult {
+export function useCascadeLayout({ awaitBeforeMeasure }: CascadeLayoutOptions = {}): CascadeLayoutResult {
     // Refs
     const containerRef = useRef<HTMLDivElement>(null);
+    const sidebarRef = useRef<HTMLElement>(null);
     const neutralCardRef = useRef<HTMLDivElement>(null);
+    const perspectivesRef = useRef<HTMLDivElement>(null);
     const isTransitioning = useRef(false);
     const lastProcessedWidth = useRef<number | null>(null);
 
     // State
     const [layoutState, setLayoutState] = useState({
-        isDesktop: false,
+        // The shell starts hidden, and the normal responsive CSS already
+        // stacks below the desktop breakpoint. Starting in desktop mode keeps
+        // the first desktop measurement out of the force-mobile override and
+        // removes a race between the mount effect and the first DOM read.
+        isDesktop: true,
         forceMobile: false,
         containerWidth: null as number | null,
         neutralRatio: 1.0,
@@ -77,10 +85,40 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
         return el.scrollHeight > el.clientHeight + 2;
     }, []);
 
-    // Optimized frame waiter
-    const nextFrame = () => new Promise<void>(resolve => {
-        requestAnimationFrame(() => setTimeout(resolve, 0));
-    });
+    // Measurement probes run only while the dashboard shell is fully hidden.
+    // Write candidate geometry directly, let the browser synchronously resolve
+    // layout on the following overflow read, then commit only the final result
+    // to React. This avoids a render + animation-frame round trip per probe.
+    const probeGeometry = useCallback((width: number, ratio = 1) => {
+        if (containerRef.current) {
+            containerRef.current.style.maxWidth = `${width}px`;
+        }
+        if (perspectivesRef.current) {
+            perspectivesRef.current.style.gridTemplateColumns = `minmax(0, 1fr) minmax(0, ${ratio}fr) minmax(0, 1fr)`;
+        }
+        return !checkOverflow();
+    }, [checkOverflow]);
+
+    const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
+    const setSidebarHeight = useCallback((sidebarHeight?: number) => {
+        if (sidebarHeight && containerRef.current) {
+            containerRef.current.style.setProperty('--dashboard-sidebar-height', `${sidebarHeight}px`);
+        }
+    }, []);
+
+    const settleTypographyAndSidebar = useCallback(async () => {
+        // Measurement state is committed synchronously before this runs, so we
+        // only need to wait for the font set that the committed text requires.
+        await document.fonts.ready;
+
+        // The main views intentionally match the natural sidebar height on
+        // desktop. Keep that geometry in the same measurement transaction as
+        // the adaptive fit instead of racing a separate ResizeObserver/state
+        // update against the neutral-card overflow checks.
+        setSidebarHeight(sidebarRef.current?.offsetHeight);
+        await nextFrame();
+    }, [setSidebarHeight]);
 
     // === THE ADAPTIVE RECALCULATION ===
     const recalculate = useCallback(async (newLang?: 'en' | 'th' | 'kh') => {
@@ -88,7 +126,6 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
         isTransitioning.current = true;
 
         const langToUse = newLang ?? lang;
-        const isLanguageSwitchOutsideAnalysis = Boolean(newLang) && viewMode !== 'analysis';
         const windowWidth = window.innerWidth;
         const isDesktopNow = windowWidth >= MOBILE_BREAKPOINT;
 
@@ -105,34 +142,40 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
             await new Promise(r => setTimeout(r, FADE_MS));
         }
 
-        // In TIMELINE/GUIDE language switches, keep existing layout mode stable.
-        // This avoids force-mobile <-> desktop probing flicker while preserving cascade fade.
-        if (isLanguageSwitchOutsideAnalysis) {
-            setLangState(langToUse);
+        // Final geometry must be committed and painted once while hidden
+        // before the shell fades back in.
+        const reveal = async (updates: Partial<typeof layoutState> = {}) => {
+            flushSync(() => updateState({
+                ...updates,
+                isMeasuring: false,
+                isLayoutReady: false,
+            }));
             await nextFrame();
             updateState({ isLayoutReady: true });
             isTransitioning.current = false;
-            return;
-        }
+        };
 
-        // Now that we're faded out, enable measuring mode (shows ANALYSIS view for measurements)
-        updateState({ isMeasuring: true });
-        setLangState(langToUse);
-        await nextFrame();
+        // Apply the language hint before font/layout work. We always fit
+        // against Analysis while hidden, even if the user changed language
+        // from Timeline/Guide, so returning to Overview cannot reveal a stale
+        // fit from the previous language.
+        document.documentElement.lang = langToUse === 'kh' ? 'km' : langToUse;
 
         // If physically on mobile/tablet, skip all logic
         if (!isDesktopNow) {
-            updateState({
-                isDesktop: false,
-                forceMobile: false,
-                containerWidth: null,
-                neutralRatio: 1.0,
-                isMeasuring: false,
-                isLayoutReady: false
+            flushSync(() => {
+                setLangState(langToUse);
+                updateState({
+                    isDesktop: false,
+                    forceMobile: false,
+                    containerWidth: null,
+                    neutralRatio: 1.0,
+                    isMeasuring: false,
+                    isLayoutReady: false,
+                });
             });
-            await nextFrame();
-            updateState({ isLayoutReady: true });
-            isTransitioning.current = false;
+            await settleTypographyAndSidebar();
+            await reveal();
             return;
         }
 
@@ -140,27 +183,29 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
         const targetMinWidth = Math.min(windowWidth, MIN_SNUG_WIDTH);
 
         // === STEP 1: MINIMUM WIDTH ===
-        updateState({
-            isDesktop: true,
-            forceMobile: false,
-            containerWidth: targetMinWidth,
-            neutralRatio: 1.0
+        // Establish the real desktop/sidebar geometry before the first overflow
+        // read. This also removes a separate setup frame from the old cascade.
+        flushSync(() => {
+            setLangState(langToUse);
+            updateState({
+                isDesktop: true,
+                forceMobile: false,
+                containerWidth: targetMinWidth,
+                neutralRatio: 1.0,
+                isMeasuring: true,
+                isLayoutReady: false,
+            });
         });
-        await nextFrame();
+        probeGeometry(targetMinWidth, 1);
+        await settleTypographyAndSidebar();
 
         if (!checkOverflow()) {
-            updateState({ isMeasuring: false, isLayoutReady: false });
-            await nextFrame();
-            updateState({ isLayoutReady: true });
-            isTransitioning.current = false;
+            await reveal({ containerWidth: targetMinWidth, neutralRatio: 1.0 });
             return;
         }
 
         // === STEP 2: MAX WIDTH CHECK ===
-        updateState({ containerWidth: windowWidth });
-        await nextFrame();
-
-        const fitsAtMax = !checkOverflow();
+        const fitsAtMax = probeGeometry(windowWidth);
 
         if (fitsAtMax) {
             // It fits at Max, and failed at Min.
@@ -176,10 +221,7 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
                 steps++;
                 const mid = Math.floor((min + max) / 2);
 
-                updateState({ containerWidth: mid });
-                await nextFrame();
-
-                if (!checkOverflow()) {
+                if (probeGeometry(mid)) {
                     // Fits here, store as best known fit, try smaller
                     bestFit = mid;
                     max = mid;
@@ -189,10 +231,8 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
                 }
             }
 
-            updateState({ containerWidth: bestFit, isMeasuring: false, isLayoutReady: false });
-            await nextFrame();
-            updateState({ isLayoutReady: true });
-            isTransitioning.current = false;
+            probeGeometry(bestFit);
+            await reveal({ containerWidth: bestFit, neutralRatio: 1.0 });
             return;
         }
 
@@ -207,19 +247,13 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
         const MAX_RATIO_STEPS = 5;
 
         // First check if MAX_RATIO even works
-        updateState({ containerWidth: windowWidth, neutralRatio: MAX_RATIO });
-        await nextFrame();
-
-        if (!checkOverflow()) {
+        if (probeGeometry(windowWidth, MAX_RATIO)) {
             // MAX_RATIO works, binary search for minimum
             while ((maxRatio - minRatio) > RATIO_PRECISION && ratioSteps < MAX_RATIO_STEPS) {
                 ratioSteps++;
                 const midRatio = (minRatio + maxRatio) / 2;
 
-                updateState({ neutralRatio: midRatio });
-                await nextFrame();
-
-                if (!checkOverflow()) {
+                if (probeGeometry(windowWidth, midRatio)) {
                     // Fits at this ratio, try smaller
                     bestRatio = midRatio;
                     maxRatio = midRatio;
@@ -229,29 +263,26 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
                 }
             }
 
-            updateState({ neutralRatio: bestRatio, isMeasuring: false, isLayoutReady: false });
-            await nextFrame();
-            updateState({ isLayoutReady: true });
-            isTransitioning.current = false;
+            probeGeometry(windowWidth, bestRatio);
+            await reveal({
+                containerWidth: windowWidth,
+                neutralRatio: bestRatio,
+            });
             return;
         }
 
         // === STEP 4: MOBILE FALLBACK ===
-        updateState({
+        await reveal({
+            isDesktop: true,
             forceMobile: true,
             neutralRatio: 1.0,
             containerWidth: null,
-            isMeasuring: false,
-            isLayoutReady: false
         });
-        await nextFrame();
-        updateState({ isLayoutReady: true });
-        isTransitioning.current = false;
 
     // updateState is a local state helper. Keeping it out preserves the original
     // recalculation lifecycle instead of recreating this callback on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [lang, checkOverflow, awaitBeforeMeasure, viewMode]);
+    }, [lang, checkOverflow, probeGeometry, awaitBeforeMeasure, settleTypographyAndSidebar]);
 
     // === HANDLERS ===
     useEffect(() => {
@@ -270,8 +301,21 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
     }, [recalculate]);
 
     useEffect(() => {
+        const sidebar = sidebarRef.current;
+        if (!sidebar) return;
+
+        const resizeObserver = new ResizeObserver(([entry]) => {
+            const borderBox = Array.isArray(entry.borderBoxSize)
+                ? entry.borderBoxSize[0]
+                : entry.borderBoxSize;
+            setSidebarHeight(borderBox?.blockSize ?? entry.target.getBoundingClientRect().height);
+        });
+        resizeObserver.observe(sidebar);
+        return () => resizeObserver.disconnect();
+    }, [setSidebarHeight]);
+
+    useEffect(() => {
         // This hook intentionally starts its DOM measurement state machine on mount.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         recalculate();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -283,7 +327,9 @@ export function useCascadeLayout({ viewMode = 'analysis', awaitBeforeMeasure }: 
 
     return {
         containerRef,
+        sidebarRef,
         neutralCardRef,
+        perspectivesRef,
         isDesktop: layoutState.isDesktop,
         containerWidth: layoutState.containerWidth,
         neutralRatio: layoutState.neutralRatio,

@@ -22,6 +22,29 @@
     animation: dashboard-status-ring 2.2s ease-out infinite;
 }
 
+.dashboard-view-button {
+    background: rgb(255 255 255 / 0.4);
+    color: var(--color-riso-ink);
+    border-color: transparent;
+}
+
+.dashboard-view-button:hover {
+    background: rgb(255 255 255 / 0.6);
+    border-color: rgb(30 58 138 / 0.3);
+}
+
+.dashboard-view-button[aria-pressed="true"],
+.dashboard-view-button[aria-pressed="true"]:hover {
+    background: var(--color-riso-ink);
+    color: var(--color-riso-paper);
+    border-color: var(--color-riso-ink);
+    box-shadow: 4px 4px 0 rgb(30 58 138 / 0.3);
+}
+
+.dashboard-view-button[aria-pressed="true"] svg {
+    stroke-width: 2.5;
+}
+
 @keyframes dashboard-status-breathe {
     0%, 100% {
         transform: scale(0.92);
@@ -100,6 +123,23 @@
 .force-mobile [data-no-cap="true"],
 .force-mobile [data-no-cap="true"] * {
     max-width: none !important;
+}
+
+/* Physical mobile/tablet sizes already use the base responsive stack. Apply
+   only the shrink guards here; the force-mobile class is reserved for the
+   adaptive desktop fallback so the initial desktop measurement never starts
+   from mobile geometry. */
+@media (max-width: 1279px) {
+    .dashboard-layout,
+    .dashboard-layout :not([data-no-cap="true"]) {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .dashboard-layout [data-no-cap="true"],
+    .dashboard-layout [data-no-cap="true"] * {
+        max-width: none !important;
+    }
 }
 
 /* Preserve the single-viewport desktop composition in shorter browser windows
@@ -202,13 +242,13 @@
     }
 
     .dashboard-side-narrative {
-        font-size: 0.84375rem !important;
+        font-size: 0.9375rem !important;
         line-height: 1.35 !important;
     }
 
     .lang-th .dashboard-side-narrative,
     .lang-kh .dashboard-side-narrative {
-        font-size: 0.9375rem !important;
+        font-size: 1.03125rem !important;
         line-height: 1.4 !important;
     }
 

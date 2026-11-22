@@ -7,12 +7,11 @@ import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
 
 test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "bd95cf6abea6292917d9d8910501d6b83d6b00f5790e671cc338e82dc3ff545f"],
+    ["src/app/DashboardClient.tsx", "900f2b2e7b633c60c50f40d9f17f095d4d8f6bf14c67e3feb2c8923a510d5084"],
     ["src/app/research-timing.ts", "09d03a502c4d8f8fccff48beb5e3cfda494ab21bf1c6f89ed41da352ffb018af"],
-    ["src/app/research-timing.ts", "09d03a502c4d8f8fccff48beb5e3cfda494ab21bf1c6f89ed41da352ffb018af"],
-    ["src/app/hooks/useCascadeLayout.ts", "9209147c08b53145da64c7c9989b266a4dec28418d7c364ca168c584c9d40753"],
-    ["src/app/globals.css", "5cde188cc1816468ca46c8765b99fc2334ea1f32679bbf3aa01846bc7f8f923b"],
-    ["src/app/layout.tsx", "b87d7baefddab9e8c3bcd12f9f18c37a140bb25775df30af13a8759f2b683274"],
+    ["src/app/hooks/useCascadeLayout.ts", "622d7d55b5e881a3d1ac5605932408a713a0db79c7d5402287982b49204cd750"],
+    ["src/app/globals.css", "c958cca117a09e690cd0a12a707051d39ed91edbe3029badd5287466c4eb65f9"],
+    ["src/app/layout.tsx", "766b9a8df7161c31b99ef6f974337b68da039b3b564db9aee508837ac72a2e6f"],
     ["src/app/loading.tsx", "3e1c0933f619ef400a9c4abbaed0e29a4bf4c6fd63f01e9a9556fde2e7000033"],
     ["src/app/page.tsx", "953d7ea3f70f8f90d3d514454868a7b7bfa404da6bbe356c2c57cf03827097e7"],
     ["src/app/translations.ts", "1640708c36ef27bf7d56a56ae2536220e2561246596ec1ce0b6340c5038abb2b"],

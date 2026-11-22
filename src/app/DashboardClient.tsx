@@ -26,8 +26,8 @@ type DashboardIconProps = React.SVGProps<SVGSVGElement> & {
   strokeWidth?: number;
 };
 type TimelineVirtualItem =
-  | { type: 'header'; date: string; eventsInDate: number; estimatedSize: number }
-  | { type: 'event'; date: string; event: TimelineEvent; eventIndex: number; estimatedSize: number };
+  | { type: 'header'; date: string; eventsInDate: number }
+  | { type: 'event'; date: string; event: TimelineEvent; eventIndex: number };
 const EMPTY_TIMELINE_EVENTS: TimelineEvent[] = [];
 const TIMELINE_IMPORTANCE_THRESHOLD = 70;
 
@@ -896,53 +896,30 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const hasAutoScrolledTimeline = useRef(false);
   const fadeShellRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const viewSelectorRef = useRef<HTMLDivElement>(null);
   const requestedViewRef = useRef<ViewMode>('ANALYSIS');
   const viewTransitionActiveRef = useRef(false);
 
-  const waitForCascadeFadeOut = useCallback(() => {
-    const shell = fadeShellRef.current;
-    if (!shell) return Promise.resolve();
-
-    // On first mount the shell already starts hidden. Keep two browser frames
-    // before measuring so font/sidebar/layout observers settle exactly as they
-    // did in the original adaptive-fit path. During language switches this
-    // also waits for the real opacity transition to finish.
-    return new Promise<void>((resolve) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        shell.removeEventListener('transitionend', onTransitionEnd);
-        window.clearTimeout(timeoutId);
-        resolve();
-      };
-      const onTransitionEnd = (event: TransitionEvent) => {
-        if (event.target !== shell || event.propertyName !== 'opacity') return;
-        const opacity = Number.parseFloat(getComputedStyle(shell).opacity || '1');
-        if (opacity <= 0.01) finish();
-      };
-      const timeoutId = window.setTimeout(finish, 300);
-
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const opacity = Number.parseFloat(getComputedStyle(shell).opacity || '1');
-          if (opacity <= 0.01) finish();
-          else shell.addEventListener('transitionend', onTransitionEnd);
-        });
-      });
-    });
-  }, []);
+  const waitForCascadeFadeOut = useCallback(
+    () => waitForOpacity(fadeShellRef.current, 0),
+    [],
+  );
 
   const runViewTransition = useCallback(async () => {
     if (viewTransitionActiveRef.current) return;
     viewTransitionActiveRef.current = true;
-    setIsViewTransitioning(true);
+    // Commit the fade immediately instead of letting React batch it behind
+    // any destination-data work started by the same click.
+    flushSync(() => setIsViewTransitioning(true));
     await waitForOpacity(mainRef.current, 0);
 
     while (true) {
       const target = requestedViewRef.current;
       flushSync(() => setViewModeRaw(target));
-      await waitForPaint();
+      // One animation frame is enough for the hidden destination to commit
+      // layout before the opacity transition starts. The old two-frame wait
+      // added latency without changing the painted result.
+      await nextFrame();
       if (requestedViewRef.current === target) break;
     }
 
@@ -954,9 +931,18 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // stable paint, then fade the destination in.
   const setViewMode = useCallback((mode: ViewMode) => {
     requestedViewRef.current = mode;
+    viewSelectorRef.current?.querySelectorAll<HTMLButtonElement>('[data-view-option]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.viewOption === mode));
+    });
     if (mode === 'TIMELINE') setShouldFetchFullTimeline(true);
     if (mode === viewMode && !viewTransitionActiveRef.current) return;
-    void runViewTransition();
+
+    // Let the tiny selector update reach a paint before asking React to render
+    // the heavier view transition. This keeps click feedback immediate without
+    // shortening the 150 ms content fade that gives the dashboard its polish.
+    if (!viewTransitionActiveRef.current) {
+      requestAnimationFrame(() => requestAnimationFrame(() => void runViewTransition()));
+    }
   }, [viewMode, runViewTransition]);
 
   // On mount, read URL hash and update viewMode (client-only, avoids hydration mismatch)
@@ -970,6 +956,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       requestedViewRef.current = 'GUIDE';
       setViewModeRaw('GUIDE');
     }
+
+    viewSelectorRef.current?.querySelectorAll<HTMLButtonElement>('[data-view-option]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.viewOption === requestedViewRef.current));
+    });
     hasInitializedFromHash.current = true;
   }, []);
 
@@ -1129,11 +1119,18 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   }, []);
 
   const warmTimeline = useCallback(() => {
-    void loadTimeline(timelineVersion).catch((error) => {
-      if (error instanceof Error) {
-        console.error('[BorderClash] Failed to warm timeline:', error);
-      }
-    });
+    void loadTimeline(timelineVersion)
+      .then((events) => {
+        // The request is already intentionally warmed after page load on good
+        // connections. Keep the parsed result in React too, so the user's first
+        // Timeline click does not need a second state handoff after parsing.
+        setClientTimelineEvents((current) => current ?? events);
+      })
+      .catch((error) => {
+        if (error instanceof Error) {
+          console.error('[BorderClash] Failed to warm timeline:', error);
+        }
+      });
   }, [timelineVersion]);
 
   // Warm the large optional asset only after the browser has spare time. A
@@ -1202,43 +1199,22 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const articleCounts = activeSnapshot.articleCounts;
   const dashboardRiskLevel = (impact?.riskLevel || 'LOW').toUpperCase();
 
+  // Keep the large Timeline request/JSON parse warm in the background, but do
+  // not make Overview/Guide pay the virtual-list render cost. In particular,
+  // language switches should not remeasure hundreds of hidden Timeline rows.
   const timelineEvents = viewMode === 'TIMELINE'
     ? (clientTimelineEvents ?? EMPTY_TIMELINE_EVENTS)
     : EMPTY_TIMELINE_EVENTS;
 
   const timelineLoading = viewMode === 'TIMELINE' && clientTimelineEvents === undefined;
 
-  // Keep all desktop views capped to the rendered sidebar height. This is the
-  // original dashboard behavior from before the short-desktop layout rewrite.
-  const sidebarRef = useRef<HTMLDivElement>(null);
-  const [sidebarHeight, setSidebarHeight] = useState<number | undefined>(undefined);
-
-  useLayoutEffect(() => {
-    const measureSidebarHeight = () => {
-      if (window.innerWidth >= 1280 && sidebarRef.current) {
-        setSidebarHeight(sidebarRef.current.offsetHeight);
-      } else {
-        setSidebarHeight(undefined);
-      }
-    };
-
-    measureSidebarHeight();
-    const resizeObserver = new ResizeObserver(measureSidebarHeight);
-    if (sidebarRef.current) resizeObserver.observe(sidebarRef.current);
-    window.addEventListener('resize', measureSidebarHeight);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', measureSidebarHeight);
-    };
-  }, []);
-
-
   // --- CASCADE LAYOUT CONTROL ---
   // All layout logic (mobile detecting, width, ratios) is handled inside the hook
   const {
     containerRef,
+    sidebarRef,
     neutralCardRef,
+    perspectivesRef,
     isDesktop,
     containerWidth,
     neutralRatio,
@@ -1248,7 +1224,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     isMeasuring,
     setLang
   } = useCascadeLayout({
-    viewMode: viewMode.toLowerCase() as 'analysis' | 'timeline' | 'guide',
     awaitBeforeMeasure: waitForCascadeFadeOut
   });
 
@@ -1639,40 +1614,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
     timelineDates.forEach(date => {
       const events = groupedEvents[date] || [];
-      items.push({ type: 'header', date, eventsInDate: events.length, estimatedSize: 60 });
+      items.push({ type: 'header', date, eventsInDate: events.length });
       events.forEach((event) => {
-        // Smart Estimation Logic for Event Height
-        const isThai = lang === 'th';
-        const isKhmer = lang === 'kh';
-
-        const titleText = localizedText(lang as Lang, event.title, event.titleTh, event.titleKh);
-        const descriptionText = localizedText(lang as Lang, event.description, event.descriptionTh, event.descriptionKh);
-        const hasSources = event.sources && event.sources.length > 0;
-
-        const titleLen = titleText.length;
-        const descLen = descriptionText.length;
-
-        let height = 85;
-
-        const titleOneLineLimit = isKhmer ? 34 : isThai ? 38 : 40;
-        if (titleLen > titleOneLineLimit * 2) height += isKhmer ? 62 : isThai ? 56 : 50;
-        else if (titleLen > titleOneLineLimit) height += isKhmer ? 46 : isThai ? 41 : 35;
-        else height += isKhmer ? 34 : isThai ? 30 : 20;
-
-        const descOneLineLimit = isKhmer ? 42 : isThai ? 50 : 60;
-        if (descLen > descOneLineLimit) height += isKhmer ? 40 : isThai ? 36 : 35;
-        else if (descLen > 0) height += isKhmer ? 24 : isThai ? 22 : 20;
-
-        if (hasSources) {
-          height += isKhmer ? 28 : 24;
-        }
-
-        items.push({ type: 'event', date, event, eventIndex: globalEventIndex, estimatedSize: height });
+        items.push({ type: 'event', date, event, eventIndex: globalEventIndex });
         globalEventIndex++;
       });
     });
     return items;
-  }, [timelineDates, groupedEvents, lang]);
+  }, [timelineDates, groupedEvents]);
 
   // Date-to-index mapping for scrollToDate
   const dateToVirtualIndex = useMemo(() => {
@@ -1690,9 +1639,23 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     count: virtualItems.length,
     getScrollElement: () => timelineScrollRef.current,
     useFlushSync: false,
-    estimateSize: (index) => virtualItems[index]?.estimatedSize || 180,
+    estimateSize: (index) => {
+      const item = virtualItems[index];
+      if (item?.type === 'header') return 60;
+      if (lang === 'kh') return 220;
+      if (lang === 'th') return 195;
+      return 180;
+    },
     overscan: 15, // Buffer items above/below viewport
   });
+
+  // TanStack can measure only the rows we actually mount and reuse those
+  // measurements. Clear cached row sizes when the typography/layout geometry
+  // changes so offscreen estimates never become stale across languages or
+  // desktop/mobile layout changes.
+  useLayoutEffect(() => {
+    if (viewMode === 'TIMELINE') rowVirtualizer.measure();
+  }, [rowVirtualizer, viewMode, lang, containerWidth, forceMobile]);
 
   // Scroll to selected date section (uses virtualizer for smooth navigation)
   const scrollToDate = useCallback((date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
@@ -1896,11 +1859,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       ? 'font-mono font-[550] text-[24px] md:text-[28px] leading-snug tracking-normal'
       : 'font-display text-3xl leading-snug';
   const timelineModalMetaDateClass = isLocalLang ? 'font-body font-[550]' : 'font-bold';
+  const sideNarrativeClass = isLocalLang
+    ? 'text-[20px] font-mono'
+    : 'text-[17.5px] font-serif';
 
   return (
     <div
       ref={fadeShellRef}
-      className={`min-h-screen grid grid-rows-[1fr_auto_1fr] transition-opacity duration-[150ms] ease-out ${langClass} ${(!isDesktop || forceMobile) ? 'force-mobile' : ''}`}
+      className={`min-h-screen grid grid-rows-[1fr_auto_1fr] transition-opacity duration-[150ms] ease-out ${langClass} ${forceMobile ? 'force-mobile' : ''}`}
       style={{ opacity: isLayoutReady ? 1 : 0 }}
     >
       {/* Top spacer - flexes equally with bottom */}
@@ -2050,7 +2016,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           </div>
 
           {/* View Selector */}
-          <div className="dashboard-view-selector rough-border p-3 bg-riso-ink/5 font-mono flex flex-col gap-2 text-xs">
+          <div ref={viewSelectorRef} className="dashboard-view-selector rough-border p-3 bg-riso-ink/5 font-mono flex flex-col gap-2 text-xs">
             <div className={`flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[10px]'}`}>
               <div className="w-4 h-[1px] bg-riso-ink/20"></div>
               {t.viewMode}
@@ -2074,16 +2040,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     if (mode.id === 'TIMELINE') warmTimeline();
                   }}
                   onClick={() => setViewMode(mode.id as ViewMode)}
-                  className={`dashboard-view-button
-                    flex items-center gap-3 p-2.5 border-2 active:scale-[0.98]
-                    transition-all duration-100 ease-out
-                    ${viewMode === mode.id
-                      ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[4px_4px_0px_rgba(30,58,138,0.3)]'
-                      : 'bg-white/40 text-riso-ink border-transparent hover:border-riso-ink/30 hover:bg-white/60'
-                    }
-                  `}
+                  data-view-option={mode.id}
+                  aria-pressed={requestedViewRef.current === mode.id}
+                  className="dashboard-view-button flex items-center gap-3 p-2.5 border-2 active:scale-[0.98] transition-[transform,box-shadow] duration-100 ease-out"
                 >
-                  <mode.icon size={mode.size} strokeWidth={viewMode === mode.id ? 2.5 : 1.5} />
+                  <mode.icon size={mode.size} strokeWidth={1.5} />
                   <span className="uppercase font-black tracking-wider">
                     {mode.label}
                   </span>
@@ -2136,7 +2097,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
           {/* ANALYSIS VIEW - Always render during measuring phase for overflow measurement */}
           <div className={`xl:col-span-3 ${(isMeasuring || viewMode === 'ANALYSIS') ? '' : 'hidden'}`}>
-            <div className="dashboard-analysis flex flex-col gap-4" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="dashboard-analysis flex flex-col gap-4" style={{ height: isDesktop && !forceMobile ? 'var(--dashboard-sidebar-height)' : undefined }}>
               {/* Stats Row - Fixed Height */}
               <div className="flex-none">
                 <Card className="dashboard-stats-card" title={t.damageAssessment} icon={Crosshair}>
@@ -2212,6 +2173,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               {/* Three Perspectives Grid - Simple 3-column on desktop */}
               <div className={isDesktop && !forceMobile ? 'flex-1 min-h-0' : ''}>
                 <div
+                  ref={perspectivesRef}
                   className={`perspectives-grid grid gap-4 ${isDesktop && !forceMobile ? 'h-full' : 'grid-cols-1'}`}
                   style={isDesktop && !forceMobile ? { gridTemplateColumns: `minmax(0, 1fr) minmax(0, ${neutralRatio}fr) minmax(0, 1fr)` } : undefined}
                 >
@@ -2262,7 +2224,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         <div>
                           {getPerspectiveSummary(cambodiaPerspective) ? (
                             <>
-                              <p className={`dashboard-side-narrative italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
+                              <p className={`dashboard-side-narrative italic leading-relaxed ${sideNarrativeClass}`}>
                                 “{getPerspectiveSummary(cambodiaPerspective)}”
                               </p>
                               <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {cambodiaPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
@@ -2305,7 +2267,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         <div>
                           {getPerspectiveSummary(thailandPerspective) ? (
                             <>
-                              <p className={`dashboard-side-narrative italic leading-relaxed ${lang === 'kh' ? 'text-[18px] font-mono leading-relaxed' : lang === 'th' ? 'text-[18px] font-mono' : 'text-base font-serif'}`}>
+                              <p className={`dashboard-side-narrative italic leading-relaxed ${sideNarrativeClass}`}>
                                 “{getPerspectiveSummary(thailandPerspective)}”
                               </p>
                               <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {thailandPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
@@ -2345,7 +2307,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
           {/* LOSSES VIEW */}
           <div className={`xl:col-span-3 ${(viewMode !== 'TIMELINE' || isMeasuring) ? 'hidden' : ''}`}>
-            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="xl:col-span-3 flex flex-col gap-4 h-[calc(100dvh-4rem)]" style={{ height: isDesktop && !forceMobile ? 'var(--dashboard-sidebar-height)' : undefined }}>
               <Card loading={timelineLoading} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
@@ -2466,6 +2428,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                 key={`header-${item.date}`}
                                 id={`timeline-date-${item.date}`}
                                 data-index={virtualRow.index}
+                                ref={rowVirtualizer.measureElement}
                                 className="absolute top-0 left-0 w-full z-20"
                                 style={{ transform: `translateY(${virtualRow.start}px)` }}
                               >
@@ -2496,6 +2459,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                               <div
                                 key={event?._id || `event-${virtualRow.index}`}
                                 data-index={virtualRow.index}
+                                ref={rowVirtualizer.measureElement}
                                 className="absolute top-0 left-0 w-full px-4 md:px-8 py-3"
                                 style={{ transform: `translateY(${virtualRow.start}px)` }}
                               >
@@ -2824,7 +2788,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
           {/* GUIDE VIEW - Viewport-contained like other views */}
           <div className={`xl:col-span-3 ${(viewMode !== 'GUIDE' || isMeasuring) ? 'hidden' : ''}`}>
-            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)]" style={{ height: (isDesktop && !forceMobile && typeof sidebarHeight !== 'undefined') ? sidebarHeight : undefined }}>
+            <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)]" style={{ height: isDesktop && !forceMobile ? 'var(--dashboard-sidebar-height)' : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
                 <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">
