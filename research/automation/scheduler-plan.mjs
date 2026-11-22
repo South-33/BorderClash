@@ -33,14 +33,15 @@ export function buildSchedulerPlan({
 }) {
   if (!Number.isFinite(nowMs) || nowMs <= 0) throw new Error("nowMs must be a positive timestamp");
 
-  if (control?.stopped) return { action: "stop", reason: "operator_stopped" };
-  if (control?.paused || state?.isPaused) return { action: "stop", reason: "paused" };
-  if (runtime?.status === "review") return { action: "stop", reason: "review_hold" };
+  if (control?.stopped) return { action: "stop", runDue: false, reason: "operator_stopped" };
+  if (control?.paused || state?.isPaused) return { action: "stop", runDue: false, reason: "paused" };
+  if (runtime?.status === "review") return { action: "stop", runDue: false, reason: "review_hold" };
 
   const retryMs = DEFAULT_RETRY_MINUTES * 60_000;
   if (RECOVERY_STATUSES.has(runtime?.status)) {
     return {
       action: "arm",
+      runDue: true,
       wakeAt: Math.round(nowMs + retryMs),
       reason: `recovery_${runtime.status}`,
       targetAt: Number(state?.nextRunAt) || null,
@@ -51,6 +52,7 @@ export function buildSchedulerPlan({
   if (!Number.isFinite(targetAt) || targetAt <= 0) {
     return {
       action: "arm",
+      runDue: true,
       wakeAt: Math.round(nowMs + retryMs),
       reason: "missing_target_retry",
       targetAt: null,
@@ -61,6 +63,7 @@ export function buildSchedulerPlan({
   if (startAt <= nowMs) {
     return {
       action: "arm",
+      runDue: true,
       wakeAt: Math.round(nowMs + retryMs),
       reason: "due_retry",
       targetAt: Math.round(targetAt),
@@ -70,6 +73,7 @@ export function buildSchedulerPlan({
 
   return {
     action: "arm",
+    runDue: false,
     wakeAt: startAt,
     reason: "next_target",
     targetAt: Math.round(targetAt),

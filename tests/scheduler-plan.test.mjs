@@ -16,6 +16,7 @@ test("scheduler wakes exactly ten minutes before the public target", () => {
 
   assert.deepEqual(plan, {
     action: "arm",
+    runDue: false,
     wakeAt: targetAt - 10 * MINUTE,
     reason: "next_target",
     targetAt,
@@ -33,6 +34,7 @@ test("scheduler retries five minutes later when the start window is already due"
   });
 
   assert.equal(plan.action, "arm");
+  assert.equal(plan.runDue, true);
   assert.equal(plan.reason, "due_retry");
   assert.equal(plan.wakeAt, NOW + 5 * MINUTE);
   assert.equal(plan.targetAt, targetAt);
@@ -47,6 +49,7 @@ test("recoverable runner states use a five-minute retry regardless of the next t
       nowMs: NOW,
     });
     assert.equal(plan.action, "arm");
+    assert.equal(plan.runDue, true);
     assert.equal(plan.wakeAt, NOW + 5 * MINUTE);
     assert.equal(plan.reason, "recovery_" + status);
   }
@@ -60,7 +63,7 @@ test("operator and review holds leave no active timer", () => {
       runtime: { status: "published" },
       nowMs: NOW,
     }),
-    { action: "stop", reason: "operator_stopped" },
+    { action: "stop", runDue: false, reason: "operator_stopped" },
   );
   assert.deepEqual(
     buildSchedulerPlan({
@@ -69,7 +72,7 @@ test("operator and review holds leave no active timer", () => {
       runtime: { status: "published" },
       nowMs: NOW,
     }),
-    { action: "stop", reason: "paused" },
+    { action: "stop", runDue: false, reason: "paused" },
   );
   assert.deepEqual(
     buildSchedulerPlan({
@@ -78,7 +81,7 @@ test("operator and review holds leave no active timer", () => {
       runtime: { status: "review" },
       nowMs: NOW,
     }),
-    { action: "stop", reason: "review_hold" },
+    { action: "stop", runDue: false, reason: "review_hold" },
   );
 });
 
@@ -90,6 +93,7 @@ test("missing target state retries instead of spinning or silently stopping", ()
     nowMs: NOW,
   });
   assert.equal(plan.action, "arm");
+  assert.equal(plan.runDue, true);
   assert.equal(plan.reason, "missing_target_retry");
   assert.equal(plan.wakeAt, NOW + 5 * MINUTE);
 });
@@ -116,6 +120,7 @@ test("verified delivery state overrides a stale production checkout after public
     nowMs: NOW,
   });
   assert.equal(plan.reason, "next_target");
+  assert.equal(plan.runDue, false);
   assert.equal(plan.wakeAt, NOW + (24 * 60 - 10) * MINUTE);
 });
 

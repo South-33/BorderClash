@@ -55,34 +55,28 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(production, /git.+merge.+--ff-only.+main/s);
   assert.doesNotMatch(production, /git.+reset.+--hard/s);
   assert.match(production, /research\\automation\\run-cycle\.ps1/);
+  assert.match(production, /scheduler-plan\.mjs/);
+  assert.match(production, /function Get-SchedulerPlan/);
   assert.match(production, /-Publish/);
-  assert.match(production, /data\\research-state\.json/);
-  assert.match(production, /\.work\\runner\\runtime\\runtime\.json/);
-  assert.match(production, /SKIP: not-due/);
-  assert.ok(
-    production.indexOf('if (-not (Test-ResearchDue))') < production.lastIndexOf('Invoke-BoundedFetch'),
-    'scheduler must check due state before waking Git/network',
-  );
+  assert.match(production, /-ScheduledTargetAt \$scheduledTargetAt/);
+  assert.match(production, /SKIP: scheduler/);
+  const firstPlanCheck = production.indexOf('$schedulerPlan = Get-SchedulerPlan');
+  const fetchIndex = production.lastIndexOf('Invoke-BoundedFetch');
+  const mergeIndex = production.lastIndexOf('merge", "--ff-only"');
+  const secondPlanCheck = production.lastIndexOf('$schedulerPlan = Get-SchedulerPlan');
+  assert.ok(firstPlanCheck >= 0 && firstPlanCheck < fetchIndex, 'scheduler planner must gate Git/network work');
+  assert.ok(secondPlanCheck > mergeIndex, 'scheduler planner must re-check the synced target before starting research');
   assert.ok(
     production.indexOf('if (-not (Test-SharedCredentialReady))') < production.lastIndexOf('Invoke-BoundedFetch'),
     'scheduler must wait for shared credentials before Git/network work',
   );
-  const preflight = production.slice(
-    production.indexOf('function Test-ResearchDue'),
-    production.indexOf('function Invoke-Checked'),
-  );
-  assert.match(preflight, /runtime\.status.+running.+resumable.+ready/s);
-  assert.ok(
-    preflight.indexOf('runtime.status') < preflight.indexOf('state.nextRunAt'),
-    'active recovery state must bypass the normal nextRunAt gate',
-  );
-  assert.doesNotMatch(preflight, /Write-Output/, 'preflight must return only a boolean');
   assert.match(production, /Write-Output \$script:preflightMessage/);
-  assert.match(production, /-StartLeadMinutes \$script:leadMinutes/);
-  assert.match(schedulePolicy, /\$RESEARCH_START_LEAD_MINUTES = 10/);
   assert.match(schedulePolicy, /Get-NextResearchTargetAt/);
-  assert.doesNotMatch(schedulePolicy, /BufferMinutes/);
-  assert.doesNotMatch(schedulePolicy, /MaximumLeadMinutes/);
+  assert.doesNotMatch(schedulePolicy, /ResearchLead|CadenceWarning|TimeDue|LEAD_MINUTES/);
+  assert.match(runner, /\[int64\]\$ScheduledTargetAt = 0/);
+  assert.match(runner, /scheduledTargetAt = \$cycleScheduledTargetAt/);
+  assert.match(runner, /requires an explicit ScheduledTargetAt from the scheduler planner/);
+  assert.doesNotMatch(runner, /StartLeadMinutes/);
   assert.doesNotMatch(platform, /agy-unattended/);
   assert.match(platform, /Get-Command agy /);
   assert.match(linuxInstaller, /PATH=\/usr\/local\/bin:\$HOME\/\.local\/bin/);

@@ -11,7 +11,7 @@ param(
     [string]$PublicBaseUrl = "https://border-clash.vercel.app",
     [int]$DeliveryTimeoutSeconds = 600,
     [int]$DeliveryPollMilliseconds = 15000,
-    [int]$StartLeadMinutes = 0
+    [int64]$ScheduledTargetAt = 0
 )
 
 . (Join-Path $PSScriptRoot "platform.ps1")
@@ -424,7 +424,8 @@ function Get-OrCreateRunnerCompletion {
         [string]$RunId,
         [string]$BaseHead,
         $BaseState,
-        $FinishMarker
+        $FinishMarker,
+        [int64]$ScheduledTargetAt
     )
 
     $path = Join-Path $logDir "$RunId.completion.json"
@@ -464,8 +465,7 @@ function Get-OrCreateRunnerCompletion {
     if ($completedAt -le [int64]$BaseState.lastResearchAt) {
         $completedAt = [int64]$BaseState.lastResearchAt + 1
     }
-    $previousTargetAt = if ($BaseState.PSObject.Properties["nextRunAt"]) { [int64]$BaseState.nextRunAt } else { 0 }
-    $nextRunAt = Get-NextResearchTargetAt -PreviousTargetAt $previousTargetAt -LastResearchAt ([int64]$BaseState.lastResearchAt) -CompletedAt $completedAt -IntervalHours $hours -LeadMinutes $RESEARCH_START_LEAD_MINUTES
+    $nextRunAt = Get-NextResearchTargetAt -ScheduledTargetAt $ScheduledTargetAt -CompletedAt $completedAt -IntervalHours $hours
     $completion = [ordered]@{
         schemaVersion = 1
         cycleId = $RunId
@@ -707,6 +707,7 @@ $runId = ""
 $runDir = ""
 $baseHead = ""
 $cycleStartedAt = $runnerStartedAt
+$cycleScheduledTargetAt = [int64][Math]::Max([int64]0, [int64]$ScheduledTargetAt)
 $resuming = $false
 $recoveringCompletedTurn = $false
 $resumeCount = 0
@@ -730,19 +731,14 @@ try {
     $baseHead = (& git -C $repoRoot rev-parse $baseRef).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $baseHead) { throw "Could not resolve cycle base $baseRef" }
     $state = Read-StateFromRef $baseHead
-    $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-
     if (-not $Force -and $state.isPaused) {
         Write-Output "SKIP: paused"
         exit 0
     }
 
     $hasRecoveryCheckpoint = $checkpoint -and [string]$checkpoint.status -in @("resumable", "ready")
-    $leadMs = [int64][Math]::Max(0, $StartLeadMinutes) * 60 * 1000
-    if (-not $Force -and -not $hasRecoveryCheckpoint -and $state.nextRunAt -and ([int64]$state.nextRunAt - $leadMs) -gt $nowMs) {
-        $next = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$state.nextRunAt).ToLocalTime()
-        Write-Output "SKIP: not-due nextRunAt=$($next.ToString('o')) lead=$StartLeadMinutes minutes"
-        exit 0
+    if (-not $Force -and -not $hasRecoveryCheckpoint -and $ScheduledTargetAt -le 0) {
+        throw "Scheduled research requires an explicit ScheduledTargetAt from the scheduler planner."
     }
 
     if ($Publish) {
@@ -850,6 +846,9 @@ try {
             ) {
                 $cycleStartedAt = [int64]$existingCycleRunMetadata.startedAt
             }
+            if ($existingCycleRunMetadata.PSObject.Properties["scheduledTargetAt"]) {
+                $cycleScheduledTargetAt = [int64]$existingCycleRunMetadata.scheduledTargetAt
+            }
         } catch {
             throw "Cycle metadata is unreadable during recovery"
         }
@@ -859,6 +858,7 @@ try {
         baseHead = $baseHead
         model = $agyModel
         startedAt = $cycleStartedAt
+        scheduledTargetAt = $cycleScheduledTargetAt
     } | ConvertTo-Json
     [IO.File]::WriteAllText($cycleRunMetadataPath, $cycleRunMetadata + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 
@@ -1013,7 +1013,7 @@ Read research/CYCLE_GUIDE.md for the stable research contract and .work/CYCLE_CO
     }
 
     $runStatePath = Join-Path $runDir "data\research-state.json"
-    $completion = Get-OrCreateRunnerCompletion $runDir $runId $baseHead $state $finishMarker
+    $completion = Get-OrCreateRunnerCompletion $runDir $runId $baseHead $state $finishMarker $cycleScheduledTargetAt
     $runState = New-CompletedResearchState $state $completion
     Write-JsonAtomicFile $runStatePath $runState
     $runState = Read-State $runStatePath

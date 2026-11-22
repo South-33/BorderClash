@@ -31,7 +31,6 @@ $runtimePath = Join-Path $runtimeDir "runtime.json"
 $pendingPublicationPath = Join-Path $runtimeDir "pending-publication.json"
 $retiredDir = Join-Path (Split-Path -Parent $runsRoot) "retired"
 $runner = Join-Path $repoRoot "research\automation\run-cycle.ps1"
-. (Join-Path $PSScriptRoot "schedule-policy.ps1")
 
 New-Item -ItemType Directory -Force -Path $runsRoot, $runtimeDir, $logDir, $retiredDir | Out-Null
 
@@ -203,10 +202,6 @@ function Show-Status {
     $control = Read-Control
     $runtime = Read-JsonSafe $runtimePath
     $state = Read-JsonSafe (Join-Path $repoRoot "data\research-state.json")
-    $leadMinutes = [int]$RESEARCH_START_LEAD_MINUTES
-    $cadenceWarning = if ($state) {
-        Get-ResearchCadenceWarning -IntervalHours ([double]$state.lastCycleInterval) -LeadMinutes $leadMinutes
-    } else { "" }
     [ordered]@{
         paused = [bool]$control.paused
         stopped = [bool]$control.stopped
@@ -216,8 +211,6 @@ function Show-Status {
                 lastResearchAt = $state.lastResearchAt
                 nextRunAt = $state.nextRunAt
                 intervalHours = $state.lastCycleInterval
-                leadMinutes = $leadMinutes
-                cadenceWarning = $cadenceWarning
             }
         } else { $null }
         nextAction = Get-NextAction $control $runtime

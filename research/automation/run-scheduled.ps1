@@ -12,19 +12,9 @@ if ($FetchAttempts -lt 1 -or $FetchAttempts -gt 20) { throw "FetchAttempts must 
 if ($FetchRetrySeconds -lt 0 -or $FetchRetrySeconds -gt 300) { throw "FetchRetrySeconds must be between 0 and 300." }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$statePath = Join-Path $repoRoot "data\research-state.json"
 $runtimePath = Join-Path $repoRoot ".work\runner\runtime\runtime.json"
-$controlPath = Join-Path $repoRoot ".work\runner\runtime\control.json"
-$logDir = Join-Path $repoRoot ".work\runner\logs"
+$schedulerPlanner = Join-Path $PSScriptRoot "scheduler-plan.mjs"
 $script:preflightMessage = $null
-. (Join-Path $PSScriptRoot "schedule-policy.ps1")
-$script:leadMinutes = [int]$RESEARCH_START_LEAD_MINUTES
-
-function Read-JsonSafe {
-    param([string]$Path)
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    try { return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json } catch { return $null }
-}
 
 function Write-RuntimeBlock {
     param([string]$Message)
@@ -45,45 +35,16 @@ function Write-RuntimeBlock {
     Move-Item -LiteralPath $temp -Destination $runtimePath -Force
 }
 
-function Test-ResearchDue {
-    if (-not (Test-Path -LiteralPath $statePath)) { return $true }
-
-    $state = Read-JsonSafe $statePath
-    if ($null -eq $state) {
-        # Let the normal sync/runner path repair or report malformed state.
-        return $true
+function Get-SchedulerPlan {
+    $output = @(& node $schedulerPlanner "--repo-root" $repoRoot 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Scheduler planner failed: $([string]::Join([Environment]::NewLine, [string[]]$output))"
     }
-
-    $control = Read-JsonSafe $controlPath
-    if ($control -and $control.stopped) {
-        $script:preflightMessage = "SKIP: stopped by operator"
-        return $false
+    try {
+        return ([string]($output | Select-Object -Last 1) | ConvertFrom-Json)
+    } catch {
+        throw "Scheduler planner returned invalid JSON."
     }
-
-    if (Test-Path -LiteralPath $runtimePath) {
-        $runtime = Read-JsonSafe $runtimePath
-        if ($runtime) {
-            if ([string]$runtime.status -in @("running", "resumable", "ready", "pending-publication")) { return $true }
-            if ([string]$runtime.status -eq "review") {
-                $script:preflightMessage = "SKIP: review hold - $([string]$runtime.message)"
-                return $false
-            }
-        }
-    }
-
-    if (($control -and $control.paused) -or $state.isPaused) {
-        $script:preflightMessage = "SKIP: paused"
-        return $false
-    }
-
-    $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    if ($state.nextRunAt -and -not (Test-ResearchTimeDue -NowMs $nowMs -NextRunAt ([int64]$state.nextRunAt) -LeadMinutes $script:leadMinutes)) {
-        $next = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$state.nextRunAt).ToLocalTime()
-        $script:preflightMessage = "SKIP: not-due nextRunAt=$($next.ToString('o')) lead=$($script:leadMinutes)m"
-        return $false
-    }
-
-    return $true
 }
 
 function Invoke-Checked {
@@ -162,12 +123,11 @@ function Test-SharedCredentialReady {
     return $true
 }
 
-# The external scheduler normally wakes exactly at the configured pre-target
-# start time. Keep this local preflight anyway: persistent missed wakes,
-# recovery retries, manual service starts, and stale timer state must not wake
-# Git/network work before research is actually due.
-if (-not (Test-ResearchDue)) {
-    Write-Output $script:preflightMessage
+# The planner owns all due/hold/recovery timing. A boot-time service start and
+# the exact timer both pass through this same decision before touching network.
+$schedulerPlan = Get-SchedulerPlan
+if (-not [bool]$schedulerPlan.runDue) {
+    Write-Output "SKIP: scheduler $([string]$schedulerPlan.reason)"
     exit 0
 }
 
@@ -192,6 +152,18 @@ Invoke-BoundedFetch
 Invoke-Checked "git" @("-C", $repoRoot, "checkout", "--quiet", "main")
 Invoke-Checked "git" @("-C", $repoRoot, "merge", "--ff-only", "$RemoteName/main")
 
+# Re-evaluate after syncing main so a newer pause/target can cancel a stale
+# local wake without starting a cycle.
+$schedulerPlan = Get-SchedulerPlan
+if (-not [bool]$schedulerPlan.runDue) {
+    Write-Output "SKIP: scheduler $([string]$schedulerPlan.reason)"
+    exit 0
+}
+
+$scheduledTargetAt = 0
+if ($schedulerPlan.PSObject.Properties["targetAt"] -and $null -ne $schedulerPlan.targetAt) {
+    $scheduledTargetAt = [int64]$schedulerPlan.targetAt
+}
 $runner = Join-Path $repoRoot "research\automation\run-cycle.ps1"
-& $script:ResearchShell -NoProfile -ExecutionPolicy Bypass -File $runner -Publish -RemoteName $RemoteName -StartLeadMinutes $script:leadMinutes
+& $script:ResearchShell -NoProfile -ExecutionPolicy Bypass -File $runner -Publish -RemoteName $RemoteName -ScheduledTargetAt $scheduledTargetAt
 exit $LASTEXITCODE

@@ -62,7 +62,8 @@ function Invoke-TestRunner {
     param(
         [switch]$Publish,
         [string]$RemoteName = "origin",
-        [string]$PublicBaseUrl = "http://127.0.0.1:9"
+        [string]$PublicBaseUrl = "http://127.0.0.1:9",
+        [int64]$ScheduledTargetAt = 0
     )
     $arguments = @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner,
@@ -72,6 +73,7 @@ function Invoke-TestRunner {
         "-PublicBaseUrl", $PublicBaseUrl, "-DeliveryTimeoutSeconds", "12", "-DeliveryPollMilliseconds", "100"
     )
     if ($Publish) { $arguments += "-Publish" }
+    if ($ScheduledTargetAt -gt 0) { $arguments += @("-ScheduledTargetAt", [string]$ScheduledTargetAt) }
     $old = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
@@ -297,6 +299,19 @@ try {
 
     }
 
+    Reset-TestArtifacts
+    $env:BORDERCLASH_FAKE_AGY_MODE = "success"
+    $oldErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $unscheduled = & $testShell -NoProfile -ExecutionPolicy Bypass -File $runner -AgyPath $fakeExe -RunsRoot $runsRoot -RuntimeDir $runtimeDir -LogDir $logDir -MutexName $mutexName 2>&1
+        $unscheduledExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $oldErrorAction
+    }
+    Assert-True ($unscheduledExit -ne 0) "non-forced runner started without scheduler intent"
+    Assert-True (($unscheduled -join "`n") -match "requires an explicit ScheduledTargetAt") "unscheduled runner rejection did not explain the scheduler boundary"
+
     $env:BORDERCLASH_EXPECT_MODEL = "gemini-3.8-flash-medium"
     $env:BORDERCLASH_FAKE_AGY_MODE = "success"
     $success = Invoke-TestRunner
@@ -420,9 +435,10 @@ try {
     Write-Output "automation: provider and runner recovery"
     Reset-TestArtifacts
     $env:BORDERCLASH_FAKE_AGY_MODE = "timeout-persistent"
-    $deferred = Invoke-TestRunner
+    $scheduledTargetAt = [int64](Read-JsonSafe (Join-Path $repoRoot "data\research-state.json")).nextRunAt
+    $deferred = Invoke-TestRunner -ScheduledTargetAt $scheduledTargetAt
     Write-Output "automation: provider checkpoint returned"
-    Assert-True ($deferred.ExitCode -eq 0 -and ($deferred.Output -join "`n") -match "DEFERRED: print_timeout") "provider interruption was not checkpointed"
+    Assert-True ($deferred.ExitCode -eq 0 -and ($deferred.Output -join "`n") -match "DEFERRED: print_timeout") "provider interruption was not checkpointed: $($deferred.Output -join ' | ')"
     $checkpoint = Get-Runtime
     Assert-True ($checkpoint.status -eq "resumable") "provider checkpoint is not resumable"
     Assert-True ([bool]$checkpoint.workspaceUsable) "provider checkpoint did not record usable local files"
@@ -430,14 +446,16 @@ try {
     $checkpointDir = [string]$checkpoint.runDir
     $checkpointMetadata = Read-JsonSafe (Join-Path $checkpointDir ".work\CYCLE_RUN.json")
     Assert-True ($checkpointMetadata -and [int64]$checkpointMetadata.startedAt -gt 0) "provider checkpoint did not persist the original cycle start"
+    Assert-True ([int64]$checkpointMetadata.scheduledTargetAt -eq $scheduledTargetAt) "provider checkpoint did not persist the scheduled target"
     $checkpointStartedAt = [int64]$checkpointMetadata.startedAt
     $resumed = Invoke-TestRunner
     Write-Output "automation: provider resume returned"
-    Assert-True ($resumed.ExitCode -eq 0 -and ($resumed.Output -join "`n") -match "RESUME:.*fake-persistent-conversation") "provider checkpoint did not resume the same conversation"
+    Assert-True ($resumed.ExitCode -eq 0 -and ($resumed.Output -join "`n") -match "RESUME:.*fake-persistent-conversation") "provider checkpoint did not resume the same conversation: $($resumed.Output -join ' | ')"
     Assert-True (Test-Path -LiteralPath $checkpointDir) "resumed workspace was discarded"
     Assert-True ((Get-Runtime).status -eq "validated") "resumed cycle did not validate"
     $resumedMetadata = Read-JsonSafe (Join-Path $checkpointDir ".work\CYCLE_RUN.json")
     Assert-True ([int64]$resumedMetadata.startedAt -eq $checkpointStartedAt) "resumed cycle replaced its original start timestamp"
+    Assert-True ([int64]$resumedMetadata.scheduledTargetAt -eq $scheduledTargetAt) "resumed cycle replaced its original scheduled target"
 
     # The streaming watchdog kills an inactive AGY process, then resumes the same
     # conversation without discarding untracked data created before the stall.
