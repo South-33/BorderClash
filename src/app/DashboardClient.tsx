@@ -1689,19 +1689,32 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     overscan: 15, // Preload nearby rows so compositor glides never reveal gaps
   });
 
-  // A programmatic date move owns scrollTop until it lands. Fresh row
-  // measurements can update the destination, but must not also shift the
-  // viewport mid-animation.
-  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => !isProgrammaticScroll.current;
+  // A programmatic date move owns scrollTop until it lands. Suppress
+  // measurement anchoring during that move, then preserve TanStack's default
+  // anchoring semantics afterwards. Returning true for every resize outside
+  // a glide over-corrects dense timelines when a below-fold row is first
+  // measured, producing a visible post-animation snap.
+  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+    if (isProgrammaticScroll.current) return false;
+
+    const scrollOffset = instance.scrollOffset ?? 0;
+    const isFirstMeasure = !instance.itemSizeCache.has(item.key);
+    return isFirstMeasure
+      ? item.start < scrollOffset
+      : item.end <= scrollOffset && instance.scrollDirection !== 'backward';
+  };
 
   // TanStack can measure only the rows we actually mount and reuse those
   // measurements. Clear cached row sizes when the typography/layout geometry
-  // changes so offscreen estimates never become stale across languages or
-  // desktop/mobile layout changes. isLayoutReady also catches physical mobile
-  // width changes, where containerWidth intentionally remains null.
+  // changes so offscreen estimates never become stale across languages,
+  // event-filter modes, or desktop/mobile layout changes. Filter mode changes
+  // which row occupies each virtual index, so its index-keyed size cache must
+  // be rebuilt before a nearby glide can trust those offsets. isLayoutReady
+  // also catches physical mobile width changes, where containerWidth
+  // intentionally remains null.
   useLayoutEffect(() => {
     if (viewMode === 'TIMELINE' && isLayoutReady) rowVirtualizer.measure();
-  }, [rowVirtualizer, viewMode, lang, containerWidth, forceMobile, isLayoutReady]);
+  }, [rowVirtualizer, viewMode, lang, showMinorEvents, containerWidth, forceMobile, isLayoutReady]);
 
   // Nearby dates glide; physically distant dates fade/teleport. Use both date
   // distance and actual travel distance so a date with many events cannot turn
