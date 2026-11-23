@@ -1344,12 +1344,46 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const filterTransitionActiveRef = useRef(false);
   const timelineContentRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const timelineVirtualRowsRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
   const scrollToDateRef = useRef<(date: string, behavior?: 'auto' | 'smooth') => void>(() => {});
+  const timelineGlideRef = useRef<{
+    animation: Animation;
+    startOffset: number;
+  } | null>(null);
+
+  const cancelTimelineGlide = useCallback((commitVisualPosition: boolean) => {
+    const activeGlide = timelineGlideRef.current;
+    if (!activeGlide) return;
+
+    const container = timelineScrollRef.current;
+    const rows = timelineVirtualRowsRef.current;
+    let visualOffset = 0;
+
+    if (commitVisualPosition && rows) {
+      const transform = getComputedStyle(rows).transform;
+      if (transform && transform !== 'none') {
+        visualOffset = new DOMMatrixReadOnly(transform).m42;
+      }
+    }
+
+    activeGlide.animation.onfinish = null;
+    activeGlide.animation.cancel();
+    timelineGlideRef.current = null;
+
+    if (commitVisualPosition && container && visualOffset !== 0) {
+      const maxScrollOffset = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollTop = Math.max(
+        0,
+        Math.min(maxScrollOffset, activeGlide.startOffset - visualOffset),
+      );
+    }
+  }, []);
 
   // Fade fully out, change the event set, restore the equivalent date while
   // hidden, then reveal the settled timeline.
   const setShowMinorEvents = useCallback((value: boolean) => {
+    cancelTimelineGlide(true);
     requestedMinorEventsRef.current = value;
     if (value === showMinorEvents && !filterTransitionActiveRef.current) return;
     filterToggleDateRef.current = selectedTimelineDate;
@@ -1397,13 +1431,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       setIsFilterTransitioning(false);
       filterTransitionActiveRef.current = false;
     })();
-  }, [showMinorEvents, selectedTimelineDate, timelineEvents]);
+  }, [cancelTimelineGlide, showMinorEvents, selectedTimelineDate, timelineEvents]);
 
   // Anti-Snapback Refs: Lock updates during programmatic scrolling
   const isProgrammaticScroll = useRef(false);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
   const scrollJumpToken = useRef(0);
-  const scrollAnimationFrame = useRef<number | null>(null);
 
   // Derive available dates and group events by date (filtered by importance)
   const { timelineDates, groupedEvents, dateCounts, totalEventsCount, filteredEventsCount } = useMemo(() => {
@@ -1645,7 +1678,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const rowVirtualizer = useVirtualizer({
     count: virtualItems.length,
     getScrollElement: () => timelineScrollRef.current,
-    useFlushSync: false,
+    directDomUpdates: true,
     estimateSize: (index) => {
       const item = virtualItems[index];
       if (item?.type === 'header') return 60;
@@ -1653,7 +1686,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       if (lang === 'th') return 195;
       return 180;
     },
-    overscan: 15, // Buffer items above/below viewport
+    overscan: 15, // Preload nearby rows so compositor glides never reveal gaps
   });
 
   // A programmatic date move owns scrollTop until it lands. Fresh row
@@ -1678,6 +1711,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     const index = dateToVirtualIndex[date];
     if (!container || index === undefined) return;
 
+    const token = ++scrollJumpToken.current;
+    cancelTimelineGlide(true);
+    rowVirtualizer.cancelScroll();
+
     const targetInfo = rowVirtualizer.getOffsetForIndex(index, 'start');
     if (!targetInfo) return;
     const targetElement = container.querySelector<HTMLElement>(`[data-index="${index}"]`);
@@ -1697,13 +1734,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     const maxSmoothDistance = container.clientHeight * 1.2;
     const targetIsRendered = renderedTargetOffset !== null;
 
-    const token = ++scrollJumpToken.current;
-    if (scrollAnimationFrame.current !== null) {
-      cancelAnimationFrame(scrollAnimationFrame.current);
-      scrollAnimationFrame.current = null;
-    }
-    rowVirtualizer.cancelScroll();
-
     // LOCK: Prevent scroll listener from overwriting selection during animation
     isProgrammaticScroll.current = true;
 
@@ -1712,10 +1742,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
     // Set safety unlock (fallback if scroll event logic fails)
     scrollTimeout.current = setTimeout(() => {
-      if (scrollAnimationFrame.current !== null) {
-        cancelAnimationFrame(scrollAnimationFrame.current);
-        scrollAnimationFrame.current = null;
-      }
+      cancelTimelineGlide(true);
       isProgrammaticScroll.current = false;
       setIsScrollJump(false); // Safety reset
     }, 1200);
@@ -1725,10 +1752,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
     const finishProgrammaticScroll = () => {
       if (scrollJumpToken.current !== token) return;
-      if (scrollAnimationFrame.current !== null) {
-        cancelAnimationFrame(scrollAnimationFrame.current);
-        scrollAnimationFrame.current = null;
-      }
       if (scrollTimeout.current) {
         clearTimeout(scrollTimeout.current);
         scrollTimeout.current = null;
@@ -1746,58 +1769,46 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
     const shouldGlide = dateDistance <= 4
       && travelDistance <= maxSmoothDistance
-      && targetIsRendered;
+      && targetIsRendered
+      && timelineVirtualRowsRef.current !== null;
 
     if (shouldGlide) {
       const distanceRatio = Math.min(1, travelDistance / maxSmoothDistance);
-      // Critical damping gives a clean ease-in/ease-out without overshoot.
-      // Slightly soften longer nearby moves; far moves never enter this path.
-      const omega = 24 - (distanceRatio * 5);
-      const hardStopMs = 360;
-      let position = container.scrollTop;
-      let velocity = 0;
-      let startedAt: number | null = null;
-      let previousAt: number | null = null;
+      const startOffset = container.scrollTop;
+      const distance = initialTargetOffset - startOffset;
+      const durationMs = 220 + (distanceRatio * 120);
+      const rows = timelineVirtualRowsRef.current!;
+      const animation = rows.animate(
+        [
+          { transform: 'translate3d(0, 0, 0)' },
+          { transform: `translate3d(0, ${-distance}px, 0)` },
+        ],
+        {
+          duration: durationMs,
+          easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+          fill: 'forwards',
+        },
+      );
+      timelineGlideRef.current = { animation, startOffset };
 
-      const step = (now: number) => {
-        if (scrollJumpToken.current !== token) return;
+      animation.onfinish = () => {
+        if (scrollJumpToken.current !== token || timelineGlideRef.current?.animation !== animation) return;
         const liveContainer = timelineScrollRef.current;
         if (!liveContainer) {
+          timelineGlideRef.current = null;
           finishProgrammaticScroll();
           return;
         }
 
-        const settledElement = liveContainer.querySelector<HTMLElement>(`[data-index="${index}"]`);
-        const rawLiveTarget = settledElement
-          ? liveContainer.scrollTop + settledElement.getBoundingClientRect().top - liveContainer.getBoundingClientRect().top
-          : rowVirtualizer.getOffsetForIndex(index, 'start')?.[0] ?? initialTargetOffset;
-        const liveTarget = Math.max(0, Math.min(liveContainer.scrollHeight - liveContainer.clientHeight, rawLiveTarget));
-
-        if (startedAt === null) {
-          startedAt = now;
-          previousAt = now;
-        }
-        const elapsed = now - startedAt;
-        const dt = Math.min(0.032, Math.max(0.001, (now - (previousAt ?? now)) / 1000));
-        previousAt = now;
-
-        const displacement = liveTarget - position;
-        const acceleration = (omega * omega * displacement) - (2 * omega * velocity);
-        velocity += acceleration * dt;
-        position += velocity * dt;
-        liveContainer.scrollTop = position;
-
-        const settled = Math.abs(liveTarget - position) < 0.75 && Math.abs(velocity) < 6;
-        if (settled || elapsed >= hardStopMs) {
-          liveContainer.scrollTop = liveTarget;
-          finishProgrammaticScroll();
-          return;
-        }
-
-        scrollAnimationFrame.current = requestAnimationFrame(step);
+        liveContainer.scrollTop = initialTargetOffset;
+        animation.cancel();
+        timelineGlideRef.current = null;
+        // TanStack can finish ResizeObserver/isScrolling work after the visual
+        // animation has landed. Keep its measurement correction disabled while
+        // that work settles; this is invisible to the user and manual input
+        // still cancels the lock immediately.
+        window.setTimeout(finishProgrammaticScroll, 200);
       };
-
-      scrollAnimationFrame.current = requestAnimationFrame(step);
       return;
     }
 
@@ -1811,7 +1822,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       setIsScrollJump(false);
       finishProgrammaticScroll();
     })();
-  }, [dateToVirtualIndex, rowVirtualizer, timelineDates]);
+  }, [cancelTimelineGlide, dateToVirtualIndex, rowVirtualizer, timelineDates]);
 
   // Keep scrollToDateRef updated with latest function
   useEffect(() => {
@@ -1887,10 +1898,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     const unlockScroll = () => {
       if (isProgrammaticScroll.current) {
         scrollJumpToken.current += 1;
-        if (scrollAnimationFrame.current !== null) {
-          cancelAnimationFrame(scrollAnimationFrame.current);
-          scrollAnimationFrame.current = null;
-        }
+        cancelTimelineGlide(true);
         virtualizerRef.current.cancelScroll();
         if (scrollTimeout.current) {
           clearTimeout(scrollTimeout.current);
@@ -1911,7 +1919,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       container.removeEventListener('touchstart', unlockScroll);
       if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
     };
-  }, [timelineDates]);
+  }, [cancelTimelineGlide, timelineDates]);
 
   // Category colors for event rendering
   const categoryColors: Record<string, string> = {
@@ -2490,63 +2498,62 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     >
                       {/* Virtual container with total height */}
                       <div
+                        ref={rowVirtualizer.containerRef}
                         className="relative w-full"
-                        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
                       >
                         {/* Center Line */}
                         <div className="absolute left-4 md:left-1/2 top-0 bottom-0 w-px border-l-2 border-dashed border-riso-ink/20 transform md:-translate-x-1/2 z-0"></div>
 
-                        {/* Virtualized items */}
-                        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                          const item = virtualItems[virtualRow.index];
-                          if (!item) return null;
+                        <div ref={timelineVirtualRowsRef} className="absolute inset-x-0 top-0">
+                          {/* Virtualized items */}
+                          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                            const item = virtualItems[virtualRow.index];
+                            if (!item) return null;
 
-                          if (item.type === 'header') {
-                            // Date Header
-                            return (
-                              <div
-                                key={`header-${item.date}`}
-                                id={`timeline-date-${item.date}`}
-                                data-index={virtualRow.index}
-                                ref={rowVirtualizer.measureElement}
-                                className="absolute top-0 left-0 w-full z-20"
-                                style={{ transform: `translateY(${virtualRow.start}px)` }}
-                              >
-                                <div className="bg-riso-paper border-t border-b border-riso-ink/10 py-3 px-4 md:px-8 shadow-sm">
-                                  <div className="flex items-center justify-between max-w-2xl mx-auto">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
-                                      <h3 className="dashboard-timeline-date-header font-display text-xl uppercase tracking-wide">
-                                        <span className="md:hidden">{formatDate(item.date, 'weekday-short')}</span>
-                                        <span className="hidden md:inline">{formatDate(item.date, 'weekday')}</span>
-                                      </h3>
+                            if (item.type === 'header') {
+                              // Date Header
+                              return (
+                                <div
+                                  key={`header-${item.date}`}
+                                  id={`timeline-date-${item.date}`}
+                                  data-index={virtualRow.index}
+                                  ref={rowVirtualizer.measureElement}
+                                  className="absolute top-0 left-0 w-full z-20"
+                                >
+                                  <div className="bg-riso-paper border-t border-b border-riso-ink/10 py-3 px-4 md:px-8 shadow-sm">
+                                    <div className="flex items-center justify-between max-w-2xl mx-auto">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
+                                        <h3 className="dashboard-timeline-date-header font-display text-xl uppercase tracking-wide">
+                                          <span className="md:hidden">{formatDate(item.date, 'weekday-short')}</span>
+                                          <span className="hidden md:inline">{formatDate(item.date, 'weekday')}</span>
+                                        </h3>
+                                      </div>
+                                      <span className="font-mono text-sm opacity-100">{item.eventsInDate} {t.reports}</span>
                                     </div>
-                                    <span className="font-mono text-sm opacity-100">{item.eventsInDate} {t.reports}</span>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          } else {
-                            // Event Card
-                            const event = item.event;
-                            const categoryKey = event?.category?.toLowerCase();
-                            const isRight = (item.eventIndex ?? 0) % 2 === 0;
-                            const isImportant = (event?.importance || 0) > 75;
-                            const importantCardBorder = categoryImportantCardBorders[categoryKey] || 'border-riso-accent';
-                            const importantNodeRing = categoryImportantNodeRings[categoryKey] || 'ring-riso-accent';
+                              );
+                            } else {
+                              // Event Card
+                              const event = item.event;
+                              const categoryKey = event?.category?.toLowerCase();
+                              const isRight = (item.eventIndex ?? 0) % 2 === 0;
+                              const isImportant = (event?.importance || 0) > 75;
+                              const importantCardBorder = categoryImportantCardBorders[categoryKey] || 'border-riso-accent';
+                              const importantNodeRing = categoryImportantNodeRings[categoryKey] || 'ring-riso-accent';
 
-                            return (
-                              <div
-                                key={event?._id || `event-${virtualRow.index}`}
-                                data-index={virtualRow.index}
-                                ref={rowVirtualizer.measureElement}
-                                className="absolute top-0 left-0 w-full px-4 md:px-8 py-3"
-                                style={{ transform: `translateY(${virtualRow.start}px)` }}
-                              >
+                              return (
                                 <div
-                                  className={`relative flex md:items-center ${isRight ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row ml-6 md:ml-0`}
+                                  key={event?._id || `event-${virtualRow.index}`}
+                                  data-index={virtualRow.index}
+                                  ref={rowVirtualizer.measureElement}
+                                  className="absolute top-0 left-0 w-full px-4 md:px-8 py-3"
                                 >
-                                  <div className="hidden md:block flex-1"></div>
+                                  <div
+                                    className={`relative flex md:items-center ${isRight ? 'md:flex-row' : 'md:flex-row-reverse'} flex-row ml-6 md:ml-0`}
+                                  >
+                                    <div className="hidden md:block flex-1"></div>
 
                                   {/* Center Node */}
                                   <div className="absolute left-[-2.25rem] md:left-1/2 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 md:w-8 md:h-8 md:-translate-x-1/2 z-10">
@@ -2612,11 +2619,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                       <div className={`absolute top-1/2 w-2 h-2 bg-riso-ink rounded-full ${isRight ? '-left-1' : '-right-1'} transform -translate-y-1/2 hidden md:block opacity-20`}></div>
                                     </div>
                                   </div>
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          }
-                        })}
+                              );
+                            }
+                          })}
+                        </div>
 
                         {virtualItems.length === 0 && (
                           <div className="flex flex-col items-center justify-center py-20 opacity-50">
