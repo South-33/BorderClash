@@ -529,6 +529,11 @@ body {
 
 .dashboard-language-option-label[lang="km"] { font-weight: 500; }
 
+/* Serif perspective copy reads optically larger than the monospaced AI
+   comparison. Keep the quoted voice slightly larger without letting the side
+   columns outrank the analytical center. */
+.dashboard-side-narrative { font-size: 1.015625rem; }
+
 .dashboard-side-narrative-source {
     opacity: 0.72;
 }
@@ -764,6 +769,14 @@ body {
     .lang-kh .dashboard-timeline-modal-title { font-size: 1.875rem; }
 }
 
+/* Chakra Petch 400 reads much lighter than Anton/Moul at the same page-title
+   tier. The loaded 700 face restores equivalent authority; a 23px desktop
+   size keeps Thai compact and avoids the ink-heavy feel of 24px bold. */
+.lang-th .dashboard-view-heading { font-weight: 700; }
+
+@media (min-width: 768px) {
+    .lang-th .dashboard-view-heading { font-size: 1.4375rem; }
+}
 
 /* The Grain Overlay */
 .riso-grain {
