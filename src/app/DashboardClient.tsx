@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } fr
 import { flushSync } from 'react-dom';
 import { Swords, Handshake, Heart, Landmark, Globe, Camera, Calendar, AlertTriangle, FileText } from 'lucide-react';
 import type { BorderClashData, CurrentSummary, NewsArticle, Perspective, TimelineEvent } from '@/lib/dashboard-data';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import React from 'react';
 import { TRANSLATIONS, KH_MONTHS, TH_MONTHS_SHORT, type Lang } from './translations';
 import { useCascadeLayout } from '@/app/hooks/useCascadeLayout';
@@ -1335,6 +1335,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const [selectedTimelineDate, setSelectedTimelineDate] = useState<string | null>(null);
   const selectedTimelineDateRef = useRef<string | null>(null);
   const [isScrollJump, setIsScrollJump] = useState(false);
+  const [timelinePreloadTargetIndex, setTimelinePreloadTargetIndex] = useState<number | null>(null);
   const [showMinorEvents, setShowMinorEventsRaw] = useState(false); // Toggle for showing events with importance < 70
   const [isFilterTransitioning, setIsFilterTransitioning] = useState(false); // For fade animation
 
@@ -1346,7 +1347,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const timelineVirtualRowsRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
-  const scrollToDateRef = useRef<(date: string, behavior?: 'auto' | 'smooth') => void>(() => {});
+  const scrollToDateRef = useRef<(date: string, behavior?: 'auto' | 'smooth', preloadAttempted?: boolean) => void>(() => {});
   const timelineGlideRef = useRef<{
     animation: Animation;
     startOffset: number;
@@ -1686,6 +1687,17 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       if (lang === 'th') return 195;
       return 180;
     },
+    // Keep steady-state overscan modest. A qualifying unmounted date can
+    // temporarily extend this range so glide/teleport does not depend on
+    // which direction happened to be mounted already.
+    rangeExtractor: (range) => {
+      const indexes = defaultRangeExtractor(range);
+      if (timelinePreloadTargetIndex === null || indexes.includes(timelinePreloadTargetIndex)) return indexes;
+
+      const start = Math.min(indexes[0] ?? range.startIndex, timelinePreloadTargetIndex);
+      const end = Math.max(indexes[indexes.length - 1] ?? range.endIndex, timelinePreloadTargetIndex);
+      return Array.from({ length: end - start + 1 }, (_, offset) => start + offset);
+    },
     overscan: 15, // Preload nearby rows so compositor glides never reveal gaps
   });
 
@@ -1719,7 +1731,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
   // Nearby dates glide; physically distant dates fade/teleport. Use both date
   // distance and actual travel distance so a date with many events cannot turn
   // an adjacent click into a long or inconsistent animation.
-  const scrollToDate = useCallback((date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
+  const scrollToDate = useCallback((date: string, behavior: 'auto' | 'smooth' = 'smooth', preloadAttempted = false) => {
     const container = timelineScrollRef.current;
     const index = dateToVirtualIndex[date];
     if (!container || index === undefined) return;
@@ -1727,6 +1739,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     const token = ++scrollJumpToken.current;
     cancelTimelineGlide(true);
     rowVirtualizer.cancelScroll();
+    if (!preloadAttempted) setTimelinePreloadTargetIndex(null);
     // The latest request owns visibility too. A far request sets this back to
     // hidden below; a nearby request must not inherit an interrupted far fade.
     setIsScrollJump(false);
@@ -1745,9 +1758,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       ? Math.abs(targetDateIndex - currentDateIndex)
       : Number.POSITIVE_INFINITY;
     const maxScrollOffset = Math.max(0, container.scrollHeight - container.clientHeight);
-    const initialTargetOffset = Math.max(0, Math.min(maxScrollOffset, renderedTargetOffset ?? targetInfo[0]));
+    const estimatedTargetOffset = Math.max(0, Math.min(maxScrollOffset, targetInfo[0]));
+    const initialTargetOffset = Math.max(0, Math.min(maxScrollOffset, renderedTargetOffset ?? estimatedTargetOffset));
     const travelDistance = Math.abs(initialTargetOffset - container.scrollTop);
-    const maxSmoothDistance = container.clientHeight * 1.7;
+    const estimatedTravelDistance = Math.abs(estimatedTargetOffset - container.scrollTop);
+    const maxSmoothDistance = container.clientHeight * 3.75;
     const targetIsRendered = renderedTargetOffset !== null;
 
     // LOCK: Prevent scroll listener from overwriting selection during animation
@@ -1759,6 +1774,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     // Set safety unlock (fallback if scroll event logic fails)
     scrollTimeout.current = setTimeout(() => {
       cancelTimelineGlide(true);
+      setTimelinePreloadTargetIndex(null);
       isProgrammaticScroll.current = false;
       setIsScrollJump(false); // Safety reset
     }, 1200);
@@ -1772,14 +1788,32 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         clearTimeout(scrollTimeout.current);
         scrollTimeout.current = null;
       }
+      setTimelinePreloadTargetIndex(null);
       isProgrammaticScroll.current = false;
     };
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (behavior === 'auto' || reducedMotion) {
+      setTimelinePreloadTargetIndex(null);
       rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
       setIsScrollJump(false);
       requestAnimationFrame(() => requestAnimationFrame(finishProgrammaticScroll));
+      return;
+    }
+
+    const shouldPrepareGlide = !preloadAttempted
+      && dateDistance <= 4
+      && estimatedTravelDistance <= maxSmoothDistance
+      && !targetIsRendered
+      && timelineVirtualRowsRef.current !== null;
+
+    if (shouldPrepareGlide) {
+      setTimelinePreloadTargetIndex(index);
+      void (async () => {
+        await waitForPaint();
+        if (scrollJumpToken.current !== token) return;
+        scrollToDateRef.current(date, behavior, true);
+      })();
       return;
     }
 
@@ -1792,7 +1826,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const distanceRatio = Math.min(1, travelDistance / maxSmoothDistance);
       const startOffset = container.scrollTop;
       const distance = initialTargetOffset - startOffset;
-      const durationMs = 210 + (distanceRatio * 100);
+      const durationMs = 210 + (distanceRatio * 90);
       const rows = timelineVirtualRowsRef.current!;
       const animation = rows.animate(
         [
@@ -1828,6 +1862,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       return;
     }
 
+    setTimelinePreloadTargetIndex(null);
     setIsScrollJump(true);
     void (async () => {
       await waitForOpacity(timelineScrollRef.current, 0);
@@ -1915,6 +1950,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       if (isProgrammaticScroll.current) {
         scrollJumpToken.current += 1;
         cancelTimelineGlide(true);
+        setTimelinePreloadTargetIndex(null);
         virtualizerRef.current.cancelScroll();
         if (scrollTimeout.current) {
           clearTimeout(scrollTimeout.current);

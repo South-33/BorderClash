@@ -7,7 +7,7 @@ import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
 
 test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "df067876fa19b3dc33576466599b0d1beb9c6234b23397e9526c31e57c04ab47"],
+    ["src/app/DashboardClient.tsx", "9d62ce692d4dab33e0bc4892b647cef6c7a0d3e663db8cf325e6fa296bb15610"],
     ["src/app/research-timing.ts", "09d03a502c4d8f8fccff48beb5e3cfda494ab21bf1c6f89ed41da352ffb018af"],
     ["src/app/hooks/useCascadeLayout.ts", "2d166db404d84f047849c9210c681915156d6c93c637d2a2d2fce23857f59a15"],
     ["src/app/globals.css", "f281e7f282c07024d234d2f1811dcbe00ac54108bf1aea17618631078360fd1d"],
@@ -69,6 +69,8 @@ test("timeline date navigation keeps the latest request in control of motion and
   assert.match(source, /await waitForOpacity\(timelineScrollRef\.current, 0\)/u);
   assert.match(source, /container\.addEventListener\('wheel', unlockScroll/u);
   assert.match(source, /container\.addEventListener\('touchstart', unlockScroll/u);
+  assert.match(source, /rangeExtractor: \(range\) =>/u);
+  assert.match(source, /setTimelinePreloadTargetIndex\(index\);[\s\S]*scrollToDateRef\.current\(date, behavior, true\)/u);
   assert.match(source, /const isFirstMeasure = !instance\.itemSizeCache\.has\(item\.key\)/u);
   assert.match(source, /\[rowVirtualizer, viewMode, lang, showMinorEvents, containerWidth, forceMobile, isLayoutReady\]/u);
 });
