@@ -767,15 +767,13 @@ body {
     :is(.lang-th, .lang-kh) .dashboard-timeline-heading { font-size: 1.5rem; }
     .lang-th .dashboard-timeline-modal-title { font-size: 1.75rem; }
     .lang-kh .dashboard-timeline-modal-title { font-size: 1.875rem; }
-}
 
-/* Chakra Petch 400 reads much lighter than Anton/Moul at the same page-title
-   tier. The loaded 700 face restores equivalent authority; a 23px desktop
-   size keeps Thai compact and avoids the ink-heavy feel of 24px bold. */
-.lang-th .dashboard-view-heading { font-weight: 700; }
-
-@media (min-width: 768px) {
-    .lang-th .dashboard-view-heading { font-size: 1.4375rem; }
+    /* Chakra Petch 400 reads much lighter than Anton/Moul at this page-title
+       tier. Keep the reviewed stronger treatment on tablet/desktop only. */
+    .lang-th .dashboard-view-heading {
+        font-size: 1.4375rem;
+        font-weight: 700;
+    }
 }
 
 /* The Grain Overlay */
