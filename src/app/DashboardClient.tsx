@@ -1803,11 +1803,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
         liveContainer.scrollTop = initialTargetOffset;
         animation.cancel();
         timelineGlideRef.current = null;
-        // TanStack can finish ResizeObserver/isScrolling work after the visual
-        // animation has landed. Keep its measurement correction disabled while
-        // that work settles; this is invisible to the user and manual input
-        // still cancels the lock immediately.
-        window.setTimeout(finishProgrammaticScroll, 200);
+        // The compositor owns motion only until the real scroll position is
+        // committed. Unlock immediately afterwards so late row measurements
+        // can use TanStack's normal scroll compensation and keep the landed
+        // content visually pinned.
+        finishProgrammaticScroll();
       };
       return;
     }
