@@ -7,7 +7,7 @@ import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
 
 test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "289377d23be18df4a8b522e7af680779ed6aa336c6443c63a4b84c95cc9e2800"],
+    ["src/app/DashboardClient.tsx", "df067876fa19b3dc33576466599b0d1beb9c6234b23397e9526c31e57c04ab47"],
     ["src/app/research-timing.ts", "09d03a502c4d8f8fccff48beb5e3cfda494ab21bf1c6f89ed41da352ffb018af"],
     ["src/app/hooks/useCascadeLayout.ts", "2d166db404d84f047849c9210c681915156d6c93c637d2a2d2fce23857f59a15"],
     ["src/app/globals.css", "f281e7f282c07024d234d2f1811dcbe00ac54108bf1aea17618631078360fd1d"],

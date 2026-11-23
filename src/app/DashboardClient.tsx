@@ -1747,7 +1747,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     const maxScrollOffset = Math.max(0, container.scrollHeight - container.clientHeight);
     const initialTargetOffset = Math.max(0, Math.min(maxScrollOffset, renderedTargetOffset ?? targetInfo[0]));
     const travelDistance = Math.abs(initialTargetOffset - container.scrollTop);
-    const maxSmoothDistance = container.clientHeight * 1.4;
+    const maxSmoothDistance = container.clientHeight * 1.7;
     const targetIsRendered = renderedTargetOffset !== null;
 
     // LOCK: Prevent scroll listener from overwriting selection during animation
@@ -1792,7 +1792,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const distanceRatio = Math.min(1, travelDistance / maxSmoothDistance);
       const startOffset = container.scrollTop;
       const distance = initialTargetOffset - startOffset;
-      const durationMs = 220 + (distanceRatio * 120);
+      const durationMs = 210 + (distanceRatio * 100);
       const rows = timelineVirtualRowsRef.current!;
       const animation = rows.animate(
         [
