@@ -296,6 +296,10 @@
         line-height: 1.4 !important;
     }
 
+    .lang-th .dashboard-side-narrative {
+        line-height: 1.45 !important;
+    }
+
     .lang-kh .dashboard-side-narrative {
         font-size: 0.9375rem !important;
         line-height: 1.45 !important;
@@ -568,6 +572,11 @@ body {
     font-weight: 400;
 }
 
+.lang-th .dashboard-news-filter-tab {
+    letter-spacing: 0;
+    white-space: nowrap;
+}
+
 :is(.lang-th, .lang-kh) .dashboard-gauge-copy,
 :is(.lang-th, .lang-kh) .dashboard-scan-label,
 :is(.lang-th, .lang-kh) .dashboard-disclaimer-body,
@@ -605,9 +614,10 @@ body {
 :is(.lang-th, .lang-kh) .dashboard-side-narrative-source { opacity: 0.75; }
 :is(.lang-th, .lang-kh) .dashboard-disclaimer-body { line-height: 1.5; }
 
-/* Khmer's stacked marks lose definition when an entire paragraph is slanted.
-   Keep the quote role and size, but render Khmer prose upright. */
-.lang-kh .dashboard-side-narrative { font-style: normal; }
+/* Continuous Thai/Khmer prose loses scan clarity when the Latin quote role
+   synthetically slants it. Keep the editorial role and size, but render the
+   local-script paragraph upright. */
+:is(.lang-th, .lang-kh) .dashboard-side-narrative { font-style: normal; }
 
 :is(.lang-th, .lang-kh) .dashboard-neutral-title,
 :is(.lang-th, .lang-kh) .dashboard-neutral-summary,
@@ -705,7 +715,10 @@ body {
     font-size: var(--type-local-ui);
 }
 
-.lang-th .dashboard-timeline-event-description { line-height: 1.5; }
+.lang-th .dashboard-timeline-event-description {
+    line-height: 1.5;
+    opacity: 0.8;
+}
 .lang-kh .dashboard-timeline-event-description { line-height: 1.625; }
 
 :is(.lang-th, .lang-kh) .dashboard-timeline-modal-title { font-weight: 700; }

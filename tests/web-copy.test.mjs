@@ -10,7 +10,7 @@ test("user-facing dashboard files remain on the approved UI contract", () => {
     ["src/app/DashboardClient.tsx", "f65ad216a6b70479e6e07326b9ff228c2d7604f5459e20c0340a89d1070ba2a1"],
     ["src/app/research-timing.ts", "09d03a502c4d8f8fccff48beb5e3cfda494ab21bf1c6f89ed41da352ffb018af"],
     ["src/app/hooks/useCascadeLayout.ts", "2d166db404d84f047849c9210c681915156d6c93c637d2a2d2fce23857f59a15"],
-    ["src/app/globals.css", "5ab514aeb51151599144f0452e08676a362d46adb1400eedf9b507d27a4d0c56"],
+    ["src/app/globals.css", "c8e2c666885b0afc1c5b866666ab748cba383add1bb43570c16f60f1854f3472"],
     ["src/app/layout.tsx", "31ad313338967e7c5ae0501b7d0bed894b765c9942cb486811c62ccb69704267"],
     ["src/app/loading.tsx", "3e1c0933f619ef400a9c4abbaed0e29a4bf4c6fd63f01e9a9556fde2e7000033"],
     ["src/app/page.tsx", "953d7ea3f70f8f90d3d514454868a7b7bfa404da6bbe356c2c57cf03827097e7"],
