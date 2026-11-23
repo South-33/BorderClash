@@ -1401,9 +1401,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
   // Anti-Snapback Refs: Lock updates during programmatic scrolling
   const isProgrammaticScroll = useRef(false);
-  const scrollTargetDate = useRef<string | null>(null);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
   const scrollJumpToken = useRef(0);
+  const scrollAnimationFrame = useRef<number | null>(null);
 
   // Derive available dates and group events by date (filtered by importance)
   const { timelineDates, groupedEvents, dateCounts, totalEventsCount, filteredEventsCount } = useMemo(() => {
@@ -1656,6 +1656,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     overscan: 15, // Buffer items above/below viewport
   });
 
+  // A programmatic date move owns scrollTop until it lands. Fresh row
+  // measurements can update the destination, but must not also shift the
+  // viewport mid-animation.
+  rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => !isProgrammaticScroll.current;
+
   // TanStack can measure only the rows we actually mount and reuse those
   // measurements. Clear cached row sizes when the typography/layout geometry
   // changes so offscreen estimates never become stale across languages or
@@ -1665,56 +1670,148 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     if (viewMode === 'TIMELINE' && isLayoutReady) rowVirtualizer.measure();
   }, [rowVirtualizer, viewMode, lang, containerWidth, forceMobile, isLayoutReady]);
 
-  // Scroll to selected date section (uses virtualizer for smooth navigation)
+  // Nearby dates glide; physically distant dates fade/teleport. Use both date
+  // distance and actual travel distance so a date with many events cannot turn
+  // an adjacent click into a long or inconsistent animation.
   const scrollToDate = useCallback((date: string, behavior: 'auto' | 'smooth' = 'smooth') => {
+    const container = timelineScrollRef.current;
+    const index = dateToVirtualIndex[date];
+    if (!container || index === undefined) return;
+
+    const targetInfo = rowVirtualizer.getOffsetForIndex(index, 'start');
+    if (!targetInfo) return;
+    const targetElement = container.querySelector<HTMLElement>(`[data-index="${index}"]`);
+    const renderedTargetOffset = targetElement
+      ? container.scrollTop + targetElement.getBoundingClientRect().top - container.getBoundingClientRect().top
+      : null;
+
+    const currentDate = selectedTimelineDateRef.current;
+    const currentDateIndex = currentDate ? timelineDates.indexOf(currentDate) : -1;
+    const targetDateIndex = timelineDates.indexOf(date);
+    const dateDistance = currentDateIndex >= 0 && targetDateIndex >= 0
+      ? Math.abs(targetDateIndex - currentDateIndex)
+      : Number.POSITIVE_INFINITY;
+    const maxScrollOffset = Math.max(0, container.scrollHeight - container.clientHeight);
+    const initialTargetOffset = Math.max(0, Math.min(maxScrollOffset, renderedTargetOffset ?? targetInfo[0]));
+    const travelDistance = Math.abs(initialTargetOffset - container.scrollTop);
+    const maxSmoothDistance = container.clientHeight * 1.2;
+    const targetIsRendered = renderedTargetOffset !== null;
+
+    const token = ++scrollJumpToken.current;
+    if (scrollAnimationFrame.current !== null) {
+      cancelAnimationFrame(scrollAnimationFrame.current);
+      scrollAnimationFrame.current = null;
+    }
+    rowVirtualizer.cancelScroll();
+
     // LOCK: Prevent scroll listener from overwriting selection during animation
     isProgrammaticScroll.current = true;
-    scrollTargetDate.current = date;
 
     // Clear existing timeout
     if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
 
     // Set safety unlock (fallback if scroll event logic fails)
     scrollTimeout.current = setTimeout(() => {
+      if (scrollAnimationFrame.current !== null) {
+        cancelAnimationFrame(scrollAnimationFrame.current);
+        scrollAnimationFrame.current = null;
+      }
       isProgrammaticScroll.current = false;
-      scrollTargetDate.current = null;
       setIsScrollJump(false); // Safety reset
     }, 1200);
 
     selectedTimelineDateRef.current = date;
     setSelectedTimelineDate(date);
-    const index = dateToVirtualIndex[date];
 
-    if (index !== undefined) {
-      if (behavior === 'auto') {
-        scrollJumpToken.current += 1;
-        rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
-        setIsScrollJump(false);
-        return;
+    const finishProgrammaticScroll = () => {
+      if (scrollJumpToken.current !== token) return;
+      if (scrollAnimationFrame.current !== null) {
+        cancelAnimationFrame(scrollAnimationFrame.current);
+        scrollAnimationFrame.current = null;
       }
-
-      // Fade-Jump Logic:
-      // Check if the target is currently visible (or very close)
-      const items = rowVirtualizer.getVirtualItems();
-      const isVisible = items.some(item => Math.abs(item.index - index) < 3);
-
-      if (isVisible) {
-        scrollJumpToken.current += 1;
-        // Smooth scroll for visible/nearby items
-        rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' });
-      } else {
-        const token = ++scrollJumpToken.current;
-        setIsScrollJump(true);
-        void (async () => {
-          await waitForOpacity(timelineScrollRef.current, 0);
-          if (scrollJumpToken.current !== token) return;
-          rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
-          await waitForPaint();
-          if (scrollJumpToken.current === token) setIsScrollJump(false);
-        })();
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+        scrollTimeout.current = null;
       }
+      isProgrammaticScroll.current = false;
+    };
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (behavior === 'auto' || reducedMotion) {
+      rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+      setIsScrollJump(false);
+      requestAnimationFrame(() => requestAnimationFrame(finishProgrammaticScroll));
+      return;
     }
-  }, [dateToVirtualIndex, rowVirtualizer]);
+
+    const shouldGlide = dateDistance <= 4
+      && travelDistance <= maxSmoothDistance
+      && targetIsRendered;
+
+    if (shouldGlide) {
+      const distanceRatio = Math.min(1, travelDistance / maxSmoothDistance);
+      // Critical damping gives a clean ease-in/ease-out without overshoot.
+      // Slightly soften longer nearby moves; far moves never enter this path.
+      const omega = 24 - (distanceRatio * 5);
+      const hardStopMs = 360;
+      let position = container.scrollTop;
+      let velocity = 0;
+      let startedAt: number | null = null;
+      let previousAt: number | null = null;
+
+      const step = (now: number) => {
+        if (scrollJumpToken.current !== token) return;
+        const liveContainer = timelineScrollRef.current;
+        if (!liveContainer) {
+          finishProgrammaticScroll();
+          return;
+        }
+
+        const settledElement = liveContainer.querySelector<HTMLElement>(`[data-index="${index}"]`);
+        const rawLiveTarget = settledElement
+          ? liveContainer.scrollTop + settledElement.getBoundingClientRect().top - liveContainer.getBoundingClientRect().top
+          : rowVirtualizer.getOffsetForIndex(index, 'start')?.[0] ?? initialTargetOffset;
+        const liveTarget = Math.max(0, Math.min(liveContainer.scrollHeight - liveContainer.clientHeight, rawLiveTarget));
+
+        if (startedAt === null) {
+          startedAt = now;
+          previousAt = now;
+        }
+        const elapsed = now - startedAt;
+        const dt = Math.min(0.032, Math.max(0.001, (now - (previousAt ?? now)) / 1000));
+        previousAt = now;
+
+        const displacement = liveTarget - position;
+        const acceleration = (omega * omega * displacement) - (2 * omega * velocity);
+        velocity += acceleration * dt;
+        position += velocity * dt;
+        liveContainer.scrollTop = position;
+
+        const settled = Math.abs(liveTarget - position) < 0.75 && Math.abs(velocity) < 6;
+        if (settled || elapsed >= hardStopMs) {
+          liveContainer.scrollTop = liveTarget;
+          finishProgrammaticScroll();
+          return;
+        }
+
+        scrollAnimationFrame.current = requestAnimationFrame(step);
+      };
+
+      scrollAnimationFrame.current = requestAnimationFrame(step);
+      return;
+    }
+
+    setIsScrollJump(true);
+    void (async () => {
+      await waitForOpacity(timelineScrollRef.current, 0);
+      if (scrollJumpToken.current !== token) return;
+      rowVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+      await waitForPaint();
+      if (scrollJumpToken.current !== token) return;
+      setIsScrollJump(false);
+      finishProgrammaticScroll();
+    })();
+  }, [dateToVirtualIndex, rowVirtualizer, timelineDates]);
 
   // Keep scrollToDateRef updated with latest function
   useEffect(() => {
@@ -1739,9 +1836,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       const container = timelineScrollRef.current;
       if (!container) return;
 
+      // Programmatic moves own both the viewport and selected date until they
+      // land. Intermediate virtualizer measurements must not fight that move.
+      if (isProgrammaticScroll.current || filterToggleDateRef.current) return;
+
       // 1. Check if we are at the very bottom (to fix the "Dec 28 vs 29" issue)
-      // Skip if filter is transitioning
-      if (filterToggleDateRef.current) return;
 
       const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
       if (isAtBottom && timelineDates.length > 0) {
@@ -1773,18 +1872,6 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           if (allItems && allItems[match.index]) {
             const date = allItems[match.index].date;
 
-            // LOCK CHECK: If programmatically scrolling OR filter is transitioning, ignore intermediate dates
-            if (isProgrammaticScroll.current || filterToggleDateRef.current) {
-              // If we reached our target, unlock and allow update
-              if (date === scrollTargetDate.current) {
-                isProgrammaticScroll.current = false;
-                scrollTargetDate.current = null;
-              } else {
-                // We are just passing through, do not update state
-                return;
-              }
-            }
-
             if (date && date !== selectedTimelineDateRef.current) {
               selectedTimelineDateRef.current = date;
               setSelectedTimelineDate(date);
@@ -1799,8 +1886,18 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     // Unlock on manual interaction (user grabs scrollbar, touches screen, or uses wheel)
     const unlockScroll = () => {
       if (isProgrammaticScroll.current) {
+        scrollJumpToken.current += 1;
+        if (scrollAnimationFrame.current !== null) {
+          cancelAnimationFrame(scrollAnimationFrame.current);
+          scrollAnimationFrame.current = null;
+        }
+        virtualizerRef.current.cancelScroll();
+        if (scrollTimeout.current) {
+          clearTimeout(scrollTimeout.current);
+          scrollTimeout.current = null;
+        }
         isProgrammaticScroll.current = false;
-        scrollTargetDate.current = null;
+        setIsScrollJump(false);
       }
     };
 
@@ -1980,7 +2077,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   data-language-option={l.id}
                   className={`
                     dashboard-language-option flex-1 flex items-center justify-center py-2 px-1 border-2 active:scale-95
-                    transition-[transform,box-shadow] duration-100 ease-out
+                    transition-[background-color,color,border-color,box-shadow,transform] duration-150 ease-out motion-reduce:duration-0
                     ${activeLanguage === l.id
                       ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[3px_3px_0px_rgba(30,58,138,0.3)]'
                       : 'bg-riso-ink/5 text-riso-ink border-transparent hover:bg-riso-ink/10 hover:border-riso-ink/20'
@@ -2025,7 +2122,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   onClick={() => setViewMode(mode.id as ViewMode)}
                   data-view-option={mode.id}
                   aria-pressed={requestedViewRef.current === mode.id}
-                  className="dashboard-view-button flex items-center gap-3 p-2.5 border-2 active:scale-[0.98] transition-[transform,box-shadow] duration-100 ease-out"
+                  className="dashboard-view-button flex items-center gap-3 p-2.5 border-2 active:scale-[0.98] transition-[background-color,color,border-color,box-shadow,transform] duration-150 ease-out motion-reduce:duration-0"
                 >
                   <mode.icon size={mode.size} strokeWidth={1.5} />
                   <span className="dashboard-view-option-label text-[12px] font-black uppercase tracking-wider">
@@ -2383,7 +2480,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     {/* --- VIRTUALIZED TIMELINE --- */}
                     <div
                       ref={timelineScrollRef}
-                      className={`flex-1 overflow-y-auto min-h-0 transition-opacity duration-200 ${isScrollJump ? 'opacity-0' : 'opacity-100'}`}
+                      className={`flex-1 overflow-y-auto min-h-0 transition-opacity duration-150 motion-reduce:duration-0 ${isScrollJump ? 'opacity-0' : 'opacity-100'}`}
                       style={{
                         overflowAnchor: 'none',
                         transform: 'translate3d(0,0,0)',
