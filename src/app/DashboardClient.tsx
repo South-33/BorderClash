@@ -369,7 +369,7 @@ const Card = ({ children, className = "", title, icon: Icon, loading = false }: 
       )}
       {(title || Icon) && (
         <div className="card-header flex items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0">
-          <h3 className="dashboard-view-heading font-display uppercase text-2xl tracking-wide text-riso-ink">{title}</h3>
+          <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">{title}</h3>
           {Icon && <Icon className="w-6 h-6 text-riso-ink" />}
         </div>
       )}
@@ -2294,7 +2294,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               <Card loading={timelineLoading} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
-                  <h3 className="dashboard-view-heading dashboard-timeline-heading font-display text-2xl uppercase tracking-wide text-riso-ink">{t.historicalTimeline}</h3>
+                  <h3 className="dashboard-timeline-heading font-display text-2xl uppercase tracking-wide text-riso-ink">{t.historicalTimeline}</h3>
 
                   {/* Simple box: 3 sections with 2 dividers */}
                   <div className="flex items-stretch">
@@ -2774,7 +2774,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
             <div className="flex flex-col bg-riso-paper rough-border h-[calc(100dvh-4rem)]" style={{ height: isDesktop && !forceMobile ? 'var(--dashboard-sidebar-height)' : undefined }}>
               {/* Fixed header with GitHub link */}
               <div className="flex items-center justify-between p-4 border-b-2 border-riso-ink/20 flex-shrink-0">
-                <h3 className="dashboard-view-heading font-display uppercase text-2xl tracking-wide text-riso-ink">
+                <h3 className="font-display uppercase text-2xl tracking-wide text-riso-ink">
                   {t.guideTitle}
                 </h3>
                 <a
