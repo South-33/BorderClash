@@ -1714,6 +1714,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     const token = ++scrollJumpToken.current;
     cancelTimelineGlide(true);
     rowVirtualizer.cancelScroll();
+    // The latest request owns visibility too. A far request sets this back to
+    // hidden below; a nearby request must not inherit an interrupted far fade.
+    setIsScrollJump(false);
 
     const targetInfo = rowVirtualizer.getOffsetForIndex(index, 'start');
     if (!targetInfo) return;
