@@ -48,7 +48,7 @@ const kantumruy = Kantumruy_Pro({
   variable: "--font-kantumruy",
   subsets: ["khmer"],
   display: "swap",
-  weight: ["400", "700"],
+  weight: ["400", "500", "700"],
 });
 
 export const viewport: Viewport = {
@@ -79,7 +79,6 @@ export default function RootLayout({
       <body
         suppressHydrationWarning
         className={`${anton.variable} ${jetbrainsMono.variable} ${inter.variable} ${chakraPetch.variable} ${ibmPlexThai.variable} ${moul.variable} ${kantumruy.variable} antialiased`}
-        style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
       >
         {children}
       </body>

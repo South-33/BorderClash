@@ -400,7 +400,7 @@ export const TRANSLATIONS = {
         autoUpdating: "អាប់ដេតដោយស្វ័យប្រវត្តិ នៅពេលដល់ពេលស្កេនបន្ទាប់",
         keyDevelopments: "ព័ត៌មានសំខាន់ៗ",
         sourcesTracked: "ប្រភពព័ត៌មាន",
-        viewMode: "មើល",
+        viewMode: "ទំព័រ",
         analysis: "ទិដ្ឋភាពទូទៅ",
         timeline: "ប្រតិទិន",
         losses: "ផលប៉ះពាល់",

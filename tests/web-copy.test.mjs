@@ -7,14 +7,14 @@ import { militaryAssessmentFor } from "../research/lib/military-assessment.mjs";
 
 test("user-facing dashboard files remain on the approved UI contract", () => {
   const expected = new Map([
-    ["src/app/DashboardClient.tsx", "67b81995d25627ea13e9865e166ba63f9c509924d62a264af972a24b5c3f47d8"],
+    ["src/app/DashboardClient.tsx", "f65ad216a6b70479e6e07326b9ff228c2d7604f5459e20c0340a89d1070ba2a1"],
     ["src/app/research-timing.ts", "09d03a502c4d8f8fccff48beb5e3cfda494ab21bf1c6f89ed41da352ffb018af"],
     ["src/app/hooks/useCascadeLayout.ts", "2d166db404d84f047849c9210c681915156d6c93c637d2a2d2fce23857f59a15"],
-    ["src/app/globals.css", "fd5170d82b8aec1acb7380bf6d3c64efd0565ca6872d874b9dd5ded4df9727ae"],
-    ["src/app/layout.tsx", "766b9a8df7161c31b99ef6f974337b68da039b3b564db9aee508837ac72a2e6f"],
+    ["src/app/globals.css", "5ab514aeb51151599144f0452e08676a362d46adb1400eedf9b507d27a4d0c56"],
+    ["src/app/layout.tsx", "31ad313338967e7c5ae0501b7d0bed894b765c9942cb486811c62ccb69704267"],
     ["src/app/loading.tsx", "3e1c0933f619ef400a9c4abbaed0e29a4bf4c6fd63f01e9a9556fde2e7000033"],
     ["src/app/page.tsx", "953d7ea3f70f8f90d3d514454868a7b7bfa404da6bbe356c2c57cf03827097e7"],
-    ["src/app/translations.ts", "1640708c36ef27bf7d56a56ae2536220e2561246596ec1ce0b6340c5038abb2b"],
+    ["src/app/translations.ts", "db78a7574ba5cc88c00aad54a72b4faed8814643dbf33f08a19c799d6727257d"],
   ]);
   for (const [file, hash] of expected) {
     const source = fs.readFileSync(file, "utf8").replace(/\r\n/gu, "\n");

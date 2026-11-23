@@ -394,12 +394,6 @@ const NewsItem = ({ article, perspective, lang = 'en', now }: {
   const borderColor = perspective === 'thailand' ? 'border-[#241D4F]' : 'border-[#032EA1]';
 
   const t = TRANSLATIONS[lang as Lang] || TRANSLATIONS.en;
-  const titleClass = lang === 'kh'
-    ? 'font-mono font-[550] text-[16px] xl:text-[17px] leading-snug tracking-normal'
-    : lang === 'th'
-      ? 'font-mono font-[550] text-[15px] xl:text-[16px] leading-snug tracking-normal'
-      : 'font-bold text-[13px] xl:text-[15px] leading-tight tracking-tight';
-
   // Format relative time with fallback: if publishedAt is in the future or very recent, use fetchedAt
   const formatRelativeTime = (publishedAt: number | undefined, fetchedAt: number) => {
     // Check if publishedAt would result in "Just now" (future date or < 1 min ago)
@@ -447,7 +441,7 @@ const NewsItem = ({ article, perspective, lang = 'en', now }: {
           </div>
 
           {/* Headline */}
-          <h5 className={`text-riso-ink transition-colors ${titleClass}`}>
+          <h5 className="dashboard-news-item-title text-[13px] xl:text-[15px] font-bold leading-tight tracking-tight text-riso-ink transition-colors">
             {localizedText(lang as Lang, article.titleEn || article.title, article.titleTh, article.titleKh)}
           </h5>
 
@@ -497,8 +491,7 @@ const CategoryFilter = ({
           <button
             key={cat.key || 'all'}
             onClick={() => onChange(cat.key)}
-            className={`pb-1.5 transition-colors uppercase tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[12px] font-medium font-mono' : 'text-[10px] font-bold font-mono'
-              } ${selected === cat.key
+            className={`dashboard-news-filter-tab pb-1.5 text-[10px] font-mono font-bold uppercase tracking-widest transition-colors ${selected === cat.key
                 ? `text-riso-ink border-b-2 border-riso-ink`
                 : 'text-riso-ink/65 hover:text-riso-ink border-b-2 border-transparent'
               }`}
@@ -686,14 +679,12 @@ const MilitaryIntensityGauge = ({
     AGGRESSIVE: 'bg-red-500/10 border-red-500/30',
   };
 
-  const labelFontSize = (lang === 'th' || lang === 'kh') ? 'text-[15px]' : 'text-[12px]';
-
   return (
     <div className="dashboard-military-gauge mb-4">
       {/* Title and Intensity Number Row */}
       <div className="dashboard-gauge-title flex items-center justify-between mb-2">
-        <h4 className={`font-mono font-bold uppercase opacity-60 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.postureGaugeTitle || t.militaryIntensity}</h4>
-        <span className={`font-mono opacity-80 font-bold ${lang === 'kh' || lang === 'th' ? 'text-[12px]' : 'text-[10px]'}`}>{displayIntensity}/100</span>
+        <h4 className="dashboard-gauge-copy font-mono text-[12px] font-bold uppercase opacity-60">{t.postureGaugeTitle || t.militaryIntensity}</h4>
+        <span className="dashboard-gauge-score font-mono text-[10px] font-bold opacity-80">{displayIntensity}/100</span>
       </div>
 
       {/* Gradient Gauge Bar */}
@@ -729,7 +720,7 @@ const MilitaryIntensityGauge = ({
 
       <div className="dashboard-gauge-controls flex items-center gap-2 mt-2">
         {/* Low Key Tactical Label */}
-        <div className={`dashboard-gauge-chip flex-shrink-0 h-8 flex items-center justify-center px-3 border ${labelFontSize} font-mono font-bold uppercase tracking-widest transition-colors duration-300 ${displayPosture === 'PEACEFUL' ? 'text-[#188d45] border-[#188d45]/30' :
+        <div className={`dashboard-gauge-chip dashboard-gauge-copy flex-shrink-0 h-8 flex items-center justify-center px-3 border text-[12px] font-mono font-bold uppercase tracking-widest transition-colors duration-300 ${displayPosture === 'PEACEFUL' ? 'text-[#188d45] border-[#188d45]/30' :
           displayPosture === 'DEFENSIVE' ? 'text-[#ca8a04] border-[#ca8a04]/30' :
             displayPosture === 'ESCALATED' ? 'text-[#ea580c] border-[#ea580c]/30' :
               'text-[#b91c1c] border-[#b91c1c]/30'
@@ -742,7 +733,7 @@ const MilitaryIntensityGauge = ({
           <AutoScrollLabel
             text={displayLabel}
             className={`dashboard-gauge-label border ${postureBgColors[displayPosture]}`}
-            fontSizeClass={labelFontSize}
+            fontSizeClass="dashboard-gauge-copy text-[12px]"
           />
         )}
 
@@ -753,7 +744,7 @@ const MilitaryIntensityGauge = ({
             className={`dashboard-gauge-button
               ml-auto flex-shrink-0 h-8 flex items-center gap-1.5 px-4 border 
               font-mono uppercase transition-all duration-100 ease-out active:translate-y-px
-              ${labelFontSize}
+              dashboard-gauge-copy text-[12px]
               ${showAnalysis
                 ? 'bg-riso-ink text-riso-paper border-riso-ink'
                 : 'bg-riso-ink/5 text-riso-ink border-riso-ink/30 hover:border-riso-ink/100 hover:bg-riso-ink/10'}
@@ -761,10 +752,9 @@ const MilitaryIntensityGauge = ({
           >
             <span className="font-bold tracking-wider">{t.postureRationale}</span>
             <span
-              className="transition-transform duration-300"
+              className="dashboard-gauge-chevron text-[16px] transition-transform duration-300"
               style={{
                 display: 'inline-block',
-                fontSize: lang === 'kh' || lang === 'th' ? '14px' : '16px',
                 lineHeight: '1',
                 transform: showAnalysis ? 'rotate(90deg)' : 'rotate(180deg)'
               }}
@@ -780,7 +770,7 @@ const MilitaryIntensityGauge = ({
         <div className="overflow-hidden">
           {displayRationale && (
             <div className="mt-2 p-3 bg-riso-ink/5 border-l-4 border-l-riso-ink border-y border-r border-y-riso-ink/10 border-r-riso-ink/10">
-              <p className={`font-mono text-justify leading-relaxed ${labelFontSize}`}>
+              <p className="dashboard-gauge-copy font-mono text-[12px] text-justify leading-relaxed">
                 {displayRationale}
               </p>
             </div>
@@ -1848,38 +1838,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     political: 'ring-purple-500/70',
   };
 
-  // Language class for font-size boost (Thai/Khmer need larger text)
+  // Scope script-specific typography roles without scattering language
+  // conditionals through the component markup.
   const langClass = lang === 'th' ? 'lang-th' : lang === 'kh' ? 'lang-kh' : '';
-  const isLocalLang = lang === 'kh' || lang === 'th';
-  const timelineHeadingClass = isLocalLang
-    ? 'font-mono text-[22px] md:text-2xl font-medium tracking-normal text-riso-ink'
-    : 'font-display uppercase text-2xl tracking-wide text-riso-ink';
-  const timelineToggleTextClass = isLocalLang
-    ? 'text-[15px] font-medium normal-case tracking-normal'
-    : 'text-[10px] uppercase tracking-wide';
-  const timelineDateTextClass = isLocalLang
-    ? 'font-body font-[550] text-lg leading-relaxed py-0.5'
-    : 'font-display text-xl uppercase leading-none';
-  const timelineDateHeaderClass = isLocalLang
-    ? 'font-body font-[550] text-xl tracking-normal'
-    : 'font-display text-xl uppercase tracking-wide';
-  const timelineDateRangeClass = isLocalLang
-    ? 'font-body text-[13px] font-[550] tracking-normal text-riso-ink/40'
-    : 'font-mono text-[11px] font-bold uppercase tracking-widest text-riso-ink/40';
-  const timelineEventTitleClass = lang === 'kh'
-    ? 'font-mono font-[550] text-[18px] leading-relaxed tracking-normal'
-    : lang === 'th'
-      ? 'font-mono font-[550] text-[17px] leading-snug tracking-normal'
-      : 'font-[1] text-[16px] font-display uppercase tracking-wide leading-tight';
-  const timelineModalTitleClass = lang === 'kh'
-    ? 'font-mono font-[550] text-[26px] md:text-[30px] leading-relaxed tracking-normal'
-    : lang === 'th'
-      ? 'font-mono font-[550] text-[24px] md:text-[28px] leading-snug tracking-normal'
-      : 'font-display text-3xl leading-snug';
-  const timelineModalMetaDateClass = isLocalLang ? 'font-body font-[550]' : 'font-bold';
-  const sideNarrativeClass = isLocalLang
-    ? 'text-[18px] font-mono'
-    : 'text-[17.5px] font-serif';
 
   return (
     <div
@@ -1912,14 +1873,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     ? 'bg-yellow-500 text-yellow-500'
                     : 'bg-green-600 text-green-600'
                 }`}></div>
-              <span className="font-mono text-xs font-bold tracking-widest">
+              <span className="dashboard-sidebar-status-text font-mono text-xs font-bold tracking-widest">
                 {isSyncing ? t.syncing :
                   researchState?.status === 'error' ? t.error :
                     t.systemOnline}
               </span>
 
             </div>
-            <div className={`dashboard-sidebar-description font-mono space-y-2 border-t border-riso-ink pt-4 opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+            <div className="dashboard-sidebar-description font-mono text-xs space-y-2 border-t border-riso-ink pt-4 opacity-80">
               <p className="leading-relaxed">
                 {t.subTitle}
               </p>
@@ -1930,7 +1891,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
           <div className="dashboard-scan-panel bg-riso-ink text-riso-paper p-3 rough-border-sm">
             <div className="flex justify-between items-stretch mb-2">
               <div className="flex flex-col justify-between">
-                <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'} whitespace-nowrap`}>{t.nextAutoScan}</p>
+                <p className="dashboard-scan-label font-mono text-[10px] opacity-70 mb-1 whitespace-nowrap">{t.nextAutoScan}</p>
                 <p className="font-mono text-3xl font-bold" suppressHydrationWarning>
                   <AutoScanCountdown
                     researchState={researchState}
@@ -1940,7 +1901,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                 </p>
               </div>
               <div className="text-right flex flex-col justify-between">
-                <p className={`font-mono opacity-70 mb-1 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[10px]'} whitespace-nowrap`}>{t.sourcesTracked}</p>
+                <p className="dashboard-scan-label font-mono text-[10px] opacity-70 mb-1 whitespace-nowrap">{t.sourcesTracked}</p>
                 <p className="font-mono text-2xl opacity-80">
                   {(articleCounts?.cambodia || 0) + (articleCounts?.international || 0) + (articleCounts?.thailand || 0)}
                 </p>
@@ -1980,7 +1941,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               </div>
 
               {/* Legend with counts & labels */}
-              <div className={`flex justify-between font-mono pt-1.5 ${lang === 'kh' || lang === 'th' ? 'text-[11px]' : 'text-[10px] font-bold'}`}>
+              <div className="dashboard-source-legend flex justify-between font-mono text-[10px] font-bold pt-1.5">
                 <span className="flex items-center gap-1.5 text-[#032EA1]">
                   <span className="w-2 h-2 bg-[#032EA1]"></span>
                   {t.labelKH} {articleCounts?.cambodia || 0}
@@ -1999,7 +1960,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
           {/* Language Selector */}
           <div className="dashboard-language-selector rough-border p-3 bg-white/50 font-mono flex flex-col gap-2">
-            <div className={`flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[10px]'}`}>
+            <div className="dashboard-selector-heading flex items-center gap-2 font-black uppercase tracking-widest text-[10px] text-riso-ink/60">
               <div className="w-4 h-[1px] bg-riso-ink/20"></div>
               {t.language}
               <div className="flex-1 h-[1px] bg-riso-ink/20"></div>
@@ -2018,7 +1979,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   aria-pressed={activeLanguage === l.id}
                   data-language-option={l.id}
                   className={`
-                    flex-1 flex items-center justify-center py-2 px-1 border-2 active:scale-95
+                    dashboard-language-option flex-1 flex items-center justify-center py-2 px-1 border-2 active:scale-95
                     transition-[transform,box-shadow] duration-100 ease-out
                     ${activeLanguage === l.id
                       ? 'bg-riso-ink text-riso-paper border-riso-ink shadow-[3px_3px_0px_rgba(30,58,138,0.3)]'
@@ -2026,7 +1987,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     }
                   `}
                 >
-                  <span lang={l.htmlLang} className="font-bold tracking-tight whitespace-nowrap leading-none text-[14px]">
+                  <span
+                    lang={l.htmlLang}
+                    className="dashboard-language-option-label whitespace-nowrap"
+                  >
                     {l.label}
                   </span>
                 </button>
@@ -2036,12 +2000,12 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
           {/* View Selector */}
           <div ref={viewSelectorRef} className="dashboard-view-selector rough-border p-3 bg-riso-ink/5 font-mono flex flex-col gap-2 text-xs">
-            <div className={`flex items-center gap-2 uppercase font-black text-riso-ink/60 tracking-widest ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[10px]'}`}>
+            <div className="dashboard-selector-heading flex items-center gap-2 font-black uppercase tracking-widest text-[10px] text-riso-ink/60">
               <div className="w-4 h-[1px] bg-riso-ink/20"></div>
               {t.viewMode}
               <div className="flex-1 h-[1px] bg-riso-ink/20"></div>
             </div>
-            <div className={`dashboard-view-options grid grid-cols-1 gap-2 ${lang === 'kh' || lang === 'th' ? 'text-[14px]' : 'text-[12px]'}`}>
+            <div className="dashboard-view-options grid grid-cols-1 gap-2">
               {[
                 { id: 'ANALYSIS', label: t.analysis, icon: ReportIcon, size: 22 },
                 { id: 'TIMELINE', label: t.timeline, icon: TimelineIcon, size: 20 },
@@ -2064,7 +2028,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   className="dashboard-view-button flex items-center gap-3 p-2.5 border-2 active:scale-[0.98] transition-[transform,box-shadow] duration-100 ease-out"
                 >
                   <mode.icon size={mode.size} strokeWidth={1.5} />
-                  <span className="uppercase font-black tracking-wider">
+                  <span className="dashboard-view-option-label text-[12px] font-black uppercase tracking-wider">
                     {mode.label}
                   </span>
                 </button>
@@ -2084,13 +2048,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               {/* Header */}
               <div className="flex items-center gap-2 mb-2 pb-2 border-b border-riso-ink/10">
                 <Gear size={11} className="text-riso-ink animate-[spin_30s_linear_infinite]" />
-                <h4 className="font-bold font-mono text-xs uppercase tracking-widest text-riso-ink">
+                <h4 className="dashboard-disclaimer-title font-bold font-mono text-xs uppercase tracking-widest text-riso-ink">
                   {t.disclaimerTitle}
                 </h4>
               </div>
 
               {/* Body */}
-                <p className={`dashboard-disclaimer-body font-mono text-riso-ink leading-relaxed ${lang === 'kh' || lang === 'th' ? 'text-[15px] leading-6' : 'text-[13px]'}`}>
+                <p className="dashboard-disclaimer-body font-mono text-[13px] text-riso-ink leading-relaxed">
                 {t.disclaimerBody.split(`'${t.guide}'`).map((part, i, arr) => (
                   <span key={i}>
                     {part}
@@ -2124,10 +2088,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                   <div className="stats-grid grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                     {/* Displaced Civilians */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
-                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.displacedCivilians}</h4>
+                      <h4 className="dashboard-stat-label font-mono text-[12px] font-bold uppercase opacity-60 mb-3">{t.displacedCivilians}</h4>
                       <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{(impact?.displacedCount || 0).toLocaleString('en-US')}</span>
                       {/* Trend Indicator - Show last updated instead */}
-                      <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'} leading-tight`}>
+                      <div className="dashboard-stat-meta dashboard-stat-meta-muted mt-3 font-mono text-[11px] uppercase tracking-wider leading-tight">
                         {impact?.updatedAt ? (
                           <span className="block" title={`${t.lastUpdated}: ${new Intl.DateTimeFormat('en-GB', {
                             timeZone: DASHBOARD_TIME_ZONE,
@@ -2168,22 +2132,22 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
                     {/* Fatalities */}
                     <div className="dashboard-stat-box bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
-                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.fatalities}</h4>
+                      <h4 className="dashboard-stat-label font-mono text-[12px] font-bold uppercase opacity-60 mb-3">{t.fatalities}</h4>
                       <span className="font-display text-3xl md:text-5xl text-riso-ink leading-none">{impact?.deathCount || 0}</span>
-                      <div className={`mt-3 font-mono text-riso-accent font-bold uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.confirmedOnly}</div>
+                      <div className="dashboard-stat-meta mt-3 font-mono text-[11px] text-riso-accent font-bold uppercase tracking-wider">{t.confirmedOnly}</div>
                     </div>
 
                     {/* Status / risk level */}
                     <div className="dashboard-stat-box col-span-2 lg:col-span-1 bg-riso-ink/5 py-5 px-3 md:p-4 border border-riso-ink/10 flex flex-col justify-center min-h-[140px] md:min-h-24">
-                      <h4 className={`font-mono font-bold uppercase opacity-60 mb-3 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>{t.threatLevel}</h4>
-                      <span className={`font-display text-3xl md:text-5xl leading-none uppercase ${(impact?.riskLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
+                      <h4 className="dashboard-stat-label font-mono text-[12px] font-bold uppercase opacity-60 mb-3">{t.threatLevel}</h4>
+                      <span className={`dashboard-risk-value font-display text-3xl md:text-5xl leading-none uppercase ${(impact?.riskLevel || 'Low').toUpperCase() === 'CRITICAL' ? 'text-riso-accent animate-pulse' :
                         (impact?.riskLevel || 'Low').toUpperCase() === 'ELEVATED' ? 'text-yellow-600' : 'text-green-700'
                         }`}>
                         {(impact?.riskLevel || 'Low').toUpperCase() === 'CRITICAL' ? t.critical :
                           (impact?.riskLevel || 'Low').toUpperCase() === 'ELEVATED' ? t.elevated :
                             t.low}
                       </span>
-                      <div className={`mt-3 font-mono opacity-50 uppercase tracking-wider ${lang === 'kh' || lang === 'th' ? 'text-[13px]' : 'text-[11px]'}`}>{t.estimated}</div>
+                      <div className="dashboard-stat-meta dashboard-stat-meta-muted mt-3 font-mono text-[11px] uppercase tracking-wider">{t.estimated}</div>
                     </div>
                   </div>
                 </Card>
@@ -2204,26 +2168,26 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     <Card className="h-full flex flex-col border-dotted border-2 !shadow-none">
                       <div ref={neutralCardRef} className="dashboard-neutral-content flex-1 flex flex-col space-y-2 min-h-0 overflow-hidden">
                         <div className="dashboard-neutral-header mb-2 flex items-center justify-between border-b border-riso-ink/10 pb-2">
-                          <h3 className={`dashboard-neutral-title font-display uppercase tracking-tight ${lang === 'th' ? 'font-bold text-[18px] leading-normal' : lang === 'kh' ? 'text-[18px] leading-normal' : 'text-2xl leading-none'}`}>
+                          <h3 className="dashboard-neutral-title font-display text-2xl uppercase tracking-tight leading-none">
                             {t.situationReport}
                           </h3>
                           <div className="dashboard-neutral-badge px-3 py-1.5 border border-dashed border-riso-ink/40 bg-riso-ink/[0.03] flex items-center justify-center">
-                            <span className={`font-mono font-black uppercase tracking-[0.2em] leading-none text-riso-ink/70 ${lang === 'kh' || lang === 'th' ? 'text-[15px]' : 'text-[12px]'}`}>
+                            <span className="dashboard-neutral-badge-text font-mono text-[12px] font-black uppercase tracking-[0.2em] leading-none text-riso-ink/70">
                               {t.aiSynthesis}
                             </span>
                           </div>
                         </div>
 
-                        <div className={`dashboard-neutral-summary font-mono leading-relaxed text-justify indent-3 ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>
+                        <div className="dashboard-neutral-summary font-mono text-[15px] leading-relaxed text-justify indent-3">
                           {getSummary(currentSummary) || t.analyzingFeeds}
                         </div>
 
                         {getKeyUpdates(currentSummary).length > 0 && (
                           <div className="dashboard-neutral-events mt-auto pt-2 border-t border-riso-ink/10">
-                            <p className={`dashboard-neutral-events-title font-bold font-mono mb-2 uppercase ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{t.keyDevelopments}:</p>
+                            <p className="dashboard-neutral-events-title font-bold font-mono text-[15px] mb-2 uppercase">{t.keyDevelopments}:</p>
                             <ul className="list-disc pl-4 space-y-1">
                               {getKeyUpdates(currentSummary).map((event: string, i: number) => (
-                                <li key={i} className={`dashboard-neutral-event font-mono ${lang === 'kh' || lang === 'th' ? 'text-[18px]' : 'text-[15px]'}`}>{event}</li>
+                                <li key={i} className="dashboard-neutral-event font-mono text-[15px]">{event}</li>
                               ))}
                             </ul>
                           </div>
@@ -2243,13 +2207,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         <div>
                           {getPerspectiveSummary(cambodiaPerspective) ? (
                             <>
-                              <p className={`dashboard-side-narrative italic leading-relaxed ${sideNarrativeClass}`}>
+                              <p className="dashboard-side-narrative text-[16.8px] font-serif italic leading-relaxed">
                                 “{getPerspectiveSummary(cambodiaPerspective)}”
                               </p>
-                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {cambodiaPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
+                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1">&mdash; {cambodiaPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
                             </>
                           ) : (
-                            <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
+                            <p className="dashboard-local-helper font-mono text-xs opacity-50">{t.analysisPending}</p>
                           )}
                         </div>
 
@@ -2286,13 +2250,13 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         <div>
                           {getPerspectiveSummary(thailandPerspective) ? (
                             <>
-                              <p className={`dashboard-side-narrative italic leading-relaxed ${sideNarrativeClass}`}>
+                              <p className="dashboard-side-narrative text-[16.8px] font-serif italic leading-relaxed">
                                 “{getPerspectiveSummary(thailandPerspective)}”
                               </p>
-                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1 opacity-60">&mdash; {thailandPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
+                              <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1">&mdash; {thailandPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
                             </>
                           ) : (
-                            <p className="font-mono text-xs opacity-50">{t.analysisPending}</p>
+                            <p className="dashboard-local-helper font-mono text-xs opacity-50">{t.analysisPending}</p>
                           )}
                         </div>
 
@@ -2330,20 +2294,20 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               <Card loading={timelineLoading} className="h-full flex flex-col overflow-hidden">
                 {/* Custom Header with Filter Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 border-b-2 border-riso-ink/20 pb-2 flex-shrink-0 gap-2">
-                  <h3 className={timelineHeadingClass}>{t.historicalTimeline}</h3>
+                  <h3 className="dashboard-timeline-heading font-display text-2xl uppercase tracking-wide text-riso-ink">{t.historicalTimeline}</h3>
 
                   {/* Simple box: 3 sections with 2 dividers */}
                   <div className="flex items-stretch">
                     <button
                       onClick={() => setShowMinorEvents(false)}
-                      className={`px-3 py-1.5 ${timelineToggleTextClass} font-mono transition-colors duration-200 cursor-pointer whitespace-nowrap border-2 border-r-0
+                      className={`dashboard-timeline-toggle-text px-3 py-1.5 text-[10px] font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2 border-r-0
                         ${!showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20'}`}
                     >
                       {t.hidingMinor}
                     </button>
                     <button
                       onClick={() => setShowMinorEvents(true)}
-                      className={`px-3 py-1.5 ${timelineToggleTextClass} font-mono transition-colors duration-200 cursor-pointer whitespace-nowrap border-2
+                      className={`dashboard-timeline-toggle-text px-3 py-1.5 text-[10px] font-mono uppercase tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap border-2
                         ${showMinorEvents ? 'bg-riso-ink text-riso-paper border-riso-ink' : 'text-riso-ink/50 hover:text-riso-ink border-riso-ink/20'}`}
                     >
                       {t.showAllEvents}
@@ -2359,7 +2323,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                 ) : (!timelineEvents || timelineEvents.length === 0) ? (
                   <div className="text-center py-12 flex-1 flex flex-col justify-center items-center">
                     <p className="font-mono text-sm opacity-60">{t.noTimelineEvents}</p>
-                    <p className="font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
+                    <p className="dashboard-local-helper font-mono text-xs opacity-40 mt-2">{t.runHistorian}</p>
                   </div>
                 ) : (
                   <div ref={timelineContentRef} className={`flex flex-col h-full min-h-0 transition-opacity duration-200 ease-out ${isFilterTransitioning ? 'opacity-0' : 'opacity-100'}`}>
@@ -2368,11 +2332,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
                       {/* Date Range Header */}
                       <div className="flex justify-between items-center mb-2 px-1">
-                        <span className={timelineDateRangeClass}>
+                        <span className="dashboard-timeline-date-range font-mono text-[11px] font-bold uppercase tracking-widest">
                           {timelineDates.length > 0 ? formatDate(timelineDates[0], 'short') : '-'}
                         </span>
                         <div className="h-px flex-1 bg-riso-ink/10 mx-4"></div>
-                        <span className={timelineDateRangeClass}>
+                        <span className="dashboard-timeline-date-range font-mono text-[11px] font-bold uppercase tracking-widest">
                           {timelineDates.length > 0 ? formatDate(timelineDates[timelineDates.length - 1], 'short') : '-'}
                         </span>
                       </div>
@@ -2393,9 +2357,9 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                               key={date}
                               data-date={date}
                               onClick={() => scrollToDate(date)}
-                              className={`
+                              className={`dashboard-timeline-date-option
                                      flex flex-col items-center justify-center snap-center
-                                     min-w-[80px] px-3 ${lang === 'kh' || lang === 'th' ? 'py-3' : 'py-2'} rounded-sm border-2 transition-colors duration-150 flex-shrink-0
+                                     min-w-[80px] px-3 py-2 rounded-sm border-2 transition-colors duration-150 flex-shrink-0
                                      ${isSelected
                                   ? 'bg-riso-ink border-riso-ink text-riso-paper'
                                   : 'bg-riso-paper border-riso-ink/20 text-riso-ink hover:border-riso-ink/50 hover:bg-black/5'}
@@ -2404,7 +2368,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                               <span className={`font-mono text-[10px] uppercase tracking-wider mb-1 ${isSelected ? 'opacity-70' : 'opacity-50'}`}>
                                 {new Date(date).getFullYear()}
                               </span>
-                              <span className={timelineDateTextClass}>
+                              <span className="dashboard-timeline-date-text font-display text-xl uppercase leading-none">
                                 {formatDate(date, 'short')}
                               </span>
                               <span className={`text-[9px] font-mono mt-1 px-1.5 rounded-full ${isSelected ? 'bg-riso-paper text-riso-ink' : 'bg-riso-ink/10 text-riso-ink'}`}>
@@ -2455,7 +2419,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                   <div className="flex items-center justify-between max-w-2xl mx-auto">
                                     <div className="flex items-center gap-3">
                                       <div className="w-3 h-3 rounded-full bg-riso-ink"></div>
-                                      <h3 className={timelineDateHeaderClass}>
+                                      <h3 className="dashboard-timeline-date-header font-display text-xl uppercase tracking-wide">
                                         <span className="md:hidden">{formatDate(item.date, 'weekday-short')}</span>
                                         <span className="hidden md:inline">{formatDate(item.date, 'weekday')}</span>
                                       </h3>
@@ -2519,7 +2483,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                       onClick={() => setSelectedEvent(event)}
                                     >
                                       <div className="flex justify-between items-start mb-1">
-                                        <span className={`font-mono ${lang === 'kh' || lang === 'th' ? 'text-[13px] font-semibold' : 'text-[10px] font-bold uppercase'} ${lang === 'kh' ? 'leading-relaxed py-1' : 'py-0.5'} px-1.5 rounded text-white ${categoryColors[event?.category?.toLowerCase()] || 'bg-gray-500'}`}>
+                                        <span className={`dashboard-timeline-category-badge font-mono text-[10px] font-bold uppercase py-0.5 px-1.5 rounded text-white ${categoryColors[event?.category?.toLowerCase()] || 'bg-gray-500'}`}>
                                           {t[`cat_${event?.category?.toLowerCase()}` as keyof typeof t] || event?.category}
                                         </span>
                                         <span className="font-mono text-[10px] opacity-50">
@@ -2527,11 +2491,11 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                         </span>
                                       </div>
 
-                                      <h4 className={`mb-1 ${timelineEventTitleClass}`}>
+                                      <h4 className="dashboard-timeline-event-title mb-1 font-display text-[16.5px] font-normal uppercase tracking-wide leading-[1.3]">
                                         {localizedText(lang as Lang, event?.title, event?.titleTh, event?.titleKh)}
                                       </h4>
 
-                                      <p className={`line-clamp-2 opacity-70 ${lang === 'kh' ? 'text-sm leading-relaxed' : lang === 'th' ? 'text-sm' : 'text-xs font-mono'}`}>
+                                      <p className="dashboard-timeline-event-description line-clamp-2 text-xs font-mono opacity-70">
                                         {localizedText(lang as Lang, event?.description, event?.descriptionTh, event?.descriptionKh)}
                                       </p>
 
@@ -2610,7 +2574,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                               {evtIndex + 1} / {sortedEvents.length}
                             </span>
                           </div>
-                          <h3 className={timelineModalTitleClass}>
+                          <h3 className="dashboard-timeline-modal-title font-display text-3xl leading-snug">
                             {getEventTitle(evt)}
                           </h3>
                         </div>
@@ -2626,10 +2590,10 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                       {/* Scrollable Body */}
                       <div className={`p-4 md:p-6 space-y-6 flex-1 ${isGhost ? 'overflow-hidden' : 'overflow-y-auto'}`}>
                         {/* Meta Info */}
-                        <div className="flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
+                        <div className="dashboard-timeline-modal-meta flex flex-wrap gap-4 text-xs font-mono border-b border-riso-ink/10 pb-4">
                           <div>
                             <p className="opacity-50 uppercase tracking-wider mb-1">{t.date}</p>
-                            <p className={timelineModalMetaDateClass}>{formatDate(evt.date, 'long')}</p>
+                            <p className="dashboard-timeline-modal-meta-date font-bold">{formatDate(evt.date, 'long')}</p>
                             {evt.timeOfDay && (
                               <p className="text-[10px] opacity-60 mt-0.5">{evt.timeOfDay}</p>
                             )}
@@ -2642,14 +2606,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           </div>
                           <div>
                             <p className="opacity-50 uppercase tracking-wider mb-1">{t.category}</p>
-                            <span className={`inline-block px-2 rounded text-white font-bold ${categoryColors[evt.category?.toLowerCase()] || 'bg-gray-500'} ${lang === 'kh' ? 'text-[13px] font-semibold leading-relaxed py-1' : lang === 'th' ? 'text-[13px] font-semibold py-0.5' : 'text-[10px] uppercase py-0.5'}`}>
+                            <span className={`dashboard-timeline-category-badge inline-block px-2 rounded text-white text-[10px] font-bold uppercase py-0.5 ${categoryColors[evt.category?.toLowerCase()] || 'bg-gray-500'}`}>
                               {t[`cat_${evt.category?.toLowerCase()}` as keyof typeof t] || evt.category}
                             </span>
                           </div>
                         </div>
 
                         {/* Description */}
-                        <p className={`text-base leading-relaxed text-gray-800 ${lang === 'kh' ? 'font-mono leading-relaxed' : lang === 'th' ? 'font-mono' : 'font-serif'}`}>
+                        <p className="dashboard-timeline-modal-body text-base font-serif leading-relaxed text-gray-800">
                           {getEventDescription(evt)}
                         </p>
 
@@ -2674,14 +2638,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                       href={s.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 cursor-pointer group"
+                                      className="dashboard-timeline-source-chip inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 cursor-pointer group"
                                     >
                                       <span className="text-gray-900">{s.name}</span>
                                       <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
                                       <span className="opacity-30 group-hover:opacity-60 transition-opacity">↗</span>
                                     </a>
                                   ) : (
-                                    <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono">
+                                    <span key={idx} className="dashboard-timeline-source-chip inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-gray-200 rounded shadow-sm text-xs font-mono">
                                       <span className="text-gray-900">{s.name}</span>
                                       <span className="opacity-40 font-bold">{s.credibility}%</span>
                                     </span>
@@ -2692,7 +2656,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                 {remainingSources.length > 0 && !showAllSources && (
                                   <button
                                     onClick={() => setShowAllSources(true)}
-                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 border border-gray-200 rounded shadow-sm text-xs font-mono hover:bg-gray-200 transition-all duration-200 text-gray-600 hover:text-gray-900"
+                                    className="dashboard-local-helper inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 border border-gray-200 rounded shadow-sm text-xs font-mono hover:bg-gray-200 transition-all duration-200 text-gray-600 hover:text-gray-900"
                                   >
                                     + {remainingSources.length} {t.moreSources}
                                   </button>
@@ -2710,14 +2674,14 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                                           href={s.url}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 cursor-pointer group"
+                                          className="dashboard-timeline-source-chip inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 cursor-pointer group"
                                         >
                                           <span className="text-gray-800">{s.name}</span>
                                           <span className="opacity-40 font-bold group-hover:opacity-70">{s.credibility}%</span>
                                           <span className="opacity-30 group-hover:opacity-60 transition-opacity">↗</span>
                                         </a>
                                       ) : (
-                                        <span key={idx + 3} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono text-gray-700">
+                                        <span key={idx + 3} className="dashboard-timeline-source-chip inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs font-mono text-gray-700">
                                           <span>{s.name}</span>
                                           <span className="opacity-40 font-bold">{s.credibility}%</span>
                                         </span>
@@ -2750,7 +2714,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                             <span className="hidden sm:inline">{t.prev}</span>
                           </button>
 
-                          <span className="font-mono text-xs opacity-50">
+                          <span className="dashboard-local-helper font-mono text-xs opacity-50">
                             {t.navHint}
                           </span>
 
@@ -2837,7 +2801,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         <h3 className="font-display text-3xl uppercase tracking-tighter mb-4 flex items-center gap-3">
                           <ScanEye className="w-10 h-10 text-riso-ink" strokeWidth={1.5} /> {t.trustWarning}
                         </h3>
-                        <p className={`font-mono leading-relaxed font-medium ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                        <p className="dashboard-guide-lead font-mono text-sm leading-relaxed font-medium">
                           {t.trustWarningDesc}
                         </p>
                       </div>
@@ -2845,7 +2809,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
                     {/* Anti-Propaganda Checklist */}
                     <div>
-                      <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.verificationChecklist}</h4>
+                      <h4 className="dashboard-guide-section-title font-mono text-sm font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4">{t.verificationChecklist}</h4>
                       <ul className="grid grid-cols-1 gap-2 font-mono text-xs">
                         {[
                           { icon: Globe, text: t.checkSources },
@@ -2858,7 +2822,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                             <div className="w-8 h-8 border border-riso-ink flex items-center justify-center bg-white group-hover:bg-riso-ink group-hover:text-white transition-colors flex-shrink-0">
                               <item.icon className="w-4 h-4" strokeWidth={2} />
                             </div>
-                            <span className={`font-medium ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm tracking-tight'}`}>
+                            <span className="dashboard-guide-check-item text-sm font-medium tracking-tight">
                               {item.text}
                             </span>
                           </li>
@@ -2869,8 +2833,8 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     {/* Deepfake Warning */}
                     <div className="border-l-4 border-riso-accent pl-4 py-2 bg-riso-accent/5">
                       <h5 className="font-display text-lg text-riso-accent mb-1">{t.aiWarning}</h5>
-                      <p className={`font-mono opacity-70 mb-2 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-[10px]'}`}>{t.aiWarningDesc}</p>
-                      <div className="flex gap-2 text-xs font-mono font-bold text-riso-accent">
+                      <p className="dashboard-guide-warning-desc font-mono text-[10px] opacity-70 mb-2">{t.aiWarningDesc}</p>
+                      <div className="dashboard-local-helper flex gap-2 text-xs font-mono font-bold text-riso-accent">
                         <span>{t.dfTip1}</span>
                       </div>
                     </div>
@@ -2889,28 +2853,28 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         <div className="relative">
                           <div className="absolute -left-[34px] top-0 bg-riso-paper border-2 border-riso-ink text-riso-ink font-bold font-mono text-xs px-1 py-0.5">01</div>
                           <h5 className="font-mono font-black uppercase mb-2 tracking-widest text-[#032EA1]">{t.curatorRole}</h5>
-                          <p className={`font-mono opacity-80 leading-relaxed max-w-prose ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.curatorDesc}</p>
+                          <p className="dashboard-guide-role-desc font-mono text-sm opacity-80 leading-relaxed max-w-prose">{t.curatorDesc}</p>
                         </div>
 
                         {/* Step 2: Verifier */}
                         <div className="relative">
                           <div className="absolute -left-[34px] top-0 bg-riso-paper border-2 border-riso-ink text-riso-ink font-bold font-mono text-xs px-1 py-0.5">02</div>
                           <h5 className="font-mono font-black uppercase mb-2 tracking-widest text-[#032EA1]">{t.verifierRole}</h5>
-                          <p className={`font-mono opacity-80 leading-relaxed max-w-prose ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.verifierDesc}</p>
+                          <p className="dashboard-guide-role-desc font-mono text-sm opacity-80 leading-relaxed max-w-prose">{t.verifierDesc}</p>
                         </div>
 
                         {/* Step 3: Historian */}
                         <div className="relative">
                           <div className="absolute -left-[34px] top-0 bg-riso-paper border-2 border-riso-ink text-riso-ink font-bold font-mono text-xs px-1 py-0.5">03</div>
                           <h5 className="font-mono font-black uppercase mb-2 tracking-widest text-[#032EA1]">{t.historianRole}</h5>
-                          <p className={`font-mono opacity-80 leading-relaxed max-w-prose ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.historianDesc}</p>
+                          <p className="dashboard-guide-role-desc font-mono text-sm opacity-80 leading-relaxed max-w-prose">{t.historianDesc}</p>
                         </div>
 
                         {/* Step 4: Synth */}
                         <div className="relative">
                           <div className="absolute -left-[34px] top-0 bg-riso-paper border-2 border-riso-ink text-riso-ink font-bold font-mono text-xs px-1 py-0.5">04</div>
                           <h5 className="font-mono font-black uppercase mb-2 tracking-widest text-[#032EA1]">{t.synthRole}</h5>
-                          <p className={`font-mono opacity-80 leading-relaxed max-w-prose ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>{t.synthDesc}</p>
+                          <p className="dashboard-guide-role-desc font-mono text-sm opacity-80 leading-relaxed max-w-prose">{t.synthDesc}</p>
                         </div>
                       </div>
                     </div>
@@ -2918,7 +2882,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                     {/* Stateless Approach Badge */}
                     <div className="mt-8 bg-riso-ink text-riso-paper p-6 text-center transform rotate-1 hover:rotate-0 transition-transform cursor-crosshair">
                       <h3 className="font-display text-2xl uppercase mb-2">{t.statelessApproach}</h3>
-                      <p className={`font-mono opacity-80 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>{t.statelessDesc}</p>
+                      <p className="dashboard-guide-stateless-desc font-mono text-xs opacity-80">{t.statelessDesc}</p>
                     </div>
                   </div> {/* End of right column */}
                 </div> {/* End of grid */}
@@ -2927,17 +2891,17 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mt-8">
                   {/* Left: Fact vs Propaganda */}
                   <div className="space-y-4">
-                    <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4 flex items-center gap-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                    <h4 className="dashboard-guide-section-title font-mono text-sm font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4 flex items-center gap-2">
                       {t.factVsPropaganda}
                     </h4>
                     <div className="grid grid-cols-1 gap-0 border-2 border-riso-ink/10 bg-white/30 h-[calc(100%-3rem)] content-start">
                       {/* Comparison 1 */}
-                      <div className={`p-4 font-mono space-y-2 border-b-2 border-dashed border-riso-ink/10 hover:bg-white transition-colors ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                      <div className="dashboard-guide-compare-block p-4 font-mono text-xs space-y-2 border-b-2 border-dashed border-riso-ink/10 hover:bg-white transition-colors">
                         <p className="text-[#188d45] flex gap-3 font-bold"><span className="opacity-50">[FACT]</span> {t.fact1}</p>
                         <p className="text-[#b91c1c] flex gap-3 font-bold opacity-80"><span className="opacity-50">[SPIN]</span> {t.propaganda1}</p>
                       </div>
                       {/* Comparison 2 */}
-                      <div className={`p-4 font-mono space-y-2 hover:bg-white transition-colors flex-1 ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                      <div className="dashboard-guide-compare-block p-4 font-mono text-xs space-y-2 hover:bg-white transition-colors flex-1">
                         <p className="text-[#188d45] flex gap-3 font-bold"><span className="opacity-50">[FACT]</span> {t.fact2}</p>
                         <p className="text-[#b91c1c] flex gap-3 font-bold opacity-80"><span className="opacity-50">[SPIN]</span> {t.propaganda2}</p>
                       </div>
@@ -2946,7 +2910,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
                   {/* Right: Scores Meaning */}
                   <div className="space-y-4">
-                    <h4 className={`font-mono font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4 flex items-center gap-2 ${lang === 'kh' || lang === 'th' ? 'text-base' : 'text-sm'}`}>
+                    <h4 className="dashboard-guide-section-title font-mono text-sm font-bold uppercase border-b-2 border-riso-ink pb-2 mb-4 flex items-center gap-2">
                       {t.understandingScores}
                     </h4>
                     <div className="grid grid-cols-1 gap-0 border-2 border-riso-ink/10 bg-white/30 h-[calc(100%-3rem)] content-start">
@@ -2955,7 +2919,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                         { color: "bg-yellow-500", text: t.scoreMid },
                         { color: "bg-red-500", text: t.scoreLow }
                       ].map((score, i) => (
-                        <div key={i} className={`p-4 font-mono flex items-center gap-3 hover:bg-white transition-colors ${i !== 2 ? 'border-b-2 border-dashed border-riso-ink/10' : ''} ${lang === 'kh' || lang === 'th' ? 'text-sm' : 'text-xs'}`}>
+                        <div key={i} className={`dashboard-guide-score-row p-4 font-mono text-xs flex items-center gap-3 hover:bg-white transition-colors ${i !== 2 ? 'border-b-2 border-dashed border-riso-ink/10' : ''}`}>
                           <div className={`w-3 h-3 rounded-full ${score.color} flex-shrink-0`}></div>
                           <p className="font-bold opacity-80">{score.text}</p>
                         </div>
