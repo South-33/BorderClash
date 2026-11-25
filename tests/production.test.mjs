@@ -105,6 +105,13 @@ test('production research runs from main through the owned scheduler', () => {
   assert.doesNotMatch(supervisor, /agyArgs\.push\([\s\S]{0,120}"-p",\s*prompt/u);
   assert.match(supervisor, /--settings/);
   assert.match(supervisor, /"--sandbox"/);
+  assert.match(runner, /unsandboxed\(\*\)/);
+  assert.match(runner, /Join-Path \$runtimeRoot "systemd"/);
+  assert.match(runner, /Join-Path \$runtimeRoot "keyring"/);
+  assert.match(runner, /Join-Path \$runtimeRoot "gcr"/);
+  assert.match(runner, /Join-Path \$runtimeRoot "gnupg"/);
+  assert.match(runner, /Join-Path \$runtimeRoot "openssh_agent"/);
+  assert.match(runner, /\.local\/share\/keyrings/);
   assert.match(supervisor, /event\.event === "init"/);
   assert.match(supervisor, /conversationId/);
   assert.match(supervisor, /maxImmediateRecoveries = 1/);
@@ -125,11 +132,6 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(supervised, /Supervised work and evidence roots must stay outside the Git checkout/);
   assert.match(supervised, /ResearchPnpm/);
   assert.match(supervised, /SUPERVISED_REPORT\.json/);
-  assert.match(supervised, /probe-agent-auth\.mjs/);
-  assert.match(supervised, /--push-dry-run true/);
-  assert.match(supervised, /readyForSouthPrivilegeAcceptance/);
-  assert.match(supervised, /Agent privilege probe did not prove publication write access is unavailable/);
-  assert.match(supervised, /agentAuthProbePath/);
   assert.match(supervised, /archive-verify/);
   assert.match(supervised, /archive-restore/);
 });

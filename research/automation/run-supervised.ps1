@@ -14,7 +14,6 @@ Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $runner = Join-Path $PSScriptRoot "run-cycle.ps1"
-$agentAuthProbeTool = Join-Path $PSScriptRoot "probe-agent-auth.mjs"
 $trustedResearchCli = Join-Path $repoRoot "research\cli.mjs"
 $isFakeAgent = -not [string]::IsNullOrWhiteSpace($AgyPath)
 if (-not $isFakeAgent -and -not [string]::Equals($script:ResearchMachine, "SouthServer", [StringComparison]::OrdinalIgnoreCase)) {
@@ -48,7 +47,6 @@ foreach ($path in @($sessionRoot, $archive, $backup)) {
 New-Item -ItemType Directory -Force -Path $sessionRoot, $runsRoot, $runtimeDir, $logDir, $archive, $backup | Out-Null
 $contextPath = Join-Path $sessionRoot "SUPERVISED_CONTEXT.json"
 $reportPath = Join-Path $sessionRoot "SUPERVISED_REPORT.json"
-$agentAuthProbePath = Join-Path $sessionRoot "AGENT_AUTH_PROBE.json"
 $context = [ordered]@{
     schemaVersion = 1
     sessionId = $sessionId
@@ -102,7 +100,6 @@ $oldBackup = $env:BORDERCLASH_EVIDENCE_BACKUP
 $cycleExit = -1
 $buildPassed = $false
 $probe = $null
-$agentAuthProbe = if ($isFakeAgent) { [ordered]@{ skipped = $true; reason = "fake-agent" } } else { $null }
 $runtime = $null
 $runDir = ""
 $postCheckError = ""
@@ -110,30 +107,6 @@ $mutexName = if ($isFakeAgent) { "Global\BorderClashResearchSupervised-$sessionI
 try {
     $env:BORDERCLASH_EVIDENCE_ARCHIVE = $archive
     $env:BORDERCLASH_EVIDENCE_BACKUP = $backup
-
-    if (-not $isFakeAgent) {
-        $agentAuthRoot = Join-Path $sessionRoot "agent-auth-probe"
-        New-Item -ItemType Directory -Force -Path $agentAuthRoot | Out-Null
-        $agentAuthRaw = (& node $agentAuthProbeTool `
-            --cwd $repoRoot `
-            --agent-cwd $agentAuthRoot `
-            --push-dry-run true | Out-String).Trim()
-        $agentAuthExit = $LASTEXITCODE
-        [IO.File]::WriteAllText(
-            $agentAuthProbePath,
-            $agentAuthRaw + [Environment]::NewLine,
-            [Text.UTF8Encoding]::new($false)
-        )
-        try { $agentAuthProbe = $agentAuthRaw | ConvertFrom-Json } catch { $agentAuthProbe = $null }
-        if (
-            $agentAuthExit -ne 0 -or
-            -not $agentAuthProbe -or
-            -not [bool]$agentAuthProbe.readyForSouthPrivilegeAcceptance
-        ) {
-            $cycleExit = 2
-            $postCheckError = "Agent privilege probe did not prove publication write access is unavailable in the South account."
-        }
-    }
 
     $arguments = @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner,
@@ -219,8 +192,6 @@ try {
         buildPassed = $buildPassed
         feedbackPath = if ($feedbackPath -and (Test-Path -LiteralPath $feedbackPath)) { $feedbackPath } else { "" }
         captureLogPath = if ($captureLogPath -and (Test-Path -LiteralPath $captureLogPath)) { $captureLogPath } else { "" }
-        agentAuthProbePath = if (Test-Path -LiteralPath $agentAuthProbePath) { $agentAuthProbePath } else { "" }
-        agentAuthProbe = $agentAuthProbe
         archiveArticleCount = $archiveItems.Count
         backupArticleCount = $backupItems.Count
         evidenceProbe = $probe

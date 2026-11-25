@@ -918,11 +918,24 @@ Read research/CYCLE_GUIDE.md for the stable research contract and .work/CYCLE_CO
         } else {
             Join-Path ([Environment]::GetFolderPath("UserProfile")) ".borderclash/evidence-backup"
         }
-        Write-JsonAtomicFile $settingsPath @{
-            permissions = @{
-                allow = @("read_url(*)", "write_file($evidenceRoot)", "write_file($backupRoot)")
-            }
+        $agentPermissions = @{
+            allow = @("read_url(*)", "write_file($evidenceRoot)", "write_file($backupRoot)")
         }
+        if (-not $isFakeAgent) {
+            $runtimeRoot = $env:XDG_RUNTIME_DIR
+            if ([string]::IsNullOrWhiteSpace($runtimeRoot)) { throw "Real research requires XDG_RUNTIME_DIR." }
+            $agentPermissions["deny"] = @(
+                "unsandboxed(*)",
+                "read_file($(Join-Path $runtimeRoot "bus"))",
+                "read_file($(Join-Path $runtimeRoot "systemd"))",
+                "read_file($(Join-Path $runtimeRoot "keyring"))",
+                "read_file($(Join-Path $runtimeRoot "gcr"))",
+                "read_file($(Join-Path $runtimeRoot "gnupg"))",
+                "read_file($(Join-Path $runtimeRoot "openssh_agent"))",
+                "read_file($(Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local/share/keyrings"))"
+            )
+        }
+        Write-JsonAtomicFile $settingsPath @{ permissions = $agentPermissions }
         $supervisorArgs = @(
             $supervisor,
             "--agy", $agy,
