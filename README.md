@@ -83,7 +83,7 @@ To inspect the compact context a research cycle receives:
 pnpm research context
 ```
 
-Real research cycles run only on South and use `gemini-3.8-flash-medium`. Development and fake-agent tests can run elsewhere. Advisory model checks are kept separate from the publication path: fixed cases use prompt-supplied evidence only, and optional benchmarks live under `benchmarks/`.
+Real research cycles run only on South and use `gemini-4-hydrogen-medium`. Development and fake-agent tests can run elsewhere. Advisory model checks are kept separate from the publication path: fixed cases use prompt-supplied evidence only, and optional benchmarks live under `benchmarks/`.
 
 Routine research helpers are intent-oriented and self-described:
 

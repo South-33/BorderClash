@@ -19,7 +19,7 @@ if ($Development) {
     Write-Warning "Development fixed-case run only. This is advisory evaluation and does not authorize publication."
 }
 
-$model = "gemini-3.8-flash-medium"
+$model = "gemini-4-hydrogen-medium"
 $agyCommand = Get-Command agy -ErrorAction SilentlyContinue
 $agy = if ($agyCommand) { $agyCommand.Source } else { Resolve-ResearchAgent }
 if (-not (Test-Path -LiteralPath $agy)) { throw "Antigravity CLI not found" }

@@ -82,7 +82,7 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(linuxInstaller, /PATH=\/usr\/local\/bin:\$HOME\/\.local\/bin/);
 
   assert.match(runner, /\[int\]\$TimeoutMinutes = 0/);
-  assert.match(runner, /\$productionModel = "gemini-3\.8-flash-medium"/);
+  assert.match(runner, /\$productionModel = "gemini-4-hydrogen-medium"/);
   assert.doesNotMatch(runner, /BORDERCLASH_RESEARCH_MODEL/);
   assert.doesNotMatch(runner, /\[string\]\$Model/);
   assert.match(runner, /capture-changed/u);

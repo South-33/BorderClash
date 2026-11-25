@@ -169,7 +169,7 @@ export function buildCycleReport(runId, options = {}) {
     startedAt: startIso(runId),
     savedAt: new Date().toISOString(),
     status,
-    model: current?.model || previous?.model || "gemini-3.8-flash-medium",
+    model: current?.model || previous?.model || "gemini-4-hydrogen-medium",
     baseHead: current?.baseHead || completion?.baseHead || delivery?.baseHead || previous?.baseHead || null,
     decision: finish?.decision || (completion ? "complete" : previous?.decision || null),
     outcome,

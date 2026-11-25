@@ -20,7 +20,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$productionModel = "gemini-3.8-flash-medium"
+$productionModel = "gemini-4-hydrogen-medium"
 $productionMutexName = "Global\BorderClashResearchCycle"
 $runnerProcess = Get-Process -Id $PID
 [DateTimeOffset]$runnerProcessStarted = $runnerProcess.StartTime

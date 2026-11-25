@@ -131,7 +131,7 @@ function New-RecoveryFixture {
         [string]$RuntimeStatus = "running",
         [string]$SessionStatus = "running",
         [string]$ConversationId = "fixture-conversation",
-        [string]$Model = "gemini-3.8-flash-medium",
+        [string]$Model = "gemini-4-hydrogen-medium",
         [switch]$Completed,
         [switch]$TerminalError
     )
@@ -312,7 +312,7 @@ try {
     Assert-True ($unscheduledExit -ne 0) "non-forced runner started without scheduler intent"
     Assert-True (($unscheduled -join "`n") -match "requires explicit scheduler intent") "unscheduled runner rejection did not explain the scheduler boundary"
 
-    $env:BORDERCLASH_EXPECT_MODEL = "gemini-3.8-flash-medium"
+    $env:BORDERCLASH_EXPECT_MODEL = "gemini-4-hydrogen-medium"
     $env:BORDERCLASH_FAKE_AGY_MODE = "success"
     $success = Invoke-TestRunner
     Assert-True ($success.ExitCode -eq 0) "fake medium cycle failed: $($success.Output -join ' | ')"
@@ -468,7 +468,7 @@ try {
         (([ordered]@{
             runId = "watchdog-stuck"
             baseHead = $watchdogHead
-            model = "gemini-3.8-flash-medium"
+            model = "gemini-4-hydrogen-medium"
             startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         } | ConvertTo-Json) + [Environment]::NewLine),
         [Text.UTF8Encoding]::new($false)
@@ -491,7 +491,7 @@ try {
         & node $supervisor `
             --agy $fakeExe `
             --cwd $watchdogDir `
-            --model "gemini-3.8-flash-medium" `
+            --model "gemini-4-hydrogen-medium" `
             --prompt-file $watchdogPrompt `
             --continuation-prompt-file $watchdogContinuation `
             --result-file $watchdogResult `
@@ -663,7 +663,7 @@ try {
     $legacyDir = New-RecoveryFixture "wrong-model" -RuntimeStatus "resumable" -Model "gemini-2.5-pro"
     $env:BORDERCLASH_FAKE_AGY_MODE = "fail"
     $legacy = Invoke-TestRunner
-    Assert-True ($legacy.ExitCode -eq 0 -and ($legacy.Output -join "`n") -match "production requires 'gemini-3.8-flash-medium'") "incompatible model was not reported"
+    Assert-True ($legacy.ExitCode -eq 0 -and ($legacy.Output -join "`n") -match "production requires 'gemini-4-hydrogen-medium'") "incompatible model was not reported"
     Assert-True ((Get-Runtime).status -eq "review") "incompatible model did not enter review"
     Assert-True ([bool](Get-Runtime).workspaceUsable) "incompatible-model hold did not record usable local files"
     Assert-True (-not [bool](Get-Runtime).conversationResumable) "incompatible-model hold incorrectly claimed production could resume the conversation"

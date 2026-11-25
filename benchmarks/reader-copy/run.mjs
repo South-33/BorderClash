@@ -10,8 +10,8 @@ const runDir = resolve(tmpdir(), "borderclash-reader-bench");
 const fixture = JSON.parse((await readFile(resolve(root, "benchmarks", "reader-copy", "cases.json"), "utf8")).replace(/^\uFEFF/u, ""));
 const canonicalGuide = (await readFile(resolve(root, "research", "CYCLE_GUIDE.md"), "utf8")).trim();
 
-const model = process.env.BENCH_MODEL || "gemini-3.8-flash-medium";
-const judgeModel = process.env.BENCH_JUDGE || "gemini-3.8-flash-medium";
+const model = process.env.BENCH_MODEL || "gemini-4-hydrogen-medium";
+const judgeModel = process.env.BENCH_JUDGE || "gemini-4-hydrogen-medium";
 const printTimeout = process.env.BENCH_TIMEOUT || "150s";
 const wallTimeoutMs = Math.max(30_000, Number(process.env.BENCH_WALL_TIMEOUT_MS || 180_000));
 const fresh = process.argv.includes("--fresh");

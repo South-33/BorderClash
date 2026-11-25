@@ -9,7 +9,7 @@ const root = resolve(".");
 const work = resolve(root, ".work", "benchmarks", "current-copy");
 const cacheRoot = resolve(work, "cache");
 const runDir = resolve(tmpdir(), "borderclash-current-copy-bench");
-const model = process.env.BENCH_MODEL || "gemini-3.8-flash-medium";
+const model = process.env.BENCH_MODEL || "gemini-4-hydrogen-medium";
 const judgeModel = process.env.BENCH_JUDGE || model;
 const fresh = process.argv.includes("--fresh");
 

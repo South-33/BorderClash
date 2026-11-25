@@ -167,7 +167,7 @@ function Set-RuntimeAfterStop {
         status = $status
         phase = $status
         runId = [string]$Runtime.runId
-        model = if ($Runtime.PSObject.Properties["model"]) { [string]$Runtime.model } else { "gemini-3.8-flash-medium" }
+        model = if ($Runtime.PSObject.Properties["model"]) { [string]$Runtime.model } else { "gemini-4-hydrogen-medium" }
         message = $message
         runDir = $runDir
         recoveryReason = "operator_stop"
@@ -268,7 +268,7 @@ function Retire-Checkpoint {
         status = "retired"
         phase = "retired"
         runId = $record.runId
-        model = if ($Runtime.PSObject.Properties["model"]) { [string]$Runtime.model } else { "gemini-3.8-flash-medium" }
+        model = if ($Runtime.PSObject.Properties["model"]) { [string]$Runtime.model } else { "gemini-4-hydrogen-medium" }
         message = "Checkpoint retired by operator; workspace kept for inspection."
         runDir = $record.runDir
     }

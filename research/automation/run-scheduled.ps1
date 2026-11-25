@@ -25,7 +25,7 @@ function Write-RuntimeBlock {
         status = "review"
         phase = "review"
         runId = ""
-        model = "gemini-3.8-flash-medium"
+        model = "gemini-4-hydrogen-medium"
         message = $Message
         runDir = ""
         recoveryReason = "production_checkout_dirty"
