@@ -88,9 +88,9 @@ export async function runAgyJson({
   });
 }
 
-export async function runCachedAgyJson({ cacheRoot, fresh = false, ...options }) {
+export async function runCachedAgyJson({ cacheRoot, fresh = false, cacheSalt = "", ...options }) {
   const key = createHash("sha256")
-    .update(JSON.stringify({ model: options.model, prompt: options.prompt, schema: options.schema }))
+    .update(JSON.stringify({ model: options.model, prompt: options.prompt, schema: options.schema, cacheSalt }))
     .digest("hex");
   const path = resolve(cacheRoot, `${key}.json`);
   let cached = null;

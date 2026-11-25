@@ -167,39 +167,26 @@ const candidateSchema = {
   additionalProperties: false,
 };
 
-const candidateScoreSchema = {
+const pairwiseSchema = {
   type: "object",
   properties: {
-    fidelity: { type: "number", minimum: 0, maximum: 10 },
-    selection: { type: "number", minimum: 0, maximum: 10 },
-    roleClarity: { type: "number", minimum: 0, maximum: 10 },
-    scanClarity: { type: "number", minimum: 0, maximum: 10 },
-    neutrality: { type: "number", minimum: 0, maximum: 10 },
-    naturalnessEn: { type: "number", minimum: 0, maximum: 10 },
-    naturalnessTh: { type: "number", minimum: 0, maximum: 10 },
-    naturalnessKh: { type: "number", minimum: 0, maximum: 10 },
-    fatalIssues: { type: "array", items: { type: "string" } },
+    winner: { type: "string", enum: ["A", "B", "tie"] },
+    confidence: { type: "string", enum: ["low", "medium", "high"] },
+    candidateAProblems: { type: "array", items: { type: "string" } },
+    candidateBProblems: { type: "array", items: { type: "string" } },
+    reasons: { type: "array", minItems: 1, maxItems: 6, items: { type: "string" } },
+    readerDifference: { type: "string" },
   },
-  required: ["fidelity", "selection", "roleClarity", "scanClarity", "neutrality", "naturalnessEn", "naturalnessTh", "naturalnessKh", "fatalIssues"],
+  required: ["winner", "confidence", "candidateAProblems", "candidateBProblems", "reasons", "readerDifference"],
   additionalProperties: false,
 };
 
-const scoreSchema = {
-  type: "object",
-  properties: {
-    score: candidateScoreSchema,
-    reasons: { type: "array", items: { type: "string" }, maxItems: 8 },
-  },
-  required: ["score", "reasons"],
-  additionalProperties: false,
-};
-
-function generatorPrompt(guide, packet, sampleIndex) {
-  return `This is a closed-book BorderClash editorial evaluation. Do not browse, use tools, inspect files, or add facts outside the packet. The existing copy is editable working memory, not a required template.\n\n<CANONICAL_GUIDE>\n${guide}\n</CANONICAL_GUIDE>\n\nRewrite only the current public picture: overall synthesis, key updates, Thailand summary, and Cambodia summary. Use the evidence and structured state to decide what deserves public space. Preserve material facts, attribution, uncertainty, and claim strength. Do not invent causal links. English, Thai, and Khmer should each read naturally for ordinary local readers. This is sample ${sampleIndex}; solve the task independently rather than imitating any prior wording. Return only the schema-required object.\n\n<PACKET>\n${JSON.stringify(packet)}\n</PACKET>`;
+function generatorPrompt(guide, packet) {
+  return `This is a closed-book BorderClash editorial evaluation. Use only the packet below; do not browse, inspect files, or add outside facts. The canonical guide is the editorial contract for this task.\n\n<CANONICAL_GUIDE>\n${guide}\n</CANONICAL_GUIDE>\n\nProduce the current public picture: overall synthesis, key updates, Thailand summary, and Cambodia summary, in English, Thai, and Khmer. Return only the schema-required object.\n\n<PACKET>\n${JSON.stringify(packet)}\n</PACKET>`;
 }
 
-function judgePrompt(packet, candidate) {
-  return `This is a closed-book review of one BorderClash current-copy candidate. Use only the packet and candidate. Do not browse or use tools.\n\nThe audience is ordinary civilians. Judge whether the candidate gives a truthful, fair, quickly understandable current picture while leaving lower-value detail in the timeline/evidence layer. Penalize duplication across overall/key updates/country summaries, low-value precision, institutional jargon, verification-memo prose, loaded narrator framing, literal translationese, unsupported causal links, and any loss or strengthening of attribution/uncertainty. Country cards separately display the structured military activity/posture fields supplied in the packet, so do not require those details to be repeated in the prose. A fatal issue is a material factual change, invented fact, dropped claimant on a disputed claim, changed number/date/actor, or materially stronger/weaker certainty. Do not reward a candidate merely for being shorter.\n\nScore the candidate from 0-10.\n\n<PACKET>\n${JSON.stringify(packet)}\n</PACKET>\n\n<CANDIDATE>\n${JSON.stringify(candidate)}\n</CANDIDATE>`;
+function pairwisePrompt(packet, candidateA, candidateB) {
+  return `This is a blind comparison of two BorderClash public-copy candidates. You are not told which guide or system produced either one. Use only the packet and candidates; do not browse, inspect files, or infer generator identity.\n\ncurrentWorkingCopy is editable working memory, not evidence or authority. Judge factual support from evidence, structuredCurrentState, and recentTimeline; a candidate may correctly repair the working copy.\n\nChoose the candidate that better serves an ordinary civilian trying to understand the current Thailand-Cambodia border situation. Faithfulness to evidence, chronology, status, attribution, and uncertainty comes first. Then prefer useful selection, clear roles between surfaces, natural English/Thai/Khmer, low duplication, and low reading burden. Do not reward verbosity or brevity by itself.\n\nIdentify concrete problems rather than assigning numeric scores. A material problem includes a changed or invented actor, fact, number, date, status, attribution, uncertainty, claim strength, causal link, or misleading omission. A tie is valid when neither candidate is meaningfully better.\n\n<PACKET>\n${JSON.stringify(packet)}\n</PACKET>\n\n<CANDIDATE_A>\n${JSON.stringify(candidateA)}\n</CANDIDATE_A>\n\n<CANDIDATE_B>\n${JSON.stringify(candidateB)}\n</CANDIDATE_B>`;
 }
 
 function words(value) {
@@ -248,41 +235,36 @@ async function runVariant(label, guide) {
       fresh,
       cwd: runDir,
       model,
-      prompt: generatorPrompt(guide, packet, index),
+      prompt: generatorPrompt(guide, packet),
       schema: candidateSchema,
+      cacheSalt: `sample-${index}`,
     });
-    if (!run.ok) {
-      runs.push({ label, sample: index, run, objectiveIssues: ["generation-failed"], judgment: null });
-      continue;
-    }
-    const issues = objectiveIssues(run.structured);
-    const judgment = await runCachedAgyJson({
-      cacheRoot,
-      fresh,
-      cwd: runDir,
-      model: judgeModel,
-      prompt: judgePrompt(packet, run.structured),
-      schema: scoreSchema,
+    runs.push({
+      label,
+      sample: index,
+      run,
+      objectiveIssues: run.ok ? objectiveIssues(run.structured) : ["generation-failed"],
+      metrics: run.ok ? metrics(run.structured) : null,
     });
-    runs.push({ label, sample: index, run, objectiveIssues: issues, judgment, metrics: metrics(run.structured) });
   }
   return runs;
 }
 
-function summarize(runs) {
-  const scored = runs.filter((item) => item.judgment?.ok);
-  const dimensions = ["fidelity", "selection", "roleClarity", "scanClarity", "neutrality", "naturalnessEn", "naturalnessTh", "naturalnessKh"];
-  const averages = Object.fromEntries(dimensions.map((key) => [key, scored.length
-    ? scored.reduce((sum, item) => sum + Number(item.judgment.structured.score[key] || 0), 0) / scored.length
-    : null]));
+function summarizeGeneration(runs) {
   return {
     samples: runs.length,
     generationFailures: runs.filter((item) => !item.run.ok).length,
     objectiveIssueSamples: runs.filter((item) => item.objectiveIssues.length > 0).length,
-    fatalJudgeSamples: scored.filter((item) => item.judgment.structured.score.fatalIssues.length > 0).length,
-    averages,
     metrics: runs.filter((item) => item.metrics).map((item) => item.metrics),
   };
+}
+
+function mappedProblems(judgment, order, variant) {
+  if (!judgment?.ok) return [];
+  const value = judgment.structured;
+  if (order.A === variant) return value.candidateAProblems;
+  if (order.B === variant) return value.candidateBProblems;
+  return [];
 }
 
 await mkdir(work, { recursive: true });
@@ -298,8 +280,55 @@ const [aRuns, bRuns] = await Promise.all([
   runVariant("A", guideA),
   runVariant("B", guideB),
 ]);
-const aSummary = summarize(aRuns);
-const bSummary = summarize(bRuns);
+
+const comparisons = [];
+for (let index = 0; index < samples; index += 1) {
+  const aRun = aRuns[index];
+  const bRun = bRuns[index];
+  if (!aRun?.run.ok || !bRun?.run.ok) {
+    comparisons.push({ sample: index + 1, ok: false, error: "generation-failed" });
+    continue;
+  }
+
+  // Alternate presentation order so a consistent A/B position preference does not
+  // systematically favor one guide across a multi-sample comparison.
+  const order = index % 2 === 0
+    ? { A: "a", B: "b" }
+    : { A: "b", B: "a" };
+  const candidateA = order.A === "a" ? aRun.run.structured : bRun.run.structured;
+  const candidateB = order.B === "b" ? bRun.run.structured : aRun.run.structured;
+  const judgment = await runCachedAgyJson({
+    cacheRoot,
+    fresh,
+    cwd: runDir,
+    model: judgeModel,
+    prompt: pairwisePrompt(packet, candidateA, candidateB),
+    schema: pairwiseSchema,
+  });
+  const blindWinner = judgment.ok ? judgment.structured.winner : null;
+  const winner = blindWinner === "tie" || !blindWinner ? blindWinner : order[blindWinner];
+  comparisons.push({
+    sample: index + 1,
+    ok: judgment.ok,
+    order,
+    winner,
+    confidence: judgment.ok ? judgment.structured.confidence : null,
+    aProblems: mappedProblems(judgment, order, "a"),
+    bProblems: mappedProblems(judgment, order, "b"),
+    reasons: judgment.ok ? judgment.structured.reasons : [],
+    readerDifference: judgment.ok ? judgment.structured.readerDifference : "",
+    judgment,
+  });
+}
+
+const comparisonSummary = {
+  aWins: comparisons.filter((item) => item.winner === "a").length,
+  bWins: comparisons.filter((item) => item.winner === "b").length,
+  ties: comparisons.filter((item) => item.winner === "tie").length,
+  judgeFailures: comparisons.filter((item) => !item.ok).length,
+};
+const aSummary = summarizeGeneration(aRuns);
+const bSummary = summarizeGeneration(bRuns);
 const report = {
   generatedAt: new Date().toISOString(),
   model,
@@ -307,18 +336,22 @@ const report = {
   samples,
   a: { source: aFile || aRef, summary: aSummary, runs: aRuns },
   b: { source: bFile, summary: bSummary, runs: bRuns },
+  comparison: { summary: comparisonSummary, runs: comparisons },
   packet,
 };
 const hash = createHash("sha256").update(JSON.stringify({ packet, guideA, guideB, model, judgeModel, samples })).digest("hex").slice(0, 12);
 const reportPath = resolve(work, `compare-${hash}.json`);
 await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n", "utf8");
-const allRuns = [...aRuns, ...bRuns];
-const ok = allRuns.every((item) => item.run.ok && item.judgment?.ok);
+const ok = [...aRuns, ...bRuns].every((item) => item.run.ok) && comparisons.every((item) => item.ok);
 console.log(JSON.stringify({
   ok,
   samples,
   a: aSummary,
   b: bSummary,
+  comparison: comparisonSummary,
+  verdicts: comparisons.map(({ sample, winner, confidence, aProblems, bProblems, reasons, readerDifference }) => ({
+    sample, winner, confidence, aProblems, bProblems, reasons, readerDifference,
+  })),
   report: reportPath,
 }, null, 2));
 if (!ok) process.exitCode = 1;

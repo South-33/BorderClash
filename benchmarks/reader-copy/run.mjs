@@ -15,7 +15,6 @@ const judgeModel = process.env.BENCH_JUDGE || "gemini-4-hydrogen-medium";
 const printTimeout = process.env.BENCH_TIMEOUT || "150s";
 const wallTimeoutMs = Math.max(30_000, Number(process.env.BENCH_WALL_TIMEOUT_MS || 180_000));
 const fresh = process.argv.includes("--fresh");
-const repair = process.argv.includes("--repair");
 const prompt = process.env.BENCH_PROMPT || canonicalGuide;
 
 const candidateSchema = {
@@ -42,36 +41,24 @@ const candidateSchema = {
   additionalProperties: false,
 };
 
-const judgeSchema = {
+const reviewSchema = {
   type: "object",
   properties: {
-    fidelity: { type: "number", minimum: 0, maximum: 10 },
-    neutrality: { type: "number", minimum: 0, maximum: 10 },
-    scanClarity: { type: "number", minimum: 0, maximum: 10 },
-    naturalness: {
+    verdict: { type: "string", enum: ["clean", "revise", "fatal"] },
+    fidelityProblems: { type: "array", items: { type: "string" } },
+    readerProblems: { type: "array", items: { type: "string" } },
+    languageProblems: {
       type: "object",
       properties: {
-        en: { type: "number", minimum: 0, maximum: 10 },
-        th: { type: "number", minimum: 0, maximum: 10 },
-        kh: { type: "number", minimum: 0, maximum: 10 },
+        en: { type: "array", items: { type: "string" } },
+        th: { type: "array", items: { type: "string" } },
+        kh: { type: "array", items: { type: "string" } },
       },
       required: ["en", "th", "kh"],
       additionalProperties: false,
     },
-    translationese: {
-      type: "object",
-      properties: {
-        en: { type: "boolean" },
-        th: { type: "boolean" },
-        kh: { type: "boolean" },
-      },
-      required: ["en", "th", "kh"],
-      additionalProperties: false,
-    },
-    fatal: { type: "boolean" },
-    issues: { type: "array", items: { type: "string" } },
   },
-  required: ["fidelity", "neutrality", "scanClarity", "naturalness", "translationese", "fatal", "issues"],
+  required: ["verdict", "fidelityProblems", "readerProblems", "languageProblems"],
   additionalProperties: false,
 };
 
@@ -136,33 +123,30 @@ function hardIssues(candidate) {
   return [...new Set(issues)];
 }
 
-function validScore(score) {
-  const validNumber = (value) => typeof value === "number" && value >= 0 && value <= 10;
-  return score
-    && typeof score.fatal === "boolean"
-    && validNumber(score.fidelity)
-    && validNumber(score.neutrality)
-    && validNumber(score.scanClarity)
-    && score.naturalness
-    && ["en", "th", "kh"].every((language) => validNumber(score.naturalness[language]))
-    && score.translationese
-    && ["en", "th", "kh"].every((language) => typeof score.translationese[language] === "boolean")
-    && Array.isArray(score.issues);
+function validReview(value) {
+  return value
+    && ["clean", "revise", "fatal"].includes(value.verdict)
+    && Array.isArray(value.fidelityProblems)
+    && Array.isArray(value.readerProblems)
+    && value.languageProblems
+    && ["en", "th", "kh"].every((language) => Array.isArray(value.languageProblems[language]));
+}
+
+function metrics(candidate) {
+  const items = Array.isArray(candidate?.items) ? candidate.items : [];
+  return Object.fromEntries(["en", "th", "kh"].map((language) => {
+    const values = items.map((item) => String(item?.[language] || ""));
+    const chars = values.reduce((sum, value) => sum + value.length, 0);
+    const words = language === "en"
+      ? values.reduce((sum, value) => sum + (value.match(/\b[\w’'-]+\b/gu) || []).length, 0)
+      : null;
+    return [language, { chars, words }];
+  }));
 }
 
 const lock = await acquireLock();
 try {
-  const candidatePrompt = `This is a closed-book rewrite benchmark. Use only the source items below. Do not browse, research, inspect files, or use tools. Return the requested JSON immediately.
-
-${prompt}
-
-Rewrite every source item for the three reader audiences. Return JSON only:
-{"items":[{"id":"...","en":"...","th":"...","kh":"..."}]}
-
-Before returning, silently compare every language directly with the source facts. Check actor/object direction, what happened versus what was only possible or alleged, numbers, negation, and attribution strength. Do not use English as the sole truth source for Thai or Khmer.
-
-SOURCE ITEMS:
-${JSON.stringify(fixture)}`;
+  const candidatePrompt = `This is a closed-book BorderClash reader-copy evaluation. Use only the source items below; do not browse, inspect files, or add outside facts. The canonical guide is the editorial contract for this task.\n\n<CANONICAL_GUIDE>\n${prompt}\n</CANONICAL_GUIDE>\n\nRewrite every source item for ordinary English, Thai, and Khmer readers. Return only the schema-required object.\n\n<SOURCE_ITEMS>\n${JSON.stringify(fixture)}\n</SOURCE_ITEMS>`;
   const candidate = await runCachedAgyJson({
     cacheRoot: resolve(work, "cache"),
     fresh,
@@ -173,95 +157,35 @@ ${JSON.stringify(fixture)}`;
     printTimeout,
     wallTimeoutMs,
   });
-  const initialCandidateOk = candidate.ok;
-  const initialCandidate = initialCandidateOk ? candidate.structured : null;
-  let repairRun = null;
-  let parsedCandidate = initialCandidate;
-  if (repair && initialCandidateOk) {
-    const repairPrompt = `This is a closed-book fidelity repair. Use only the source items and draft below. Do not browse, inspect files, or add new facts. Return the same JSON shape immediately.
-
-Correct factual or translation drift while preserving concise, natural reader-facing prose. Compare English, Thai, and Khmer independently against the source, not against one another. Preserve actor/object direction, scope, population or legal category, numbers, negation, attribution, uncertainty, outcome versus ability, and claim strength. Do not add intensifiers, narrower weapon/location specificity, motives, or implications. Do not mix Thai and Khmer scripts; use ASCII digits. If a specialist term has no safe ordinary equivalent, retain the original term rather than inventing a different concept. A source-level negative limitation need not be repeated if the draft simply avoids asserting the excluded fact.
-
-SOURCE ITEMS:
-${JSON.stringify(fixture)}
-
-DRAFT:
-${JSON.stringify(initialCandidate)}`;
-    repairRun = await runCachedAgyJson({
-      cacheRoot: resolve(work, "cache"),
-      fresh,
-      cwd: runDir,
-      model,
-      prompt: repairPrompt,
-      schema: candidateSchema,
-      printTimeout,
-      wallTimeoutMs,
-    });
-    if (repairRun.ok) parsedCandidate = repairRun.structured;
-  }
-  const candidateOk = initialCandidateOk && (!repair || repairRun?.ok);
-  const hard = candidateOk ? hardIssues(parsedCandidate) : ["run-failed", candidate.error, repairRun?.error].filter(Boolean);
-  const candidateSeconds = Number(candidate.seconds || 0) + Number(repairRun?.seconds || 0);
-  const candidateTokens = Number(candidate.usage?.total_tokens || 0) + Number(repairRun?.usage?.total_tokens || 0);
-  const candidateCached = candidate.cached;
+  const parsedCandidate = candidate.ok ? candidate.structured : null;
+  const hard = candidate.ok ? hardIssues(parsedCandidate) : ["run-failed", candidate.error].filter(Boolean);
 
   let judgment = null;
-  if (candidateOk && parsedCandidate) {
-    const judgePrompt = `This is a closed-book evaluation. Use only the source and rewrite below. Do not browse, research, inspect files, or use tools. Return the requested JSON immediately.
-
-Evaluate public-facing crisis information for ordinary civilians, not translators or policy analysts.
-
-Fatal means a material changed fact, number, name, attribution, uncertainty, relationship, claim strength, actor/object direction, unsupported specificity, or added implication. Do not require a rewrite to repeat a source's negative limitation (for example, "the source does not say X") when the rewrite simply avoids asserting or implying X. Omitting such meta-commentary is acceptable; moving that limitation onto a party, or implying the excluded fact, is not.
-
-Judge each language independently:
-- English: clear everyday general-news writing.
-- Thai: natural Thai general-news writing for ordinary readers, not English syntax translated word-for-word and not bureaucratic unless necessary.
-- Khmer: natural Cambodian Khmer general-news writing for ordinary readers, not English syntax translated word-for-word and not bureaucratic unless necessary.
-- Scan clarity: can a normal reader quickly understand what happened, who says it, and what remains uncertain?
-- Simple language must never erase attribution or uncertainty.
-
-Be demanding. A 10 means genuinely excellent for ordinary civilians, not merely grammatical.
-
-Return JSON only:
-{"fidelity":0,"neutrality":0,"scanClarity":0,"naturalness":{"en":0,"th":0,"kh":0},"translationese":{"en":false,"th":false,"kh":false},"fatal":false,"issues":[]}
-
-SOURCE:
-${JSON.stringify(fixture)}
-
-REWRITE:
-${JSON.stringify(parsedCandidate)}`;
-
+  if (candidate.ok && parsedCandidate) {
+    const judgePrompt = `This is a blind review of public-facing crisis copy. You are not told which model or prompt produced it. Use only the source and rewrite below; do not browse, inspect files, or infer generator identity.\n\nThe audience is ordinary civilians. Decide whether you would publish the rewrite unchanged, revise it, or reject it for a fatal factual problem. Do not assign numeric scores.\n\nA fatal problem materially changes or invents a fact, number, name, actor, attribution, uncertainty, relationship, status, claim strength, direction, or implication. Nonfatal problems include avoidable ambiguity, verification-memo prose, unnecessary reading burden, unnatural English/Thai/Khmer, or translationese. Judge each language against the source, not against another translation. Report only concrete problems.\n\n<SOURCE>\n${JSON.stringify(fixture)}\n</SOURCE>\n\n<REWRITE>\n${JSON.stringify(parsedCandidate)}\n</REWRITE>`;
     const judge = await runCachedAgyJson({
       cacheRoot: resolve(work, "cache"),
       fresh,
       cwd: runDir,
       model: judgeModel,
       prompt: judgePrompt,
-      schema: judgeSchema,
+      schema: reviewSchema,
       printTimeout,
       wallTimeoutMs,
     });
     if (judge.ok) {
-      const score = judge.structured;
-      judgment = validScore(score)
-        ? { ok: true, seconds: judge.seconds, cached: judge.cached, score }
-        : { ok: false, seconds: judge.seconds, error: "invalid judge score" };
+      judgment = validReview(judge.structured)
+        ? { ok: true, seconds: judge.seconds, cached: judge.cached, review: judge.structured }
+        : { ok: false, seconds: judge.seconds, error: "invalid judge review" };
     } else {
       judgment = judge;
     }
   }
 
-  const score = judgment?.score;
-  const meetsReferenceThresholds = candidateOk
+  const publishableAsIs = candidate.ok
     && hard.length === 0
     && judgment?.ok
-    && score?.fatal === false
-    && score?.fidelity >= 9
-    && score?.neutrality >= 9
-    && score?.scanClarity >= 8
-    && ["en", "th", "kh"].every((language) => score?.naturalness?.[language] >= 8)
-    && ["en", "th", "kh"].every((language) => score?.translationese?.[language] === false);
-
+    && judgment.review.verdict === "clean";
   const hash = createHash("sha256")
     .update(JSON.stringify({ fixture, prompt, model, judgeModel }))
     .digest("hex")
@@ -271,21 +195,13 @@ ${JSON.stringify(parsedCandidate)}`;
     judgeModel,
     prompt,
     candidate: {
-      ok: candidateOk,
-      seconds: candidateSeconds,
-      cached: candidateCached,
-      tokens: candidateTokens,
-      error: candidateOk ? null : hard.join("; "),
-      batches: repair ? 2 : 1,
-      initialResponse: repair ? initialCandidate : undefined,
-      repair: repairRun ? {
-        ok: repairRun.ok,
-        seconds: repairRun.seconds,
-        cached: repairRun.cached,
-        tokens: Number(repairRun.usage?.total_tokens || 0),
-        error: repairRun.ok ? null : repairRun.error,
-      } : null,
+      ok: candidate.ok,
+      seconds: Number(candidate.seconds || 0),
+      cached: candidate.cached,
+      tokens: Number(candidate.usage?.total_tokens || 0),
+      error: candidate.ok ? null : candidate.error,
       response: parsedCandidate,
+      metrics: parsedCandidate ? metrics(parsedCandidate) : null,
     },
     hardIssues: hard,
     judgment,
@@ -294,20 +210,20 @@ ${JSON.stringify(parsedCandidate)}`;
   await writeFile(reportPath, JSON.stringify(report, null, 2) + "\n", "utf8");
 
   console.log(JSON.stringify({
-    ok: candidateOk && judgment?.ok,
-    meetsReferenceThresholds,
+    ok: candidate.ok && judgment?.ok,
+    publishableAsIs,
     model,
     judgeModel,
-    candidateSeconds,
-    candidateTokens,
-    candidateBatches: repair ? 2 : 1,
+    candidateSeconds: Number(candidate.seconds || 0),
+    candidateTokens: Number(candidate.usage?.total_tokens || 0),
+    metrics: parsedCandidate ? metrics(parsedCandidate) : null,
     hardIssues: hard,
+    review: judgment?.review || null,
     judgeSeconds: judgment?.seconds || null,
-    score: score || null,
     report: reportPath,
   }, null, 2));
 
-  if (!candidateOk || !judgment?.ok) process.exitCode = 1;
+  if (!candidate.ok || !judgment?.ok) process.exitCode = 1;
 } finally {
   await lock.close();
   await unlink(lockPath).catch(() => {});
