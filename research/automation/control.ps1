@@ -192,7 +192,7 @@ function Get-NextAction {
         "ready" { return "Use resume to validate the completed agent turn without another model call." }
         "review" { return "Resolve the reported issue, then use resume when safe or restart-fresh to retire this checkpoint." }
         "validated" { return "Review the nonpublishing result. Use cleanup when the workspace is no longer needed." }
-        "pending-publication" { return "Publication is pending. Do not start another research cycle." }
+        "pending-publication" { return "Git publication is complete; public delivery is pending and does not block the next scheduled research cycle." }
         "published" { return "The cycle is published. Cleanup is optional after diagnostics are no longer needed." }
         default { return "Wait for the next due cycle or use run-now." }
     }
@@ -277,16 +277,25 @@ function Retire-Checkpoint {
 
 function Get-CleanupCandidates {
     $active = Read-JsonSafe $runtimePath
-    $protected = ""
+    $protected = @()
     if ($active -and [string]$active.status -in @("running", "resumable", "ready", "review", "pending-publication")) {
-        $protected = if ($active.PSObject.Properties["runDir"]) { Get-OwnedRunDirectory ([string]$active.runDir) } else { "" }
+        $owned = if ($active.PSObject.Properties["runDir"]) { Get-OwnedRunDirectory ([string]$active.runDir) } else { "" }
+        if ($owned) { $protected += $owned }
+    }
+    $pendingDelivery = Read-JsonSafe $pendingPublicationPath
+    if ($pendingDelivery -and [string]$pendingDelivery.status -in @("prepared", "awaiting-public")) {
+        foreach ($property in @("candidateDir", "sourceRunDir")) {
+            if (-not $pendingDelivery.PSObject.Properties[$property] -or -not $pendingDelivery.$property) { continue }
+            $owned = Get-OwnedRunDirectory ([string]$pendingDelivery.$property)
+            if ($owned) { $protected += $owned }
+        }
     }
     $candidates = @()
     foreach ($recordFile in Get-ChildItem -LiteralPath $retiredDir -Filter "*.json" -File -ErrorAction SilentlyContinue) {
         $record = Read-JsonSafe $recordFile.FullName
         if (-not $record -or -not $record.runDir) { continue }
         $owned = Get-OwnedRunDirectory ([string]$record.runDir)
-        if ($owned -and $owned -ne $protected -and (Test-Path -LiteralPath $owned)) {
+        if ($owned -and $owned -notin $protected -and (Test-Path -LiteralPath $owned)) {
             $candidates += [pscustomobject]@{ runId = [string]$record.runId; runDir = $owned; source = "retired"; record = $recordFile.FullName }
         }
     }
@@ -309,7 +318,7 @@ function Get-CleanupCandidates {
             }
         }
     }
-    return @($candidates | Sort-Object runDir -Unique)
+    return @($candidates | Where-Object { $_.runDir -notin $protected } | Sort-Object runDir -Unique)
 }
 
 switch ($Command) {

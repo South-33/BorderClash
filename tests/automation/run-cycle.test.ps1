@@ -63,14 +63,15 @@ function Invoke-TestRunner {
         [switch]$Publish,
         [string]$RemoteName = "origin",
         [string]$PublicBaseUrl = "http://127.0.0.1:9",
-        [int64]$ScheduledTargetAt = 0
+        [int64]$ScheduledTargetAt = 0,
+        [int]$DeliveryTimeoutSeconds = 12
     )
     $arguments = @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner,
         "-Force", "-AgyPath", $fakeExe, "-TimeoutMinutes", "1",
         "-RunsRoot", $runsRoot, "-RuntimeDir", $runtimeDir, "-LogDir", $logDir,
         "-MutexName", $mutexName, "-RemoteName", $RemoteName,
-        "-PublicBaseUrl", $PublicBaseUrl, "-DeliveryTimeoutSeconds", "12", "-DeliveryPollMilliseconds", "100"
+        "-PublicBaseUrl", $PublicBaseUrl, "-DeliveryTimeoutSeconds", [string]$DeliveryTimeoutSeconds, "-DeliveryPollMilliseconds", "100"
     )
     if ($Publish) { $arguments += "-Publish" }
     if ($ScheduledTargetAt -gt 0) { $arguments += @("-ScheduledTargetAt", [string]$ScheduledTargetAt) }
@@ -260,10 +261,12 @@ function Push-ExternalCommit {
 }
 
 function Start-FakePublic {
-    param([string]$RemotePath)
+    param([string]$RemotePath, [string]$ModeFile = "")
     $portFile = Join-Path $testRoot ("port-" + [Guid]::NewGuid().ToString("N") + ".txt")
     $workDir = Join-Path $testRoot ("public-" + [Guid]::NewGuid().ToString("N"))
-    $process = Start-Process node -ArgumentList @($fakePublic, "--remote", $RemotePath, "--port-file", $portFile, "--work-dir", $workDir) -PassThru @windowOptions
+    $args = @($fakePublic, "--remote", $RemotePath, "--port-file", $portFile, "--work-dir", $workDir)
+    if ($ModeFile) { $args += @("--mode-file", $ModeFile) }
+    $process = Start-Process node -ArgumentList $args -PassThru @windowOptions
     $serverProcesses.Add($process)
     Assert-True (Wait-Until { Test-Path -LiteralPath $portFile } 10) "fake public server did not start"
     $port = (Get-Content -LiteralPath $portFile -Raw).Trim()
@@ -754,6 +757,56 @@ try {
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $runtimeDir "pending-publication.json"))) "verified delivery did not clear stale pending publication state"
     $resumeEventsAfter = @(Get-ChildItem -LiteralPath $logDir -Filter "$($publishedRuntime.runId).resume-*.events.ndjson" -File -ErrorAction SilentlyContinue).Count
     Assert-True ($resumeEventsAfter -eq $resumeEventsBefore) "verified published run invoked the agent again"
+
+    # A stale public deployment never blocks a due research cycle. The old
+    # delivery is observed once, then the scheduled cycle continues.
+    Reset-TestArtifacts
+    $deliveryName = "runner-delivery-independent-$PID"
+    $deliveryRemote = New-TestRemote $deliveryName
+    $deliveryMode = Join-Path $testRoot "delivery-mode.json"
+    [IO.File]::WriteAllText($deliveryMode, '{"fail":true}', [Text.UTF8Encoding]::new($false))
+    $deliveryPublic = Start-FakePublic $deliveryRemote $deliveryMode
+    $deliveryCandidate = Join-Path $runsRoot "publish-old-delivery"
+    & $realGit clone --quiet --no-checkout $deliveryRemote $deliveryCandidate
+    Assert-True ($LASTEXITCODE -eq 0) "delivery fixture candidate clone failed"
+    $deliveryHead = (& $realGit -C $repoRoot rev-parse HEAD).Trim()
+    $deliveryTree = (& $realGit -C $repoRoot rev-parse "${deliveryHead}:data").Trim()
+    $baseResearchState = Get-Content -LiteralPath (Join-Path (Join-Path $repoRoot "data") "research-state.json") -Raw | ConvertFrom-Json
+    $oldPending = [ordered]@{
+        schemaVersion = 1
+        status = "awaiting-public"
+        runId = "old-delivery"
+        baseHead = $deliveryHead
+        sourceRunDir = $deliveryCandidate
+        candidateDir = $deliveryCandidate
+        candidateCommit = $deliveryHead
+        expectedDataTree = $deliveryTree
+        expectedResearchState = [ordered]@{
+            lastResearchAt = [int64]$baseResearchState.lastResearchAt
+            nextRunAt = [int64]$baseResearchState.nextRunAt
+        }
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $runtimeDir "pending-publication.json"),
+        (($oldPending | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
+        [Text.UTF8Encoding]::new($false)
+    )
+    [IO.File]::WriteAllText(
+        (Join-Path $runtimeDir "runtime.json"),
+        (([ordered]@{ status = "pending-publication"; phase = "pending-publication"; runId = "old-delivery"; model = "gemini-4-hydrogen-medium"; message = "fixture"; runDir = $deliveryCandidate; baseHead = $deliveryHead } | ConvertTo-Json -Depth 20) + [Environment]::NewLine),
+        [Text.UTF8Encoding]::new($false)
+    )
+    $env:BORDERCLASH_FAKE_AGY_MODE = "summary-change"
+    $deliveryCycle = Invoke-TestRunner -Publish -RemoteName $deliveryName -PublicBaseUrl $deliveryPublic -ScheduledTargetAt ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) -DeliveryTimeoutSeconds 0
+    Assert-True ($deliveryCycle.ExitCode -eq 0) "pending delivery blocked the scheduled cycle: $($deliveryCycle.Output -join ' | ')"
+    Assert-True (($deliveryCycle.Output -join "`n") -match "DELIVERY CHECK COMPLETE") "scheduled cycle did not pass through the nonblocking delivery check"
+    $deliveryRuntime = Get-Runtime
+    Assert-True ([string]$deliveryRuntime.runId -ne "old-delivery") "scheduled research never advanced beyond the stale delivery"
+    Assert-True ([string]$deliveryRuntime.status -eq "published") "scheduled cycle did not reach Git-published state while delivery stayed stale"
+    Assert-True ([bool]$deliveryRuntime.deliveryPending) "stale delivery was not recorded on the new published cycle"
+    $oldDeliveryReceipt = Read-JsonSafe (Join-Path $logDir "old-delivery.delivery.json")
+    Assert-True ($oldDeliveryReceipt -and [string]$oldDeliveryReceipt.status -eq "awaiting-public") "old delivery diagnostics were lost when research continued"
+
     }
 
     if (Test-Section "publication-overlap") {

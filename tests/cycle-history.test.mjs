@@ -88,6 +88,30 @@ test("saved cycle review combines resumed trace, evidence patch, finish, and ver
   });
 });
 
+test("Git-published cycles still report delayed public delivery", () => {
+  withFixture(({ root, logs, runtime, runDir }) => {
+    writeJson(join(logs, `${runId}.completion.json`), { cycleId: runId, baseHead: "base123", intervalHours: 24, reason: "Research complete" });
+    writeJson(join(logs, `${runId}.delivery.json`), {
+      runId,
+      status: "awaiting-public",
+      candidateCommit: "candidate123",
+      lastError: "served research state does not match the candidate",
+    });
+    writeJson(join(runtime, "runtime.json"), {
+      runId,
+      status: "published",
+      message: "Git published; public delivery pending",
+      runDir,
+    });
+
+    assert.equal(cli(root, "save", runId).status, 0);
+    const report = JSON.parse(readFileSync(join(root, "history", runId, "report.json"), "utf8"));
+    assert.equal(report.status, "awaiting-publication");
+    assert.equal(report.publicationStatus, "awaiting-public");
+    assert.equal(report.publishedCommit, "candidate123");
+  });
+});
+
 test("review records are usable during an interrupted cycle and can be refreshed later", () => {
   withFixture(({ root, logs, runtime }) => {
     writeJson(join(runtime, "runtime.json"), { runId, status: "running", model: "model-fixture" });

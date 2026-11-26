@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_LEAD_MINUTES = 10;
 const DEFAULT_RETRY_MINUTES = 5;
-const RECOVERY_STATUSES = new Set(["running", "resumable", "ready", "pending-publication"]);
+const RECOVERY_STATUSES = new Set(["running", "resumable", "ready"]);
 
 export function resolveSchedulerState(state, runtime, delivery) {
   const expected = (

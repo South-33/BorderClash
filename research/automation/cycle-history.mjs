@@ -157,8 +157,8 @@ export function buildCycleReport(runId, options = {}) {
   const failedActions = steps.filter((step) => step.outcome !== "completed" && step.outcome !== "exit 0");
 
   const status = delivery?.status === "verified" ? "published"
-    : current?.status || (delivery?.status === "awaiting-public" ? "awaiting-publication"
-      : completion ? "completed"
+    : delivery?.status === "awaiting-public" ? "awaiting-publication"
+      : current?.status || (completion ? "completed"
         : lastResult?.status === "SUCCESS" ? "agent-finished"
           : lastResult ? "agent-error"
             : previous?.status && previous.status !== "started" ? previous.status : "incomplete-unverified");

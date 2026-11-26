@@ -40,8 +40,8 @@ test("scheduler retries five minutes later when the start window is already due"
   assert.equal(plan.targetAt, targetAt);
 });
 
-test("recoverable runner states use a five-minute retry regardless of the next target", () => {
-  for (const status of ["running", "resumable", "ready", "pending-publication"]) {
+test("recoverable research states use a five-minute retry regardless of the next target", () => {
+  for (const status of ["running", "resumable", "ready"]) {
     const plan = buildSchedulerPlan({
       state: { nextRunAt: NOW + 24 * 60 * MINUTE, isPaused: false },
       control: { paused: false, stopped: false },
@@ -53,6 +53,25 @@ test("recoverable runner states use a five-minute retry regardless of the next t
     assert.equal(plan.wakeAt, NOW + 5 * MINUTE);
     assert.equal(plan.reason, "recovery_" + status);
   }
+});
+
+test("pending public delivery never preempts the next research target", () => {
+  const targetAt = NOW + 24 * 60 * MINUTE;
+  const plan = buildSchedulerPlan({
+    state: { nextRunAt: targetAt, isPaused: false },
+    control: {},
+    runtime: { status: "pending-publication" },
+    nowMs: NOW,
+  });
+
+  assert.deepEqual(plan, {
+    action: "arm",
+    runDue: false,
+    wakeAt: targetAt - 10 * MINUTE,
+    reason: "next_target",
+    targetAt,
+    startAt: targetAt - 10 * MINUTE,
+  });
 });
 
 test("operator and review holds leave no active timer", () => {

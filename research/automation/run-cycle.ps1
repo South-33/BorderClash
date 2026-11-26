@@ -584,13 +584,14 @@ function Get-PublicDashboardUrl {
 }
 
 function Get-PublicationResumeArgs {
+    param([int]$TimeoutSeconds = $DeliveryTimeoutSeconds)
     return @(
         "--repo-root", $repoRoot,
         "--remote-name", $RemoteName,
         "--candidate-root", $runsRoot,
         "--pending-path", $pendingPublicationPath,
         "--public-url", (Get-PublicDashboardUrl),
-        "--timeout-ms", [string][Math]::Max(0, $DeliveryTimeoutSeconds * 1000),
+        "--timeout-ms", [string][Math]::Max(0, $TimeoutSeconds * 1000),
         "--interval-ms", [string][Math]::Max(100, $DeliveryPollMilliseconds)
     )
 }
@@ -626,15 +627,17 @@ function Set-PublicationRuntime {
     }
 
     $message = if ($Publication.lastError) {
-        "Git accepted the candidate; public delivery is still pending: $([string]$Publication.lastError)"
+        "Git published the validated cycle; public delivery is still pending: $([string]$Publication.lastError)"
     } else {
-        "Git accepted the candidate; waiting for the public dashboard."
+        "Git published the validated cycle; public delivery is still pending."
     }
-    Write-RuntimeState "pending-publication" $pubRunId $message $pubRunDir $pubBase $ConversationId $ResumeCount "awaiting_public" "" @{
+    Write-JsonAtomicFile (Join-Path $logDir "$pubRunId.delivery.json") $Publication
+    Write-RuntimeState "published" $pubRunId $message $pubRunDir $pubBase $ConversationId $ResumeCount "" "" @{
         publishCandidate = [string]$Publication.candidateDir
         publishCommit = [string]$Publication.candidateCommit
+        deliveryPending = $true
     }
-    return "PENDING PUBLICATION: $($Publication.candidateCommit)"
+    return "GIT PUBLISHED; DELIVERY PENDING: $($Publication.candidateCommit)"
 }
 $lock = Acquire-CycleLock
 if ($null -eq $lock) {
@@ -675,12 +678,18 @@ if ($Publish -and (Test-Path -LiteralPath $pendingPublicationPath)) {
         $publication = if ([string]$savedPublication.status -in @("verified", "review")) {
             $savedPublication
         } else {
-            Invoke-PublicationTool "resume" (Get-PublicationResumeArgs)
+            # A scheduled research wake only needs one delivery observation.
+            # Delivery failure must not consume the research window.
+            $deliveryTimeout = if ($ScheduledTargetAt -gt 0) { 0 } else { $DeliveryTimeoutSeconds }
+            Invoke-PublicationTool "resume" (Get-PublicationResumeArgs -TimeoutSeconds $deliveryTimeout)
         }
         $existingRuntime = Read-RuntimeState
         $savedConversation = if ($existingRuntime -and $existingRuntime.PSObject.Properties["conversationId"]) { [string]$existingRuntime.conversationId } else { "" }
         $savedResumeCount = if ($existingRuntime -and $existingRuntime.PSObject.Properties["resumeCount"]) { [int]$existingRuntime.resumeCount } else { 0 }
         Write-Output (Set-PublicationRuntime $publication $savedConversation $savedResumeCount)
+        if ([string]$publication.status -eq "review") { exit 0 }
+        if ($ScheduledTargetAt -le 0) { exit 0 }
+        Write-Output "DELIVERY CHECK COMPLETE: continuing scheduled research independently of public deployment."
     } catch {
         $message = $_.Exception.Message
         $saved = if (Test-Path -LiteralPath $pendingPublicationPath) { Read-State $pendingPublicationPath } else { $null }
@@ -691,7 +700,6 @@ if ($Publish -and (Test-Path -LiteralPath $pendingPublicationPath)) {
         Write-Error $message
         exit 1
     }
-    exit 0
 }
 
 $staleRecovery = Recover-StaleRuntimeState
@@ -1094,7 +1102,10 @@ Read research/CYCLE_GUIDE.md for the stable research contract and .work/CYCLE_CO
     )
     $publication = Invoke-PublicationTool "publish" $publishArgs
     if ([string]$publication.status -eq "awaiting-public") {
-        $publication = Invoke-PublicationTool "resume" (Get-PublicationResumeArgs)
+        # Scheduled research observes delivery once and releases the runner.
+        # Manual operator runs may still wait for the configured verification window.
+        $deliveryTimeout = if ($ScheduledTargetAt -gt 0) { 0 } else { $DeliveryTimeoutSeconds }
+        $publication = Invoke-PublicationTool "resume" (Get-PublicationResumeArgs -TimeoutSeconds $deliveryTimeout)
     }
     Write-Output (Set-PublicationRuntime $publication $conversationId $resumeCount)
     exit 0
