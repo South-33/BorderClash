@@ -2365,7 +2365,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           {getPerspectiveSummary(cambodiaPerspective) ? (
                             <>
                               <p className="dashboard-side-narrative font-serif italic leading-relaxed">
-                                “{getPerspectiveSummary(cambodiaPerspective)}”
+                                {getPerspectiveSummary(cambodiaPerspective)}
                               </p>
                               <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1">&mdash; {cambodiaPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
                             </>
@@ -2408,7 +2408,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
                           {getPerspectiveSummary(thailandPerspective) ? (
                             <>
                               <p className="dashboard-side-narrative font-serif italic leading-relaxed">
-                                “{getPerspectiveSummary(thailandPerspective)}”
+                                {getPerspectiveSummary(thailandPerspective)}
                               </p>
                               <p className="dashboard-side-narrative-source text-right text-[10px] font-mono mt-1">&mdash; {thailandPerspective?.sourceNames?.join(', ') || t.aiAnalysis}</p>
                             </>

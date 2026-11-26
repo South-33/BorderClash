@@ -17,7 +17,7 @@ Use judgment. Choose the research depth, sources, tools, sequence, and rewrites 
 - `data/current/` is the latest reader-facing picture.
 - `data/research-state.json` carries cycle timing and scheduler state.
 
-The current screen is one composition. The overall synthesis explains the shared current picture and major uncertainty. Key updates add material recent or imminent changes rather than repeat the synthesis; zero is valid. Country summaries explain that side's priorities, positions, and material claims. Activity fields carry supported physical military posture. Put a fact in the most useful surface and repeat it only when comprehension needs it.
+The current screen is one composition. The overall synthesis explains the shared current picture and major uncertainty. Key updates add material recent or imminent changes rather than repeat the synthesis; zero is valid. Country summaries explain that side's priorities, positions, and material claims. Activity fields carry supported physical military posture. Put a fact in the most useful surface and repeat it only when comprehension needs it. These summaries live in narrow dashboard columns, so prefer the shortest complete version that preserves the meaning; lower-value detail belongs in timeline or evidence.
 
 The private evidence archive on South Server holds retained publisher material. The tracked repository and prior summaries are orientation, not substitutes for source evidence.
 

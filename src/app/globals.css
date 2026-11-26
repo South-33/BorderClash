@@ -530,8 +530,8 @@ body {
 .dashboard-language-option-label[lang="km"] { font-weight: 500; }
 
 /* Serif perspective copy reads optically larger than the monospaced AI
-   comparison. Keep the quoted voice slightly larger without letting the side
-   columns outrank the analytical center. */
+   comparison. Keep the perspective voice slightly larger without letting the
+   side columns outrank the analytical center. */
 .dashboard-side-narrative { font-size: 1.015625rem; }
 
 .dashboard-side-narrative-source {
@@ -619,9 +619,9 @@ body {
 :is(.lang-th, .lang-kh) .dashboard-side-narrative-source { opacity: 0.75; }
 :is(.lang-th, .lang-kh) .dashboard-disclaimer-body { line-height: 1.5; }
 
-/* Continuous Thai/Khmer prose loses scan clarity when the Latin quote role
-   synthetically slants it. Keep the editorial role and size, but render the
-   local-script paragraph upright. */
+/* Continuous Thai/Khmer prose loses scan clarity when the Latin perspective
+   style synthetically slants it. Keep the editorial role and size, but render
+   the local-script paragraph upright. */
 :is(.lang-th, .lang-kh) .dashboard-side-narrative { font-style: normal; }
 
 :is(.lang-th, .lang-kh) .dashboard-neutral-title,

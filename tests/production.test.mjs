@@ -135,3 +135,9 @@ test('production research runs from main through the owned scheduler', () => {
   assert.match(supervised, /archive-verify/);
   assert.match(supervised, /archive-restore/);
 });
+
+test('side perspective summaries have no decorative wrapping quotes', () => {
+  const dashboard = fs.readFileSync('src/app/DashboardClient.tsx', 'utf8');
+  assert.doesNotMatch(dashboard, /“\{getPerspectiveSummary\(/u);
+  assert.doesNotMatch(dashboard, /getPerspectiveSummary\([^)]*\)\}”/u);
+});
