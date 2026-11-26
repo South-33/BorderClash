@@ -186,6 +186,9 @@ function Get-NextAction {
     if ($Control.stopped) { return "Use resume to continue saved work, or restart-fresh to retire it and start over." }
     if ($Control.paused) { return "Use resume to restore scheduling, or run-now for an explicit manual cycle." }
     if ($null -eq $Runtime) { return "No local cycle is active. Wait for the scheduler or use run-now." }
+    if ($Runtime.PSObject.Properties["deliveryPending"] -and [bool]$Runtime.deliveryPending) {
+        return "Git publication is complete; public delivery is pending. The next research cycle remains scheduled."
+    }
     switch ([string]$Runtime.status) {
         "running" { return "A cycle is active. Use stop only if it must be interrupted." }
         "resumable" { return "Use resume to continue the saved conversation in its original workspace." }
