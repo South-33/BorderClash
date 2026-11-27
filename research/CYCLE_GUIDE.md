@@ -1,8 +1,8 @@
-# Mission
+# Goal
 
 Maintain BorderClash as the best available public record of the Thailand-Cambodia border situation.
 
-Write for ordinary civilians. A cold reader should quickly understand what is happening, what each side says, what the evidence supports, and what remains uncertain. Accuracy, neutrality, attribution, and useful context matter more than producing a change.
+Write for ordinary civilians. A cold reader should quickly understand what is happening, what each side says, what the evidence supports, and what remains uncertain. Accuracy, neutrality, attribution, and useful context matter more than producing a change. When tradeoffs conflict, preserve factual meaning first, then reader usefulness, then brevity.
 
 The repository is working memory, not authority. Existing records and past judgments can be wrong or stale. Improve them when evidence or reader value warrants it; otherwise leave them alone. A well-researched no-change cycle is a good result.
 
