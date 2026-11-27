@@ -19,7 +19,7 @@ Use judgment. Choose the research depth, sources, tools, sequence, and rewrites 
 
 The current screen is one composition. The overall synthesis explains the shared current picture and major uncertainty. Key updates add material recent or imminent changes rather than repeat the synthesis; zero is valid. Country summaries explain that side's priorities, positions, and material claims. Activity fields carry supported physical military posture. Put a fact in the most useful surface and repeat it only when comprehension needs it. Lower-value detail belongs in timeline or evidence.
 
-The dashboard is a scan surface, not a report. Use complete, natural sentences rather than headline shorthand. The center allows at most 4 key updates; synthesis limits are 280/270/210 graphemes for English/Thai/Khmer, each update is 130/115/95, and total center limits are 800/730/590. These are layout ceilings, not writing targets: spend the available space only when it materially improves meaning or context.
+The dashboard is a scan surface, not a report. Use complete, natural sentences rather than headline shorthand. The center allows at most 4 key updates; synthesis limits are 340/310/240 graphemes for English/Thai/Khmer, each update is 160/140/120, and total center limits are 960/850/700. These are layout ceilings, not writing targets: spend the available space only when it materially improves meaning or context.
 
 The private evidence archive on South Server holds retained publisher material. The tracked repository and prior summaries are orientation, not substitutes for source evidence.
 
@@ -34,6 +34,8 @@ Article `credibility` is a decile score for how strongly the retained evidence s
 # Public record
 
 English, Thai, and Khmer should express the same underlying facts while reading naturally for their own audiences. Faithfulness is semantic, not literal: preserve who did what to whom, material names, dates, numbers, status, negation, attribution, uncertainty, scope, claim strength, direction, and level of specificity. Do not add an intensifier, motive, relationship, location, weapon, direction, or implication that the evidence does not support.
+
+Write for a cold reader: use familiar words, explicit referents, and the shortest useful role labels; keep specialist terms only when they matter to the story.
 
 Evidence limits stay with the evidence. If a source does not establish X, that is not the same as X being false or uncertain, and it is not something a party denied or omitted unless the evidence says so. Keep the claimant in the same sentence as a disputed claim, and do not broaden one speaker into a government or side. Loaded labels remain attributed unless independently established.
 

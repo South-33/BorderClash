@@ -3,19 +3,19 @@ import { keyUpdateRecords } from "./current-shape.mjs";
 export const CURRENT_CENTER_COPY_BUDGET = Object.freeze({
   maxKeyUpdates: 4,
   summaryGraphemes: Object.freeze({
-    en: 280,
-    th: 270,
-    kh: 210,
+    en: 340,
+    th: 310,
+    kh: 240,
   }),
   keyUpdateGraphemes: Object.freeze({
-    en: 130,
-    th: 115,
-    kh: 95,
+    en: 160,
+    th: 140,
+    kh: 120,
   }),
   totalGraphemes: Object.freeze({
-    en: 800,
-    th: 730,
-    kh: 590,
+    en: 960,
+    th: 850,
+    kh: 700,
   }),
 });
 

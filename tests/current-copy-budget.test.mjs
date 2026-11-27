@@ -44,7 +44,7 @@ test("center copy budget rejects an oversized summary, individual update, total,
   };
   const issues = currentCenterCopyBudgetIssues(summary);
   assert.ok(issues.some((issue) => /keyUpdates 5 exceeds 4/u.test(issue)));
-  assert.ok(issues.some((issue) => /en summary .* exceeds 280/u.test(issue)));
-  assert.ok(issues.some((issue) => /en keyUpdate\[0\].* exceeds 130/u.test(issue)));
-  assert.ok(issues.some((issue) => /en total .* exceeds 800/u.test(issue)));
+  assert.ok(issues.some((issue) => /en summary .* exceeds 340/u.test(issue)));
+  assert.ok(issues.some((issue) => /en keyUpdate\[0\].* exceeds 160/u.test(issue)));
+  assert.ok(issues.some((issue) => /en total .* exceeds 960/u.test(issue)));
 });
