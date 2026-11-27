@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1795640456809,
+  "updatedAt": 1795746900000,
   "summary": "Border calm; no major new armed clash reported. Territorial/displacement disputes persist. ASEAN says ceasefire remains fragile; maritime conciliation adds diplomatic friction. No near-term reopening signal. ASEAN monitoring continues.",
   "summaryTh": "ชายแดนสงบ ไม่มีรายงานการปะทะด้วยอาวุธครั้งใหญ่ระลอกใหม่ ข้อพิพาทดินแดนและการพลัดถิ่นยังยืดเยื้อ อาเซียนชี้การหยุดยิงยังเปราะบาง การประนอมทางทะเลเพิ่มความตึงเครียดทางการทูต ยังไร้สัญญาณเปิดด่านระยะใกล้ อาเซียนติดตามสถานการณ์ต่อเนื่อง",
   "summaryKh": "ព្រំដែនស្ងប់ស្ងាត់ គ្មានរបាយការណ៍ប៉ះទង្គិចប្រដាប់អាវុធធំថ្មីទេ។ ជម្លោះដែនដីនិងការផ្លាស់ទីលំនៅនៅតែបន្ត។ អាស៊ានថាបទឈប់បាញ់នៅផុយស្រួយ ការសម្រុះសម្រួលដែនសមុទ្របង្កើនភាពតានតឹងការទូត។ គ្មានសញ្ញាបើកច្រកឆាប់ៗទេ។ អាស៊ានបន្តតាមដាន។",
@@ -22,14 +22,14 @@
       ]
     },
     {
-      "text": "UNCLOS talks, Kuala Lumpur Nov 24–27; Anutin: bilateral talks stop if Cambodia keeps compulsory conciliation.",
-      "textTh": "เจรจา UNCLOS กัวลาลัมเปอร์ 24–27 พ.ย. อนุทิน: เจรจาทวิภาคีหยุดหากกัมพูชาเดินหน้าประนอมแบบบังคับ",
-      "textKh": "ចរចា UNCLOS គូឡាឡាំពួរ 24–27 វិច្ឆិកា; អនុទិន៖ បញ្ឈប់ចរចាទ្វេភាគីបើកម្ពុជាបន្តសម្រុះសម្រួលជាកំហិត",
+      "text": "UNCLOS talks end Nov 27: Thailand and Cambodia form a joint technical working group and agree to a commission site visit.",
+      "textTh": "เจรจา UNCLOS ปิดฉาก 27 พ.ย. ไทย-กัมพูชาตั้งคณะทำงานเทคนิคร่วม และตกลงให้คณะกรรมาธิการลงพื้นที่",
+      "textKh": "ចរចា UNCLOS បញ្ចប់ 27 វិច្ឆិកា៖ បង្កើតក្រុមបច្ចេកទេសរួម និងឯកភាពឱ្យចុះពិនិត្យទីតាំង",
       "evidenceIds": [
+        "ce2199d500542fb01aeae8564b4d9b99",
+        "a2f580799232da9532f802dc2441aecc",
         "a8aadb7d12ebbe9cbae6c38743b1ef95",
-        "8f195ceb066d4ebc5ab952aa4413cd79",
-        "3ae337cea857a2dea84f44523ae4b645",
-        "5d5428fb0bf13e8e39b160558b371fc0"
+        "8f195ceb066d4ebc5ab952aa4413cd79"
       ]
     },
     {
@@ -59,6 +59,8 @@
     "2599d20f64abb31afa091b9d58bb099b",
     "4b4e90221c8f0e7e97f1b3fbd9611d0e",
     "de8c54519ecf288574f000968bf48c91",
-    "130ced5e5363d193ef6be86991b47f3c"
+    "130ced5e5363d193ef6be86991b47f3c",
+    "ce2199d500542fb01aeae8564b4d9b99",
+    "a2f580799232da9532f802dc2441aecc"
   ]
 }
