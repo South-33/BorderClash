@@ -17,7 +17,9 @@ Use judgment. Choose the research depth, sources, tools, sequence, and rewrites 
 - `data/current/` is the latest reader-facing picture.
 - `data/research-state.json` carries cycle timing and scheduler state.
 
-The current screen is one composition. The overall synthesis explains the shared current picture and major uncertainty. Key updates add material recent or imminent changes rather than repeat the synthesis; zero is valid. Country summaries explain that side's priorities, positions, and material claims. Activity fields carry supported physical military posture. Put a fact in the most useful surface and repeat it only when comprehension needs it. These summaries live in narrow dashboard columns, so prefer the shortest complete version that preserves the meaning; lower-value detail belongs in timeline or evidence. The center column has an objective display budget calibrated against the real desktop layout: at most 4 key updates; the synthesis is limited to 240 English, 250 Thai, or 190 Khmer grapheme clusters; each key update is limited to 110 English, 100 Thai, or 85 Khmer grapheme clusters; and the full center is limited to 680 English, 650 Thai, or 530 Khmer grapheme clusters. Key updates are compact developments, not mini-reports; keep the central fact and material qualifier there, and leave secondary provenance or context in timeline/evidence. These are layout limits, not targets: use less when the same meaning fits.
+The current screen is one composition. The overall synthesis explains the shared current picture and major uncertainty. Key updates add material recent or imminent changes rather than repeat the synthesis; zero is valid. Country summaries explain that side's priorities, positions, and material claims. Activity fields carry supported physical military posture. Put a fact in the most useful surface and repeat it only when comprehension needs it. Lower-value detail belongs in timeline or evidence.
+
+The dashboard is a scan surface, not a report. Use complete, natural sentences rather than headline shorthand. The center allows at most 4 key updates; synthesis limits are 280/270/210 graphemes for English/Thai/Khmer, each update is 130/115/95, and total center limits are 800/730/590. These are layout ceilings, not writing targets: spend the available space only when it materially improves meaning or context.
 
 The private evidence archive on South Server holds retained publisher material. The tracked repository and prior summaries are orientation, not substitutes for source evidence.
 
@@ -41,6 +43,6 @@ Select for reader value rather than completeness. Public copy should contain wha
 
 The research agent owns research and canonical data edits, not publication. The trusted runner handles final validation, generated public data, commits, publication, and delivery verification. Do not publish manually.
 
-Repository research tools are self-described by `node research/cli.mjs --help`. Use them when they help; they are not a required workflow. Objective validators already cover mechanical data, reference, localization, script, and numeric invariants. Fix their blockers, but do not turn them into an editorial checklist.
+Repository research tools are self-described by `node research/cli.mjs --help`. Use them when useful; they are not a required workflow. Mechanical invariants belong to validators, not to the research method.
 
-Finish with the cycle outcome and a next cadence chosen by when another full cycle is likely to produce materially new information. Report concrete harness friction in `HARNESS_FEEDBACK:` when it would help improve the system.
+Finish with the cycle outcome and choose the next cadence by when another full cycle is likely to produce materially new information.
