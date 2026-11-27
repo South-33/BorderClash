@@ -3,6 +3,7 @@ import { LOCALIZED_NEWS_LIMIT, NEWS_MEDIA_ENVIRONMENTS, newsEnvironmentKey, sele
 import { isValidProvenanceId, normalizeArticleUrl } from "./lib/articles.mjs";
 import { isCanonicalDataPath } from "./lib/data-paths.mjs";
 import { keyUpdateRecords } from "./lib/current-shape.mjs";
+import { currentCenterCopyBudgetIssues } from "./lib/current-copy-budget.mjs";
 import { getLocalizedTextIssueDetails } from "./lib/localization.mjs";
 import { listFiles, readJson, readJsonl } from "./lib/files.mjs";
 import { MILITARY_RUBRIC_VERSION, militaryAssessmentFor } from "./lib/military-assessment.mjs";
@@ -371,6 +372,9 @@ if (structuredSummary) {
   evidenceRefs("current/summary.summaryEvidenceIds", summary.summaryEvidenceIds);
 } else if (summary.summaryEvidenceIds !== undefined) {
   evidenceRefs("current/summary.summaryEvidenceIds", summary.summaryEvidenceIds);
+}
+for (const issue of currentCenterCopyBudgetIssues(summary)) {
+  add("current/summary.centerCopy", issue);
 }
 for (const field of ["generalSummary", "keyEvents", "conflictLevel", "displacedCount", "casualtyCount", "lastUpdatedAt"]) {
   if (summary[field] !== undefined) add("current/summary." + field, "legacy field");

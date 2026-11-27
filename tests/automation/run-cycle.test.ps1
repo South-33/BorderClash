@@ -240,7 +240,7 @@ function Push-ExternalCommit {
         Add-Content -LiteralPath (Join-Path $dir "README.md") -Value "`nexternal code-only fixture"
     } else {
         $path = Join-Path $dir "data\current\summary.json"
-        & node $fixtureMutator append-summary $path " External data fixture."
+        & node $fixtureMutator bump-updated-at $path "2"
         Assert-True ($LASTEXITCODE -eq 0) "external data fixture mutation failed"
     }
     & $realGit -C $dir add -A

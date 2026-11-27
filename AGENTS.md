@@ -12,6 +12,8 @@ The user explicitly approved trailing-plus formatting for qualified impact-card 
 
 South host maintenance, networking, drivers, power policy, and recovery belong in the sibling `SouthServer` repository. Real production research cycles run through the owned runner on South Server; development and fake-agent tests can run elsewhere.
 
+Vercel Hobby deployment quota is owner-scoped and `main` pushes trigger production deployments. Keep meaningful local commits, but batch related verified work into one remote push and never create throwaway commits only to trigger a deployment.
+
 Prefer the simplest reliable implementation. Tests and validators should protect objective behavior and data contracts, not freeze prose or prior research judgments. Remove obsolete machinery instead of preserving it for history.
 
 For substantial multi-step repository work, use `plan.md` as living working memory. Treat its workstreams as hypotheses to test and reshape around the goal, not instructions to follow after evidence points to a better design. Keep reasoning, acceptance criteria, boundaries, verification, and decision-changing evidence current, then reset it to the reusable template when the work is complete.

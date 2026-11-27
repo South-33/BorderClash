@@ -334,7 +334,7 @@ if ($mode -eq "flip-pause-workspace-marker") {
 if ($mode -eq "summary-change") {
     $summaryPath = Join-Path (Get-Location) "data\current\summary.json"
     $mutator = Join-Path $PSScriptRoot "mutate-fixture.mjs"
-    & node $mutator append-summary $summaryPath " Fake validated summary change."
+    & node $mutator bump-updated-at $summaryPath "1"
     if ($LASTEXITCODE -ne 0) {
         [Console]::Error.WriteLine("fake cycle could not apply UTF-8-safe summary fixture")
         exit 29
