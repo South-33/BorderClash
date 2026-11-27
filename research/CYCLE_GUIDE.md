@@ -17,7 +17,7 @@ Use judgment. Choose the research depth, sources, tools, sequence, and rewrites 
 - `data/current/` is the latest reader-facing picture.
 - `data/research-state.json` carries cycle timing and scheduler state.
 
-The current screen is one composition. The overall synthesis explains the shared current picture and major uncertainty. Key updates add material recent or imminent changes rather than repeat the synthesis; zero is valid. Country summaries explain that side's priorities, positions, and material claims. Activity fields carry supported physical military posture. Put a fact in the most useful surface and repeat it only when comprehension needs it. Lower-value detail belongs in timeline or evidence.
+The current screen is one composition. The overall synthesis explains the shared current picture and major uncertainty. There is no target number of key updates. Each one should earn its space by adding distinct reader value beyond the synthesis and the other updates. Country summaries explain that side's priorities, positions, and material claims. Activity fields carry supported physical military posture. Put a fact in the most useful surface and repeat it only when comprehension needs it. Lower-value detail belongs in timeline or evidence.
 
 The dashboard is a scan surface, not a report. Use complete, natural sentences rather than headline shorthand. The center allows at most 4 key updates; synthesis limits are 340/310/240 graphemes for English/Thai/Khmer, each update is 160/140/120, and total center limits are 960/850/700. These are layout ceilings, not writing targets: spend the available space only when it materially improves meaning or context.
 
