@@ -1341,6 +1341,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
 
   // Ref to remember date during filter toggle (for scroll restoration)
   const filterToggleDateRef = useRef<string | null>(null);
+  const languageSwitchDateRef = useRef<string | null>(null);
   const requestedMinorEventsRef = useRef(showMinorEvents);
   const filterTransitionActiveRef = useRef(false);
   const timelineContentRef = useRef<HTMLDivElement>(null);
@@ -1380,6 +1381,19 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
       );
     }
   }, []);
+
+  const handleLanguageChange = useCallback((nextLang: Lang) => {
+    if (nextLang === activeLanguage) return;
+
+    if (viewMode === 'TIMELINE') {
+      cancelTimelineGlide(true);
+      languageSwitchDateRef.current ??= selectedTimelineDateRef.current;
+    } else {
+      languageSwitchDateRef.current = null;
+    }
+
+    setRequestedLang(nextLang);
+  }, [activeLanguage, cancelTimelineGlide, viewMode]);
 
   // Fade fully out, change the event set, restore the equivalent date while
   // hidden, then reveal the settled timeline.
@@ -1875,6 +1889,17 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
     })();
   }, [cancelTimelineGlide, dateToVirtualIndex, rowVirtualizer, timelineDates]);
 
+  // Typography changes can move every virtual row. Preserve the semantic date
+  // anchor captured before the language transaction instead of the old pixel
+  // offset, after the new-language measurements have been invalidated above.
+  useLayoutEffect(() => {
+    const targetDate = languageSwitchDateRef.current;
+    if (!targetDate || viewMode !== 'TIMELINE' || !isLayoutReady) return;
+
+    languageSwitchDateRef.current = null;
+    scrollToDate(targetDate, 'auto');
+  }, [lang, isLayoutReady, scrollToDate, viewMode]);
+
   // Keep scrollToDateRef updated with latest function
   useEffect(() => {
     scrollToDateRef.current = scrollToDate;
@@ -2131,7 +2156,7 @@ function DashboardClientInner({ initialData }: DashboardClientProps) {
               ].map((l) => (
                 <button
                   key={l.id}
-                  onClick={() => setRequestedLang(l.id as Lang)}
+                  onClick={() => handleLanguageChange(l.id as Lang)}
                   aria-label={`Switch language to ${l.label}`}
                   aria-pressed={activeLanguage === l.id}
                   data-language-option={l.id}
